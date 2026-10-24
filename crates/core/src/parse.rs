@@ -8,6 +8,26 @@ pub fn unit_min(u: Unit, day: i64) -> i64 {
     match u { Unit::M => 1, Unit::H => 60, Unit::D => day, Unit::W => 5 * day, Unit::Mo => 20 * day }
 }
 
+/// Like `dur`, but also accepts elapsed durations ("3ed", "12eh"): returns clock minutes and true.
+pub fn dur_any(s: &str, day: i64) -> Result<(i64, Unit, bool), String> {
+    let t = s.trim().to_lowercase();
+    let cut = t.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == ' ')).unwrap_or(t.len());
+    if t[cut..].starts_with('e') && t.len() > cut + 1 {
+        let (m, u) = dur(&format!("{}{}", &t[..cut], &t[cut + 1..]), day)?;
+        let clock = match u { Unit::M => 1, Unit::H => 60, Unit::D => 1440, Unit::W => 10080, Unit::Mo => 43200 };
+        return Ok(((m as f64 / unit_min(u, day) as f64 * clock as f64).round() as i64, u, true));
+    }
+    dur(&t, day).map(|(m, u)| (m, u, false))
+}
+
+/// Shows an elapsed duration ("3 edays").
+pub fn fmt_edur(min: i64, u: Unit) -> String {
+    let clock = match u { Unit::M => 1, Unit::H => 60, Unit::D => 1440, Unit::W => 10080, Unit::Mo => 43200 };
+    let v = min as f64 / clock as f64;
+    let name = match u { Unit::M => "emins", Unit::H => "ehrs", Unit::D => "edays", Unit::W => "ewks", Unit::Mo => "emons" };
+    format!("{} {name}", num(v))
+}
+
 /// "5", "5d", "4h", "2 wks", "1.5w", "1 mo" → working minutes and the unit typed.
 pub fn dur(s: &str, day: i64) -> Result<(i64, Unit), String> {
     let s = s.trim().to_lowercase();
@@ -84,20 +104,25 @@ pub fn preds(s: &str, ids: &[u32], day: i64) -> Result<Vec<Link>, String> {
         if matches!(rest.get(..2), Some("FS" | "SS" | "FF" | "SF")) {
             rest = &rest[2..];
         }
+        let pct = rest.ends_with('%');
+        let amount = |x: &str| -> Result<i64, String> {
+            if pct { x.trim_end_matches('%').parse::<f64>().map(|v| v.round() as i64).map_err(|_| format!("\"{tok}\": write a percent lag as +50%.")) } else { Ok(dur(x, day)?.0) }
+        };
         let lag = match rest.chars().next() {
             None => 0,
-            Some('+') => dur(&rest[1..], day)?.0,
-            Some('-') => -dur(&rest[1..], day)?.0,
-            _ => return Err(format!("Write the lag in \"{tok}\" as +2d or -4h.")),
+            Some('+') => amount(&rest[1..])?,
+            Some('-') => -amount(&rest[1..])?,
+            _ => return Err(format!("Write the lag in \"{tok}\" as +2d, -4h or +50%.")),
         };
-        out.push(Link { pred: uid, kind, lag, pct: false });
+        out.push(Link { pred: uid, kind, lag, pct });
     }
     Ok(out)
 }
 
 pub fn fmt_link(id: usize, l: &Link, day: i64) -> String {
     let k = if l.kind == LinkType::FS && l.lag == 0 { String::new() } else { format!("{:?}", l.kind) };
-    format!("{id}{k}{}", fmt_lag(l.lag, day))
+    let lag = if l.pct && l.lag != 0 { format!("{:+}%", l.lag) } else { fmt_lag(l.lag, day) };
+    format!("{id}{k}{lag}")
 }
 
 pub fn fmt_preds(links: &[Link], id_of: &HashMap<u32, usize>, day: i64) -> String {

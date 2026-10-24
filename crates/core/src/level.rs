@@ -1,0 +1,86 @@
+//! Resource leveling: delay lower-ranked tasks until no work resource is over its daily capacity.
+use crate::cal::{at, date_of, DAY};
+use crate::model::{Constraint, LevelOrder, Project, ResKind};
+use crate::sched::{schedule, Sched};
+use std::collections::{BTreeMap, HashSet};
+
+fn movable(p: &Project, s: &Sched, i: usize) -> bool {
+    let t = &p.tasks[i];
+    !s.summary[i] && !s.off[i] && !t.manual && t.act_start.is_none() && !matches!(t.constraint, Constraint::MSO | Constraint::MFO)
+}
+
+/// Daily minutes per (resource index, day) and the tasks behind them.
+fn loads(p: &Project, s: &Sched) -> BTreeMap<(i64, usize), (f64, Vec<usize>)> {
+    let mut m: BTreeMap<(i64, usize), (f64, Vec<usize>)> = BTreeMap::new();
+    for (i, t) in p.tasks.iter().enumerate().filter(|&(i, _)| !s.summary[i] && !s.off[i]) {
+        let c = &s.cals[s.ci[i]];
+        for a in t.res.iter().filter(|a| a.units > 0.0) {
+            let Some(k) = p.res_idx(a.res).filter(|&k| p.resources[k].kind == ResKind::Work) else { continue };
+            let mut d = s.es[i].div_euclid(DAY);
+            while d * DAY < s.ef[i] {
+                let mins = c.between(s.es[i].max(d * DAY), s.ef[i].min((d + 1) * DAY)) as f64 * a.units;
+                if mins > 0.0 {
+                    let e = m.entry((d, k)).or_default();
+                    e.0 += mins;
+                    e.1.push(i);
+                }
+                d += 1;
+            }
+        }
+    }
+    m
+}
+
+/// Levels the given tasks (all tasks when empty). Returns how many delays were added.
+pub fn level(p: &mut Project, only: &[u32]) -> Result<usize, String> {
+    let scope: HashSet<usize> = if only.is_empty() { (0..p.tasks.len()).collect() } else { only.iter().filter_map(|&u| p.idx(u)).collect() };
+    scope.iter().for_each(|&i| p.tasks[i].level_delay = 0);
+    let pc = p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0);
+    let mut stuck: HashSet<(i64, usize)> = HashSet::new();
+    let mut moves = 0;
+    // Rank once, from the unleveled schedule, so tasks do not take turns being delayed.
+    let s0 = schedule(p)?;
+    let rank: Vec<(i64, i64, i64, i64)> = (0..p.tasks.len()).map(|i| {
+        let pr = 1000 - p.priority(i) as i64;
+        match p.opts.level_order {
+            LevelOrder::IdOnly => (i as i64, 0, 0, 0),
+            LevelOrder::Standard => (s0.tf[i], s0.es[i], pr, i as i64),
+            LevelOrder::Priority => (pr, s0.tf[i], s0.es[i], i as i64),
+        }
+    }).collect();
+    for _ in 0..5000 {
+        let s = schedule(p)?;
+        let over = loads(p, &s).into_iter().find(|((d, k), (mins, _))| {
+            let cap = p.resources[*k].max_on(date_of(d * DAY)) * s.cals[pc].day_minutes(date_of(d * DAY)).max(1) as f64;
+            *mins > cap + 0.5 && !stuck.contains(&(*d, *k))
+        });
+        let Some(((day, k), (_, tasks))) = over else { break };
+        let mut cands: Vec<usize> = tasks.iter().copied().filter(|&i| scope.contains(&i) && movable(p, &s, i)).collect();
+        cands.sort_by_key(|&i| rank[i]);
+        cands.dedup();
+        // The highest-ranked task keeps its place; delay the lowest-ranked one past this day.
+        let pick = (tasks.len() > 1).then(|| cands.iter().rev().copied().find(|&i| {
+            let need = s.cals[s.ci[i]].between(s.es[i], s.cals[s.ci[i]].next_start(at(date_of((day + 1) * DAY))));
+            !p.opts.level_within_slack || s.tf[i] >= need
+        })).flatten();
+        match pick.filter(|&i| Some(&i) != cands.first() || cands.len() > 1) {
+            Some(i) => {
+                let c = &s.cals[s.ci[i]];
+                let add = c.between(s.es[i], c.next_start((day + 1) * DAY)).max(60);
+                p.tasks[i].level_delay += add;
+                moves += 1;
+            }
+            None => {
+                stuck.insert((day, k));
+            }
+        }
+    }
+    Ok(moves)
+}
+
+/// Removes leveling delays from the given tasks (all when empty).
+pub fn clear(p: &mut Project, only: &[u32]) {
+    for t in p.tasks.iter_mut().filter(|t| only.is_empty() || only.contains(&t.uid)) {
+        t.level_delay = 0;
+    }
+}

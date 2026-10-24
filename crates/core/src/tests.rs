@@ -309,3 +309,108 @@ fn exchange_round_trips() {
     assert_eq!((bad, q.tasks[2].preds.len(), q.tasks[2].preds[0].kind), (0, 2, LinkType::SS));
     std::fs::remove_dir_all(dir).ok();
 }
+
+// ---------- 0.3 engine ----------
+
+#[test]
+fn elapsed_pct_lags_splits_and_from_finish() {
+    let mut p = plan(&[(10, ""), (2, "1SS+50%"), (2, "")]);
+    let (m, _, e) = parse::dur_any("2ed", D).unwrap();
+    (p.tasks[2].dur, p.tasks[2].elapsed) = (m, e);
+    let s = schedule(&p).unwrap();
+    assert_eq!(when(s.es[1]), "09 08:00"); // half of task 1's ten days later
+    assert_eq!(when(s.ef[2]), "04 08:00"); // two days around the clock
+    p.tasks[1].splits = vec![(D, D)];
+    let s = schedule(&p).unwrap();
+    assert_eq!(when(s.ef[1]), "11 17:00"); // a one-day pause inside the work
+    assert_eq!(parse::fmt_preds(&p.tasks[1].preds, &[(p.tasks[0].uid, 1)].into_iter().collect(), D), "1SS+50%");
+    p.opts.from_finish = true;
+    p.opts.finish_date = Some(d(2026, 11, 30));
+    let s = schedule(&p).unwrap();
+    assert_eq!(when(s.ef[0]), "30 17:00");
+}
+
+#[test]
+fn level_of_effort_progress_logic_and_longest_path() {
+    let mut p = plan(&[(5, ""), (3, "1"), (0, "1SS"), (2, "")]);
+    p.tasks[3].preds = parse::preds("2FF", &p.tasks.iter().map(|t| t.uid).collect::<Vec<_>>(), D).unwrap();
+    p.tasks[2].act_type = ActType::Loe;
+    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 0, pct: false }];
+    p.tasks[3].preds.clear();
+    let ids: Vec<u32> = p.tasks.iter().map(|t| t.uid).collect();
+    p.tasks[2].dur = 0;
+    p.tasks.push(Task { uid: 99, name: "after LOE".into(), dur: D, preds: parse::preds("3", &ids, D).unwrap(), ..Default::default() });
+    let s = schedule(&p).unwrap();
+    assert_eq!(when(s.es[2]), "02 08:00");
+    assert_eq!(when(s.ef[2]), "02 08:00"); // a level of effort only reaches its successors' needs…
+    assert_eq!(when(s.es[4]), "02 08:00"); // …and never drives them
+    assert!(s.lp[0] && s.lp[1] && !s.lp[3]);
+
+    // Out-of-sequence progress: task 2 started before task 1 finished.
+    let mut p = plan(&[(4, ""), (4, "1")]);
+    p.status = Some(d(2026, 11, 3));
+    p.tasks[1].act_start = Some(d(2026, 11, 2));
+    p.tasks[1].pct = 50;
+    assert_eq!(when(schedule(&p).unwrap().ef[1]), "11 17:00"); // retained logic waits for task 1 (which cannot start before the status date)
+    p.opts.retained = false;
+    assert_eq!(when(schedule(&p).unwrap().ef[1]), "05 17:00"); // progress override does not
+}
+
+#[test]
+fn leveling_and_task_types() {
+    let mut doc = Doc::new(plan(&[(2, ""), (3, ""), (1, "")]));
+    let u: Vec<u32> = doc.p.tasks.iter().map(|t| t.uid).collect();
+    for &uid in &u[..2] {
+        op(&mut doc, Op::Set { uid, field: "res".into(), value: "Welder".into() }).unwrap();
+    }
+    op(&mut doc, Op::Level { uids: vec![], clear: false }).unwrap();
+    let s = schedule(&doc.p).unwrap();
+    assert!(!load::compute(&doc.p, &s).over.iter().any(|&o| o));
+    assert!(s.es[1] >= s.ef[0] || s.es[0] >= s.ef[1]);
+    op(&mut doc, Op::Level { uids: vec![], clear: true }).unwrap();
+    assert!(doc.p.tasks.iter().all(|t| t.level_delay == 0));
+
+    // Fixed work: two people halve the duration; fixed duration keeps it.
+    op(&mut doc, Op::Set { uid: u[1], field: "type".into(), value: "Fixed Work".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: u[1], field: "res".into(), value: "Welder, Fitter".into() }).unwrap();
+    assert_eq!(doc.p.tasks[1].dur, 3 * D / 2);
+    op(&mut doc, Op::Set { uid: u[0], field: "res".into(), value: "Welder, Fitter".into() }).unwrap();
+    assert_eq!(doc.p.tasks[0].dur, 2 * D);
+    op(&mut doc, Op::Set { uid: u[0], field: "work".into(), value: "8".into() }).unwrap();
+    assert_eq!(doc.p.tasks[0].res[0].units, 0.25); // 8h over 2 days with two people
+    // Custom fields, codes, risks and steps.
+    op(&mut doc, Op::Set { uid: u[2], field: "c:number1".into(), value: "12.5".into() }).unwrap();
+    assert_eq!(doc.p.tasks[2].custom["number1"], serde_json::json!(12.5));
+    op(&mut doc, Op::CodeDef { old: None, def: Some(CodeDef { name: "Discipline".into(), scope: String::new(), values: vec![CodeValue { value: "MECH".into(), ..Default::default() }] }) }).unwrap();
+    assert!(op(&mut doc, Op::Set { uid: u[2], field: "code:Discipline".into(), value: "CIVIL".into() }).is_err());
+    op(&mut doc, Op::Set { uid: u[2], field: "code:Discipline".into(), value: "MECH".into() }).unwrap();
+    op(&mut doc, Op::TaskList { uid: u[2], field: "steps".into(), value: serde_json::json!([{"name": "a", "weight": 3, "done": true}, {"name": "b", "weight": 1}]) }).unwrap();
+    assert_eq!(doc.p.tasks[2].phys, 75);
+    op(&mut doc, Op::Risk { id: 0, risk: Some(Risk { name: "Late steel".into(), prob: 3, impact: 4, ..Default::default() }) }).unwrap();
+    assert_eq!(doc.p.risks[0].id, 1);
+    assert!(doc.p.tasks.iter().all(|t| t.code.starts_with('A') || t.code.is_empty()));
+}
+
+struct Row1(std::collections::HashMap<&'static str, crate::formula::F>);
+impl crate::formula::Ctx for Row1 {
+    fn field(&self, n: &str) -> Option<crate::formula::F> { self.0.get(n.to_lowercase().as_str()).cloned() }
+    fn now(&self) -> i64 { at(d(2026, 11, 2)) }
+    fn work_between(&self, a: i64, b: i64) -> i64 { WorkCal::new(&Calendar::standard("S")).between(a, b) }
+    fn work_add(&self, a: i64, m: i64) -> i64 { WorkCal::new(&Calendar::standard("S")).add(a, m) }
+}
+
+#[test]
+fn formulas() {
+    use crate::formula::{eval, parse as fp, F};
+    let row = Row1([("duration", F::Num(960.0)), ("finish", F::Date(at(d(2026, 11, 6)))), ("baseline finish", F::Date(at(d(2026, 11, 4)))), ("name", F::Str("Pump".into()))].into_iter().collect());
+    let ev = |s: &str| eval(&fp(s).unwrap(), &row).unwrap();
+    assert_eq!(ev("[Duration] / 480"), F::Num(2.0));
+    assert_eq!(ev(r#"IIf([Finish] > [Baseline Finish], "Late", "On time")"#), F::Str("Late".into()));
+    assert_eq!(ev("[Finish] - [Baseline Finish]"), F::Num(2.0));
+    assert_eq!(ev("ProjDateDiff([Baseline Finish], [Finish]) / 60"), F::Num(16.0));
+    assert_eq!(ev(r#"Switch([Duration] > 1000, "Long", [Duration] > 100, "Medium")"#), F::Str("Medium".into()));
+    assert_eq!(ev(r#"UCase(Left([Name], 2)) & "-" & 7 Mod 4"#), F::Str("PU-3".into()));
+    assert_eq!(ev("Not (1 > 2) And 3 >= 3"), F::Bool(true));
+    assert!(fp("IIf(1, 2").is_err() && fp("Foo(1)").is_err());
+    assert!(eval(&fp("1 / 0").unwrap(), &row).is_err());
+}

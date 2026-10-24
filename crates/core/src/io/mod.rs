@@ -9,7 +9,7 @@ use chrono::NaiveDate;
 use std::path::Path;
 
 pub enum Imported {
-    Plan(Project),
+    Plan(Box<Project>),
     /// A spreadsheet that needs its columns mapped first.
     Table(table::Table),
 }
@@ -21,8 +21,8 @@ fn ext(path: &Path) -> String {
 pub fn import(path: &Path) -> Result<Imported, String> {
     let read = || std::fs::read(path).map(|b| String::from_utf8_lossy(&b).into_owned()).map_err(|e| format!("Could not open {}: {e}", path.display()));
     match ext(path).as_str() {
-        "xml" => mspdi::read(&read()?).map(Imported::Plan),
-        "xer" => xer::read(&read()?).map(Imported::Plan),
+        "xml" => mspdi::read(&read()?).map(|p| Imported::Plan(Box::new(p))),
+        "xer" => xer::read(&read()?).map(|p| Imported::Plan(Box::new(p))),
         "csv" | "txt" | "xlsx" | "xlsm" | "xls" | "ods" => table::read(path).map(Imported::Table),
         "mpp" => Err("MS Project .mpp files are a closed format. In MS Project, use File › Save As › XML, then import the XML file.".into()),
         e => Err(format!("Datum Plan cannot import .{e} files. Use XML, XER, XLSX or CSV.")),

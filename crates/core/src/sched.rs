@@ -1,7 +1,9 @@
-//! Critical path method on working time. Each task runs on its own calendar; lags count on the
-//! successor's calendar. Summaries roll up; a link to or from a summary applies to every task in it.
+//! Critical path method on working time. Each task runs on its own calendar (elapsed tasks on a
+//! 24-hour clock, resource-dependent tasks on their resource's calendar). Lags use the calendar
+//! chosen in Schedule Options. Summaries roll up; a link to or from a summary applies to every task
+//! in it. Level-of-effort tasks stretch between their neighbours and never drive them.
 use crate::cal::{at, WorkCal, DAY};
-use crate::model::{Constraint as C, LinkType, Project};
+use crate::model::{ActType, Calendar, Constraint as C, LagCal, LinkType, Project};
 use std::collections::HashMap;
 
 /// Instants per task index (minutes); floats in working minutes of the task's calendar.
@@ -15,17 +17,28 @@ pub struct Sched {
     pub summary: Vec<bool>,
     /// Inactive, or under an inactive summary.
     pub off: Vec<bool>,
+    /// Level of effort or WBS summary activity.
+    pub loe: Vec<bool>,
+    /// On the longest path.
+    pub lp: Vec<bool>,
+    /// Float path number (1 = most critical; 0 = not calculated).
+    pub fpath: Vec<u8>,
     /// Index into `cals` for each task.
     pub ci: Vec<usize>,
     pub cals: Vec<WorkCal>,
+    pub edges: Vec<Edge>,
+    /// Whether each edge drives its successor's dates.
+    pub drive: Vec<bool>,
     pub start: i64,
     pub finish: i64,
 }
 
-struct Edge { p: usize, s: usize, kind: LinkType, lag: i64 }
+#[derive(Clone, Copy)]
+pub struct Edge { pub p: usize, pub s: usize, pub kind: LinkType, pub lag: i64 }
 
 pub fn schedule(p: &Project) -> Result<Sched, String> {
     let n = p.tasks.len();
+    let o = &p.opts;
     let summary: Vec<bool> = (0..n).map(|i| p.is_summary(i)).collect();
     let mut off = vec![false; n];
     for i in 0..n {
@@ -34,15 +47,28 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         }
     }
     let names: Vec<&str> = p.calendars.iter().map(|c| c.name.as_str()).collect();
-    let cals: Vec<WorkCal> = p.calendars.iter().map(WorkCal::new).collect();
+    let mut cals: Vec<WorkCal> = p.calendars.iter().map(WorkCal::new).collect();
+    let h24 = cals.len();
+    cals.push(WorkCal::new(&Calendar::full("24 Hours")));
     let def = names.iter().position(|n| *n == p.calendar).unwrap_or(0);
-    let ci: Vec<usize> = p.tasks.iter().map(|t| t.cal.as_deref().and_then(|c| names.iter().position(|n| *n == c)).unwrap_or(def)).collect();
+    let cal_of = |name: Option<&str>| name.and_then(|c| names.iter().position(|n| *n == c));
+    let ci: Vec<usize> = p.tasks.iter().map(|t| {
+        if t.elapsed {
+            return h24;
+        }
+        let res_cal = || t.res.first().and_then(|a| p.res_idx(a.res)).and_then(|k| cal_of(p.resources[k].cal.as_deref()));
+        (if t.act_type == ActType::ResourceDep { res_cal() } else { None }).or_else(|| cal_of(t.cal.as_deref())).unwrap_or(def)
+    }).collect();
     let ix: HashMap<u32, usize> = p.tasks.iter().enumerate().map(|(i, t)| (t.uid, i)).collect();
-    let dur: Vec<i64> = p.tasks.iter().map(|t| t.dur).collect();
+    let ms_type = |i: usize| matches!(p.tasks[i].act_type, ActType::StartMs | ActType::FinishMs);
+    let dur: Vec<i64> = p.tasks.iter().enumerate().map(|(i, t)| if ms_type(i) { 0 } else { t.dur }).collect();
+    // Splits add pauses inside the work.
+    let span: Vec<i64> = p.tasks.iter().enumerate().map(|(i, t)| dur[i] + t.splits.iter().filter(|(a, _)| *a < dur[i]).map(|(_, g)| g.max(&0)).sum::<i64>()).collect();
+    let loe: Vec<bool> = p.tasks.iter().map(|t| matches!(t.act_type, ActType::Loe | ActType::WbsSummary)).collect();
     let leaf = |i: usize| !summary[i] && !off[i];
     let leaves_of = |i: usize| -> Vec<usize> { if summary[i] { p.subtree(i).filter(|&j| leaf(j)).collect() } else { vec![i] } };
 
-    let mut edges = vec![];
+    let mut edges: Vec<Edge> = vec![];
     let (mut inc, mut out) = (vec![vec![]; n], vec![vec![]; n]);
     for (s, t) in p.tasks.iter().enumerate().filter(|&(s, _)| !off[s]) {
         for l in &t.preds {
@@ -55,9 +81,10 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             }
             for &a in &leaves_of(q) {
                 for &b in &leaves_of(s) {
+                    let lag = if l.pct { dur[a] * l.lag / 100 } else { l.lag };
                     inc[b].push(edges.len());
                     out[a].push(edges.len());
-                    edges.push(Edge { p: a, s: b, kind: l.kind, lag: l.lag });
+                    edges.push(Edge { p: a, s: b, kind: l.kind, lag });
                 }
             }
         }
@@ -82,13 +109,20 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         return Err(format!("Circular link: task {} \"{}\" ends up depending on itself.", i + 1, p.tasks[i].name));
     }
 
+    // The calendar a lag is counted on.
+    let lag_cal = |e: &Edge| match o.lag_cal { LagCal::Successor => ci[e.s], LagCal::Predecessor => ci[e.p], LagCal::H24 => h24, LagCal::Project => def };
     let pc = &cals[def];
     let start = pc.next_start(at(p.start));
     let data = p.status.map(|d| at(d) + DAY);
     let (mut es, mut ef) = (vec![start; n], vec![start; n]);
     let mut fixed = vec![false; n];
+    // The earliest start (or finish, for FF/SF) a link allows.
+    let need = |e: &Edge, es: &[i64], ef: &[i64]| -> i64 {
+        let lc = &cals[lag_cal(e)];
+        match e.kind { LinkType::FS | LinkType::FF => lc.add(ef[e.p], e.lag), LinkType::SS | LinkType::SF => lc.add(es[e.p], e.lag) }
+    };
     for &i in &order {
-        let (t, c, d) = (&p.tasks[i], &cals[ci[i]], dur[i]);
+        let (t, c, d, sp) = (&p.tasks[i], &cals[ci[i]], dur[i], span[i]);
         if let Some(a) = t.act_start {
             es[i] = c.next_start(at(a));
             ef[i] = match (t.act_finish, data) {
@@ -96,66 +130,97 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                     fixed[i] = true;
                     c.end_of(f).max(es[i])
                 }
-                (None, Some(dd)) if t.pct < 100 => c.add(c.next_start(dd.max(es[i])), d * (100 - t.pct as i64) / 100),
-                _ => c.add(es[i], d),
+                (None, Some(dd)) if t.pct < 100 => {
+                    let rem = sp * (100 - t.pct as i64) / 100;
+                    let mut from = dd.max(es[i]);
+                    // Retained logic: unfinished predecessors still hold back the remaining work.
+                    if o.retained {
+                        for &e in inc[i].iter().filter(|&&e| !fixed[edges[e].p] && !loe[edges[e].p]) {
+                            let x = need(&edges[e], &es, &ef);
+                            from = from.max(match edges[e].kind { LinkType::FS | LinkType::SS => x, _ => c.sub(x, rem) });
+                        }
+                    }
+                    c.add(c.next_start(from), rem)
+                }
+                _ => c.add(es[i], sp),
             };
             continue;
         }
         let mut v = match data { Some(dd) if t.pct == 0 => dd.max(start), _ => start };
         if !(t.manual && t.mstart.is_some()) {
-            for &e in &inc[i] {
-                let Edge { p: q, kind, lag, .. } = edges[e];
-                v = v.max(match kind {
-                    LinkType::FS => c.add(ef[q], lag),
-                    LinkType::SS => c.add(es[q], lag),
-                    LinkType::FF => c.sub(c.add(ef[q], lag), d),
-                    LinkType::SF => c.sub(c.add(es[q], lag), d),
-                });
+            for &e in inc[i].iter().filter(|&&e| !loe[edges[e].p]) {
+                let x = need(&edges[e], &es, &ef);
+                v = v.max(match edges[e].kind { LinkType::FS | LinkType::SS => x, _ => c.sub(x, sp) });
             }
         }
         if let Some(cd) = t.cdate {
             match t.constraint {
                 C::SNET => v = v.max(at(cd)),
-                C::FNET => v = v.max(c.sub(c.end_of(cd), d)),
+                C::FNET => v = v.max(c.sub(c.end_of(cd), sp)),
                 C::MSO => v = at(cd),
-                C::MFO => v = c.sub(c.end_of(cd), d),
+                C::MFO => v = c.sub(c.end_of(cd), sp),
                 _ => {}
             }
         }
         if let (true, Some(m)) = (t.manual, t.mstart) {
             v = at(m);
         }
-        es[i] = if d > 0 || !c.in_or_end(v) { c.next_start(v) } else { v };
-        ef[i] = c.add(es[i], d);
+        es[i] = if d > 0 || t.act_type == ActType::StartMs || !c.in_or_end(v) { c.next_start(v) } else { v };
+        if t.level_delay > 0 {
+            es[i] = c.next_start(c.add(es[i], t.level_delay));
+        }
+        ef[i] = c.add(es[i], sp);
     }
-    let finish = order.iter().map(|&i| ef[i]).max().unwrap_or(start);
+    // Level of effort: from its own start to the latest point its successors need.
+    for &i in order.iter().filter(|&&i| loe[i] && !fixed[i]) {
+        let reach = out[i].iter().map(|&e| {
+            let Edge { s, kind, lag, .. } = edges[e];
+            let lc = &cals[lag_cal(&edges[e])];
+            match kind { LinkType::FS => lc.sub(es[s], lag), LinkType::SS => es[s], LinkType::FF | LinkType::SF => lc.sub(ef[s], lag) }
+        }).max();
+        if let Some(r) = reach {
+            ef[i] = r.max(es[i]);
+        }
+    }
+    let mut finish = order.iter().map(|&i| ef[i]).max().unwrap_or(start);
+    let back_from = match (o.from_finish, o.finish_date) { (true, Some(f)) => pc.end_of(f), _ => finish };
+
+    // Which links drive their successor (for the longest path and the Inspect pane).
+    let drive: Vec<bool> = edges.iter().map(|e| {
+        if loe[e.p] || fixed[e.s] {
+            return false;
+        }
+        let c = &cals[ci[e.s]];
+        let x = need(e, &es, &ef);
+        match e.kind { LinkType::FS | LinkType::SS => c.next_start(x) >= es[e.s] || x == es[e.s], _ => x >= ef[e.s] }
+    }).collect();
 
     let (mut ls, mut lf, mut ff) = (es.clone(), ef.clone(), vec![0i64; n]);
     for &i in order.iter().rev() {
-        let (t, c, d) = (&p.tasks[i], &cals[ci[i]], dur[i]);
-        let mut v = finish;
-        let mut free = c.between(ef[i], finish);
+        let (t, c, sp) = (&p.tasks[i], &cals[ci[i]], span[i]);
+        let mut v = back_from;
+        let mut free = c.between(ef[i], back_from);
         for &e in &out[i] {
             let Edge { s, kind, lag, .. } = edges[e];
-            let cs = &cals[ci[s]];
+            let lc = &cals[lag_cal(&edges[e])];
             v = v.min(match kind {
-                LinkType::FS => cs.sub(ls[s], lag),
-                LinkType::SS => c.add(cs.sub(ls[s], lag), d),
-                LinkType::FF => cs.sub(lf[s], lag),
-                LinkType::SF => c.add(cs.sub(lf[s], lag), d),
+                LinkType::FS => lc.sub(ls[s], lag),
+                LinkType::SS => c.add(lc.sub(ls[s], lag), sp),
+                LinkType::FF => lc.sub(lf[s], lag),
+                LinkType::SF => c.add(lc.sub(lf[s], lag), sp),
             });
             free = free.min(match kind {
-                LinkType::FS => c.between(cs.add(ef[i], lag), es[s]),
-                LinkType::SS => c.between(cs.add(es[i], lag), es[s]),
-                LinkType::FF => c.between(cs.add(ef[i], lag), ef[s]),
-                LinkType::SF => c.between(cs.add(es[i], lag), ef[s]),
+                LinkType::FS => c.between(lc.add(ef[i], lag), es[s]),
+                LinkType::SS => c.between(lc.add(es[i], lag), es[s]),
+                LinkType::FF => c.between(lc.add(ef[i], lag), ef[s]),
+                LinkType::SF => c.between(lc.add(es[i], lag), ef[s]),
             });
         }
         if let Some(cd) = t.cdate {
             match t.constraint {
-                C::SNLT => v = v.min(c.add(c.next_start(at(cd)), d)),
+                C::SNLT => v = v.min(c.add(c.next_start(at(cd)), sp)),
                 C::FNLT => v = v.min(c.end_of(cd)),
-                C::MSO => v = c.add(c.next_start(at(cd)), d),
+                C::MSO => v = c.add(c.next_start(at(cd)), sp),
                 C::MFO => v = c.end_of(cd),
                 _ => {}
             }
@@ -166,15 +231,53 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         if fixed[i] {
             continue;
         }
-        lf[i] = if d > 0 { c.prev_end(v) } else { v };
-        ls[i] = c.sub(lf[i], d);
+        if loe[i] {
+            (ls[i], lf[i]) = (es[i], ef[i]);
+            continue;
+        }
+        lf[i] = if sp > 0 { c.prev_end(v) } else { v };
+        ls[i] = c.sub(lf[i], sp);
         ff[i] = free.max(0);
-        if t.constraint == C::ALAP && t.act_start.is_none() {
+        let backward = o.from_finish && o.finish_date.is_some() && !t.manual && t.act_start.is_none();
+        if (t.constraint == C::ALAP && t.act_start.is_none()) || backward {
             (es[i], ef[i]) = (ls[i], lf[i]);
             ff[i] = 0;
         }
     }
-    let mut tf: Vec<i64> = (0..n).map(|i| if leaf(i) && !fixed[i] { cals[ci[i]].between(ef[i], lf[i]) } else { 0 }).collect();
+    let mut tf: Vec<i64> = (0..n).map(|i| if leaf(i) && !fixed[i] && !loe[i] { cals[ci[i]].between(ef[i], lf[i]) } else { 0 }).collect();
+    let mut start = start;
+    if o.from_finish && o.finish_date.is_some() {
+        start = order.iter().map(|&i| es[i]).min().unwrap_or(start);
+        finish = back_from;
+    }
+
+    // Longest path: back from the tasks that finish last, through driving links.
+    let mut lp = vec![false; n];
+    let mut stack: Vec<usize> = order.iter().copied().filter(|&i| ef[i] >= finish && !loe[i]).collect();
+    while let Some(i) = stack.pop() {
+        if std::mem::replace(&mut lp[i], true) {
+            continue;
+        }
+        stack.extend(inc[i].iter().filter(|&&e| drive[e]).map(|&e| edges[e].p));
+    }
+    // Float paths: 1 is the longest path, then tasks grouped by total float, most critical first.
+    let mut fpath = vec![0u8; n];
+    if o.float_paths > 0 {
+        let mut rest: Vec<usize> = order.iter().copied().filter(|&i| !lp[i] && !fixed[i] && !loe[i]).collect();
+        rest.sort_by_key(|&i| (tf[i], es[i]));
+        order.iter().filter(|&&i| lp[i]).for_each(|&i| fpath[i] = 1);
+        let (mut path, mut last) = (1u8, None);
+        for i in rest {
+            if last != Some(tf[i]) {
+                path += 1;
+                last = Some(tf[i]);
+            }
+            if path > o.float_paths {
+                break;
+            }
+            fpath[i] = path;
+        }
+    }
 
     for i in (0..n).filter(|&i| summary[i]) {
         let kids: Vec<usize> = p.subtree(i).filter(|&j| leaf(j)).collect();
@@ -185,8 +288,20 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         ef[i] = kids.iter().map(|&j| ef[j]).max().unwrap();
         ls[i] = kids.iter().map(|&j| ls[j]).min().unwrap();
         lf[i] = kids.iter().map(|&j| lf[j]).max().unwrap();
-        tf[i] = kids.iter().map(|&j| tf[j]).min().unwrap();
+        tf[i] = kids.iter().filter(|&&j| !loe[j]).map(|&j| tf[j]).min().unwrap_or(0);
         ff[i] = kids.iter().map(|&j| ff[j]).min().unwrap();
+        lp[i] = kids.iter().any(|&j| lp[j]);
+        fpath[i] = kids.iter().map(|&j| fpath[j]).filter(|&f| f > 0).min().unwrap_or(0);
     }
-    Ok(Sched { es, ef, ls, lf, tf, ff, summary, off, ci, cals, start, finish })
+    Ok(Sched { es, ef, ls, lf, tf, ff, summary, off, loe, lp, fpath, ci, cals, edges, drive, start, finish })
+}
+
+impl Sched {
+    /// Is task `i` critical under the plan's options?
+    pub fn critical(&self, p: &Project, i: usize) -> bool {
+        if self.off[i] || self.loe[i] || p.tasks[i].pct >= 100 && !self.summary[i] {
+            return false;
+        }
+        if p.opts.longest_path { self.lp[i] } else { self.tf[i] <= p.opts.critical_float }
+    }
 }

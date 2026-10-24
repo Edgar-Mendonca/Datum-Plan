@@ -265,7 +265,7 @@ impl Resource {
     /// (standard rate per hour, cost per use) of table `t` on day `d`.
     pub fn rate_on(&self, t: u8, d: NaiveDate) -> (f64, f64) {
         match self.tables.get(t as usize).filter(|v| !v.is_empty()) {
-            Some(v) => v.iter().filter(|r| r.from.is_none_or(|f| f <= d)).last().or(v.first()).map_or((self.rate, self.per_use), |r| (r.std, r.per_use)),
+            Some(v) => v.iter().rfind(|r| r.from.is_none_or(|f| f <= d)).or(v.first()).map_or((self.rate, self.per_use), |r| (r.std, r.per_use)),
             None => (self.rate, self.per_use),
         }
     }

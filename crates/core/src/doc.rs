@@ -17,6 +17,29 @@ pub enum Op {
     Outdent { uids: Vec<u32> },
     Move { uids: Vec<u32>, up: bool },
     Link { uids: Vec<u32> },
+    /// Resource leveling of the given tasks (all when empty), or clearing it.
+    Level { uids: Vec<u32>, clear: bool },
+    /// Splits a task: a pause of `gap` working minutes after `after` working minutes of work.
+    Split { uid: u32, after: i64, gap: i64 },
+    /// Saves current start/finish into interim plan n (custom start/finish n).
+    Interim { n: u8 },
+    /// Marks work complete through a date (Update Project).
+    UpdateProject { through: String, reschedule: bool },
+    /// Freezes the plan at the status date (period performance).
+    Snapshot { label: String, comment: String },
+    /// Sets a project-level value (setup, currency, branding, options) from JSON.
+    ProjectSet { field: String, value: serde_json::Value },
+    /// Replaces a custom field definition (empty alias and formula with no values removes it).
+    FieldDef { def: CustomDef },
+    CodeDef { old: Option<String>, def: Option<CodeDef> },
+    /// Adds, changes or (when `risk` is None) removes a risk by id.
+    Risk { id: u32, risk: Option<Risk> },
+    /// Sets a task list (steps, notebook, expenses, docs) from JSON.
+    TaskList { uid: u32, field: String, value: serde_json::Value },
+    /// Sets a resource list or value (rate tables, availability, custom) from JSON.
+    ResJson { uid: u32, field: String, value: serde_json::Value },
+    /// Stores window settings (views, tables, filters, styles, reports) under a key.
+    Ui { key: String, value: serde_json::Value },
     /// Adds, changes or (with no kind) removes the link from `pred` to `succ`.
     LinkSet { pred: u32, succ: u32, kind: Option<LinkType>, lag: String },
     Unlink { uids: Vec<u32> },
@@ -186,17 +209,74 @@ fn set_pct(p: &mut Project, i: usize, n: u8) -> Result<(), String> {
 
 pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str) -> Result<(), String> {
     let v = value.trim();
-    if p.is_summary(i) && !matches!(field, "name" | "notes" | "code" | "preds" | "active" | "timeline" | "deadline") {
+    let any_row = field.starts_with("c:") || field.starts_with("code:") || matches!(field, "name" | "notes" | "code" | "preds" | "active" | "timeline" | "deadline" | "priority" | "costaccount" | "responsible" | "hyperlink" | "style" | "fixedcost");
+    if p.is_summary(i) && !any_row {
         return Err(format!("A summary task's {field} comes from the tasks under it."));
     }
     let date = |s: &str| -> Result<Option<NaiveDate>, String> { if s.is_empty() { Ok(None) } else { parse::date_in(s, fmt).map(Some) } };
     let day = p.day_min;
     let uid = p.tasks[i].uid;
+    if let Some(key) = field.strip_prefix("c:") {
+        let val = custom_value(p, key, value, fmt)?;
+        match val { serde_json::Value::Null => { p.tasks[i].custom.remove(key); } v => { p.tasks[i].custom.insert(key.into(), v); } }
+        return Ok(());
+    }
+    if let Some(code) = field.strip_prefix("code:") {
+        if let Some(def) = p.codes.iter().find(|c| c.name == code) {
+            if !v.is_empty() && !def.values.iter().any(|x| x.value == v) {
+                return Err(format!("\"{v}\" is not a value of the {code} code. Add it in Project › Activity Codes."));
+            }
+        }
+        if v.is_empty() { p.tasks[i].codes.remove(code); } else { p.tasks[i].codes.insert(code.into(), v.into()); }
+        return Ok(());
+    }
     match field {
         "name" => p.tasks[i].name = v.into(),
         "notes" => p.tasks[i].notes = value.into(),
         "code" => p.tasks[i].code = v.into(),
-        "dur" => (p.tasks[i].dur, p.tasks[i].unit) = parse::dur(v, day)?,
+        "dur" => {
+            let (m, u, e) = parse::dur_any(v, day)?;
+            let t = &mut p.tasks[i];
+            (t.dur, t.unit, t.elapsed) = (m, u, e);
+        }
+        "work" => {
+            let (m, _) = parse::dur(if v.chars().all(|c| c.is_ascii_digit() || c == '.') { format!("{v}h") } else { v.to_string() }.as_str(), day)?;
+            let units: f64 = work_units(p, i);
+            if units <= 0.0 {
+                return Err("Assign a work resource before entering work.".into());
+            }
+            let t = &mut p.tasks[i];
+            if t.task_type == TaskType::FixedDuration && t.dur > 0 {
+                let f = m as f64 / (t.dur as f64 * units);
+                for a in &mut t.res { a.units *= f; }
+            } else {
+                t.dur = (m as f64 / units).round() as i64;
+            }
+        }
+        "type" => p.tasks[i].task_type = match v.to_lowercase().replace(' ', "").as_str() {
+            "fixedunits" => TaskType::FixedUnits, "fixedwork" => TaskType::FixedWork, "fixedduration" => TaskType::FixedDuration,
+            _ => return Err("Task type is Fixed Duration, Fixed Units or Fixed Work.".into()),
+        },
+        "effort" => p.tasks[i].effort = yes(v),
+        "acttype" => {
+            let t = &mut p.tasks[i];
+            t.act_type = match v.to_lowercase().replace([' ', '-'], "").as_str() {
+                "task" | "taskdependent" => ActType::Task, "resourcedependent" => ActType::ResourceDep, "levelofeffort" | "loe" => ActType::Loe,
+                "startmilestone" => ActType::StartMs, "finishmilestone" => ActType::FinishMs, "wbssummary" => ActType::WbsSummary,
+                _ => return Err("Activity type is Task Dependent, Resource Dependent, Level of Effort, Start Milestone, Finish Milestone or WBS Summary.".into()),
+            };
+            if matches!(t.act_type, ActType::StartMs | ActType::FinishMs) { t.dur = 0; }
+        }
+        "pcttype" => p.tasks[i].pct_type = match v.to_lowercase().as_str() { "units" => PctType::Units, "physical" => PctType::Physical, _ => PctType::Duration },
+        "phys" => p.tasks[i].phys = v.trim_end_matches('%').trim().parse::<u8>().map_err(|_| "Enter a number from 0 to 100.")?.min(100),
+        "priority" => p.tasks[i].priority = if v.is_empty() { None } else { Some(v.parse::<u16>().map_err(|_| "Priority is a number from 0 to 1000.")?.min(1000)) },
+        "fixedcost" => p.tasks[i].fixed_cost = money(v)?,
+        "accrual" => p.tasks[i].accrual = match v.to_lowercase().chars().next() { Some('s') => Accrual::Start, Some('e') => Accrual::End, _ => Accrual::Prorated },
+        "costaccount" => p.tasks[i].cost_account = v.into(),
+        "responsible" => p.tasks[i].responsible = v.into(),
+        "hyperlink" => p.tasks[i].hyperlink = v.into(),
+        "leveldelay" => p.tasks[i].level_delay = if v.is_empty() { 0 } else { parse::dur(v, day)?.0 },
+        "style" => p.tasks[i].style = serde_json::from_str(value).unwrap_or(serde_json::Value::Null),
         "pct" => set_pct(p, i, v.trim_end_matches('%').trim().parse().map_err(|_| "Enter a number from 0 to 100.")?)?,
         "rem" => {
             let (m, _) = parse::dur(v, day)?;
@@ -228,7 +308,17 @@ pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str
             }
             p.tasks[i].preds = links;
         }
-        "res" => p.tasks[i].res = parse::res(v, p)?,
+        "res" => {
+            let before = work_units(p, i);
+            let res = parse::res(v, p)?;
+            p.tasks[i].res = res;
+            let after = work_units(p, i);
+            // Fixed work, or effort-driven fixed units: the work stays and the duration changes.
+            let t = &mut p.tasks[i];
+            if before > 0.0 && after > 0.0 && (t.task_type == TaskType::FixedWork || (t.effort && t.task_type == TaskType::FixedUnits)) {
+                t.dur = (t.dur as f64 * before / after).round() as i64;
+            }
+        }
         "ctype" => {
             let c = parse::constraint(v)?;
             if matches!(c, Constraint::ASAP | Constraint::ALAP) {
@@ -291,6 +381,44 @@ pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str
     Ok(())
 }
 
+/// Total units of work resources on task `i`.
+fn work_units(p: &Project, i: usize) -> f64 {
+    p.tasks[i].res.iter().filter(|a| p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work)).map(|a| a.units).sum()
+}
+
+fn money(v: &str) -> Result<f64, String> {
+    let t: String = v.chars().filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-').collect();
+    if t.is_empty() { Ok(0.0) } else { t.parse().map_err(|_| format!("\"{v}\" is not an amount.")) }
+}
+
+/// Checks and converts a custom field value for key `key` (text1, number2, flag3, date1, cost1,
+/// duration1, start1, finish1, outline1). Empty clears it.
+pub(crate) fn custom_value(p: &Project, key: &str, value: &str, fmt: &str) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    let v = value.trim();
+    let def = p.fields.iter().find(|d| d.key == key);
+    if let Some(d) = def {
+        if !d.formula.is_empty() {
+            return Err(format!("{} is calculated by a formula and cannot be typed in.", if d.alias.is_empty() { key } else { &d.alias }));
+        }
+        if d.restrict && !v.is_empty() && !d.lookup.iter().any(|x| x.value.eq_ignore_ascii_case(v)) {
+            return Err(format!("\"{v}\" is not in the list for this field."));
+        }
+    }
+    if v.is_empty() {
+        return Ok(serde_json::Value::Null);
+    }
+    let kind = key.trim_start_matches('r').trim_end_matches(|c: char| c.is_ascii_digit());
+    Ok(match kind {
+        "number" => json!(v.replace(',', "").parse::<f64>().map_err(|_| format!("\"{v}\" is not a number."))?),
+        "cost" => json!(money(v)?),
+        "flag" => json!(yes(v)),
+        "duration" => json!(parse::dur(v, p.day_min)?.0),
+        "date" | "start" | "finish" => json!(parse::date_in(v, fmt)?.to_string()),
+        _ => json!(v),
+    })
+}
+
 fn insert_rows(p: &mut Project, at: usize, rows: Vec<Vec<(String, String)>>, fmt: &str) -> Result<(), String> {
     let at = at.min(p.tasks.len());
     let level = level_at(p, at);
@@ -326,6 +454,11 @@ fn res_set(p: &mut Project, uid: u32, field: &str, v: &str) -> Result<(), String
         "rate" => r.rate = num(v)?,
         "per_use" => r.per_use = num(v)?,
         "label" => r.label = v.into(),
+        "initials" => r.initials = v.into(),
+        "email" => r.email = v.into(),
+        "code" => r.code = v.into(),
+        "notes" => r.notes = v.into(),
+        "ovt" => r.ovt = num(v)?,
         f => return Err(format!("{f} cannot be edited.")),
     }
     let name = p.resources[i].name.clone();
@@ -359,6 +492,19 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 t.uid = map[&t.uid];
                 t.level += base;
                 t.preds.retain_mut(|l| map.get(&l.pred).map(|&u| l.pred = u).is_some());
+            }
+            // Pasted copies get fresh Activity IDs.
+            let mut taken: HashSet<String> = p.tasks.iter().map(|t| t.code.clone()).collect();
+            let mut next = p.next_code();
+            for t in tasks.iter_mut().filter(|t| !t.code.is_empty()) {
+                if taken.contains(&t.code) {
+                    while taken.contains(&next) {
+                        let n: u32 = next.trim_start_matches(p.id_prefix.as_str()).parse().unwrap_or(p.id_start);
+                        next = format!("{}{}", p.id_prefix, n + p.id_step.max(1));
+                    }
+                    t.code = next.clone();
+                }
+                taken.insert(t.code.clone());
             }
             p.tasks.splice(at..at, tasks);
         }
@@ -402,6 +548,134 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 (None, Some(k)) => { t.preds.remove(k); }
                 (None, None) => {}
             }
+        }
+        Op::Level { uids, clear } => {
+            if clear { crate::level::clear(p, &uids) } else { crate::level::level(p, &uids)?; }
+        }
+        Op::Split { uid, after, gap } => {
+            let i = p.idx(uid).ok_or("That task no longer exists.")?;
+            let t = &mut p.tasks[i];
+            if after <= 0 || after >= t.dur || gap <= 0 {
+                return Err("Split inside the task's work, with a pause of at least a minute.".into());
+            }
+            t.splits.retain(|(a, _)| *a != after);
+            t.splits.push((after, gap));
+            t.splits.sort_unstable();
+        }
+        Op::Interim { n } => {
+            let s = sched::schedule(p)?;
+            let n = n.clamp(1, 10);
+            for (i, t) in p.tasks.iter_mut().enumerate() {
+                t.custom.insert(format!("start{n}"), serde_json::json!(date_of(s.es[i]).to_string()));
+                t.custom.insert(format!("finish{n}"), serde_json::json!(date_of((s.ef[i] - 1).max(s.es[i])).to_string()));
+            }
+        }
+        Op::UpdateProject { through, reschedule } => {
+            let d = parse::date_in(&through, fmt)?;
+            let s = sched::schedule(p)?;
+            let dd = at(d) + DAY;
+            for i in (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]) {
+                if reschedule {
+                    if p.tasks[i].act_start.is_none() && s.es[i] < dd && p.tasks[i].pct == 0 {
+                        (p.tasks[i].constraint, p.tasks[i].cdate) = (Constraint::SNET, Some(d.succ_opt().unwrap()));
+                    }
+                    continue;
+                }
+                let c = &s.cals[s.ci[i]];
+                let done = if dd <= s.es[i] { 0 } else if dd >= s.ef[i] { 100 } else { c.between(s.es[i], dd) * 100 / c.between(s.es[i], s.ef[i]).max(1) };
+                if done as u8 > p.tasks[i].pct {
+                    set_pct(p, i, done as u8)?;
+                }
+            }
+            p.status = Some(d);
+        }
+        Op::Snapshot { label, comment } => {
+            let s = sched::schedule(p)?;
+            let cost = load::compute(p, &s).cost;
+            let rows = p.tasks.iter().enumerate().map(|(i, t)| SnapRow { uid: t.uid, start: s.es[i], finish: s.ef[i], pct: t.pct, cost: cost[i] }).collect();
+            let leaf: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
+            let w: i64 = leaf.iter().map(|&i| p.tasks[i].dur).sum();
+            let pct = if w > 0 { leaf.iter().map(|&i| p.tasks[i].dur * p.tasks[i].pct as i64).sum::<i64>() as f64 / w as f64 } else { 0.0 };
+            let total = leaf.iter().map(|&i| cost[i]).sum();
+            p.snapshots.push(Snapshot { date: Some(p.status.unwrap_or_else(|| date_of(s.start))), label, comment, finish: s.finish, pct, cost: total, rows });
+        }
+        Op::ProjectSet { field, value } => {
+            let mut v = serde_json::to_value(&*p).map_err(|e| e.to_string())?;
+            if v.get(&field).is_none() || matches!(field.as_str(), "tasks" | "resources" | "format" | "next_uid") {
+                return Err(format!("{field} cannot be set here."));
+            }
+            v[&field] = value;
+            *p = serde_json::from_value(v).map_err(|e| format!("That value does not fit {field}: {e}"))?;
+        }
+        Op::FieldDef { def } => {
+            if !def.formula.trim().is_empty() {
+                crate::formula::parse(&def.formula).map_err(|e| format!("Formula: {e}"))?;
+            }
+            p.fields.retain(|d| d.key != def.key);
+            if !(def.alias.is_empty() && def.formula.is_empty() && def.lookup.is_empty() && def.indicators.is_empty()) {
+                p.fields.push(def);
+            }
+        }
+        Op::CodeDef { old, def } => {
+            if let Some(o) = &old {
+                p.codes.retain(|c| &c.name != o);
+            }
+            if let Some(d) = def {
+                if d.name.trim().is_empty() {
+                    return Err("An activity code needs a name.".into());
+                }
+                if let Some(o) = old.filter(|o| *o != d.name) {
+                    for t in &mut p.tasks {
+                        if let Some(v) = t.codes.remove(&o) { t.codes.insert(d.name.clone(), v); }
+                    }
+                }
+                p.codes.retain(|c| c.name != d.name);
+                p.codes.push(d);
+            }
+        }
+        Op::Risk { id, risk } => {
+            p.risks.retain(|r| r.id != id);
+            if let Some(mut r) = risk {
+                r.id = if id == 0 { p.risks.iter().map(|r| r.id).max().unwrap_or(0) + 1 } else { id };
+                p.risks.push(r);
+                p.risks.sort_by_key(|r| r.id);
+            }
+        }
+        Op::TaskList { uid, field, value } => {
+            let i = p.idx(uid).ok_or("That task no longer exists.")?;
+            let t = &mut p.tasks[i];
+            let e = |x: serde_json::Error| x.to_string();
+            match field.as_str() {
+                "steps" => t.steps = serde_json::from_value(value).map_err(e)?,
+                "notebook" => t.notebook = serde_json::from_value(value).map_err(e)?,
+                "expenses" => t.expenses = serde_json::from_value(value).map_err(e)?,
+                "docs" => t.docs = serde_json::from_value(value).map_err(e)?,
+                "splits" => t.splits = serde_json::from_value(value).map_err(e)?,
+                f => return Err(format!("{f} is not a task list.")),
+            }
+            // Weighted steps measure physical progress.
+            let w: f64 = t.steps.iter().map(|s| s.weight.max(0.0)).sum();
+            if field == "steps" && w > 0.0 {
+                t.phys = (t.steps.iter().filter(|s| s.done).map(|s| s.weight.max(0.0)).sum::<f64>() * 100.0 / w).round() as u8;
+            }
+        }
+        Op::ResJson { uid, field, value } => {
+            let k = p.res_idx(uid).ok_or("That resource no longer exists.")?;
+            let r = &mut p.resources[k];
+            let e = |x: serde_json::Error| x.to_string();
+            match field.as_str() {
+                "tables" => r.tables = serde_json::from_value(value).map_err(e)?,
+                "avail" => r.avail = serde_json::from_value(value).map_err(e)?,
+                "custom" => r.custom = serde_json::from_value(value).map_err(e)?,
+                "cal" => r.cal = value.as_str().filter(|s| !s.is_empty()).map(String::from),
+                f => return Err(format!("{f} cannot be set here.")),
+            }
+        }
+        Op::Ui { key, value } => {
+            if !p.ui.is_object() {
+                p.ui = serde_json::json!({});
+            }
+            p.ui[&key] = value;
         }
         Op::Unlink { uids } => {
             let set: HashSet<u32> = uids.iter().copied().collect();
