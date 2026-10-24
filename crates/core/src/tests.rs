@@ -550,3 +550,14 @@ fn text_formatting_on_tasks_and_sheets() {
     op(&mut doc, Op::SheetStyle { k: 0, cells: vec![("b2".into(), "i;a:r".into())] }).unwrap();
     assert_eq!(doc.p.sheets[0].style.get("B2").map(String::as_str), Some("i;a:r"));
 }
+
+#[test]
+fn delete_custom_field_removes_values() {
+    let mut doc = Doc::new(plan(&[(2, "")]));
+    let u = doc.p.tasks[0].uid;
+    op(&mut doc, Op::FieldDef { def: CustomDef { key: "text1".into(), alias: "Area".into(), ..CustomDef::default() } }).unwrap();
+    op(&mut doc, Op::Cells { cells: vec![(u, "c:text1".into(), "North".into())] }).unwrap();
+    assert!(doc.p.tasks[0].custom.contains_key("text1"));
+    op(&mut doc, Op::DeleteField { key: "text1".into() }).unwrap();
+    assert!(doc.p.fields.is_empty() && doc.p.tasks[0].custom.is_empty());
+}

@@ -53,7 +53,7 @@ kbd { font: 10.5px "Segoe UI", sans-serif; color: var(--muted); border: 1px soli
 .tabs .ctx small { color: var(--blue); font-size: 10px; margin-right: 4px; }
 
 /* Ribbon */
-.ribbon { display: flex; height: 92px; background: var(--panel); border-bottom: 1px solid var(--line); padding: 3px 4px 0; flex: none; overflow-x: auto; overflow-y: hidden; }
+.ribbon { display: flex; height: 92px; background: var(--panel); border-bottom: 1px solid var(--line); padding: 3px 4px 0; flex: none; overflow: hidden; }
 .grp { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 0 5px; flex: none; }
 .grp .items { flex: 1; display: flex; align-items: flex-start; gap: 2px; }
 .grp .cap { text-align: center; font-size: 10.5px; color: var(--muted); padding: 1px 0 3px; white-space: nowrap; }
@@ -567,3 +567,27 @@ tr.behind td { background: var(--err-bg); }
   html.printing .ppage:last-child { break-after: auto; page-break-after: auto; }
 }
 .pset .seg { display: flex; flex-wrap: wrap; } .pset .seg button { flex: 1; padding: 3px 6px; }
+
+/* Columns dialog */
+.coldlg { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; min-width: 760px; }
+.coldlg > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.coldlg .fieldlist { height: 340px; overflow: auto; border: 1px solid var(--line); }
+.coldlg tr.on td { background: var(--sel); }
+.coldlg .inline { display: flex; gap: 6px; align-items: center; }
+
+/* Ribbon fitting: 1 = tighter, 2 = small buttons show icons only, 3 = big buttons too */
+.ribbon[data-fit="1"] .grp, .ribbon[data-fit="2"] .grp, .ribbon[data-fit="3"] .grp { padding: 0 2px; }
+.ribbon[data-fit="2"] .stack .rb span, .ribbon[data-fit="3"] .stack .rb span { display: none; }
+.ribbon[data-fit="3"] .rb.big span, .ribbon[data-fit="3"] .splitbig .bot span { font-size: 0; }
+.ribbon[data-fit="3"] .rb.big, .ribbon[data-fit="3"] .splitbig .rb { min-width: 40px; max-width: 48px; }
+.ribbon .grp .cap { overflow: hidden; text-overflow: ellipsis; }
+
+/* Project Setup as a page */
+.setuppage { flex: 1; overflow: auto; padding: 24px; background: var(--panel); }
+.setuppage .setup { width: auto; max-width: 720px; margin: 0 auto; border: 1px solid var(--line); box-shadow: none; min-height: 560px; }
+.pcols { max-height: 220px; overflow: auto; border: 1px solid var(--line); padding: 2px 6px; margin: 4px 0 8px; }
+.pcols > div { display: flex; align-items: center; justify-content: space-between; }
+.pcols .chk { margin: 2px 0 !important; }
+.pnotes { flex: 1; font-size: 11px; color: #1B2733; overflow: hidden; }
+.pnotes h3 { margin: 0 0 8px; font-size: 14px; }
+.pnotes p { margin: 2px 0 8px 12px; white-space: pre-wrap; }

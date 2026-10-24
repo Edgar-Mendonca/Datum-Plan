@@ -2,7 +2,7 @@
 import { For, Show, createSignal, createMemo, Index } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay, invoke } from "./api";
-import { act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query } from "./store";
+import { allCols, saveAll, deleteCol, act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query } from "./store";
 import { Dialog, Row, Text, Pick, Check, Tabs } from "./ui";
 import { TaskTab, useInfo, TABS } from "./details";
 
@@ -233,6 +233,41 @@ export const snapshot = () => openDialog(() => {
 });
 
 // ---------- columns, field settings, tables ----------
+const nameOf = (k: string) => P().fields.find(f => `c:${f.key}` === k)?.alias || P().titles?.[k] || fields().task.find(f => f.key === k)?.name || k.replace(/^code:/, "");
+/** Delete Column: a custom or formula field may go from this table only, or be deleted with its values. */
+export const deleteColumn = (key: string) => {
+  if (!key.startsWith("c:")) return deleteCol(key);
+  openDialog(() => (
+    <Dialog title="Delete Column" ok={() => { deleteCol(key, true); }} okText="Delete field and values" extra={<button class="btn" onClick={() => { deleteCol(key); closeDialog(); }}>Remove from this table</button>}>
+      <p><b>{nameOf(key)}</b> is a custom field. Remove it from this table only (its values stay and it can be inserted again), or delete the field, its formula and every task's value?</p>
+    </Dialog>
+  ));
+};
+/** Columns: the fields available on the left, this table's columns on the right (show, width, order). */
+export const columnsDialog = () => openDialog(() => {
+  const [list, setList] = createStore<[string, number][]>(allCols().map(c => [c[0], c[1]] as [string, number]));
+  const [find, setFind] = createSignal(""), [pick, setPick] = createSignal(0);
+  const avail = createMemo(() => fields().task.filter(f => !list.some(c => c[0] === f.key) && (f.name + f.group).toLowerCase().includes(find().toLowerCase())));
+  const move = (d: number) => { const i = pick(), j = i + d; if (j < 0 || j >= list.length) return; const v = list.map(x => [...x] as [string, number]); [v[i], v[j]] = [v[j], v[i]]; setList(v); setPick(j); };
+  return (
+    <Dialog title={`Columns: ${table()} table`} wide ok={() => { if (!list.some(c => c[1] > 0)) { toast("Keep at least one column shown."); return false; } saveAll(list.map(c => [c[0], c[1]])); }}>
+      <div class="coldlg">
+        <div><b>Available fields</b><input class="find" placeholder="Search" value={find()} onInput={e => setFind(e.currentTarget.value)} />
+          <div class="fieldlist"><table class="tbl"><tbody><For each={avail().slice(0, 300)}>{f => <tr class="link" onDblClick={() => setList(list.length, [f.key, 90])}><td>{nameOf(f.key)}</td><td class="muted">{f.group}</td><td><button class="btn sm" onClick={() => { setList(list.length, [f.key, 90]); setPick(list.length - 1); }}>Add ›</button></td></tr>}</For></tbody></table></div></div>
+        <div><b>Columns in this table</b>
+          <div class="fieldlist"><table class="tbl"><thead><tr><th>Show</th><th>Column</th><th>Width</th><th /></tr></thead><tbody>
+            <For each={list}>{(c, i) => <tr classList={{ on: pick() === i() }} onClick={() => setPick(i())}>
+              <td><input type="checkbox" checked={c[1] > 0} onChange={e => setList(i(), 1, Math.abs(c[1] || 90) * (e.currentTarget.checked ? 1 : -1))} /></td>
+              <td>{nameOf(c[0])}</td><td><input type="number" min="20" max="600" style={{ width: "64px" }} value={Math.abs(c[1])} onChange={e => setList(i(), 1, Math.max(20, +e.currentTarget.value) * (c[1] < 0 ? -1 : 1))} /></td>
+              <td><button class="x" title="Remove" onClick={() => setList(list.filter((_, j) => j !== i()))}>×</button></td></tr>}</For>
+          </tbody></table></div>
+          <div class="inline"><button class="btn sm" onClick={() => move(-1)}>↑ Up</button><button class="btn sm" onClick={() => move(1)}>↓ Down</button><span class="muted">Untick Show to hide a column; × removes it from the table.</span></div>
+        </div>
+      </div>
+    </Dialog>
+  );
+});
+
 export const insertColumn = (run?: (key: string) => void) => openDialog(() => {
   const [find, setFind] = createSignal("");
   const list = createMemo(() => [...fields().task.map(f => [f.key, f.name, f.group] as [string, string, string]), ...P().codes.map(c => [`code:${c.name}`, c.name, "Activity codes"] as [string, string, string])]

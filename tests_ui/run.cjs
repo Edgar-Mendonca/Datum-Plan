@@ -107,6 +107,30 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Print renders every page with its paper size", pr && pr[0] === nprev && /size: 297mm 210mm/.test(pr[1]), JSON.stringify(pr));
   await p.click(".bs aside .back"); await p.waitForTimeout(200);
 
+  // 0.3.5: nested Insert Column menu, hide/unhide/delete, every column printed, ribbon fits, Setup in the sidebar.
+  await p.keyboard.press("Escape");
+  const hd = await p.$(".ghead .hc:nth-child(4)"); await hd.click({ button: "right" }); await p.waitForTimeout(150);
+  await p.hover(".menu button:has-text('Insert Column')"); await p.waitForTimeout(120);
+  await p.hover(".menu button:has-text('Schedule')"); await p.waitForTimeout(150);
+  check("Insert Column categories open their fields", (await p.$$(".menu")).length === 3 && (await p.$$eval(".menu:nth-of-type(3) button", b => b.length)) > 10);
+  await p.mouse.click(5, 5);
+  const hd2 = await p.$(".ghead .hc:nth-child(4)"); const hname = (await hd2.textContent()).trim(); await hd2.click({ button: "right" }); await p.click(".menu button:has-text('Hide Column')"); await p.waitForTimeout(150);
+  const hc = JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()));
+  check("Hide Column keeps the column, hidden", /"Columns".*-\d+/.test(hc), hc.slice(0, 200));
+  const hd3 = await p.$(".ghead .hc:nth-child(4)"); await hd3.click({ button: "right" });
+  check("Unhide Columns lists the hidden column", !(await p.$eval(".menu button:has-text('Unhide Columns')", b => b.disabled)) && (await p.$$(".menu button:has-text('Delete Column')")).length === 1, hname);
+  await p.mouse.click(5, 5);
+  await p.evaluate(() => document.querySelector(".gscroll").focus()); await p.keyboard.press("Control+p"); await p.waitForTimeout(400);
+  const heads = await p.$$eval(".pprev svg text", t => t.map(x => x.textContent));
+  check("Print includes every column of the table", ["Task Name", "Duration", "Start", "Finish"].every(h => heads.includes(h)), heads.slice(0, 12).join("|"));
+  await p.click(".bs aside .back"); await p.waitForTimeout(150);
+  for (const w of [1280, 1600]) { await p.setViewportSize({ width: w, height: 900 }); for (const t of ["Task", "Schedule", "Progress", "Report", "View", "Format"]) { await p.click(`.tabs button:text-is('${t}')`); await p.waitForTimeout(120); const o = await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth); if (o > 1) check(`ribbon fits at ${w}px (${t})`, false, String(o)); } }
+  check("ribbon never scrolls sideways (1280/1600 px)", true);
+  await p.setViewportSize({ width: 1440, height: 900 });
+  await p.click('.side button[title="Setup"]'); await p.waitForTimeout(200);
+  check("Setup opens as a page from the sidebar", !!(await p.$(".setuppage .setup")));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

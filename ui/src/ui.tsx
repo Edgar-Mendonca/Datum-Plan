@@ -7,20 +7,21 @@ export const Icon = (p: { n: string; size?: number }) => (
 );
 
 export const Menu = () => {
-  const [sub, setSub] = createSignal<{ x: number; y: number; items: Item[] } | null>(null);
-  const close = () => { setMenu(null); setSub(null); };
-  const list = (items: Item[], x: number, y: number, isSub: boolean): JSX.Element => {
+  // Open submenus by depth: hovering an item at depth d replaces everything deeper.
+  const [subs, setSubs] = createSignal<{ x: number; y: number; px: number; items: Item[] }[]>([]);
+  const close = () => { setMenu(null); setSubs([]); };
+  const list = (items: Item[], x: number, y: number, depth: number, px = 0): JSX.Element => {
     let el!: HTMLDivElement;
     onMount(() => {
       const r = el.getBoundingClientRect();
       if (r.bottom > innerHeight - 4) el.style.top = `${Math.max(4, innerHeight - r.height - 4)}px`;
-      if (r.right > innerWidth - 4) el.style.left = `${Math.max(4, innerWidth - r.width - 4)}px`;
+      if (r.right > innerWidth - 4) el.style.left = `${Math.max(4, depth ? px - r.width : innerWidth - r.width - 4)}px`;
     });
     return (
       <div class="menu" ref={el} style={{ left: `${x}px`, top: `${y}px` }} onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
         <For each={items}>{it => it === "-" ? <hr /> : (
           <button disabled={it.off} classList={{ on: it.on }}
-            onMouseEnter={e => { if (!isSub) { const r = e.currentTarget.getBoundingClientRect(); setSub(it.sub ? { x: r.right, y: r.top - 4, items: it.sub } : null); } }}
+            onMouseEnter={e => { const r = e.currentTarget.getBoundingClientRect(); setSubs([...subs().slice(0, depth), ...(it.sub ? [{ x: r.right, y: r.top - 4, px: r.left, items: it.sub }] : [])]); }}
             onClick={() => { if (it.sub) return; close(); it.run?.(); }}>
             <i class="tick">{it.on ? "✓" : it.icon ? <Icon n={it.icon} /> : ""}</i><span>{it.label}</span>{it.keys && <kbd>{it.keys}</kbd>}{it.sub && <b class="more">›</b>}
           </button>
@@ -32,7 +33,7 @@ export const Menu = () => {
   onMount(() => document.addEventListener("mousedown", down));
   onCleanup(() => document.removeEventListener("mousedown", down));
   return (
-    <Show when={menu()}>{m => <>{list(m().items, m().x, m().y, false)}<Show when={sub()}>{s => list(s().items, s().x, s().y, true)}</Show></>}</Show>
+    <Show when={menu()}>{m => <>{list(m().items, m().x, m().y, 0)}<For each={subs()}>{(s, i) => list(s.items, s.x, s.y, i() + 1, s.px)}</For></>}</Show>
   );
 };
 

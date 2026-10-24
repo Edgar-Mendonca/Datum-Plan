@@ -31,6 +31,8 @@ pub enum Op {
     ProjectSet { field: String, value: serde_json::Value },
     /// Replaces a custom field definition (empty alias and formula with no values removes it).
     FieldDef { def: CustomDef },
+    /// Deletes a custom field: its definition and every task's value.
+    DeleteField { key: String },
     CodeDef { old: Option<String>, def: Option<CodeDef> },
     /// Adds, changes or (when `risk` is None) removes a risk by id.
     Risk { id: u32, risk: Option<Risk> },
@@ -52,7 +54,7 @@ pub enum Op {
     ResInsert { name: String },
     ResSet { uid: u32, field: String, value: String },
     ResDelete { uids: Vec<u32> },
-    Columns { cols: Vec<(String, u16)> },
+    Columns { cols: Vec<(String, i32)> },
     /// Many cell edits as one step (paste, fill, clear a range). Cells that cannot take the value
     /// are skipped; it fails only when none could be set.
     Cells { cells: Vec<(u32, String, String)> },
@@ -637,6 +639,10 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if !(def.alias.is_empty() && def.formula.is_empty() && def.lookup.is_empty() && def.indicators.is_empty()) {
                 p.fields.push(def);
             }
+        }
+        Op::DeleteField { key } => {
+            p.fields.retain(|d| d.key != key);
+            p.tasks.iter_mut().for_each(|t| { t.custom.remove(&key); });
         }
         Op::CodeDef { old, def } => {
             if let Some(o) = &old {

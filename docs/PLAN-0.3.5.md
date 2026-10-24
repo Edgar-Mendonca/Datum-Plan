@@ -1,6 +1,6 @@
 # Datum Plan 0.3.5: cleaner ribbon, Setup in the sidebar, column control, full printing
 
-Status: **draft, waiting for the user's answers** (section 6). Built after the answers.
+Status: **answered and built as 0.3.5** (tabs are Task, Schedule and Progress; no Home tab). Other views' printing, the shared grid and xlsx formatting moved to 0.3.6.
 
 ## 1. User feedback on 0.3.4 (screenshots, 24 Oct 2026)
 1. The Project Setup panel takes a big area on the right. Move it to the left sidebar as the first icon ("Setup").

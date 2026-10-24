@@ -1,6 +1,6 @@
 // Title bar, quick access toolbar, Tell Me and the ribbon.
 import { For, Show, JSX, createSignal, createMemo, onMount } from "solid-js";
-import { out, tab, setTab, setBackstage, view, openMenu, Item, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, setHideSum, hideSum, baseline, setBaseline, details, timeline, setupOpen, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
+import { out, tab, setTab, setBackstage, view, openMenu, Item, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import * as D from "./dialogs";
 import { Icon } from "./ui";
@@ -110,30 +110,43 @@ export const TitleBar = (p: { update: string | null }) => (
     </div>
     <nav class="tabs">
       <button class="file" onClick={() => setBackstage("home")}>File</button>
-      <For each={[["task", "Task"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["help", "Help"]]}>{([k, l]) =>
+      <For each={[["task", "Task"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["help", "Help"]]}>{([k, l]) =>
         k === "format" ? <div class="ctxgrp"><small>Gantt Chart Tools</small><button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button></div>
           : <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For>
     </nav>
   </header>
 );
 
+/** Shrinks the ribbon in steps (labels of small buttons, then of big ones) instead of scrolling sideways. */
+const fitRibbon = (el: HTMLElement) => {
+  const fit = () => { for (const k of [0, 1, 2, 3]) { el.dataset.fit = String(k); if (el.scrollWidth <= el.clientWidth + 1) break; } };
+  new ResizeObserver(fit).observe(el);
+  new MutationObserver(() => requestAnimationFrame(fit)).observe(el, { childList: true, subtree: true });
+};
 export const Ribbon = () => (
-  <section class="ribbon">
+  <section class="ribbon" ref={fitRibbon}>
     <Show when={tab() === "task"}>
       <G l="View"><B big i="gantt" l="Gantt Chart" run={() => C.view("gantt")} dd={e => openMenu(e, viewMenu())} /></G>
       <G l="Clipboard"><B big i="paste" l="Paste" run={C.paste} /><S><B i="cut" l="Cut" run={C.cut} /><B i="copy" l="Copy" run={C.copy} /><B i="paint" l="Format Painter" run={F.paint} on={F.painter() !== null} /></S></G>
       <Font />
-      <G l="Schedule">
-        <div class="pcts"><For each={[0, 25, 50, 75, 100]}>{v => <button class="rb" title={`${v}% complete`} onClick={() => C.pct(v)}><Icon n="pct" /><span>{v}%</span></button>}</For></div>
-        <S><B i="track" l="Mark on Track" run={C.onTrack} dd={e => openMenu(e, [{ label: "Mark on Track", run: C.onTrack }, { label: "Update Tasks…", run: C.info }, { label: "Update Project…", run: C.update }])} /><B i="link" l="Link" run={C.link} /><B i="unlink" l="Unlink" run={C.unlink} /></S>
-        <S><B i="outdent" l="Outdent" run={C.outdent} /><B i="indent" l="Indent" run={C.indent} /><B i="split" l="Split" run={C.split} /></S>
-        <S><B i="up" l="Move Up" run={() => C.move(true)} /><B i="down" l="Move Down" run={() => C.move(false)} /><B i="inact" l="Inactivate" run={C.inactive} /></S>
-      </G>
-      <G l="Tasks"><B big i="manual" l="Manually Schedule" run={() => C.mode(true)} /><B big i="auto" l="Auto Schedule" run={() => C.mode(false)} /></G>
       <G l="Insert"><B big i="task" l="Task" run={() => C.newTask()} dd={e => openMenu(e, [{ label: "Task", run: () => C.newTask() }, { label: "Blank Row", run: () => C.newTask() }, { label: "Summary Task", run: C.summary }, { label: "Milestone", run: () => C.newTask(true) }, { label: "Recurring Task…", icon: "repeat", run: C.recurring }])} />
-        <S><B i="proj" l="Summary" run={C.summary} /><B i="ms" l="Milestone" run={() => C.newTask(true)} /><B i="del" l="Delete" run={C.del} /></S></G>
-      <G l="Properties"><B big i="info" l="Information" run={C.info} /><S><B i="detail" l="Notes" run={C.notes} /><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Add to Timeline" run={C.timeline} /></S></G>
-      <G l="Editing"><S><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="find" l="Find" run={palette} /><B i="fill" l="Inspect" run={() => D.inspect(C.ids()[0])} /></S><S><B i="change" l="Global Change" run={C.globalChange} /><B i="repeat" l="Recurring Task" run={C.recurring} /></S></G>
+        <S><B i="proj" l="Summary" run={C.summary} /><B i="ms" l="Milestone" run={() => C.newTask(true)} /><B i="repeat" l="Recurring" run={C.recurring} /></S><S><B i="del" l="Delete" run={C.del} /></S></G>
+      <G l="Properties"><B big i="info" l="Information" run={C.info} /><S><B i="note" l="Notes" run={C.notes} /><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Add to Timeline" run={C.timeline} /></S></G>
+    </Show>
+    <Show when={tab() === "schedule"}>
+      <G l="Links"><B big i="link" l="Link Tasks" run={C.link} /><S><B i="unlink" l="Unlink" run={C.unlink} /><B i="link" l="Relationships" run={() => C.view("relations")} /></S></G>
+      <G l="Outline"><S><B i="outdent" l="Outdent" run={C.outdent} /><B i="indent" l="Indent" run={C.indent} /><B i="list" l="Outline Level" dd={e => openMenu(e, outlineMenu())} /></S><S><B i="up" l="Move Up" run={() => C.move(true)} /><B i="down" l="Move Down" run={() => C.move(false)} /></S></G>
+      <G l="Tasks"><B big i="manual" l="Manually Schedule" run={() => C.mode(true)} /><B big i="auto" l="Auto Schedule" run={() => C.mode(false)} /><S><B i="split" l="Split" run={C.split} /><B i="inact" l="Inactivate" run={C.inactive} /></S></G>
+      <G l="Leveling"><B big i="level" l="Level All" run={() => C.level()} /><S><B i="level" l="Level Selection" run={() => C.level(false)} /><B i="del" l="Clear Leveling" run={C.clearLevel} /></S></G>
+      <G l="Paths"><S><B i="crit" l="Critical Path" run={() => { setShowCrit(true); setFilter(fields().filters.find(f => f.name === "Critical") ?? ALL); }} /><B i="crit" l="Longest Path" run={() => setFilter(fields().filters.find(f => f.name === "Longest Path") ?? ALL)} /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
+      <G l="Editing"><S><B i="find" l="Find" run={palette} /><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="search" l="Inspect" run={() => D.inspect(C.ids()[0])} /></S><S><B i="change" l="Global Change" run={C.globalChange} /><B i="opts" l="Schedule Options" run={() => D.scheduleOptions()} /></S></G>
+    </Show>
+    <Show when={tab() === "progress"}>
+      <G l="Update"><div class="pcts"><For each={[0, 25, 50, 75, 100]}>{v => <button class="rb" title={`${v}% complete`} onClick={() => C.pct(v)}><Icon n="pct" /><span>{v}%</span></button>}</For></div>
+        <S><B i="track" l="Mark on Track" run={C.onTrack} /><B i="info" l="Update Tasks" run={C.info} /><B i="track" l="Update Project" run={C.update} /></S></G>
+      <G l="Period"><B big i="update" l="Update Progress" run={() => C.view("update")} /><S><B i="calendar2" l="Status Date" run={() => D.projectInfo()} /><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /></S></G>
+      <G l="Baselines"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="report" l="Store Snapshot" run={() => D.snapshot()} /><B i="base" l="Show Baseline" dd={e => openMenu(e, baselineMenu())} on={showBase()} /><B i="base" l="Tracking Gantt" run={() => C.view("tracking")} /></S></G>
+      <G l="Progress Reports"><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /></G>
     </Show>
     <Show when={tab() === "resource"}>
       <G l="View"><B big i="res" l="Resource Sheet" run={() => C.view("ressheet")} dd={e => openMenu(e, viewMenu())} /><B big i="team" l="Team Planner" run={() => C.view("team")} /></G>
@@ -142,7 +155,6 @@ export const Ribbon = () => (
       <G l="Level"><B big i="level" l="Level All" run={() => C.level()} /><S><B i="level" l="Level Selection" run={() => C.level(false)} /><B i="del" l="Clear Leveling" run={C.clearLevel} /><B i="opts" l="Leveling Options" run={() => D.scheduleOptions()} /></S></G>
     </Show>
     <Show when={tab() === "report"}>
-      <G l="Status"><B big i="update" l="Update Progress" run={() => C.view("update")} /></G>
       <G l="View Reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="builder" l="Report Builder" run={() => C.view("builder")} /><B big i="report" l="Reports" run={() => C.view("reports")} /></G>
       <G l="Health"><B big i="check" l="Check Schedule" run={() => C.view("checks")} /><B big i="risk" l="Risks" run={() => C.view("risks")} /></G>
       <G l="Portfolio"><B big i="folder" l="Portfolio" run={() => C.view("portfolio")} /><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
@@ -150,9 +162,8 @@ export const Ribbon = () => (
     </Show>
     <Show when={tab() === "project"}>
       <G l="Properties"><B big i="proj" l="Project Information" run={() => D.projectInfo()} /><S><B i="cols" l="Custom Fields" run={() => D.customFields()} /><B i="group" l="Activity Codes" run={() => D.activityCodes()} /><B i="calendar2" l="Change Working Time" run={() => D.calendars()} /></S>
-        <S><B i="detail" l="Project Setup" run={C.setup} on={setupOpen()} /><B i="opts" l="Schedule Options" run={() => D.scheduleOptions()} /></S></G>
-      <G l="Schedule"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="track" l="Update Project" run={C.update} /><B i="calendar2" l="Status Date" run={() => D.projectInfo()} /><B i="report" l="Store Snapshot" run={() => D.snapshot()} /></S><S><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /></S></G>
-      <G l="Status"><S><B i="crit" l="Critical Path" run={() => { setShowCrit(true); setFilter(fields().filters.find(f => f.name === "Critical") ?? ALL); }} /><B i="crit" l="Longest Path" run={() => setFilter(fields().filters.find(f => f.name === "Longest Path") ?? ALL)} /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
+        <S><B i="setup" l="Project Setup" run={C.setup} on={view() === "setup"} /><B i="opts" l="Schedule Options" run={() => D.scheduleOptions()} /></S></G>
+      <G l="Schedule"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="track" l="Update Project" run={C.update} /><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
       <G l="Proofing"><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
     </Show>
     <Show when={tab() === "view"}>
@@ -160,6 +171,7 @@ export const Ribbon = () => (
       <G l="Resource Views"><S><B i="res" l="Resource Sheet" run={() => C.view("ressheet")} /><B i="load" l="Resource Usage" run={() => C.view("resusage")} /><B i="team" l="Team Planner" run={() => C.view("team")} /></S></G>
       <G l="Data">
         <S><B i="sort" l={`Sort${sort().length ? ": on" : ""}`} dd={e => openMenu(e, sortMenu())} /><B i="list" l="Outline" dd={e => openMenu(e, outlineMenu())} /><B i="table" l={`Tables: ${table()}`} dd={e => openMenu(e, tableMenu())} /></S>
+        <S><B i="cols" l="Columns…" run={() => D.columnsDialog()} /></S>
         <S><B i="filter" l={`Filter: ${filter().name || "Custom"}`} dd={e => openMenu(e, filterMenu())} on={filter().rules.length > 0} /><B i="filter" l="Highlight" dd={e => openMenu(e, filterMenu().map(x => x === "-" ? x : { ...x, run: () => { x.run?.(); setFilter({ ...filter(), highlight: true }); } }))} /><B i="group" l={`Group by: ${group().length ? group().join(", ") : "None"}`} dd={e => openMenu(e, groupMenu())} on={group().length > 0} /></S>
       </G>
       <G l="Zoom"><B big i="zin" l="Timescale" dd={e => openMenu(e, zoomMenu())} /><S><B i="zin" l="Zoom In" run={C.zoomIn} /><B i="zout" l="Zoom Out" run={C.zoomOut} /><B i="fit" l="Entire Project" run={C.fit} /></S></G>
@@ -167,7 +179,7 @@ export const Ribbon = () => (
     </Show>
     <Show when={tab() === "format"}>
       <G l="Format"><B big i="style" l="Bar Styles" run={() => D.barStyles()} /><B big i="grid" l="Conditional Formatting" run={() => D.condFormat()} /><S><label class="chk"><input type="checkbox" checked={gstyle().grid} onChange={e => act({ Ui: { key: "gantt", value: { ...gstyle(), grid: e.currentTarget.checked } } })} />Gridlines</label><B i="detail" l="Details Pane" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
-      <G l="Columns"><B big i="cols" l="Formula Column" run={() => D.formulaColumn()} /><B big i="cols" l="Insert Column" dd={e => openMenu(e, fieldMenu(k => saveCols([...cols(), [k, 90]])))} /><S><B i="table" l="Column Settings" run={() => D.fieldSettings(0)} /><B i="cols" l="Custom Fields" run={() => D.customFields()} /></S></G>
+      <G l="Columns"><B big i="cols" l="Formula Column" run={() => D.formulaColumn()} /><B big i="cols" l="Insert Column" dd={e => openMenu(e, fieldMenu(k => saveCols([...cols(), [k, 90]])))} /><S><B i="table" l="Columns…" run={() => D.columnsDialog()} /><B i="cols" l="Custom Fields" run={() => D.customFields()} /></S></G>
       <G l="Bar Styles"><S><label class="chk"><input type="checkbox" checked={showCrit()} onChange={e => setShowCrit(e.currentTarget.checked)} />Critical Tasks</label><label class="chk"><input type="checkbox" checked={showSlack()} onChange={e => setShowSlack(e.currentTarget.checked)} />Slack</label><label class="chk"><input type="checkbox" checked={showLate()} onChange={e => setShowLate(e.currentTarget.checked)} />Late Tasks</label></S>
         <B big i="base" l="Baseline" dd={e => openMenu(e, baselineMenu())} on={showBase()} /></G>
       <G l="Gantt Chart Style"><div class="swatches"><For each={STYLES}>{st => <button class="swatch" classList={{ on: gstyle().name === st.name }} title={st.name} onClick={() => act({ Ui: { key: "gantt", value: { ...st, grid: gstyle().grid } } })}><i style={{ background: st.sum }} /><i style={{ background: st.fill, border: `1px solid ${st.edge}` }} /><i style={{ background: st.cfill, border: `1px solid ${st.crit}` }} /></button>}</For></div></G>

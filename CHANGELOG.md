@@ -1,6 +1,38 @@
 # Changelog
 
-## 0.3.4 — 2026-10-24
+## 0.3.5 — 2026-10-24
+
+A cleaner ribbon, Setup in the sidebar, full control of columns, and printing that includes every column.
+
+**Ribbon**
+- The Task tab is split into three: **Task** (clipboard, font, alignment, insert, properties), **Schedule** (links, outline, manual/auto, split, leveling, critical and longest path, find, global change), and **Progress** (% complete, Mark on Track, Update Progress, status date, reporting periods, baselines, snapshots, progress reports).
+- No more sideways scrollbar. On a narrow window the ribbon tightens, then shows icons only, so every command stays in view and group names are no longer cut off.
+- New icons for Setup and Notes.
+
+**Project Setup**
+- Setup is now the first icon in the left sidebar and opens as a page, not a panel over the plan. New plans open on it. Skip or Done takes you to your chosen view.
+
+**Columns**
+- Fixed: the Insert Column categories (General, Schedule, Progress…) now open their list of fields. Menus can have any number of levels. "Search all fields…" is at the top.
+- Right-click a column heading:
+  - Hide Column (the column stays in the table, hidden);
+  - Unhide Columns ▸ (lists the hidden ones, or Unhide All);
+  - Delete Column (with undo). For a custom or formula column it asks whether to remove it from the table or delete the field and all its values.
+- New Columns… dialog (heading menu, View › Data, Format › Columns): all fields on the left; the table's columns on the right with Show, width, order and remove.
+
+**Printing**
+- Every column of the table prints by default (Task Name, Duration, Start, Finish, Predecessors, Resources, % Complete…), not just the first three.
+- Fixed: the chart no longer overlaps the last table columns.
+- A table wider than the page continues on the next page without cutting a column in half. ID and Task Name repeat on every page.
+- "Fit timescale to N pages wide" now really fits: it shrinks the page when the table is wide.
+- Page Setup › View:
+  - choose and order the columns to print;
+  - text size and row height;
+  - shrink columns to fit;
+  - wrap long task names;
+  - print task notes on the last pages.
+
+ 2026-10-24
 
 Printing and PDF done properly, Excel-style text formatting, and a clearer Options page.
 

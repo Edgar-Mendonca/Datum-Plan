@@ -10,7 +10,7 @@ import "@fontsource/ibm-plex-mono/latin-500.css";
 import "@fontsource/ibm-plex-mono/latin-600.css";
 import "./styles.css";
 import { invoke, listen, Out, FieldList, Options } from "./api";
-import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setupOpen, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut, setThemeRaw, applyTheme } from "./store";
+import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut, setThemeRaw, applyTheme } from "./store";
 import { C } from "./cmds";
 import { TitleBar, Ribbon, palette } from "./ribbon";
 import { Grid, FormulaBar } from "./grid";
@@ -26,7 +26,7 @@ import { Menu, Toast, Icon, Dialog } from "./ui";
 import * as D from "./dialogs";
 
 const SIDE: ([View, string, string] | "-")[] = [
-  ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
+  ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
   ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["team", "team", "Team"], "-",
   ["sheets", "table", "Sheets"], "-",
   ["update", "update", "Update"], ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["builder", "builder", "Builder"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["portfolio", "folder", "Portfolio"],
@@ -117,6 +117,7 @@ const App = () => {
         <div class="content">
           <Show when={out()}>
             <Switch fallback={<GanttView />}>
+              <Match when={view() === "setup"}><div class="setuppage"><Setup /></div></Match>
               <Match when={view() === "network"}><Network /></Match>
               <Match when={view() === "calendar"}><CalendarView /></Match>
               <Match when={view() === "taskusage"}><UsageView by="task" /></Match>
@@ -138,7 +139,6 @@ const App = () => {
             </Switch>
           </Show>
         </div>
-        <Show when={setupOpen() && out()}><Setup /></Show>
       </main>
       <Status />
       <Show when={backstage()}><Backstage /></Show>

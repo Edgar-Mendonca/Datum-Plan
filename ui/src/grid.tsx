@@ -3,7 +3,7 @@
 // AutoFilter buttons and inline header rename.
 import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, untrack, batch, on, JSX } from "solid-js";
 import { Col, Row } from "./api";
-import { grid, cols, setCols, saveCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
+import { grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
 import { C } from "./cmds";
 import * as D from "./dialogs";
 import * as F from "./fmt";
@@ -40,6 +40,8 @@ const num = (s: string) => { const v = parseFloat(s.replace(/[^\d.\-]/g, "")); r
 export const formulaOf = (key: string) => key.startsWith("c:") ? P().fields.find(f => f.key === key.slice(2))?.formula ?? "" : "";
 
 /** Field picker menu (Insert Column, Group by, Sort by). */
+/** A column's display name: the custom alias, a renamed heading, or the field name. */
+export const fieldName = (key: string) => P().fields.find(f => `c:${f.key}` === key)?.alias || P().titles?.[key] || fields().task.find(f => f.key === key)?.name || key;
 export const fieldMenu = (run: (key: string) => void): Item[] => {
   const groups = new Map<string, Item[]>();
   const names = new Map(P().fields.map(f => [`c:${f.key}`, f.alias]));
@@ -49,9 +51,8 @@ export const fieldMenu = (run: (key: string) => void): Item[] => {
     g.push({ label: alias ? `${alias} (${f.name})` : f.name, run: () => run(f.key) });
     groups.set(f.group, g);
   }
-  const items: Item[] = [{ label: "New Formula Column…", icon: "fx", run: () => D.formulaColumn() }, "-", ...[...groups].map(([label, sub]) => ({ label, sub }))];
+  const items: Item[] = [{ label: "Search all fields…", icon: "search", run: () => D.insertColumn(run) }, { label: "New Formula Column…", icon: "fx", run: () => D.formulaColumn() }, "-", ...[...groups].map(([label, sub]) => ({ label, sub }))];
   if (P().codes.length) items.push({ label: "Activity codes", sub: P().codes.map(c => ({ label: c.name, run: () => run(`code:${c.name}`) })) });
-  items.push("-", { label: "All fields…", run: () => D.insertColumn(run) });
   return items;
 };
 
@@ -326,7 +327,10 @@ export const Grid = (p: { width?: number }) => {
     openMenu(e, [
       { label: "Rename Column", icon: "rename", run: () => setRename(k) }, { label: "Insert Column", icon: "cols", sub: fieldMenu(ins) }, { label: "New Formula Column…", icon: "fx", run: () => D.formulaColumn(undefined, k + 1) },
       ...(c.key.startsWith("c:") ? [{ label: f ? "Edit Formula…" : "Add Formula…", icon: "fx", run: () => D.formulaColumn(c.key.slice(2), k) }] : []),
-      { label: "Hide Column", icon: "hide", run: () => saveCols(cols().filter((_, j) => j !== k)), off: cols().length < 2 },
+      { label: "Hide Column", icon: "hide", run: () => hideCol(c.key), off: cols().length < 2 },
+      { label: "Unhide Columns", icon: "cols", off: !hiddenCols().length, sub: [...hiddenCols().map(h => ({ label: fieldName(h), run: () => unhideCol(h) })), "-", { label: "Unhide All", run: () => hiddenCols().forEach(unhideCol) }] },
+      { label: "Delete Column", icon: "del", run: () => D.deleteColumn(c.key), off: cols().length < 2 },
+      { label: "Columns…", icon: "table", run: () => D.columnsDialog() },
       { label: "Field Settings…", icon: "table", run: () => D.fieldSettings(k) }, { label: "Custom Fields…", icon: "cols", run: () => D.customFields(c?.key.startsWith("c:") ? c.key.slice(2) : undefined) }, "-",
       { label: "Sort A to Z", icon: "az", run: () => setSort([[c.key, false]]), on: sort()[0]?.[0] === c.key && !sort()[0][1] }, { label: "Sort Z to A", icon: "za", run: () => setSort([[c.key, true]]), on: sort()[0]?.[0] === c.key && sort()[0][1] },
       { label: "No Sort", icon: "sort", run: () => setSort([]) }, { label: "Group by This Field", icon: "group", run: () => setGroup([c.key]) }, { label: "Filter…", icon: "filter", run: () => autoFilter(e, k) }, "-",

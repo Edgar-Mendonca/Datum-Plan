@@ -4,7 +4,7 @@ fn main() {
     let t = &templates::TEMPLATES[2];
     let p = templates::build(t, chrono::NaiveDate::from_ymd_opt(2026, 10, 26).unwrap());
     let c = Calc::new(&p, "%d-%b-%y", chrono::NaiveDate::from_ymd_opt(2026, 10, 24).unwrap());
-    let q = Query { cols: p.columns.iter().map(|c| c.0.clone()).collect(), ..Query::default() };
+    let q = Query { cols: p.columns.iter().filter(|c| c.1 > 0).map(|c| c.0.clone()).collect(), ..Query::default() };
     let g = c.grid(&q);
     let rows: Vec<usize> = g.rows.iter().filter(|r| r.kind == "task").filter_map(|r| p.idx(r.uid)).collect();
     let mut proj = serde_json::to_value(&p).unwrap();

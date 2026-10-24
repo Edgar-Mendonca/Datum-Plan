@@ -16,7 +16,7 @@ darkMq?.addEventListener("change", () => theme() === "auto" && applyTheme());
 export const setTheme = (t: string) => { setThemeRaw(t); applyTheme(); invoke("set_options", { opts: { ...opts(), theme: t } }).then(o => setOut(o as Out)).catch(() => {}); setOpts({ ...opts(), theme: t }); };
 export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", autosave: 5, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: true, theme: "auto", openLast: false, startView: "gantt", manualDefault: false, weekEnd: 4, monthEnd: 0, paper: "A4", landscape: true });
 
-export type View = "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "checks" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder";
+export type View = "setup" | "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "checks" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder";
 export const [view, setView] = createSignal<View>("gantt");
 export const [backstage, setBackstage] = createSignal<string | null>("home");
 export const [tab, setTab] = createSignal("task");
@@ -41,7 +41,9 @@ export const tables = (): Record<string, Cols> => ({ ...TABLES, ...(out()?.proje
 // ---------- the view's query ----------
 export const ALL: Filter = { name: "All Tasks", rules: [], summaries: true, highlight: false };
 export const [table, setTable] = createSignal("Entry");
-export const [cols, setCols] = createSignal<Cols>(TABLES.Entry);
+/** All columns of the table; a negative width marks a hidden column. `cols()` is what the grid shows. */
+export const [allCols, setCols] = createSignal<Cols>(TABLES.Entry);
+export const cols = (): Cols => allCols().filter(c => c[1] > 0);
 export const [filter, setFilter] = createSignal<Filter>(ALL);
 export const [group, setGroup] = createSignal<string[]>([]);
 export const [sort, setSort] = createSignal<[string, boolean][]>([]);
@@ -72,7 +74,14 @@ createRoot(() => {
 });
 
 /** Saves the Entry table's columns into the plan; other tables go to plan settings. */
-export const saveCols = (c: Cols) => {
+export const saveCols = (shown: Cols) => {
+  // Hidden columns keep their places; the shown ones fill the other slots in their new order.
+  const rest = [...shown], c: Cols = [];
+  for (const x of allCols()) c.push(x[1] > 0 ? rest.shift()! : x);
+  c.push(...rest);
+  saveAll(c.filter(Boolean));
+};
+export const saveAll = (c: Cols) => {
   setCols(c);
   if (table() === "Entry") act({ Columns: { cols: c } });
   else act({ Ui: { key: "tables", value: { ...(out()?.project.ui?.tables ?? {}), [table()]: c } } });
@@ -90,7 +99,9 @@ export const [details, setDetails] = createSignal(true);
 export const [detailsTab, setDetailsTab] = createSignal("general");
 export const [timeline, setTimeline] = createSignal(true);
 export const [zoom, setZoom] = createSignal(24);
-export const [setupOpen, setSetupOpen] = createSignal(false);
+/** Project Setup is a page (sidebar › Setup). */
+export const setupOpen = () => view() === "setup";
+export const setSetupOpen = (v: boolean) => setView(v ? "setup" : ((opts().startView || "gantt") as View));
 export const [gridW, setGridW] = createSignal(620);
 
 // ---------- editing ----------
@@ -103,6 +114,19 @@ export const call = async <T = any>(cmd: string, args?: object): Promise<T | und
   try { return await invoke<T>(cmd, args); } catch (e) { toast(String(e)); return undefined; }
 };
 export const loadOut = async (cmd: string, args?: object) => { const o = await call<Out | null>(cmd, args); if (o) { setOut(o); setBackstage(null); useTable(table()); setView((opts().startView || "gantt") as View); } return o; };
+
+export const hideCol = (key: string) => saveAll(allCols().map(c => (c[0] === key && c[1] > 0 ? [c[0], -c[1]] : c)));
+export const unhideCol = (key: string) => saveAll(allCols().map(c => (c[0] === key ? [c[0], Math.abs(c[1]) || 90] : c)));
+export const hiddenCols = () => allCols().filter(c => c[1] <= 0).map(c => c[0]);
+/** Removes a column from the table; `field` also deletes a custom field's definition and values. */
+export const deleteCol = (key: string, field = false) => {
+  const c = allCols().filter(x => x[0] !== key);
+  if (!field || !key.startsWith("c:")) return saveAll(c);
+  setCols(c);
+  const k = key.slice(2), ops: unknown[] = [{ DeleteField: { key: k } }];
+  ops.push(table() === "Entry" ? { Columns: { cols: c } } : { Ui: { key: "tables", value: { ...(out()?.project.ui?.tables ?? {}), [table()]: c } } });
+  return act({ Batch: ops });
+};
 
 // ---------- messages, menus, dialogs ----------
 export const [msg, setMsg] = createSignal<{ text: string; ok: boolean } | null>(null);

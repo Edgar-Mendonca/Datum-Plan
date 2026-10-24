@@ -1,4 +1,4 @@
-// Project Setup: a skippable step-by-step panel docked on the right for new plans.
+// Project Setup: a skippable step-by-step page (sidebar › Setup), shown first for new plans.
 import { For, Show, createSignal } from "solid-js";
 import { act, call, grid, P, refresh, setSetupOpen, toast, opts } from "./store";
 import * as D from "./dialogs";
@@ -36,7 +36,7 @@ export const Setup = () => {
   };
   return (
     <aside class="setup">
-      <header><b>Project Setup</b><button class="x" title="Close (you can reopen it from Project › Project Setup)" onClick={() => setSetupOpen(false)}>×</button></header>
+      <header><b>Project Setup</b><button class="x" title="Close (reopen it from the Setup icon in the sidebar)" onClick={() => setSetupOpen(false)}>×</button></header>
       <ol class="steps"><For each={STEPS}>{(s, k) => <li classList={{ on: k() === step(), done: k() < step() }} onClick={() => setStep(k())}>{s}</li>}</For></ol>
       <div class="sbody">
         <Show when={step() === 0}>

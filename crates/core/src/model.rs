@@ -436,8 +436,8 @@ pub struct Project {
     pub tasks: Vec<Task>,
     pub resources: Vec<Resource>,
     pub next_uid: u32,
-    /// Grid columns: field and width.
-    pub columns: Vec<(String, u16)>,
+    /// Grid columns: field and width (a negative width is a hidden column).
+    pub columns: Vec<(String, i32)>,
     // Project Setup.
     pub code: String,
     pub description: String,
@@ -474,7 +474,7 @@ impl Default for Project {
     }
 }
 
-pub const DEFAULT_COLUMNS: [(&str, u16); 8] =
+pub const DEFAULT_COLUMNS: [(&str, i32); 8] =
     [("mode", 34), ("name", 260), ("dur", 74), ("start", 92), ("finish", 92), ("preds", 90), ("res", 140), ("pct", 64)];
 
 fn is_zero(v: &i64) -> bool { *v == 0 }
