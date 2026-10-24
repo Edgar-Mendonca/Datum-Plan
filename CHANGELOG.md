@@ -9,7 +9,7 @@
   - In the details pane, every date field has one.
   - Typing a date still works.
 
- 2026-10-24
+## 0.3.7 — 2026-10-24
 
 A real Tracking Gantt, templates with a team and man-hours, a whiteboard-style Network Diagram, one grid engine and a consistent icon set.
 
@@ -38,7 +38,7 @@ A real Tracking Gantt, templates with a team and man-hours, a whiteboard-style N
 **Icons**
 - Redrawn in one line style: the progress, scroll, track, baseline, split, manual, auto, inactive and style icons, and a new Custom Fields icon.
 
- 2026-10-24
+## 0.3.6 — 2026-10-24
 
 Every view prints properly, a complete Network Diagram, MS Project's timeline zoom box, and the finishing touches from your 0.3.5 review.
 
@@ -85,7 +85,7 @@ Every view prints properly, a complete Network Diagram, MS Project's timeline zo
 - Help tab: Getting Started (for people who know MS Project, P6 or Excel), a Glossary (FS, SS, FF, SF, lag, float, critical and longest path, baseline, status date, SPI/CPI…), GitHub links.
 - The link type in the details pane reads "FS · Finish-to-Start", with a ? button that opens the Glossary.
 
- 2026-10-24
+## 0.3.5 — 2026-10-24
 
 A cleaner ribbon, Setup in the sidebar, full control of columns, and printing that includes every column.
 
@@ -117,7 +117,7 @@ A cleaner ribbon, Setup in the sidebar, full control of columns, and printing th
   - wrap long task names;
   - print task notes on the last pages.
 
- 2026-10-24
+## 0.3.4 — 2026-10-24
 
 Printing and PDF done properly, Excel-style text formatting, and a clearer Options page.
 
@@ -143,7 +143,7 @@ Printing and PDF done properly, Excel-style text formatting, and a clearer Optio
 - Grouped into sections, each with an explanation.
 - New options: reopen the last plan at start; the view plans open in; manual or auto scheduling for new tasks; the week-end and month-close day for reports; default paper and orientation; choose the workspace folder directly.
 
- 2026-10-24
+## 0.3.3 — 2026-10-24
 
 **Fix (critical):** in 0.3.2, after the first click the task sheet kept the same row selected. Clicking another cell only changed the column, so you could not select, edit or work on other tasks. Clicking now selects the cell you click. An automated test clicks cell after cell and edits one, so this can't come back unnoticed.
 
