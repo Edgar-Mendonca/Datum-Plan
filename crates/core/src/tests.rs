@@ -250,3 +250,54 @@ fn templates_and_old_files() {
     let s = schedule(&p).unwrap();
     assert_eq!(when(s.ef[0]), "04 17:00"); // the holiday carried over
 }
+
+fn rich() -> Project {
+    let mut p = crate::templates::build(&crate::templates::TEMPLATES[0], d(2026, 11, 2));
+    p.calendars[0].exceptions.push(Exception { name: "Holiday".into(), from: d(2026, 12, 24), to: d(2026, 12, 25), hours: vec![] });
+    p.calendars.push(Calendar::full("24 Hours"));
+    p.tasks[16].cal = Some("24 Hours".into());
+    p.tasks[2].constraint = Constraint::SNET;
+    p.tasks[2].cdate = Some(d(2026, 11, 5));
+    p.tasks[1].pct = 100;
+    p.tasks[1].act_start = Some(d(2026, 11, 2));
+    p.tasks[1].act_finish = Some(d(2026, 11, 3));
+    let mut doc = Doc::new(p);
+    let u = doc.p.tasks[9].uid;
+    op(&mut doc, Op::Set { uid: u, field: "res".into(), value: "CAD Designer, Design Engineer[50%]".into() }).unwrap();
+    doc.p
+}
+
+fn same_schedule(a: &Project, b: &Project) {
+    let (sa, sb) = (schedule(a).unwrap(), schedule(b).unwrap());
+    assert_eq!(a.tasks.len(), b.tasks.len());
+    assert_eq!(when(sa.finish), when(sb.finish));
+    assert_eq!(a.tasks.iter().map(|t| t.preds.len()).sum::<usize>(), b.tasks.iter().map(|t| t.preds.len()).sum::<usize>());
+    assert_eq!(a.resources.len(), b.resources.len());
+}
+
+#[test]
+fn exchange_round_trips() {
+    let p = rich();
+    let dir = std::env::temp_dir().join(format!("datum-io-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for ext in ["xml", "xer"] {
+        let f = dir.join(format!("plan.{ext}"));
+        crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1)).unwrap();
+        let crate::io::Imported::Plan(q) = crate::io::import(&f).unwrap() else { panic!("{ext} should import as a plan") };
+        same_schedule(&p, &q);
+        assert_eq!(q.tasks[1].act_finish, Some(d(2026, 11, 3)), "{ext}");
+        assert!(q.calendars.iter().any(|c| c.exceptions.iter().any(|e| e.from == d(2026, 12, 24))), "{ext}");
+    }
+    for ext in ["csv", "xlsx"] {
+        let f = dir.join(format!("plan.{ext}"));
+        crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1)).unwrap();
+        let crate::io::Imported::Table(t) = crate::io::import(&f).unwrap() else { panic!("{ext} should import as a table") };
+        assert!(t.guess.contains(&"name".to_string()) && t.guess.contains(&"preds".to_string()), "{ext}: {:?}", t.guess);
+        let (q, bad) = crate::io::table::to_project(&t, &t.guess, "Q", d(2026, 11, 2), "%d-%b-%y").unwrap();
+        assert_eq!(bad, 0, "{ext}");
+        assert_eq!(q.tasks.len(), p.tasks.len());
+        assert!(q.is_summary(0) && q.tasks[3].dur == 0);
+        assert_eq!(q.tasks[10].preds[0].kind, LinkType::SS);
+    }
+    std::fs::remove_dir_all(dir).ok();
+}

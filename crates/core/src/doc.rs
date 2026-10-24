@@ -182,7 +182,7 @@ fn set_pct(p: &mut Project, i: usize, n: u8) -> Result<(), String> {
     Ok(())
 }
 
-fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str) -> Result<(), String> {
+pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str) -> Result<(), String> {
     let v = value.trim();
     if p.is_summary(i) && !matches!(field, "name" | "notes" | "code" | "preds" | "active" | "timeline" | "deadline") {
         return Err(format!("A summary task's {field} comes from the tasks under it."));

@@ -5,6 +5,8 @@ edition = "2021"
 description = "Datum Plan scheduling engine: model, calendars, CPM, parsing, edit operations."
 
 [dependencies]
+calamine = { version = "0.37.0", default-features = false }
 chrono.workspace = true
+rust_xlsxwriter = { version = "0.101.0", default-features = false }
 serde.workspace = true
 serde_json.workspace = true

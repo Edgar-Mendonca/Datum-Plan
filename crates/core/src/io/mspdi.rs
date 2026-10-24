@@ -1,0 +1,265 @@
+//! Microsoft Project XML (MSPDI): the exchange format MS Project, ProjectLibre and others save.
+use super::xml::{esc, parse, Node};
+use crate::cal::{at, date_of, DAY};
+use crate::model::*;
+use crate::sched::Sched;
+use std::collections::HashMap;
+use std::fmt::Write;
+
+fn dt(t: i64) -> String {
+    format!("{}T{:02}:{:02}:00", date_of(t), t.rem_euclid(DAY) / 60, t.rem_euclid(60))
+}
+
+fn dur(m: i64) -> String {
+    format!("PT{}H{}M0S", m / 60, m % 60)
+}
+
+/// "PT40H0M0S", "P2DT4H0M0S" → minutes (days count 24 hours, as MSPDI writes elapsed time).
+fn read_dur(s: &str) -> i64 {
+    let (mut v, mut n, mut time) = (0.0, String::new(), false);
+    for ch in s.chars() {
+        match ch {
+            '0'..='9' | '.' => n.push(ch),
+            'T' => time = true,
+            'D' => { v += n.parse::<f64>().unwrap_or(0.0) * 1440.0; n.clear() }
+            'H' => { v += n.parse::<f64>().unwrap_or(0.0) * 60.0; n.clear() }
+            'M' if time => { v += n.parse::<f64>().unwrap_or(0.0); n.clear() }
+            'S' => { v += n.parse::<f64>().unwrap_or(0.0) / 60.0; n.clear() }
+            _ => n.clear(),
+        }
+    }
+    v.round() as i64
+}
+
+fn date(s: &str) -> Option<chrono::NaiveDate> {
+    s.get(..10).and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+}
+
+const CONS: [Constraint; 8] = [Constraint::ASAP, Constraint::ALAP, Constraint::MSO, Constraint::MFO, Constraint::SNET, Constraint::SNLT, Constraint::FNET, Constraint::FNLT];
+const LINKS: [LinkType; 4] = [LinkType::FF, LinkType::FS, LinkType::SF, LinkType::SS];
+
+fn unit_code(u: Unit) -> u8 {
+    match u { Unit::M => 3, Unit::H => 5, Unit::D => 7, Unit::W => 9, Unit::Mo => 11 }
+}
+
+fn hours_xml(out: &mut String, h: &Hours) {
+    out.push_str("<WorkingTimes>");
+    for (s, e) in h {
+        let e = if *e >= 1440 { "00:00:00".to_string() } else { format!("{:02}:{:02}:00", e / 60, e % 60) };
+        let _ = write!(out, "<WorkingTime><FromTime>{:02}:{:02}:00</FromTime><ToTime>{e}</ToTime></WorkingTime>", s / 60, s % 60);
+    }
+    out.push_str("</WorkingTimes>");
+}
+
+pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
+    let mut o = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Project xmlns=\"http://schemas.microsoft.com/project\">\n");
+    let cal_uid = |name: &str| p.calendars.iter().position(|c| c.name == name).map_or(1, |k| k + 1);
+    let _ = write!(o, "<SaveVersion>14</SaveVersion><Name>{0}.xml</Name><Title>{0}</Title><ScheduleFromStart>1</ScheduleFromStart><StartDate>{1}</StartDate><FinishDate>{2}</FinishDate>\
+<CalendarUID>{3}</CalendarUID><MinutesPerDay>{4}</MinutesPerDay><MinutesPerWeek>{5}</MinutesPerWeek><DaysPerMonth>20</DaysPerMonth><NewTasksAreManual>{6}</NewTasksAreManual>",
+        esc(&p.name), dt(s.start), dt(s.finish), cal_uid(&p.calendar), p.day_min, p.day_min * 5, p.manual_default as u8);
+    if let Some(st) = p.status {
+        let _ = write!(o, "<StatusDate>{}</StatusDate>", dt(at(st) + 17 * 60));
+    }
+    o.push_str("\n<Calendars>");
+    for (k, c) in p.calendars.iter().enumerate() {
+        let _ = write!(o, "<Calendar><UID>{}</UID><Name>{}</Name><IsBaseCalendar>1</IsBaseCalendar><BaseCalendarUID>-1</BaseCalendarUID><WeekDays>", k + 1, esc(&c.name));
+        for (i, h) in c.week.iter().enumerate() {
+            let _ = write!(o, "<WeekDay><DayType>{}</DayType><DayWorking>{}</DayWorking>", (i + 1) % 7 + 1, !h.is_empty() as u8);
+            if !h.is_empty() {
+                hours_xml(&mut o, h);
+            }
+            o.push_str("</WeekDay>");
+        }
+        o.push_str("</WeekDays><Exceptions>");
+        for e in &c.exceptions {
+            let _ = write!(o, "<Exception><EnteredByOccurrences>0</EnteredByOccurrences><TimePeriod><FromDate>{}T00:00:00</FromDate><ToDate>{}T23:59:00</ToDate></TimePeriod>\
+<Occurrences>1</Occurrences><Name>{}</Name><Type>1</Type><DayWorking>{}</DayWorking>", e.from, e.to, esc(&e.name), !e.hours.is_empty() as u8);
+            if !e.hours.is_empty() {
+                hours_xml(&mut o, &e.hours);
+            }
+            o.push_str("</Exception>");
+        }
+        o.push_str("</Exceptions></Calendar>");
+    }
+    o.push_str("</Calendars>\n<Tasks>");
+    let mut wbs: Vec<u32> = vec![];
+    for (i, t) in p.tasks.iter().enumerate() {
+        let lv = t.level as usize;
+        wbs.truncate(lv + 1);
+        wbs.resize(lv + 1, 0);
+        wbs[lv] += 1;
+        let num = wbs.iter().map(u32::to_string).collect::<Vec<_>>().join(".");
+        let (sum, d) = (s.summary[i], if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur });
+        let _ = write!(o, "<Task><UID>{}</UID><ID>{}</ID><Name>{}</Name><Active>{}</Active><Manual>{}</Manual><Type>0</Type><IsNull>0</IsNull><WBS>{num}</WBS><OutlineNumber>{num}</OutlineNumber>\
+<OutlineLevel>{}</OutlineLevel><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><DurationFormat>{}</DurationFormat><Milestone>{}</Milestone><Summary>{}</Summary>\
+<Critical>{}</Critical><PercentComplete>{}</PercentComplete><ConstraintType>{}</ConstraintType><CalendarUID>{}</CalendarUID><Cost>{:.2}</Cost>",
+            t.uid, i + 1, esc(&t.name), !t.inactive as u8, t.manual as u8, lv + 1, dt(s.es[i]), dt(s.ef[i]), dur(d), unit_code(t.unit), (!sum && t.dur == 0) as u8, sum as u8,
+            (s.tf[i] <= 0) as u8, t.pct, CONS.iter().position(|c| *c == t.constraint).unwrap_or(0), t.cal.as_deref().map_or(-1, |c| cal_uid(c) as i64), cost[i]);
+        if let Some(c) = t.cdate {
+            let _ = write!(o, "<ConstraintDate>{}T08:00:00</ConstraintDate>", c);
+        }
+        if let Some(c) = t.deadline {
+            let _ = write!(o, "<Deadline>{}T17:00:00</Deadline>", c);
+        }
+        if let Some(a) = t.act_start {
+            let _ = write!(o, "<ActualStart>{}</ActualStart>", dt(at(a) + 8 * 60));
+        }
+        if let Some(a) = t.act_finish {
+            let _ = write!(o, "<ActualFinish>{}</ActualFinish>", dt(at(a) + 17 * 60));
+        }
+        if !t.notes.is_empty() {
+            let _ = write!(o, "<Notes>{}</Notes>", esc(&t.notes));
+        }
+        if !t.code.is_empty() {
+            let _ = write!(o, "<Text1>{}</Text1>", esc(&t.code));
+        }
+        for l in &t.preds {
+            let _ = write!(o, "<PredecessorLink><PredecessorUID>{}</PredecessorUID><Type>{}</Type><CrossProject>0</CrossProject><LinkLag>{}</LinkLag><LagFormat>7</LagFormat></PredecessorLink>",
+                l.pred, LINKS.iter().position(|k| *k == l.kind).unwrap(), l.lag * 10);
+        }
+        if let Some(b) = t.bl {
+            let _ = write!(o, "<Baseline><Number>0</Number><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><Cost>{:.2}</Cost></Baseline>", dt(b.start), dt(b.finish), dur(b.dur), b.cost);
+        }
+        o.push_str("</Task>\n");
+    }
+    o.push_str("</Tasks>\n<Resources>");
+    for (k, r) in p.resources.iter().enumerate() {
+        let ty = match r.kind { ResKind::Work => 1, ResKind::Material => 0, ResKind::Cost => 2 };
+        let _ = write!(o, "<Resource><UID>{}</UID><ID>{}</ID><Name>{}</Name><Type>{ty}</Type><IsNull>0</IsNull><Group>{}</Group><MaterialLabel>{}</MaterialLabel>\
+<MaxUnits>{:.2}</MaxUnits><StandardRate>{}</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>{}</CostPerUse></Resource>",
+            r.uid, k + 1, esc(&r.name), esc(&r.group), esc(&r.label), r.max, r.rate, r.per_use);
+    }
+    o.push_str("</Resources>\n<Assignments>");
+    let mut n = 1;
+    for t in &p.tasks {
+        for a in &t.res {
+            let _ = write!(o, "<Assignment><UID>{n}</UID><TaskUID>{}</TaskUID><ResourceUID>{}</ResourceUID><Units>{}</Units><Work>{}</Work></Assignment>",
+                t.uid, a.res, a.units, dur((t.dur as f64 * a.units) as i64));
+            n += 1;
+        }
+    }
+    o.push_str("</Assignments>\n</Project>\n");
+    o
+}
+
+fn read_hours(n: &Node) -> Hours {
+    n.get("WorkingTimes").map_or(vec![], |w| w.all("WorkingTime").filter_map(|t| {
+        let m = |s: &str| -> Option<u16> { Some(s.get(..2)?.parse::<u16>().ok()? * 60 + s.get(3..5)?.parse::<u16>().ok()?) };
+        let (a, b) = (m(t.val("FromTime"))?, m(t.val("ToTime"))?);
+        Some((a, if b == 0 { 1440 } else { b }))
+    }).collect())
+}
+
+pub fn read(text: &str) -> Result<Project, String> {
+    let root = parse(text)?;
+    if root.name != "Project" {
+        return Err("This XML file is not a Microsoft Project XML file.".into());
+    }
+    let start = date(root.val("StartDate")).unwrap_or_else(|| chrono::Local::now().date_naive());
+    let name = [root.val("Title"), root.val("Name").trim_end_matches(".xml")].into_iter().find(|s| !s.is_empty()).unwrap_or("Imported project");
+    let mut p = Project::new(name, start);
+    p.status = date(root.val("StatusDate"));
+    p.day_min = root.val("MinutesPerDay").parse().unwrap_or(480);
+    p.manual_default = root.val("NewTasksAreManual") == "1";
+    let mut cal_names: HashMap<String, String> = HashMap::new();
+    if let Some(cs) = root.get("Calendars") {
+        let mut cals = vec![];
+        for c in cs.all("Calendar") {
+            let mut cal = Calendar::standard(c.val("Name"));
+            if cal.name.is_empty() || cals.iter().any(|x: &Calendar| x.name == cal.name) {
+                cal.name = format!("Calendar {}", c.val("UID"));
+            }
+            for wd in c.get("WeekDays").into_iter().flat_map(|w| w.all("WeekDay")) {
+                let ty: usize = wd.val("DayType").parse().unwrap_or(0);
+                let h = if wd.val("DayWorking") == "1" { read_hours(wd) } else { vec![] };
+                if (1..=7).contains(&ty) {
+                    cal.week[(ty + 5) % 7] = if h.is_empty() && wd.val("DayWorking") == "1" { STD_HOURS.to_vec() } else { h };
+                } else if ty == 0 {
+                    if let Some(tp) = wd.get("TimePeriod") {
+                        if let (Some(f), Some(t)) = (date(tp.val("FromDate")), date(tp.val("ToDate"))) {
+                            cal.exceptions.push(Exception { name: "Exception".into(), from: f, to: t, hours: read_hours(wd) });
+                        }
+                    }
+                }
+            }
+            for e in c.get("Exceptions").into_iter().flat_map(|x| x.all("Exception")) {
+                if let Some(tp) = e.get("TimePeriod") {
+                    if let (Some(f), Some(t)) = (date(tp.val("FromDate")), date(tp.val("ToDate"))) {
+                        let h = if e.val("DayWorking") == "1" { read_hours(e) } else { vec![] };
+                        cal.exceptions.push(Exception { name: e.val("Name").to_string(), from: f, to: t, hours: h });
+                    }
+                }
+            }
+            cal_names.insert(c.val("UID").to_string(), cal.name.clone());
+            cals.push(cal);
+        }
+        if !cals.is_empty() {
+            p.calendars = cals;
+            if let Some(n) = cal_names.get(root.val("CalendarUID")) {
+                p.calendar = n.clone();
+            }
+        }
+    }
+    let unit = |c: &str| match c { "3" | "4" => Unit::M, "5" | "6" => Unit::H, "9" | "10" => Unit::W, "11" | "12" => Unit::Mo, _ => Unit::D };
+    let mut tasks: Vec<(i64, Task)> = vec![];
+    for t in root.get("Tasks").into_iter().flat_map(|x| x.all("Task")) {
+        let uid: u32 = t.val("UID").parse().unwrap_or(0);
+        if uid == 0 || t.val("IsNull") == "1" || t.val("OutlineLevel") == "0" {
+            continue;
+        }
+        let mut k = Task {
+            uid, name: t.val("Name").to_string(),
+            level: t.val("OutlineLevel").parse::<u8>().unwrap_or(1).saturating_sub(1),
+            dur: read_dur(t.val("Duration")), unit: unit(t.val("DurationFormat")),
+            pct: t.val("PercentComplete").parse().unwrap_or(0),
+            constraint: t.val("ConstraintType").parse::<usize>().ok().and_then(|i| CONS.get(i).copied()).unwrap_or_default(),
+            cdate: date(t.val("ConstraintDate")), deadline: date(t.val("Deadline")),
+            manual: t.val("Manual") == "1", inactive: t.val("Active") == "0",
+            cal: cal_names.get(t.val("CalendarUID")).cloned(),
+            act_start: date(t.val("ActualStart")), act_finish: date(t.val("ActualFinish")),
+            code: t.val("Text1").to_string(), notes: t.get("Notes").map_or(String::new(), |n| n.text.clone()),
+            ..Default::default()
+        };
+        if k.manual {
+            k.mstart = date(t.val("Start"));
+        }
+        if matches!(k.constraint, Constraint::ASAP | Constraint::ALAP) {
+            k.cdate = None;
+        }
+        for l in t.all("PredecessorLink") {
+            if let Ok(pred) = l.val("PredecessorUID").parse() {
+                let lag = l.val("LinkLag").parse::<i64>().unwrap_or(0) / 10;
+                let pct = matches!(l.val("LagFormat"), "19" | "20");
+                k.preds.push(Link { pred, kind: l.val("Type").parse::<usize>().ok().and_then(|i| LINKS.get(i).copied()).unwrap_or(LinkType::FS), lag: if pct { 0 } else { lag } });
+            }
+        }
+        if let Some(b) = t.all("Baseline").find(|b| b.val("Number") == "0") {
+            if let (Some(bs), Some(bf)) = (date(b.val("Start")), date(b.val("Finish"))) {
+                let tm = |s: &str| s.get(11..16).and_then(|x| Some(x.get(..2)?.parse::<i64>().ok()? * 60 + x.get(3..)?.parse::<i64>().ok()?)).unwrap_or(0);
+                k.bl = Some(Baseline { start: at(bs) + tm(b.val("Start")), finish: at(bf) + tm(b.val("Finish")), dur: read_dur(b.val("Duration")), cost: b.val("Cost").parse().unwrap_or(0.0) });
+            }
+        }
+        tasks.push((t.val("ID").parse().unwrap_or(i64::MAX), k));
+    }
+    tasks.sort_by_key(|(id, _)| *id);
+    p.tasks = tasks.into_iter().map(|(_, t)| t).collect();
+    for r in root.get("Resources").into_iter().flat_map(|x| x.all("Resource")) {
+        let uid: u32 = r.val("UID").parse().unwrap_or(0);
+        if uid == 0 || r.val("IsNull") == "1" || r.val("Name").is_empty() {
+            continue;
+        }
+        p.resources.push(Resource {
+            uid, name: r.val("Name").into(), group: r.val("Group").into(), label: r.val("MaterialLabel").into(),
+            kind: match r.val("Type") { "0" => ResKind::Material, "2" => ResKind::Cost, _ => ResKind::Work },
+            max: r.val("MaxUnits").parse().unwrap_or(1.0), rate: r.val("StandardRate").parse().unwrap_or(0.0), per_use: r.val("CostPerUse").parse().unwrap_or(0.0),
+        });
+    }
+    for a in root.get("Assignments").into_iter().flat_map(|x| x.all("Assignment")) {
+        let (tu, ru): (u32, u32) = (a.val("TaskUID").parse().unwrap_or(0), a.val("ResourceUID").parse().unwrap_or(0));
+        if let Some(t) = p.tasks.iter_mut().find(|t| t.uid == tu) {
+            t.res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0) });
+        }
+    }
+    p.normalize();
+    Ok(p)
+}
