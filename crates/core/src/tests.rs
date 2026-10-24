@@ -1,4 +1,4 @@
-use crate::{cal::{at, date_of, WorkCal, DAY}, doc::{copy, Doc, Op}, load, parse, sched::schedule, view, *};
+use crate::{cal::{at, date_of, WorkCal, DAY}, doc::{copy, Doc, Op}, fields::Calc, load, parse, sched::schedule, *};
 use chrono::NaiveDate;
 
 fn d(y: i32, m: u32, day: u32) -> NaiveDate {
@@ -177,9 +177,9 @@ fn resources_costs_and_baseline() {
     assert_eq!(parse::fmt_res(&doc.p.tasks[0].res, &doc.p), "Engineer[50%], Concrete[12]");
     op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
     op(&mut doc, Op::Set { uid: u[0], field: "dur".into(), value: "4d".into() }).unwrap();
-    let v = view::build(&doc.p, "%d-%b-%y", d(2026, 11, 1));
-    assert_eq!(v.rows[0].vfinish, "2 days");
-    assert_eq!(v.rows[0].cost, "2,200.00");
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 1));
+    assert_eq!(c.text(0, "vfinish"), "2 days");
+    assert_eq!(c.text(0, "cost"), "$2,200.00");
     let w = load::workload(&doc.p, &schedule(&doc.p).unwrap(), true);
     assert_eq!(w.rows[0].load[0], 16.0 + 24.0);
 }
@@ -232,15 +232,16 @@ fn parsing() {
     let ids = [(10, 1), (20, 2), (30, 3)].into_iter().collect();
     assert_eq!(parse::fmt_preds(&ls, &ids, D), "2SS+3d, 1, 3FF-4h");
     assert_eq!(parse::constraint("start no earlier than"), Ok(Constraint::SNET));
-    assert_eq!(view::money(1234567.5), "1,234,567.50");
+    let eur = Currency { code: "EUR".into(), symbol: "€".into(), decimals: 2, after: true };
+    assert_eq!(fields::money(1234567.5, &eur), "1,234,567.50 €");
+    assert_eq!(fields::money(-12.0, &Currency { decimals: 0, ..Currency::default() }), "-$12");
 }
 
 #[test]
 fn templates_and_old_files() {
     for t in crate::templates::TEMPLATES {
         let p = crate::templates::build(t, d(2026, 11, 2));
-        let v = view::build(&p, "%d-%b-%y", d(2026, 11, 1));
-        assert!(v.error.is_none(), "{}", t.id);
+        assert!(Calc::new(&p, "%d-%b-%y", d(2026, 11, 1)).error.is_none(), "{}", t.id);
         let back = Project::from_json(&serde_json::to_string(&p).unwrap()).unwrap();
         assert_eq!(back, p);
     }
@@ -283,7 +284,7 @@ fn exchange_round_trips() {
     std::fs::create_dir_all(&dir).unwrap();
     for ext in ["xml", "xer"] {
         let f = dir.join(format!("plan.{ext}"));
-        crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1)).unwrap();
+        crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
         let crate::io::Imported::Plan(q) = crate::io::import(&f).unwrap() else { panic!("{ext} should import as a plan") };
         same_schedule(&p, &q);
         assert_eq!(q.tasks[1].act_finish, Some(d(2026, 11, 3)), "{ext}");
@@ -291,7 +292,7 @@ fn exchange_round_trips() {
     }
     for ext in ["csv", "xlsx"] {
         let f = dir.join(format!("plan.{ext}"));
-        crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1)).unwrap();
+        crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
         let crate::io::Imported::Table(t) = crate::io::import(&f).unwrap() else { panic!("{ext} should import as a table") };
         assert!(t.guess.contains(&"name".to_string()) && t.guess.contains(&"preds".to_string()), "{ext}: {:?}", t.guess);
         let (q, bad) = crate::io::table::to_project(&t, &t.guess, "Q", d(2026, 11, 2), "%d-%b-%y").unwrap();
@@ -413,4 +414,51 @@ fn formulas() {
     assert_eq!(ev("Not (1 > 2) And 3 >= 3"), F::Bool(true));
     assert!(fp("IIf(1, 2").is_err() && fp("Foo(1)").is_err());
     assert!(eval(&fp("1 / 0").unwrap(), &row).is_err());
+}
+
+#[test]
+fn fields_earned_value_queries_and_checks() {
+    use crate::query::{Filter, Query, Rule};
+    let mut doc = Doc::new(plan(&[(0, ""), (2, ""), (4, "2"), (0, "3")]));
+    let u: Vec<u32> = doc.p.tasks.iter().map(|t| t.uid).collect();
+    op(&mut doc, Op::Indent { uids: vec![u[1], u[2]] }).unwrap();
+    op(&mut doc, Op::Set { uid: u[0], field: "name".into(), value: "Phase".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: u[1], field: "fixedcost".into(), value: "1000".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: u[2], field: "fixedcost".into(), value: "2000".into() }).unwrap();
+    op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
+    op(&mut doc, Op::Set { uid: u[1], field: "pct".into(), value: "100".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: u[2], field: "pct".into(), value: "25".into() }).unwrap();
+    // Status at the end of Wednesday: task 2 (Mon–Tue) done, task 3 one day in of four.
+    op(&mut doc, Op::ProjectSet { field: "status".into(), value: serde_json::json!("2026-11-04") }).unwrap();
+    let def = CustomDef { key: "number1".into(), alias: "Double cost".into(), formula: "[Cost] * 2".into(), ..CustomDef::default() };
+    op(&mut doc, Op::FieldDef { def }).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 1));
+    assert_eq!((c.val(1, "bcws").num(), c.val(2, "bcws").num()), (1000.0, 500.0));
+    assert_eq!((c.val(0, "bcwp").num(), c.val(0, "bac").num()), (1500.0, 3000.0));
+    assert_eq!(c.text(0, "spi"), "1");
+    assert_eq!(c.text(1, "c:number1"), "2000");
+    assert_eq!(c.key_of("Double cost").as_deref(), Some("c:number1"));
+    assert_eq!(c.text(0, "pct"), "50%"); // weighted by duration: (2×100 + 4×25) / 6
+    // Filters keep the summary of matching tasks; sorting keeps the outline.
+    let q = |f: Filter, sort: Vec<(String, bool)>| c.grid(&Query { cols: vec!["name".into(), "Duration".into()], filter: f, sort, ..Query::default() });
+    let crit = Filter { rules: vec![Rule { field: "Milestone".into(), test: "equals".into(), value: "Yes".into(), ..Rule::default() }], summaries: true, ..Filter::default() };
+    let g = q(crit, vec![]);
+    assert_eq!(g.rows.iter().map(|r| r.cells[0].as_str()).collect::<Vec<_>>(), ["T4"]);
+    let g = q(Filter::default(), vec![("dur".into(), true)]);
+    assert_eq!(g.rows.iter().map(|r| r.cells[0].as_str()).collect::<Vec<_>>(), ["Phase", "T3", "T2", "T4"]);
+    assert_eq!(g.cols[1].name, "Duration");
+    let grouped = c.grid(&Query { cols: vec!["name".into()], group: vec!["milestone".into()], ..Query::default() });
+    assert_eq!(grouped.rows.iter().map(|r| (r.kind, r.cells[0].as_str())).collect::<Vec<_>>(), [("group", "Milestone: No"), ("task", "T2"), ("task", "T3"), ("group", "Milestone: Yes"), ("task", "T4")]);
+    let checks = crate::check::run(&c, &Default::default());
+    let logic = checks.iter().find(|k| k.key == "logic").unwrap();
+    assert_eq!((logic.count, logic.pass), (0, true));
+    assert!(checks.iter().find(|k| k.key == "resources").is_some_and(|k| k.count == 0 && k.pass));
+    let net = crate::network::layout(&c, &[1, 2, 3]);
+    assert_eq!(net.nodes.iter().map(|n| n.col).collect::<Vec<_>>(), [0, 1, 2]);
+    let curve = crate::report::curve(&c, "week");
+    assert_eq!(curve.planned.iter().sum::<f64>().round(), 3000.0);
+    assert_eq!(c.summary().tasks, 3);
+    let html = crate::io::formats::html(&c, &["name".into(), "cost".into()]);
+    assert!(html.contains("$3,000.00") && html.contains("T3"));
+    assert!(crate::io::formats::pmxml(&c).contains("<Relationship>"));
 }

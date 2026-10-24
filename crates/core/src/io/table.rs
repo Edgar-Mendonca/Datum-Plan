@@ -1,5 +1,5 @@
 //! Task lists in spreadsheets: CSV and Excel in, with a column mapping step; CSV and Excel out.
-use crate::{doc, model::Project, view::View};
+use crate::{doc, fields::{Calc, Kind}, model::Project};
 use calamine::{open_workbook_auto, Data, Reader};
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -164,51 +164,52 @@ pub fn to_project(t: &Table, map: &[String], name: &str, today: NaiveDate, fmt: 
     Ok((p, bad))
 }
 
-const OUT: [(&str, &str); 13] = [
-    ("ID", "id"), ("WBS", "wbs"), ("Outline Level", "lvl"), ("Activity ID", "code"), ("Task Name", "name"), ("Duration", "dur"), ("Start", "start"),
-    ("Finish", "finish"), ("Predecessors", "preds"), ("Resource Names", "res"), ("% Complete", "pct"), ("Total Float", "tf"), ("Cost", "cost"),
-];
+/// Columns written when the caller does not choose: the current table's columns are used normally.
+pub const OUT: [&str; 13] = ["id", "wbs", "level", "code", "name", "dur", "start", "finish", "preds", "res", "pct", "tf", "cost"];
 
-fn row_values(v: &View) -> Vec<Vec<String>> {
-    v.rows.iter().map(|r| {
-        let j = serde_json::to_value(r).unwrap_or_default();
-        OUT.iter().map(|(_, k)| match k { &"lvl" => (r.lvl + 1).to_string(), k => match &j[*k] { serde_json::Value::String(s) => s.clone(), x => x.to_string() } }).collect()
-    }).collect()
+fn cells(c: &Calc, cols: &[String]) -> (Vec<String>, Vec<(usize, Vec<String>)>) {
+    let cols: Vec<String> = cols.iter().filter_map(|k| c.key_of(k)).collect();
+    let head = cols.iter().map(|k| c.name(k)).collect();
+    (head, (0..c.p.tasks.len()).map(|i| (i, cols.iter().map(|k| c.text(i, k)).collect())).collect())
 }
 
-pub fn write_csv(v: &View, path: &Path) -> Result<(), String> {
+pub fn write_csv(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
     let q = |s: &str| if s.contains([',', '"', '\n']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() };
+    let (head, rows) = cells(c, cols);
     let mut out = String::from("\u{feff}");
-    out.push_str(&OUT.iter().map(|h| h.0).collect::<Vec<_>>().join(","));
+    out.push_str(&head.iter().map(|h| q(h)).collect::<Vec<_>>().join(","));
     out.push('\n');
-    for r in row_values(v) {
+    for (_, r) in rows {
         out.push_str(&r.iter().map(|c| q(c)).collect::<Vec<_>>().join(","));
         out.push('\n');
     }
     std::fs::write(path, out).map_err(|e| format!("Could not save {}: {e}", path.display()))
 }
 
-pub fn write_xlsx(v: &View, path: &Path) -> Result<(), String> {
+pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
     use rust_xlsxwriter::{Format, Workbook};
     let mut wb = Workbook::new();
     let ws = wb.add_worksheet();
     let e = |x: rust_xlsxwriter::XlsxError| x.to_string();
     ws.set_name("Tasks").map_err(e)?;
-    let head = Format::new().set_bold().set_background_color(0xE6F0FC);
-    for (c, (h, _)) in OUT.iter().enumerate() {
-        ws.write_string_with_format(0, c as u16, *h, &head).map_err(e)?;
-        ws.set_column_width(c as u16, if *h == "Task Name" { 44.0 } else if *h == "Resource Names" { 28.0 } else { 13.0 }).map_err(e)?;
+    let head_fmt = Format::new().set_bold().set_background_color(0xE6F0FC);
+    let (head, rows) = cells(c, cols);
+    let keys: Vec<String> = cols.iter().filter_map(|k| c.key_of(k)).collect();
+    for (k, h) in head.iter().enumerate() {
+        ws.write_string_with_format(0, k as u16, h, &head_fmt).map_err(e)?;
+        ws.set_column_width(k as u16, if keys[k] == "name" { 44.0 } else if keys[k] == "res" { 28.0 } else { 13.0 }).map_err(e)?;
     }
-    for (k, (r, vals)) in v.rows.iter().zip(row_values(v)).enumerate() {
+    for (r, (i, vals)) in rows.iter().enumerate() {
         let mut f = Format::new();
-        if r.sum {
+        if c.s.summary[*i] {
             f = f.set_bold();
         }
-        for (c, val) in vals.iter().enumerate() {
-            let fmt = if OUT[c].1 == "name" { f.clone().set_indent(r.lvl) } else { f.clone() };
-            match (OUT[c].1, val.parse::<f64>()) {
-                ("id" | "lvl" | "pct", Ok(n)) => ws.write_number_with_format(k as u32 + 1, c as u16, n, &fmt).map(|_| ()),
-                _ => ws.write_string_with_format(k as u32 + 1, c as u16, val, &fmt).map(|_| ()),
+        for (k, val) in vals.iter().enumerate() {
+            let fmt = if keys[k] == "name" { f.clone().set_indent(c.p.tasks[*i].level) } else { f.clone() };
+            let numeric = matches!(c.kind(&keys[k]), Kind::Int | Kind::Num) || matches!(keys[k].as_str(), "id" | "level" | "uid");
+            match (numeric, val.parse::<f64>()) {
+                (true, Ok(n)) => ws.write_number_with_format(r as u32 + 1, k as u16, n, &fmt).map(|_| ()),
+                _ => ws.write_string_with_format(r as u32 + 1, k as u16, val, &fmt).map(|_| ()),
             }.map_err(e)?;
         }
     }
