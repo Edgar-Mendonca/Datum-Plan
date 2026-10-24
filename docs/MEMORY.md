@@ -10,7 +10,7 @@
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, strict TypeScript UI with no framework, plain CSS |
 | **Code size** | About 5,400 lines: core 3,000 (with 311 lines of tests), shell 520, UI 1,550 TypeScript + CSS |
-| **Installer** | NSIS `.exe`, per-user install. 1.7 MB (0.1.0), 1.8 MB (0.1.1); 0.2.0 is larger because of the Excel libraries |
+| **Installer** | NSIS `.exe`, per-user install. 1.7 MB (0.1.0), 1.8 MB (0.1.1); 2.4 MB (0.2.0) |
 | **Reference repos** | `Edgar-Mendonca/Cairn` (the earlier web planner: feature and template reference) · `Compressor-Engineering-Suite` (the Home/update pattern) |
 
 ---
