@@ -115,12 +115,23 @@ fn parsing() {
 }
 
 #[test]
-fn sample_round_trips_and_schedules() {
-    let p = sample(d(2026, 11, 2));
-    let v = view::build(&p);
-    assert!(v.error.is_none());
-    assert!(v.rows[0].sum && v.rows[2].ms);
-    assert_eq!(v.rows.last().unwrap().finish, v.finish);
-    let back: Project = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
-    assert_eq!(back, p);
+fn templates_schedule_and_round_trip() {
+    for t in crate::templates::TEMPLATES {
+        let p = crate::templates::build(t, d(2026, 11, 2));
+        let v = view::build(&p);
+        assert!(v.error.is_none(), "{}", t.id);
+        assert!(v.rows[0].sum && v.rows.iter().any(|r| r.ms), "{}", t.id);
+        let back: Project = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(back, p);
+    }
+}
+
+#[test]
+fn finish_sets_duration() {
+    let mut doc = Doc::new(plan(&[(2, "")]));
+    let uid = doc.p.tasks[0].uid;
+    doc.apply(Op::Set { uid, field: "finish".into(), value: "2026-11-06".into() }).unwrap();
+    assert_eq!(doc.p.tasks[0].dur, 5);
+    doc.apply(Op::Set { uid, field: "finish".into(), value: "2026-11-08".into() }).unwrap(); // Sunday
+    assert_eq!(doc.p.tasks[0].dur, 5);
 }

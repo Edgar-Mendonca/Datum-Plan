@@ -12,6 +12,7 @@ interface View {
 }
 interface Recent { path: string; name: string; modified: string }
 interface Upd { current: string; latest: string | null; available: boolean; notes: string; published: string; url: string | null; sums: string | null; size: number; page: string }
+interface Tpl { id: string; name: string; desc: string; color: string; tasks: number; days: number; bars: [number, number, number][] }
 interface Col { k: keyof Row; t: string; w: number; ed?: string; cls?: string }
 
 const TAURI = (window as any).__TAURI__;
@@ -23,10 +24,10 @@ const today = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / D
 
 const COLS: Col[] = [
   { k: 'id', t: '', w: 42, cls: 'id' },
-  { k: 'name', t: 'Task Name', w: 250, ed: 'name' },
+  { k: 'name', t: 'Task Name', w: 250, ed: 'name', cls: 'nm' },
   { k: 'dur', t: 'Duration', w: 78, ed: 'dur' },
   { k: 'start', t: 'Start', w: 86, ed: 'start' },
-  { k: 'finish', t: 'Finish', w: 86, cls: 'ro' },
+  { k: 'finish', t: 'Finish', w: 86, ed: 'finish' },
   { k: 'preds', t: 'Predecessors', w: 104, ed: 'preds' },
   { k: 'pct', t: '% Complete', w: 80, ed: 'pct', cls: 'r' },
   { k: 'tf', t: 'Total Float', w: 78, cls: 'r ro' },
@@ -41,6 +42,9 @@ const sel = new Set<number>();
 let cur = { r: 0, c: 1 }, anchor = 0;
 let pd = 16, d0 = 0, showCrit = true, tab = 'task';
 let editor: HTMLInputElement | null = null;
+let view = 'gantt', tpls: Tpl[] = [];
+const endDay = (r: Row) => r.ms ? r.s : r.f - 1;
+const isLate = (r: Row) => !r.sum && r.pct < 100 && endDay(r) < today;
 
 const gbody = $('#gbody'), grows = $('#grows'), gspace = $('#gspace'), ghead = $('#ghead');
 const cbody = $('#cbody'), cspace = $('#cspace');
@@ -70,6 +74,7 @@ function show(v: View) {
   setStatus(v.error ?? 'Ready', !!v.error);
   cur.r = Math.min(cur.r, rows.length + EXTRA - 1);
   layout();
+  if (!$('#page').hidden) renderPage();
 }
 
 function visible(): Row[] {
@@ -128,7 +133,7 @@ function renderRows() {
   let html = '';
   for (let i = a; i < b; i++) {
     const r = rows[i];
-    html += `<div class="row${r && sel.has(r.uid) ? ' sel' : ''}${r?.sum ? ' sum' : ''}" style="top:${i * ROW}px;width:${gridW()}px" data-i="${i}">${COLS.map((c, ci) => cell(r, c, ci, i)).join('')}</div>`;
+    html += `<div class="row${r && sel.has(r.uid) ? ' sel' : ''}${r && isLate(r) ? ' late' : ''}${r?.sum ? ' sum' : ''}" style="top:${i * ROW}px;width:${gridW()}px" data-i="${i}">${COLS.map((c, ci) => cell(r, c, ci, i)).join('')}</div>`;
   }
   grows.innerHTML = html;
 }
@@ -248,7 +253,7 @@ function draw() {
 function drawScale() {
   const w = cbody.clientWidth, x0 = cbody.scrollLeft;
   const ctx = fitCanvas(scaleCv, scaleCv.parentElement!.clientWidth, 40);
-  ctx.fillStyle = '#F5F7FA'; ctx.fillRect(0, 0, w + 40, 40);
+  ctx.fillStyle = '#F7F9FC'; ctx.fillRect(0, 0, w + 40, 40);
   const [top, bot]: [Unit, Unit] = pd >= 16 ? ['week', 'day'] : pd >= 4 ? ['month', 'week'] : ['year', 'month'];
   const first = d0 + Math.floor(x0 / pd) - 1, last = d0 + Math.ceil((x0 + w) / pd) + 1;
   ctx.font = '11px "Segoe UI", sans-serif'; ctx.textBaseline = 'middle';
@@ -257,7 +262,8 @@ function drawScale() {
       const x = (d - d0) * pd - x0, x2 = (nextU(d, u) - d0) * pd - x0;
       ctx.fillStyle = '#DCE2EA'; ctx.fillRect(Math.round(x), y + 2, 1, 18);
       ctx.fillStyle = u === 'day' && !V.week[dowMon(d)] ? '#97A1AF' : '#3B4657';
-      const t = label(d, u, isTop), tw = ctx.measureText(t).width;
+      let t = label(d, u, isTop), tw = ctx.measureText(t).width;
+      if (tw >= x2 - x - 4 && u === 'week') { t = String(ymd(d)[2]); tw = ctx.measureText(t).width; }
       if (tw < x2 - x - 4) ctx.fillText(t, u === 'day' ? x + (x2 - x - tw) / 2 : Math.max(x + 4, Math.min(4, x2 - tw - 4)), y + 11);
     }
   }
@@ -269,7 +275,7 @@ function drawBars() {
   const ctx = fitCanvas(barsCv, w, h);
   const X = (d: number) => (d - d0) * pd - x0;
   if (pd >= 8) {
-    ctx.fillStyle = '#F1F3F7';
+    ctx.fillStyle = '#F4F6FA';
     for (let d = d0 + Math.floor(x0 / pd); X(d) < w; d++) if (!V.week[dowMon(d)]) ctx.fillRect(X(d), 0, pd, h);
   }
   const a = Math.floor(top / ROW), b = Math.min(rows.length, a + Math.ceil(h / ROW) + 1);
@@ -289,7 +295,7 @@ function drawBars() {
     const pts: [number, number][] = (inn === 1 ? tx >= ax : tx <= ax)
       ? [[fx, y1], [ax, y1], [ax, y2], [tx, y2]]
       : (() => { const ym = y2 + (y2 > y1 ? -ROW / 2 : ROW / 2), bx = tx - inn * 6; return [[fx, y1], [ax, y1], [ax, ym], [bx, ym], [bx, y2], [tx, y2]] as [number, number][]; })();
-    const col = showCrit && r.crit && p.crit ? '#D64545' : '#5A6F94';
+    const col = showCrit && r.crit && p.crit ? '#D64545' : '#7A8BA6';
     ctx.strokeStyle = col; ctx.beginPath();
     pts.forEach(([x, y], n) => n ? ctx.lineTo(Math.round(x) + .5, Math.round(y) + .5) : ctx.moveTo(Math.round(x) + .5, Math.round(y) + .5));
     ctx.stroke();
@@ -302,23 +308,30 @@ function drawBars() {
     const r = rows[i], y = i * ROW - top, x1 = X(r.s), x2 = X(r.f);
     let lx = x2 + 6;
     if (r.ms) {
-      ctx.fillStyle = showCrit && r.crit ? '#D64545' : '#0B2A5B';
+      ctx.fillStyle = showCrit && r.crit ? '#D64545' : '#14325E';
       ctx.beginPath(); ctx.moveTo(x1, y + 5); ctx.lineTo(x1 + 7, y + 12); ctx.lineTo(x1, y + 19); ctx.lineTo(x1 - 7, y + 12); ctx.fill();
       lx = x1 + 11;
     } else if (r.sum) {
-      ctx.fillStyle = '#0B2A5B';
+      ctx.fillStyle = '#14325E';
       ctx.fillRect(x1, y + 7, x2 - x1, 5);
       ctx.beginPath(); ctx.moveTo(x1, y + 7); ctx.lineTo(x1 + 5, y + 7); ctx.lineTo(x1, y + 16); ctx.fill();
       ctx.beginPath(); ctx.moveTo(x2, y + 7); ctx.lineTo(x2 - 5, y + 7); ctx.lineTo(x2, y + 16); ctx.fill();
     } else {
-      ctx.fillStyle = showCrit && r.crit ? '#E27A7A' : '#7FA7E6';
+      ctx.fillStyle = showCrit && r.crit ? '#F2B0B0' : '#A9CAF6';
       ctx.fillRect(x1, y + 6, Math.max(x2 - x1, 2), 12);
-      ctx.fillStyle = showCrit && r.crit ? '#B32D2D' : '#1F4E9A';
+      ctx.fillStyle = showCrit && r.crit ? '#C73B3B' : '#2F6FCF';
       ctx.fillRect(x1, y + 10, (x2 - x1) * r.pct / 100, 4);
-      ctx.strokeStyle = showCrit && r.crit ? '#B32D2D' : '#1F4E9A'; ctx.strokeRect(x1 + .5, y + 6.5, Math.max(x2 - x1, 2) - 1, 11);
+      ctx.strokeStyle = showCrit && r.crit ? '#C73B3B' : '#2F6FCF'; ctx.strokeRect(x1 + .5, y + 6.5, Math.max(x2 - x1, 2) - 1, 11);
     }
     ctx.fillStyle = '#3B4657';
     ctx.fillText(r.ms ? `${r.name}  ${r.start}` : r.name, lx, y + 12);
+  }
+  if (drag) {
+    const r = drag.r, y = drag.i * ROW - top;
+    ctx.setLineDash([4, 3]); ctx.strokeStyle = '#2F6FCF'; ctx.lineWidth = 1.5;
+    if (drag.mode === 'link') { ctx.beginPath(); ctx.moveTo(X(r.f), y + 12); ctx.lineTo(drag.mx - x0, drag.my - top); ctx.stroke(); }
+    else { const g1 = X(r.s + (drag.mode === 'move' ? drag.dd : 0)), g2 = X(r.f + drag.dd); ctx.strokeRect(g1 + .5, y + 3.5, Math.max(g2 - g1, 6), 17); }
+    ctx.setLineDash([]); ctx.lineWidth = 1;
   }
 }
 
@@ -346,12 +359,13 @@ async function guard(): Promise<boolean> {
   if (b === 0) return !!(await run('save', { asNew: false }));
   return b === 1;
 }
-async function newPlan(example: boolean) {
+async function newPlan(template?: string) {
   if (!(await guard())) return;
   collapsed.clear(); sel.clear(); cur = { r: 0, c: 1 };
-  await run('new_plan', { example });
+  await run('new_plan', { template: template ?? null });
   closeBs();
-  if (example) fit(); else setZoom(16, today + 20);
+  setView('gantt');
+  if (template) fit(); else setZoom(16, today + 20);
 }
 async function openPlan(path?: string) {
   if (!(await guard())) return;
@@ -502,9 +516,13 @@ async function renderBs() {
   }
   const hr = new Date().getHours();
   const recent = await call<Recent[]>('recent') ?? [];
-  const tile = (a: string, icon: string, t: string) => `<button class="tile" data-h="${a}"><div class="pic"><svg><use href="#${icon}"/></svg></div>${t}</button>`;
+  const tile = (a: string, icon: string, t: string, d: string) => `<button class="tile" data-h="${a}"><div class="pic"><svg class="ic"><use href="#${icon}"/></svg></div><b>${t}</b><span>${d}</span></button>`;
+  const mini = (t: Tpl) => { const h = Math.min(6, 84 / t.bars.length); return `<svg viewBox="0 0 200 96" preserveAspectRatio="none">${t.bars.map(([k, a, b], i) => { const x = 8 + a * 184, w = Math.max((b - a) * 184, 1.5), y = 6 + i * h;
+    return k === 2 ? `<rect x="${x - 1.5}" y="${y}" width="3" height="3" fill="#14325E" transform="rotate(45 ${x} ${y + 1.5})"/>` : `<rect x="${x}" y="${y + (k ? 1 : .5)}" width="${w}" height="${k ? 1.6 : h - 1.6}" fill="${k ? '#14325E' : t.color}" rx=".6"/>`; }).join('')}</svg>`; };
   main.innerHTML = `<h1>Good ${hr < 12 ? 'morning' : hr < 17 ? 'afternoon' : 'evening'}</h1><div class="home"><div>
-    <h2>New</h2><div class="tiles">${tile('blank', 'i-new', 'Blank Project')}${tile('sample', 'i-gantt', 'Sample: Compressor Package')}${tile('open', 'i-open', 'Open a plan…')}</div>
+    <h2>New</h2><div class="tiles">${tile('blank', 'i-new', 'Blank project', 'An empty plan starting today.')}${tile('open', 'i-open', 'Open a plan…', 'A .dplan file saved on this computer.')}</div>
+    <h2>Templates</h2><div class="tiles">${tpls.map(t => `<button class="tile" data-h="t:${t.id}"><div class="pic">${mini(t)}<small>${t.tasks} tasks · ${t.days} days</small></div><b>${esc(t.name)}</b><span>${esc(t.desc)}</span></button>`).join('')}</div>
+    <p class="muted">Templates start next Monday. Change the start date in Project › Project Information and every task moves with it.</p>
     <h2>Recent</h2>${recent.length ? `<table class="recent"><tr><th>Name</th><th>Date modified</th></tr>${recent.map(r =>
       `<tr class="f" data-p="${esc(r.path)}"><td><b>${esc(r.name)}</b><div class="p">${esc(r.path)}</div></td><td>${r.modified}</td></tr>`).join('')}</table>`
       : '<p class="muted">Plans you open or save appear here.</p>'}
@@ -552,6 +570,180 @@ function toast(msg: string, ok = false) {
 }
 function setStatus(msg: string, err = false) { const s = $('#stMsg'); s.textContent = msg; s.className = err ? 'err' : ''; }
 
+// ---------- Gantt mouse: select, drag to move, drag the end to resize, drag down to link ----------
+interface Drag { r: Row; i: number; mode: 'move' | 'size' | 'link'; x: number; y: number; dd: number; mx: number; my: number }
+let drag: Drag | null = null;
+const tip = $('#tip');
+const iso = (d: number) => new Date(d * DAY).toISOString().slice(0, 10);
+const fmtD = (d: number) => { const [y, m, dd] = ymd(d); return `${String(dd).padStart(2, '0')}-${MON[m]}-${String(y).slice(2)}`; };
+const pos = (e: MouseEvent) => { const b = cbody.getBoundingClientRect(); return [e.clientX - b.left + cbody.scrollLeft, e.clientY - b.top + cbody.scrollTop]; };
+function hit(e: MouseEvent) {
+  const [x, y] = pos(e), i = Math.floor(y / ROW), r = rows[i];
+  let part = '';
+  if (r && !r.sum) {
+    const x1 = (r.s - d0) * pd, x2 = (r.f - d0) * pd;
+    part = r.ms ? (Math.abs(x - x1) <= 8 ? 'move' : '') : x >= x2 - 5 && x <= x2 + 3 ? 'size' : x >= x1 - 2 && x < x2 - 5 ? 'move' : '';
+  }
+  return { i, x, y, r, part };
+}
+function showTip(e: MouseEvent, html: string) {
+  tip.innerHTML = html; tip.hidden = false;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px';
+  tip.style.top = e.clientY + 18 + 'px';
+}
+cbody.onmousedown = e => {
+  if (e.button !== 0) return;
+  const h = hit(e);
+  select(h.i, cur.c, e);
+  if (!h.r || !h.part || e.shiftKey || e.ctrlKey) return;
+  drag = { r: h.r, i: h.i, mode: h.part as 'move' | 'size', x: h.x, y: h.y, dd: 0, mx: h.x, my: h.y };
+  e.preventDefault();
+};
+document.addEventListener('mousemove', e => {
+  if (!drag) {
+    if (!cbody.contains(e.target as Node)) return void (tip.hidden = true);
+    const h = hit(e), r = h.r;
+    cbody.style.cursor = h.part === 'size' ? 'ew-resize' : h.part ? 'grab' : 'default';
+    if (r && h.part) showTip(e, `<b>${esc(r.name)}</b><br>${r.start} → ${r.finish} · ${r.dur}<br>${r.pct}% complete · total float ${r.tf}<br><span class="muted">Drag to move · drag the end to resize · drag down to link</span>`);
+    else tip.hidden = true;
+    return;
+  }
+  const [x, y] = pos(e), d = drag;
+  d.mx = x; d.my = y; d.dd = Math.round((x - d.x) / pd);
+  if (d.mode === 'move' && Math.abs(y - d.y) > ROW) d.mode = 'link';
+  const t = rows[Math.floor(y / ROW)];
+  showTip(e, d.mode === 'link' ? `Link <b>${d.r.id}</b> → <b>${t && !t.sum && t !== d.r ? t.id + ' ' + esc(t.name) : '…'}</b>`
+    : d.mode === 'move' ? `Start <b>${fmtD(d.r.s + d.dd)}</b>` : `Finish <b>${fmtD(Math.max(d.r.s, d.r.f - 1 + d.dd))}</b>`);
+  draw();
+});
+document.addEventListener('mouseup', async () => {
+  const d = drag;
+  if (!d) return;
+  drag = null; tip.hidden = true; draw();
+  if (d.mode === 'link') {
+    const t = rows[Math.floor(d.my / ROW)];
+    if (t && t !== d.r && !t.sum) await op({ Set: { uid: t.uid, field: 'preds', value: t.preds ? `${t.preds}, ${d.r.id}` : String(d.r.id) } });
+  } else if (d.dd && d.mode === 'move') await op({ Set: { uid: d.r.uid, field: 'start', value: iso(d.r.s + d.dd) } });
+  else if (d.dd) await op({ Set: { uid: d.r.uid, field: 'finish', value: iso(Math.max(d.r.s, d.r.f - 1 + d.dd)) } });
+});
+
+// ---------- view sidebar and pages ----------
+const VIEWS: ([string, string, string, string?] | '-')[] = [
+  ['gantt', 'gantt', 'Gantt'], ['list', 'list', 'Task List'], ['cal', 'cal', 'Calendar'], ['dash', 'dash', 'Dashboard'], ['report', 'report', 'Reports'], '-',
+  ['net', 'net', 'Network', '0.8'], ['res', 'res', 'Resources', '0.4'], ['load', 'load', 'Workload', '0.4'],
+];
+function renderViews() {
+  $('#views').innerHTML = VIEWS.map(v => v === '-' ? '<hr>' : `<button data-v="${v[0]}" class="${view === v[0] ? 'on' : ''}${v[3] ? ' soon' : ''}" title="${v[3] ? `${v[2]}: coming in ${v[3]}` : v[2]}"><svg><use href="#i-${v[1]}"/></svg>${v[2]}</button>`).join('');
+}
+function setView(v: string) {
+  const def = VIEWS.find(x => x !== '-' && x[0] === v) as [string, string, string, string?];
+  if (def[3]) return toast(`${def[2]} arrives in version ${def[3]}. See the roadmap under Help › About.`);
+  view = v;
+  renderViews();
+  const grid = v === 'gantt' || v === 'list';
+  $('#ganttView').hidden = !grid;
+  $('#page').hidden = grid;
+  $('#ganttView').classList.toggle('list', v === 'list');
+  if (grid) { layout(); gbody.focus(); } else renderPage();
+}
+$('#views').onclick = e => { const b = (e.target as HTMLElement).closest('[data-v]') as HTMLElement | null; if (b) setView(b.dataset.v!); };
+
+const leaves = () => V.rows.filter(r => !r.sum);
+const span = (r: Row) => r.ms ? 0 : r.f - r.s;
+const pctNow = (L: Row[]) => { const w = L.reduce((a, r) => a + span(r), 0); return w ? L.reduce((a, r) => a + span(r) * r.pct, 0) / w : 0; };
+const planned = (L: Row[], d: number) => { const w = L.reduce((a, r) => a + span(r), 0); return w ? 100 * L.reduce((a, r) => a + (span(r) ? span(r) * Math.min(1, Math.max(0, (d - r.s) / span(r))) : 0), 0) / w : 0; };
+const tbl = (L: Row[], extra?: (r: Row) => string) => L.length
+  ? `<table class="tbl"><tr><th>ID</th><th>Task</th><th>Start</th><th>Finish</th><th class="r">Done</th>${extra ? '<th></th>' : ''}</tr>${L.map(r =>
+    `<tr><td>${r.id}</td><td${isLate(r) ? ' class="late"' : ''}>${esc(r.name)}</td><td>${r.start}</td><td>${r.finish}</td><td class="r">${r.pct}%</td>${extra ? `<td>${extra(r)}</td>` : ''}</tr>`).join('')}</table>`
+  : '<div class="empty">None</div>';
+const meter = (p: number) => `<div class="meter"><i style="width:${p}%"></i></div>`;
+
+let calOff = 0, rep: { unit: 'week' | 'month'; off: number } = { unit: 'week', off: 0 };
+function renderPage() {
+  const pg = $('#page');
+  if (!V.rows.length) { pg.innerHTML = '<h1>Nothing to show yet</h1><p class="muted">Add tasks in the Gantt view, or start from a template under File › Home.</p>'; return; }
+  pg.innerHTML = view === 'cal' ? calendarPage() : view === 'dash' ? dashboardPage() : reportPage();
+}
+
+function calendarPage(): string {
+  const [ty, tm] = ymd(today), first = Date.UTC(ty, tm + calOff, 1) / DAY, [y, m] = ymd(first), start = first - dowMon(first);
+  const byDay = new Map<number, Row[]>();
+  const add = (d: number, r: Row) => byDay.set(d, [...(byDay.get(d) ?? []), r]);
+  for (const r of leaves()) { add(r.s, r); if (!r.ms && endDay(r) !== r.s) add(endDay(r), r); }
+  let cells = '';
+  for (let k = 0; k < 42; k++) {
+    const d = start + k, [, mm, dd] = ymd(d), it = byDay.get(d) ?? [];
+    const chip = (r: Row) => `<div class="chip${r.ms ? ' ms' : ''}${showCrit && r.crit ? ' crit' : ''}" data-u="${r.uid}" title="${esc(r.name)} · ${r.start} → ${r.finish}">${r.ms ? '◆' : r.s === d ? '▶' : '■'} ${esc(r.name)}</div>`;
+    cells += `<div class="day${mm !== m ? ' out' : ''}${V.week[dowMon(d)] ? '' : ' nw'}${d === today ? ' today' : ''}"><span class="dn">${dd}</span>${it.slice(0, 4).map(chip).join('')}${it.length > 4 ? `<div class="chip more">+${it.length - 4} more</div>` : ''}</div>`;
+  }
+  const MONF = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  return `<div class="ptools"><h1>${MONF[m]} ${y}</h1><span class="grow"></span><div class="seg"><button data-cal="-1">‹</button><button data-cal="0">Today</button><button data-cal="1">›</button></div></div>
+    <div class="calgrid">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => `<div class="dh">${x}</div>`).join('')}${cells}</div>
+    <p class="muted">▶ starts · ■ finishes · ◆ milestone. Click a task to open it in the Gantt chart.</p>`;
+}
+
+function scurve(L: Row[]): string {
+  const a = V.s, b = Math.max(V.f, a + 1), W = 600, H = 170, px = (d: number) => 30 + (d - a) / (b - a) * (W - 40), py = (p: number) => H - 20 - p / 100 * (H - 30);
+  const pts = Array.from({ length: 61 }, (_, k) => { const d = a + (b - a) * k / 60; return `${px(d).toFixed(1)},${py(planned(L, d)).toFixed(1)}`; }).join(' ');
+  const t = Math.min(Math.max(today, a), b), act = pctNow(L);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
+    ${[0, 50, 100].map(p => `<line x1="30" x2="${W - 10}" y1="${py(p)}" y2="${py(p)}" stroke="#E3E9F2"/><text x="2" y="${py(p) + 4}" font-size="10" fill="#6B7686">${p}%</text>`).join('')}
+    <polyline points="${pts}" fill="none" stroke="#2F6FCF" stroke-width="2"/>
+    <line x1="${px(t)}" x2="${px(t)}" y1="8" y2="${H - 20}" stroke="#F2B233" stroke-dasharray="4 3"/>
+    <circle cx="${px(t)}" cy="${py(act)}" r="5" fill="#2E9D57"/>
+    <text x="30" y="${H - 4}" font-size="10" fill="#6B7686">${V.start}</text><text x="${W - 10}" y="${H - 4}" font-size="10" fill="#6B7686" text-anchor="end">${V.finish}</text></svg>
+    <div class="muted"><span style="color:#2F6FCF">━</span> planned progress · <span style="color:#2E9D57">●</span> actual today (${act.toFixed(0)}%)</div>`;
+}
+
+function dashboardPage(): string {
+  const L = leaves(), done = L.filter(r => r.pct === 100), prog = L.filter(r => r.pct > 0 && r.pct < 100), late = L.filter(isLate);
+  const now = pctNow(L), plan = planned(L, today + 1), left = Math.max(0, V.f - 1 - today);
+  const kpi = (v: string, l: string, c = '') => `<div class="kpi ${c}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  const phases = V.rows.filter(r => r.sum && r.lvl === Math.min(...V.rows.filter(x => x.sum).map(x => x.lvl)));
+  const ms = L.filter(r => r.ms && r.s >= today).slice(0, 8);
+  return `<div class="ptools"><h1>${esc(V.name)}: dashboard</h1></div>
+    <div class="kpis">${kpi(now.toFixed(0) + '%', `complete · planned ${plan.toFixed(0)}% by today`, now + 0.5 >= plan ? 'good' : 'bad')}
+      ${kpi(V.finish, `finish · ${left} days to go`)}${kpi(String(L.length), 'tasks')}${kpi(String(done.length), 'completed', 'good')}
+      ${kpi(String(prog.length), 'in progress')}${kpi(String(late.length), 'late', late.length ? 'bad' : 'good')}${kpi(String(L.filter(r => r.crit).length), 'critical tasks')}</div>
+    <div class="cols">
+      <div class="panel"><h2 style="margin-top:0">Progress curve</h2>${scurve(L)}</div>
+      <div class="panel"><h2 style="margin-top:0">Phases</h2>${phases.length ? `<table class="tbl"><tr><th>Phase</th><th>Finish</th><th>Done</th><th></th></tr>${phases.map(r => `<tr><td>${esc(r.name)}</td><td>${r.finish}</td><td class="r">${r.pct}%</td><td>${meter(r.pct)}</td></tr>`).join('')}</table>` : '<div class="empty">Indent tasks under summary tasks to see phases.</div>'}</div>
+      <div class="panel"><h2 style="margin-top:0">Upcoming milestones</h2>${tbl(ms)}</div>
+      <div class="panel"><h2 style="margin-top:0">Late tasks</h2>${tbl(late)}</div>
+    </div>`;
+}
+
+function reportPage(): string {
+  const [ty, tm] = ymd(today);
+  const ps = rep.unit === 'week' ? today - dowMon(today) + 7 * rep.off : Date.UTC(ty, tm + rep.off, 1) / DAY;
+  const pe = rep.unit === 'week' ? ps + 7 : nextU(ps, 'month'), ne = rep.unit === 'week' ? pe + 7 : nextU(pe, 'month');
+  const L = leaves(), inP = (d: number, a = ps, b = pe) => d >= a && d < b;
+  const finished = L.filter(r => r.pct === 100 && inP(endDay(r))), due = L.filter(r => r.pct < 100 && inP(endDay(r)));
+  const starting = L.filter(r => !r.ms && inP(r.s)), active = L.filter(r => r.pct > 0 && r.pct < 100), late = L.filter(isLate);
+  const ms = L.filter(r => r.ms && inP(r.s)), next = L.filter(r => inP(r.s, pe, ne));
+  const now = pctNow(L), plan = planned(L, pe), title = rep.unit === 'week' ? `Week of ${fmtD(ps)} to ${fmtD(pe - 1)}` : `${MON[ymd(ps)[1]]} ${ymd(ps)[0]}`;
+  const sec = (h: string, L2: Row[]) => `<div class="panel"><h2 style="margin-top:0">${h} <span class="muted">(${L2.length})</span></h2>${tbl(L2)}</div>`;
+  return `<div class="ptools"><div class="seg"><button data-rep="week" class="${rep.unit === 'week' ? 'on' : ''}">Weekly</button><button data-rep="month" class="${rep.unit === 'month' ? 'on' : ''}">Monthly</button></div>
+      <div class="seg"><button data-rp="-1">‹ Previous</button><button data-rp="0">Current</button><button data-rp="1">Next ›</button></div><span class="grow"></span>
+      <button class="btn" data-print="1">Print or save as PDF</button></div>
+    <h1>${esc(V.name)}: progress report</h1><div class="muted">${title} · produced ${fmtD(today)}</div>
+    <div class="kpis" style="margin-top:14px"><div class="kpi"><div class="v">${now.toFixed(0)}%</div><div class="l">complete now</div></div>
+      <div class="kpi"><div class="v">${plan.toFixed(0)}%</div><div class="l">planned by end of period</div></div>
+      <div class="kpi ${late.length ? 'bad' : 'good'}"><div class="v">${late.length}</div><div class="l">late tasks</div></div>
+      <div class="kpi"><div class="v">${V.finish}</div><div class="l">forecast finish</div></div></div>
+    <div class="cols">${sec('Finished this period', finished)}${sec('Due to finish this period', due)}${sec('Starting this period', starting)}${sec('Milestones this period', ms)}${sec('In progress', active)}${sec('Late', late)}${sec('Starting next period (look-ahead)', next)}</div>`;
+}
+
+$('#page').onclick = e => {
+  const el = e.target as HTMLElement, d = el.dataset;
+  const chip = (el.closest('[data-u]') as HTMLElement | null)?.dataset.u;
+  if (d.cal) { calOff = d.cal === '0' ? 0 : calOff + +d.cal; renderPage(); }
+  else if (d.rep) { rep = { unit: d.rep as 'week' | 'month', off: 0 }; renderPage(); }
+  else if (d.rp) { rep.off = d.rp === '0' ? 0 : rep.off + +d.rp; renderPage(); }
+  else if (d.print) print();
+  else if (chip) { setView('gantt'); const i = rows.findIndex(r => r.uid === +chip); if (i >= 0) { select(i, 1); scrollToTask(); } }
+};
+
 // ---------- events ----------
 let syncing = false;
 gbody.onscroll = () => {
@@ -565,7 +757,6 @@ cbody.onscroll = () => {
   draw();
 };
 cbody.onwheel = e => { if (e.ctrlKey) { e.preventDefault(); setZoom(pd * (e.deltaY < 0 ? 1.2 : 1 / 1.2), d0 + (cbody.scrollLeft + e.offsetX) / pd); } };
-cbody.onmousedown = e => select(Math.floor((e.offsetY + cbody.scrollTop) / ROW), cur.c, e);
 cbody.ondblclick = () => taskInfo();
 gbody.tabIndex = 0;
 
@@ -613,7 +804,7 @@ document.querySelectorAll('[data-a]').forEach(b => ((b as HTMLElement).onclick =
 $('#bs aside').onclick = e => {
   const b = ((e.target as HTMLElement).closest('[data-b]') as HTMLElement | null)?.dataset.b;
   if (b === 'back') closeBs();
-  else if (b === 'new') newPlan(false);
+  else if (b === 'new') newPlan();
   else if (b === 'open') openPlan();
   else if (b === 'save' || b === 'saveas') save(b === 'saveas').then(closeBs);
   else if (b) { bsPage = b; renderBs(); }
@@ -621,8 +812,8 @@ $('#bs aside').onclick = e => {
 $('#bsMain').onclick = e => {
   const el = e.target as HTMLElement, h = (el.closest('[data-h]') as HTMLElement | null)?.dataset.h;
   const p = (el.closest('[data-p]') as HTMLElement | null)?.dataset.p, u = el.dataset.u;
-  if (h === 'blank') newPlan(false);
-  else if (h === 'sample') newPlan(true);
+  if (h === 'blank') newPlan();
+  else if (h?.startsWith('t:')) newPlan(h.slice(2));
   else if (h === 'open') openPlan();
   else if (p) openPlan(p);
   else if (u === 'check') checkUpdate();
@@ -637,9 +828,10 @@ document.addEventListener('keydown', e => {
   const go = (dr: number, dc: number) => { e.preventDefault(); select(cur.r + dr, cur.c + dc, { shiftKey: e.shiftKey && dr !== 0, ctrlKey: false }); };
   if (ctrl && k.toLowerCase() === 's') { e.preventDefault(); save(e.shiftKey); }
   else if (ctrl && k.toLowerCase() === 'o') { e.preventDefault(); openPlan(); }
-  else if (ctrl && k.toLowerCase() === 'n') { e.preventDefault(); newPlan(false); }
+  else if (ctrl && k.toLowerCase() === 'n') { e.preventDefault(); newPlan(); }
   else if (ctrl && k.toLowerCase() === 'z') { e.preventDefault(); undoRedo(false); }
   else if (ctrl && k.toLowerCase() === 'y') { e.preventDefault(); undoRedo(true); }
+  else if ($('#ganttView').hidden) { /* pages take no grid keys */ }
   else if (ctrl && k === 'F2') op(e.shiftKey ? { Unlink: { uids: picked() } } : { Link: { uids: picked() } });
   else if (ctrl && e.shiftKey && k === 'F5') scrollToTask();
   else if (e.altKey && e.shiftKey && (k === 'ArrowRight' || k === 'ArrowLeft')) { e.preventDefault(); op(k === 'ArrowRight' ? { Indent: { uids: picked() } } : { Outdent: { uids: picked() } }); }
@@ -664,6 +856,8 @@ TAURI.event.listen('update-progress', (e: { payload: number }) => { updPct = e.p
 // ---------- start ----------
 (async () => {
   version = await inv<string>('version');
+  tpls = await inv<Tpl[]>('templates');
+  renderViews();
   ribbon();
   $('#grid').style.width = Math.min(gridW() + 18, innerWidth * 0.55) + 'px';
   show(await inv<View>('state'));

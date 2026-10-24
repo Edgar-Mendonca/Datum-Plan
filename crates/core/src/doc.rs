@@ -136,6 +136,14 @@ fn exec(p: &mut Project, op: Op) -> Result<(), String> {
                     let v: u8 = value.trim().trim_end_matches('%').parse().map_err(|_| "Enter a number from 0 to 100.")?;
                     p.tasks[i].pct = v.min(100);
                 }
+                "finish" => {
+                    leaf_only("finish")?;
+                    let d = parse::date(&value)?;
+                    let mut cal = WorkCal::new(&p.calendar, p.start);
+                    let es = sched::schedule(p, &mut cal)?.es[i];
+                    let end = cal.ord(d) + i64::from(cal.is_work(d));
+                    p.tasks[i].dur = (end - es).max(0) as i32;
+                }
                 "start" => {
                     leaf_only("start")?;
                     p.tasks[i].snet = if value.trim().is_empty() { None } else { Some(parse::date(&value)?) };

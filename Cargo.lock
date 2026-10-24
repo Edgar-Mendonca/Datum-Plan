@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "datum-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "serde",
@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "datum-plan"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "datum-core",

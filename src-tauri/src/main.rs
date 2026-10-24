@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod update;
 
-use datum_core::{doc::{Doc, Op}, sample, view, Project};
+use datum_core::{doc::{Doc, Op}, templates, view, Project};
 use serde::Serialize;
 use std::{path::{Path, PathBuf}, sync::Mutex};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
@@ -55,9 +55,36 @@ fn history(st: State<St>, redo: bool) -> Out {
     out(&d)
 }
 
+/// Templates start next Monday so the first week is a full one.
+fn next_monday() -> chrono::NaiveDate {
+    use chrono::Datelike;
+    let t = today();
+    t + chrono::Days::new(7 - t.weekday().num_days_from_monday() as u64)
+}
+
+#[derive(Serialize)]
+struct Tpl { id: &'static str, name: &'static str, desc: &'static str, color: &'static str, tasks: usize, days: i64, bars: Vec<(u8, f64, f64)> }
+
+/// Template cards with a miniature Gantt: (0 task / 1 summary / 2 milestone, start, end) as 0–1 fractions.
 #[tauri::command]
-fn new_plan(st: State<St>, example: bool) -> Out {
-    let p = if example { sample(today()) } else { Project::new("Project1", today()) };
+fn templates() -> Vec<Tpl> {
+    templates::TEMPLATES
+        .iter()
+        .map(|t| {
+            let v = view::build(&templates::build(t, next_monday()));
+            let span = (v.f - v.s).max(1) as f64;
+            let bars = v.rows.iter().map(|r| (if r.ms { 2 } else { r.sum as u8 }, (r.s - v.s) as f64 / span, (r.f - v.s) as f64 / span)).collect();
+            Tpl { id: t.id, name: t.name, desc: t.desc, color: t.color, tasks: v.rows.iter().filter(|r| !r.sum).count(), days: v.f - v.s, bars }
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn new_plan(st: State<St>, template: Option<String>) -> Out {
+    let p = match templates::TEMPLATES.iter().find(|t| Some(t.id) == template.as_deref()) {
+        Some(t) => templates::build(t, next_monday()),
+        None => Project::new("Project1", today()),
+    };
     let mut d = st.0.lock().unwrap();
     *d = Doc::new(p);
     out(&d)
@@ -173,7 +200,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            state, apply, history, new_plan, open, save, recent, startup_file, version, quit, check_update, install_update
+            state, apply, history, new_plan, templates, open, save, recent, startup_file, version, quit, check_update, install_update
         ])
         .run(tauri::generate_context!())
         .expect("Datum Plan failed to start");

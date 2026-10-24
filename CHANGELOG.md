@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.1.1 — 2026-10-24
+
+A lighter look, a view sidebar, templates, a Gantt chart you can drag, and progress reporting.
+
+**New look**
+- A light theme with white panels and blue accents in place of the dark navy chrome.
+- A new, lighter logo.
+- A view sidebar on the left: Gantt, Task List, Calendar, Dashboard and Reports. Network, Resources and Workload show the version they arrive in.
+
+**Templates instead of the sample plan**
+- File › Home offers Engineering design, EPC project, Software development, Building construction and Research project, each with a miniature Gantt preview. Templates start next Monday.
+
+**Gantt you can touch**
+- Drag a bar to move it. This sets a "start no earlier than" date.
+- Drag the end of a bar to change its duration.
+- Drag a bar down onto another task to link them (finish-to-start).
+- Hover over a bar to see its dates, duration, % complete and float.
+- The Finish column can now be edited. Typing a finish date sets the duration.
+- The weekly timescale shows day numbers when zoomed out.
+
+**Views and reports**
+- Task List: the full-width task sheet.
+- Calendar: a month view of starts, finishes and milestones. Click a task to jump to it in the Gantt.
+- Dashboard: % complete against planned, finish date, task counts, late and critical tasks, a progress S-curve, phase progress and upcoming milestones.
+- Reports: a weekly or monthly progress report. It lists what finished, what is due, what starts, milestones, work in progress, late tasks and a look-ahead to the next period. Print it or save it as PDF.
+- Late tasks are shown in red in the task sheet.
+
 ## 0.1.0 — 2026-10-24
 
 The first version: the application shell, the scheduling engine and automatic updates.

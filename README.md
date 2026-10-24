@@ -18,12 +18,17 @@
 2. Run it. It installs for your user account, with no administrator rights needed. The installer is not code-signed yet, so on the first install Windows may show *"Windows protected your PC"*. Click **More info › Run anyway**.
 3. Later versions install themselves. Open **File › Home** (or click the amber **Update available** badge) and click **Update now**.
 
-## What 0.1 does
+## What it does today
 
-- A task sheet and Gantt chart in the MS Project layout, with a navy theme.
+- An MS Project-style ribbon, task sheet and Gantt chart, in a light theme.
+- A view sidebar: Gantt, Task List, Calendar, Dashboard and Reports.
+- Drag Gantt bars to move them, drag the end to resize, drag down to link.
 - Summary tasks, milestones, and FS/SS/FF/SF links with lags. A Rust critical path engine calculates total and free float.
-- Undo and redo, `.dplan` files, recent plans, and a sample compressor-package plan.
+- A dashboard with an S-curve, and weekly or monthly progress reports you can print or save as PDF.
+- Five templates (engineering, EPC, software, building, research), undo and redo, `.dplan` files.
 - One-click updates from GitHub Releases, with SHA-256 checksum verification.
+
+<img src="docs/images/dashboard.png" alt="Dashboard" width="100%">
 
 See the [changelog](CHANGELOG.md) for details and the [roadmap](docs/MEMORY.md#roadmap) for what comes next.
 
