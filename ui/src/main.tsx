@@ -1,16 +1,24 @@
 // Datum Plan window: layout, sidebar, status bar, keyboard shortcuts, startup and recovery.
 import { render } from "solid-js/web";
 import { For, Show, Switch, Match, createSignal, onMount } from "solid-js";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-500.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
+import "@fontsource/ibm-plex-sans/latin-700.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import "@fontsource/ibm-plex-mono/latin-500.css";
+import "@fontsource/ibm-plex-mono/latin-600.css";
 import "./styles.css";
 import { invoke, listen, Out, FieldList, Options } from "./api";
-import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setupOpen, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut } from "./store";
+import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setupOpen, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut, setThemeRaw, applyTheme } from "./store";
 import { C } from "./cmds";
 import { TitleBar, Ribbon, palette } from "./ribbon";
-import { Grid } from "./grid";
+import { Grid, FormulaBar } from "./grid";
 import { Gantt, Timeline } from "./gantt";
 import { Details } from "./details";
 import { Network, CalendarView, UsageView, ResourceSheet, ResourceGraph, TeamPlanner, Risks, Checks, Portfolio } from "./views";
-import { Dashboard, Reports } from "./reports";
+import { Dashboard, Reports, SCurves, Progress } from "./reports";
+import { Sheets } from "./sheets";
 import { Backstage, update, checkUpdate } from "./backstage";
 import { Setup } from "./setup";
 import { Menu, Toast, Icon, Dialog } from "./ui";
@@ -19,7 +27,8 @@ import * as D from "./dialogs";
 const SIDE: ([View, string, string] | "-")[] = [
   ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
   ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["team", "team", "Team"], "-",
-  ["dashboard", "dash", "Dashboard"], ["reports", "report", "Reports"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["portfolio", "folder", "Portfolio"],
+  ["sheets", "table", "Sheets"], "-",
+  ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["portfolio", "folder", "Portfolio"],
 ];
 
 const GanttView = () => {
@@ -34,6 +43,7 @@ const GanttView = () => {
   return (
     <div class="ganttview">
       <Show when={timeline()}><Timeline /></Show>
+      <FormulaBar />
       <div class="gmain">
         <Grid width={gridW()} />
         <div class="split" onMouseDown={e => drag(e, setGridW, gridW(), "x")} onDblClick={() => setGridW(gridW() > 300 ? 120 : 620)} />
@@ -68,7 +78,7 @@ const App = () => {
   onMount(async () => {
     try {
       setFields(await invoke<FieldList>("field_list"));
-      const o = await invoke<Options>("options"); setOpts(o);
+      const o = await invoke<Options>("options"); setOpts(o); setThemeRaw(o.theme || "auto"); applyTheme();
       setOut(await invoke<Out>("state"));
       useTable("Entry");
       const start = await invoke<string | null>("startup_file");
@@ -114,6 +124,9 @@ const App = () => {
               <Match when={view() === "resgraph"}><ResourceGraph /></Match>
               <Match when={view() === "team"}><TeamPlanner /></Match>
               <Match when={view() === "dashboard"}><Dashboard /></Match>
+              <Match when={view() === "progress"}><Progress /></Match>
+              <Match when={view() === "scurve"}><SCurves /></Match>
+              <Match when={view() === "sheets"}><Sheets /></Match>
               <Match when={view() === "reports"}><Reports /></Match>
               <Match when={view() === "risks"}><Risks /></Match>
               <Match when={view() === "checks"}><Checks /></Match>

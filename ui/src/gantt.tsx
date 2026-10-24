@@ -2,7 +2,7 @@
 // to move, resize, change progress or link.
 import { createSignal, createEffect, onMount, onCleanup, Show } from "solid-js";
 import { Row, fmtDay, iso, dateDay } from "./api";
-import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query } from "./store";
+import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick } from "./store";
 import { RH } from "./grid";
 import { C } from "./cmds";
 
@@ -41,6 +41,14 @@ const fit = (cv: HTMLCanvasElement, w: number, h: number) => {
   ctx.clearRect(0, 0, w, h);
   return ctx;
 };
+/** Canvas colours from the theme. */
+let K: Record<string, string> = {};
+const pal = () => {
+  const v = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const dark = document.documentElement.dataset.theme === "dark";
+  K = { ink: dark ? "#9CC2F7" : "#0C1A2B", line: v("--line"), text: v("--text2"), bg: v("--bg2"), panel: v("--panel"), off: dark ? "#141E2A" : "#F2F4F2", pale: v("--pale"), muted: v("--muted"),
+    base: dark ? "#5B6878" : "#AEB7C4", link: dark ? "#6B7F99" : "#7A8BA6", fill: dark ? "#24476E" : "#A9CAF6", blue: v("--blue"), cfill: dark ? "#5A2522" : "#F2B0B0", crit: v("--crit") };
+};
 const off = (d: number) => { const s = out()?.summary; if (!s) return dow(d) >= 5; return !s.week[dow(d)] || s.off_days.includes(Math.floor(d)); };
 
 export const Gantt = () => {
@@ -53,32 +61,32 @@ export const Gantt = () => {
   type Drag = { r: Row; i: number; mode: "move" | "size" | "link" | "pct"; x: number; y: number; dd: number; mx: number; my: number; pct: number };
   let drag: Drag | null = null;
   let pending = false;
-  const draw = () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; if (body) { drawScale(); drawBars(); } }); };
+  const draw = () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; if (body) { pal(); drawScale(); drawBars(); } }); };
 
   const drawScale = () => {
     const w = size().w, x0 = body.scrollLeft, pd = zoom();
     const ctx = fit(scaleCv, w, 40);
-    ctx.fillStyle = "#F7F9FC"; ctx.fillRect(0, 0, w, 40);
+    ctx.fillStyle = K.panel; ctx.fillRect(0, 0, w, 40);
     const [top, bot]: [Unit, Unit] = pd >= 16 ? ["week", "day"] : pd >= 4 ? ["month", "week"] : pd >= 1.2 ? ["quarter", "month"] : ["year", "quarter"];
     const first = d0() + Math.floor(x0 / pd) - 1, last = d0() + Math.ceil((x0 + w) / pd) + 1;
     ctx.font = "11px 'Segoe UI', sans-serif"; ctx.textBaseline = "middle";
     for (const [u, y, isTop] of [[top, 0, true], [bot, 20, false]] as [Unit, number, boolean][]) {
       for (let d = floorU(first, u); d < last; d = nextU(d, u)) {
         const x = (d - d0()) * pd - x0, x2 = (nextU(d, u) - d0()) * pd - x0;
-        ctx.fillStyle = "#DCE2EA"; ctx.fillRect(Math.round(x), y + 2, 1, 18);
-        ctx.fillStyle = u === "day" && off(d) ? "#97A1AF" : "#3B4657";
+        ctx.fillStyle = K.line; ctx.fillRect(Math.round(x), y + 2, 1, 18);
+        ctx.fillStyle = u === "day" && off(d) ? K.muted : K.text;
         let t = label(d, u, isTop, pd), tw = ctx.measureText(t).width;
         if (tw >= x2 - x - 4 && u === "week") { t = String(ymd(d)[2]); tw = ctx.measureText(t).width; }
         if (tw < x2 - x - 4) ctx.fillText(t, u === "day" ? x + (x2 - x - tw) / 2 : Math.max(x + 4, Math.min(4, x2 - tw - 4)), y + 11);
       }
     }
-    ctx.fillStyle = "#DCE2EA"; ctx.fillRect(0, 20, w, 1); ctx.fillRect(0, 39, w, 1);
+    ctx.fillStyle = K.line; ctx.fillRect(0, 20, w, 1); ctx.fillRect(0, 39, w, 1);
   };
 
   const drawBars = () => {
     const { w, h } = size(), top = body.scrollTop, pd = zoom(), rows = grid().rows, crit = showCrit() || view() === "tracking", base = showBase() || view() === "tracking";
     const ctx = fit(barsCv, w, h);
-    if (pd >= 6) { ctx.fillStyle = "#F3F5F9"; for (let d = d0() + Math.floor(body.scrollLeft / pd); X(d) < w; d++) if (off(d)) ctx.fillRect(X(d), 0, pd, h); }
+    if (pd >= 6) { ctx.fillStyle = K.off; for (let d = d0() + Math.floor(body.scrollLeft / pd); X(d) < w; d++) if (off(d)) ctx.fillRect(X(d), 0, pd, h); }
     const a = Math.floor(top / RH), b = Math.min(rows.length, a + Math.ceil(h / RH) + 1);
     const ss = new Set(sel());
     for (let i = a; i < b; i++) {
@@ -102,7 +110,7 @@ export const Gantt = () => {
       const y1 = pi * RH - top + RH / 2, y2 = i * RH - top + RH / 2, ax = fx + outD * 6;
       const pts: [number, number][] = (inn === 1 ? tx >= ax : tx <= ax) ? [[fx, y1], [ax, y1], [ax, y2], [tx, y2]]
         : (() => { const ym = y2 + (y2 > y1 ? -RH / 2 : RH / 2), bx = tx - inn * 6; return [[fx, y1], [ax, y1], [ax, ym], [bx, ym], [bx, y2], [tx, y2]] as [number, number][]; })();
-      const col = crit && r.crit && p.crit ? "#D64545" : "#7A8BA6";
+      const col = crit && r.crit && p.crit ? K.crit : K.link;
       ctx.strokeStyle = col; ctx.beginPath();
       pts.forEach(([x, y], n) => (n ? ctx.lineTo(Math.round(x) + 0.5, Math.round(y) + 0.5) : ctx.moveTo(Math.round(x) + 0.5, Math.round(y) + 0.5)));
       ctx.stroke();
@@ -114,28 +122,28 @@ export const Gantt = () => {
       const r = rows[i], B = r.bar, y = i * RH - top, x1 = X(B.s), x2 = X(B.f);
       const isCrit = crit && r.crit, hasBase = base && B.bs !== null, by = hasBase ? y + 3 : y + 4, bh = hasBase ? 9 : 11;
       if (hasBase && B.bf !== null) {
-        ctx.fillStyle = "#AEB7C4";
+        ctx.fillStyle = K.base;
         if (B.bf === B.bs) { const bx = X(B.bs!); ctx.beginPath(); ctx.moveTo(bx, y + 12); ctx.lineTo(bx + 4, y + 16); ctx.lineTo(bx, y + 20); ctx.lineTo(bx - 4, y + 16); ctx.fill(); }
         else ctx.fillRect(X(B.bs!), y + 14, Math.max(X(B.bf) - X(B.bs!), 2), 4);
       }
       if (showSlack() && r.kind === "task" && B.lf > B.f) { ctx.fillStyle = "#7FA6DA"; ctx.fillRect(x2, y + 15, X(B.lf) - x2, 2); }
-      if (showLate() && r.kind === "task" && B.ls > B.s) { ctx.strokeStyle = "#9AA4B2"; ctx.setLineDash([2, 2]); ctx.strokeRect(X(B.ls) + 0.5, by + 0.5, X(B.lf) - X(B.ls), bh); ctx.setLineDash([]); }
+      if (showLate() && r.kind === "task" && B.ls > B.s) { ctx.strokeStyle = K.muted; ctx.setLineDash([2, 2]); ctx.strokeRect(X(B.ls) + 0.5, by + 0.5, X(B.lf) - X(B.ls), bh); ctx.setLineDash([]); }
       let lx = x2 + 6;
       ctx.globalAlpha = r.off ? 0.35 : 1;
-      if (r.kind === "group") { ctx.fillStyle = "#8A94A3"; ctx.fillRect(x1, y + 7, x2 - x1, 5); }
+      if (r.kind === "group") { ctx.fillStyle = K.muted; ctx.fillRect(x1, y + 7, x2 - x1, 5); }
       else if (r.ms) {
-        ctx.fillStyle = isCrit ? "#D64545" : "#14325E";
+        ctx.fillStyle = isCrit ? K.crit : K.ink;
         ctx.beginPath(); ctx.moveTo(x1, by - 1); ctx.lineTo(x1 + 6, by + 5); ctx.lineTo(x1, by + 11); ctx.lineTo(x1 - 6, by + 5); ctx.fill();
         lx = x1 + 10;
       } else if (r.kind === "summary" || r.kind === "project") {
-        ctx.fillStyle = r.kind === "project" ? "#5B6B82" : "#14325E";
+        ctx.fillStyle = r.kind === "project" ? K.muted : K.ink;
         ctx.fillRect(x1, y + 6, x2 - x1, 4);
         ctx.beginPath(); ctx.moveTo(x1, y + 6); ctx.lineTo(x1 + 5, y + 6); ctx.lineTo(x1, y + 14); ctx.fill();
         ctx.beginPath(); ctx.moveTo(x2, y + 6); ctx.lineTo(x2 - 5, y + 6); ctx.lineTo(x2, y + 14); ctx.fill();
         if (B.pct > 0) { ctx.fillStyle = "#2E9D57"; ctx.fillRect(x1, y + 10, (x2 - x1) * B.pct / 100, 2); }
       } else {
         const segs = B.segs.length ? B.segs : [[B.s, B.f] as [number, number]];
-        const fill = r.manual ? "#BFE6D3" : isCrit ? "#F2B0B0" : "#A9CAF6", edge = r.manual ? "#2E9D6B" : isCrit ? "#C73B3B" : "#2F6FCF";
+        const fill = r.manual ? "#BFE6D3" : isCrit ? K.cfill : K.fill, edge = r.manual ? "#2E9D6B" : isCrit ? K.crit : K.blue;
         const done = B.s + (B.f - B.s) * B.pct / 100;
         segs.forEach(([s, f], n) => {
           const a1 = X(s), wd = Math.max(X(f) - a1, 2);
@@ -148,15 +156,15 @@ export const Gantt = () => {
       }
       if (B.dl !== null) {
         const dx = X(B.dl);
-        ctx.fillStyle = B.dl < B.f ? "#D64545" : "#2E9D57";
+        ctx.fillStyle = B.dl < B.f ? K.crit : "#2E9D57";
         ctx.beginPath(); ctx.moveTo(dx - 4, y + 1); ctx.lineTo(dx + 4, y + 1); ctx.lineTo(dx, y + 7); ctx.fill(); ctx.fillRect(dx - 0.5, y + 5, 1, 13);
       }
-      if (showLabels() && r.kind !== "group") { ctx.fillStyle = "#3B4657"; ctx.fillText(r.ms ? `${fmtDay(B.s)}` : r.res, lx, y + RH / 2); }
+      if (showLabels() && r.kind !== "group") { ctx.fillStyle = K.text; ctx.fillText(r.ms ? `${fmtDay(B.s)}` : r.res, lx, y + RH / 2); }
       ctx.globalAlpha = 1;
     }
     if (drag) {
       const r = drag.r, y = drag.i * RH - top;
-      ctx.setLineDash([4, 3]); ctx.strokeStyle = "#2F6FCF"; ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]); ctx.strokeStyle = K.blue; ctx.lineWidth = 1.5;
       if (drag.mode === "link") { ctx.beginPath(); ctx.moveTo(X(r.bar.f), y + RH / 2); ctx.lineTo(drag.mx - body.scrollLeft, drag.my - top); ctx.stroke(); }
       else if (drag.mode === "pct") { ctx.fillStyle = "rgba(46,157,87,.55)"; ctx.fillRect(X(r.bar.s), y + 8, (X(r.bar.f) - X(r.bar.s)) * drag.pct / 100, 4); }
       else { const g1 = X(r.bar.s + (drag.mode === "move" ? drag.dd : 0)), g2 = X(r.bar.f + drag.dd); ctx.strokeRect(g1 + 0.5, y + 2.5, Math.max(g2 - g1, 6), RH - 5); }
@@ -235,7 +243,7 @@ export const Gantt = () => {
     ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up);
     document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
   });
-  createEffect(() => { grid(); sel(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); draw(); });
+  createEffect(() => { themeTick(); grid(); sel(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); draw(); });
 
   return (
     <div class="chart">
@@ -266,32 +274,33 @@ export const Timeline = () => {
   createEffect(() => { tick(); grid(); (async () => { const g = await call<{ rows: Row[] }>("query", { q: { ...query(), cols: ["name"], filter: { name: "", rules: [{ field: "timeline", test: "equals", value: "Yes", value2: "", or: false }], summaries: false, highlight: false }, group: [], collapsed: [], level: 0, project_summary: false } }); setItems(g?.rows ?? []); })(); });
   const draw = () => {
     if (!cv || !timeline()) return;
+    pal();
     const h = 64, ctx = fit(cv, w(), h), s = out()?.summary;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w(), h);
+    ctx.fillStyle = K.bg; ctx.fillRect(0, 0, w(), h);
     ctx.font = "11px 'Segoe UI', sans-serif"; ctx.textBaseline = "middle";
     if (!s) return;
     const L = 76, R = w() - 76, a = s.s, b = Math.max(s.f, a + 1), px = (d: number) => L + (d - a) / (b - a) * (R - L);
-    ctx.fillStyle = "#6B7686"; ctx.fillText("Start", 10, 20); ctx.fillText(s.start, 10, 36); ctx.fillText("Finish", R + 10, 20); ctx.fillText(s.finish, R + 10, 36);
-    ctx.fillStyle = "#EEF4FD"; ctx.fillRect(L, 22, R - L, 20);
+    ctx.fillStyle = K.muted; ctx.fillText("Start", 10, 20); ctx.fillText(s.start, 10, 36); ctx.fillText("Finish", R + 10, 20); ctx.fillText(s.finish, R + 10, 36);
+    ctx.fillStyle = K.pale; ctx.fillRect(L, 22, R - L, 20);
     const step: Unit = (b - a) / (R - L) > 3 ? "quarter" : "month";
-    ctx.fillStyle = "#9AA4B2";
+    ctx.fillStyle = K.muted;
     for (let d = nextU(floorU(a, step), step); d < b; d = nextU(d, step)) { ctx.fillRect(px(d), 22, 1, 20); if (px(nextU(d, step)) - px(d) > 40) ctx.fillText(label(d, step, true, 1), px(d) + 3, 53); }
     const lanes: number[] = [];
     for (const r of items()) {
       const x1 = px(r.bar.s), x2 = Math.max(px(r.bar.f), x1 + 2);
-      if (r.ms) { ctx.fillStyle = "#F2B233"; ctx.beginPath(); ctx.moveTo(x1, 24); ctx.lineTo(x1 + 7, 32); ctx.lineTo(x1, 40); ctx.lineTo(x1 - 7, 32); ctx.fill(); ctx.fillStyle = "#14325E"; ctx.fillText(r.name, x1 + 8, 12); continue; }
+      if (r.ms) { ctx.fillStyle = "#F2B233"; ctx.beginPath(); ctx.moveTo(x1, 24); ctx.lineTo(x1 + 7, 32); ctx.lineTo(x1, 40); ctx.lineTo(x1 - 7, 32); ctx.fill(); ctx.fillStyle = K.ink; ctx.fillText(r.name, x1 + 8, 12); continue; }
       let lane = lanes.findIndex(e => e <= x1); if (lane < 0) lane = lanes.length; lanes[lane] = x2 + 4;
       const y = 23 + (lane % 2) * 9;
-      ctx.fillStyle = r.kind === "summary" ? "#2F6FCF" : "#6E9FE6"; ctx.fillRect(x1, y, x2 - x1, 9);
-      ctx.fillStyle = "#14325E"; if (ctx.measureText(r.name).width < x2 - x1 + 40) ctx.fillText(r.name, x1, lane % 2 ? 58 : 12);
+      ctx.fillStyle = r.kind === "summary" ? K.blue : "#6E9FE6"; ctx.fillRect(x1, y, x2 - x1, 9);
+      ctx.fillStyle = K.ink; if (ctx.measureText(r.name).width < x2 - x1 + 40) ctx.fillText(r.name, x1, lane % 2 ? 58 : 12);
     }
-    if (!items().length) { ctx.fillStyle = "#8A94A3"; ctx.fillText("Right-click a task and choose Add to Timeline", L + 8, 32); }
+    if (!items().length) { ctx.fillStyle = K.muted; ctx.fillText("Right-click a task and choose Add to Timeline", L + 8, 32); }
     const t = today(); ctx.strokeStyle = "#F2B233"; ctx.beginPath(); ctx.moveTo(px(t), 18); ctx.lineTo(px(t), 46); ctx.stroke();
   };
   const ro = new ResizeObserver(() => setW(cv.parentElement!.clientWidth));
   onMount(() => { ro.observe(cv.parentElement!); document.addEventListener("tl-redraw", draw); });
   onCleanup(() => { ro.disconnect(); document.removeEventListener("tl-redraw", draw); });
-  createEffect(() => { items(); w(); timeline(); out(); draw(); });
+  createEffect(() => { themeTick(); items(); w(); timeline(); out(); draw(); });
   const click = (e: MouseEvent) => {
     const s = out()?.summary; if (!s) return;
     const L = 76, R = w() - 76, d = s.s + (e.offsetX - L) / (R - L) * (Math.max(s.f, s.s + 1) - s.s);

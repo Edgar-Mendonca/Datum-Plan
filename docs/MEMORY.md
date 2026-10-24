@@ -6,9 +6,9 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.0** (released 2026-10-24). Earlier: 0.1.0, 0.1.1, 0.2.0 |
+| **Current version** | **0.3.1** (released 2026-10-24). Earlier: 0.1.0, 0.1.1, 0.2.0, 0.3.0 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
-| **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS |
+| **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
 | **Installer** | NSIS `.exe`, per-user install. 1.7 MB (0.1.0), 1.8 MB (0.1.1), 2.4 MB (0.2.0); UI bundle 200 kB JS (61 kB gzip) in 0.3.0 |
 | **Reference repos** | `Edgar-Mendonca/Cairn` (the earlier web planner: feature and template reference) · `Compressor-Engineering-Suite` (the Home/update pattern) |
@@ -42,13 +42,14 @@ flowchart LR
     Query[query.rs: filter · group · sort · outline → Grid + bars]
     Rep2[report.rs · check.rs · network.rs<br/>usage · curves · compare · DCMA · layout]
     Form[formula.rs: MSP formula language]
+    Sheet[sheet.rs: GridCraft Excel engine:<br/>formula columns · sheet tabs · Plan sheet]
     Load[load.rs: timephased work and cost]
     IO[io/: mspdi · xer · table · formats pmxml/mpx/ics/html/json]
   end
   UI -- "invoke(cmd, args)" --> Cmd
   Cmd --> Doc & Query & Rep2 & IO
   Doc --> Sched
-  Query --> Fields --> Sched & Load & Form
+  Query --> Fields --> Sched & Load & Form & Sheet
   Rep2 --> Fields
 ```
 
@@ -84,7 +85,8 @@ flowchart LR
 | `crates/core/src/formula.rs` | MS Project formula parser and evaluator (34 functions). |
 | `crates/core/src/fields.rs` | Field registry (`task_fields`, `resource_fields`), `Calc` (one scheduled plan + loads + EV), `val/text/format/icon`, filter `test`, `money`. |
 | `crates/core/src/query.rs` | `Query` → `Grid` (cols, rows with cells, icons, bar geometry), built-in filters, `Summary`. |
-| `crates/core/src/report.rs` | Usage grids, cost/EV curves, compare. |
+| `crates/core/src/report.rs` | Usage grids, cost/EV curves, compare; reporting periods (`period_ends`), weighted progress S-curves (`scurve`: planned from baseline, actual linear from actual start to today's %, forecast), `period_report` (this vs previous period, WBS, lists, hours). |
+| `crates/core/src/sheet.rs` | GridCraft bridge: value conversion (dates ↔ Excel serials, durations in days), `[Field]` translation, `task_formulas` (all Excel formula columns in one in-memory workbook, one row per task), `book`/`sheet_view` (Plan sheet + user tabs). |
 | `crates/core/src/check.rs` | DCMA 14 + P6 checks with limits. |
 | `crates/core/src/network.rs` | Network Diagram layout (columns by logic, rows by predecessor position). |
 | `crates/core/src/parse.rs` | Durations (also elapsed), dates, predecessors (also % lags), resources, quick add. |
@@ -96,10 +98,13 @@ flowchart LR
 | `src-tauri/src/update.rs` | Updater; `check(beta)` reads `/releases` when beta is on; versions compare with pre-release tags. |
 | `ui/index.html` | Root and the icon sprite (about 65 icons). `ui/public/logo.svg`. |
 | `ui/src/api.ts` | Types matching the Rust JSON, `invoke`, date and money helpers. |
-| `ui/src/store.ts` | Global signals, built-in tables, `query()`, `refresh()`, `act()`, menus, dialogs, toast. |
+| `ui/src/store.ts` | Global signals, built-in tables, `query()`, `refresh()`, `act()`, menus, dialogs, toast, theme (`applyTheme`, `themeTick`). |
 | `ui/src/cmds.ts` | Command functions `C` and the `ALL_CMDS` list for Tell Me. |
 | `ui/src/ui.tsx` | Icon, Menu (with submenus), Dialog, Tabs, form helpers. |
-| `ui/src/grid.tsx`, `gantt.tsx`, `details.tsx`, `views.tsx`, `reports.tsx`, `dialogs.tsx`, `ribbon.tsx`, `backstage.tsx`, `setup.tsx`, `main.tsx` | As in the diagram. `styles.css` holds the light theme and print styles. |
+| `ui/src/grid.tsx` | Excel-like task sheet: one scroller with sticky header and frozen ID/name, ranges (`ranges` signal), fill handle, TSV clipboard via copy/paste events, `Cells` op for range edits, AutoFilter menus, header rename (`Title` op), `FormulaBar`. |
+| `ui/src/charts.tsx` | Chart.js wrapper in a Prism style (Okabe-Ito colours, crosshair, status marker, PNG save). |
+| `ui/src/sheets.tsx` | Sheet tabs (A1 grid, formula bar, formats, clipboard). |
+| `gantt.tsx`, `details.tsx`, `views.tsx`, `reports.tsx`, `dialogs.tsx`, `ribbon.tsx`, `backstage.tsx`, `setup.tsx`, `main.tsx` | As in the diagram. `styles.css` holds the light theme and print styles. |
 
 ### Update flow
 
@@ -162,6 +167,15 @@ flowchart LR
 | 0.3.0 | The engine owns fields, filters, groups and sorts (`Calc` + `query`); the window asks for rows per view | One place for values, exports use the same text; 20k tasks query in ~50 ms. |
 | 0.3.0 | Print/PDF through the WebView print dialog ("Save as PDF") with print CSS, instead of a PDF library | No extra dependency; works for every view and report. |
 | 0.3.0 | Templates still use the Project Setup panel (setup_done = false) | Setup is step one of every new plan, as agreed. |
+| 0.3.1 | Keep the MS Project ribbon and layout; adopt only CentriForge's styling (IBM Plex, palette, square controls, mono labels) | The user's answer: improve the current UI, don't replace the command bar. |
+| 0.3.1 | Light / Dark / Auto theme via CSS tokens on `:root[data-theme]`; canvas colours read the tokens | The user asked for all three. |
+| 0.3.1 | Formulas are per column (MS Project style) in Excel syntax with `[Field]` names, evaluated by GridCraft; cell references only in sheet tabs | The user's answer. GridCraft gives ~400 Excel functions without writing them. |
+| 0.3.1 | GridCraft as a pinned git dependency (calc, model, core), not a fork | Small surface (one module), easy upgrades, attribution in NOTICE. |
+| 0.3.1 | Grid stays DOM (virtual rows) with a single scroller and sticky header, not canvas | Fixes the alignment bug at the root; real inputs for editing. |
+| 0.3.1 | Reporting periods per plan (week end day, month close day, weighting) chosen by the user | The user's answer: it varies by project. |
+| 0.3.1 | Charts with Chart.js in a Prism style; PNG save on every chart | The user asked for elegant, hoverable charts like Prism/plotly; Chart.js is small. |
+| 0.3.1 | Period notes and photos stored inside the .dplan (photos downscaled to 1400 px JPEG) | Portable single file; the user left it to us. |
+| 0.3.1 | No Python; a separate future app "Datum Plot" (Prism/Origin-like) may use Python | The user's answer. |
 
 ---
 
@@ -175,9 +189,8 @@ flowchart LR
 | **0.1.1** | Look, views, reports | Light theme, logo, sidebar, templates, drag bars, Calendar, Dashboard, weekly/monthly report | ✅ |
 | **0.2.0** | The big one | Grid power (any column, clipboard, fill, move, find/replace, menus), Gantt power (timeline, progress drag, details pane, link editing), Ctrl+K, Ctrl+J, Options, recovery, minute calendars + exceptions + task calendars, all constraints + deadlines, manual/inactive tasks, summary links, status date + actuals + Mark on Track, baselines + variance, resources + costs + workload, import/export XML/XER/XLSX/CSV | ✅ |
 | **0.3.0** | MSP look + P6 power (one big release) | Everything planned for 0.2.1 → 0.5.2, network diagram included. Full scope and beta milestones in **[PLAN-0.3.md](PLAN-0.3.md)**: MSP ribbon with dropdowns and Format tabs, about 450 fields + custom fields/formulas/lookups/indicators, Field Settings, Information dialogs, tables, filters, groups and views, formatting, task types, leveling, P6 activity types, longest path, usage views, Team Planner, Network Diagram, 11 baselines, Update Project, earned value, costs, report gallery and designer, page setup/PDF, DCMA check, compare, risks, EPS workspace, new formats (P6 XML, MPX, ICS, HTML, JSON) | ✅ (see 0.3.1 for what slipped) |
-| 0.3.1 | Foundation (plan under review: [PLAN-0.3.1.md](PLAN-0.3.1.md)) | CentriForge design system and shell, Gridcraft formula engine, Excel-like spreadsheet grid (ranges, fill, clipboard, formula bar), Excel formula columns, bug fixes, Playwright CI tests | 🔜 |
-| 0.3.2 | Progress & reporting | Reporting periods, Update Progress workflow, period comparison, Dashboard → Charts → Tables → Notes reports, PDF/Excel | ⬜ |
-| 0.3.3 | Builder & power | Report builder, sheet tabs, xlsx with formulas, recurring tasks, relationship diagram, global change, EPS | ⬜ |
+| 0.3.1 | Foundation ([PLAN-0.3.1.md](PLAN-0.3.1.md)) | Excel-like grid, GridCraft formula columns, sheet tabs, reporting periods, period progress reports with notes/photos, Prism-style S-curves and dashboard, CentriForge styling, light/dark/auto | ✅ |
+| 0.3.2 | Builder & power | Report builder and templates, Update Progress workflow, xlsx export with formulas, recurring tasks, relationship diagram, global change, EPS tree, conditional formatting, Playwright UI tests in CI | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
@@ -263,6 +276,13 @@ flowchart LR
 - References given: `storytold/gridcraft` (pure Rust Excel engine, MIT/Apache; cloned read-only), `Edgar-Mendonca/Compressor-Engineering-Suite` (design to copy: IBM Plex, square, mono labels, Launcher/Workspace), Cairn. The user suggested Python libraries.
 - Wrote [PLAN-0.3.1.md](PLAN-0.3.1.md): diagnosis, Gridcraft crates as pinned dependencies, canvas spreadsheet grid, CentriForge shell and modules, period reporting, Python recommendation (none in 0.3.x), release steps 0.3.1–0.3.3, 10 questions. Waiting for answers and the user's bug write-up.
 
+### 2026-10-24: Session 6, continued (0.3.1)
+- Answers: keep the ribbon (style only), light/dark/auto, Excel formulas per column with field names, sheet tabs OK, no Python (future app Datum Plot), user-chosen periods, all kinds of S-curves (elegant, hoverable, printable), notes/photos our call, build it all as 0.3.1. Also: rename headings by double-click, rename tasks from the right-click menu, multi-cell selection like Excel. Screenshot showed misaligned headings.
+- Engine: `sheet.rs` (GridCraft), `Cells`/`Title`/`Sheet`/`SheetCells`/`Note` ops, model `titles`, `sheets`, `periods`, `notes`; fields Baseline % Complete and % Complete Variance; periods, S-curves and period reports in `report.rs`; 19 tests.
+- UI: grid rewrite, formula bar, Formula Column dialog, Sheets view, `charts.tsx`, Dashboard/Progress/S-Curves pages, period settings, theme switch, CentriForge styling.
+- Bugs found while testing: context-menu items never ran (document mousedown closed the menu before click; Solid's delegated stopPropagation does not stop native listeners); a selection-sync effect reset ranges to the old column (fixed with `batch` + `untrack`); cost/hours S-curves showed duration-weighted values for plans without costs (now hidden, `SCurve.weight`).
+- Checked in the real app (Xvfb): grid editing, range drag, formula column `=[% Complete]-[Baseline % Complete]`, Progress report, S-curves, Dashboard, Sheets with `=SUM(Plan!F2:F30)`, dark theme.
+
 ---
 
 ## 5. Known limits and next steps
@@ -271,3 +291,5 @@ flowchart LR
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).
 - Not built yet (0.3.1): report designer, Page Setup dialog, bar/text style editors, recurring tasks, Relationship diagram, global change, EPS tree, the reference's C2 scenario tests.
 - Templates have no resources or costs, so cost reports are empty until resources are added.
+- Actual progress history is modelled linearly from actual start to the current % (snapshots are stored but not yet used as history points).
+- Fill handle and paste were checked by code review and in the harness, not with a real clipboard in the app.

@@ -31,6 +31,7 @@ export interface Project {
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
+  titles: Record<string, string>; sheets: SheetData[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {
   name: string; start: string; finish: string; s: number; f: number; status: string; status_day: number | null; dur: string; pct: number; work: string; cost: string;
@@ -65,7 +66,7 @@ export interface Curve { buckets: number[]; planned: number[]; forecast: number[
 export interface Check { key: string; name: string; about: string; count: number; total: number; value: number; limit: string; pass: boolean; uids: number[] }
 export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean }[]; cols: number; rows: number }
 export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }
-export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; setupPanel: boolean }
+export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; setupPanel: boolean; theme: string }
 
 /** Days since 1970-01-01 (local) to a Date at local midnight + fraction. */
 export const dayDate = (d: number) => { const x = new Date(1970, 0, 1); x.setDate(x.getDate() + Math.floor(d)); x.setMinutes(Math.round((d - Math.floor(d)) * 1440)); return x; };
@@ -81,3 +82,16 @@ export const money = (v: number, c: Currency) => {
   const s = Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: c.decimals, maximumFractionDigits: c.decimals });
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
+
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number> }
+export interface Photo { data: string; caption: string }
+export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
+export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean][] }
+export interface SCurve { days: number[]; planned: number[]; actual: (number | null)[]; forecast: number[]; total: number; status_day: number; name: string; weight: string }
+export interface PRow { uid: number; code: string; name: string; start: string; finish: string; pct: number; note: string }
+export interface PeriodReport {
+  kind: string; from: number; to: number; prev_from: number; planned_prev: number; planned: number; actual_prev: number; actual: number;
+  finish: string; baseline_finish: string; finish_var: string; spi: number | null; cpi: number | null; cost: string; critical: number; late: number;
+  completed: PRow[]; started: PRow[]; in_progress: PRow[]; slipped: PRow[]; upcoming: PRow[]; milestones: PRow[];
+  wbs: { uid: number; name: string; planned_prev: number; planned: number; actual_prev: number; actual: number }[]; hours: [number, number][];
+}

@@ -28,7 +28,7 @@ export const Menu = () => {
       </div>
     );
   };
-  const down = () => close();
+  const down = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.(".menu")) close(); };
   onMount(() => document.addEventListener("mousedown", down));
   onCleanup(() => document.removeEventListener("mousedown", down));
   return (

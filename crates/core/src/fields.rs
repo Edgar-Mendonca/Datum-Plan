@@ -55,7 +55,7 @@ pub fn task_fields() -> &'static [FieldDef] {
         for (k, n, kd, e) in [
             ("pct", "% Complete", Pct, true), ("phys", "Physical % Complete", Pct, true), ("workpct", "% Work Complete", Pct, false), ("astart", "Actual Start", Date, true),
             ("afinish", "Actual Finish", Fin, true), ("adur", "Actual Duration", Dur, true), ("rem", "Remaining Duration", Dur, true), ("status", "Status", Text, false),
-            ("steps", "Steps", Int, false),
+            ("steps", "Steps", Int, false), ("plannedpct", "Baseline % Complete", Pct, false), ("pctvar", "% Complete Variance", Pct, false),
         ] { add(k, n, kd, "Progress", e) }
         for (k, n, kd, e) in [
             ("work", "Work", Work, true), ("awork", "Actual Work", Work, false), ("rwork", "Remaining Work", Work, false), ("cost", "Cost", Cost, false),
@@ -183,7 +183,7 @@ impl<'a> Calc<'a> {
         }).collect();
         let defs = p.fields.iter().map(|d| (d.key.clone(), (d.clone(), formula::parse(&d.formula).ok().filter(|_| !d.formula.trim().is_empty())))).collect();
         let mut names: HashMap<String, String> = task_fields().iter().map(|f| (f.name.to_lowercase(), f.key.clone())).collect();
-        for (k, a) in [("total slack", "tf"), ("free slack", "ff"), ("total float", "tf"), ("free float", "ff"), ("name", "name"), ("resource names", "res")] {
+        for (k, a) in [("planned % complete", "plannedpct"), ("percent complete", "pct"), ("total slack", "tf"), ("free slack", "ff"), ("total float", "tf"), ("free float", "ff"), ("name", "name"), ("resource names", "res")] {
             names.insert(k.into(), a.into());
         }
         for d in &p.fields {
@@ -345,6 +345,13 @@ impl<'a> Calc<'a> {
             "rem" => F::Num((dur * (100 - self.pct[i] as i64) / 100) as f64),
             "status" => txt(if self.pct[i] == 100 { "Complete" } else if s.es[i] >= self.status_at() { "Future Task" } else if self.val(i, "late").truth() { "Late" } else { "On Schedule" }),
             "steps" => F::Num(t.steps.len() as f64),
+            "plannedpct" | "pctvar" => {
+                // Where the baseline (or, without one, the current plan) says the task should be at the status date.
+                let (a, b) = t.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
+                let (dd, c) = (self.status_at(), &s.cals[s.ci[i]]);
+                let planned = if dd <= a { 0.0 } else if dd >= b { 100.0 } else { (c.between(a, dd) as f64 / c.between(a, b).max(1) as f64 * 100.0).round() };
+                F::Num(if key == "pctvar" { self.pct[i] as f64 - planned } else { planned })
+            }
             "work" => F::Num(l.work[i] / 60.0),
             "awork" => F::Num(l.awork[i] / 60.0),
             "rwork" => F::Num((l.work[i] - l.awork[i]) / 60.0),

@@ -217,8 +217,9 @@ pub fn period_ends(c: &Calc, kind: &str) -> Vec<i64> {
     out
 }
 
-/// Weight of each leaf task for progress: duration, cost, work or (physical) duration.
-fn weights(c: &Calc, how: &str) -> Vec<f64> {
+/// Weight of each leaf task for progress: duration, cost, work or (physical) duration, and the
+/// weighting actually used (a plan without costs or work falls back to duration).
+fn weights(c: &Calc, how: &str) -> (Vec<f64>, String) {
     let (p, s) = (c.p, &c.s);
     let w: Vec<f64> = (0..p.tasks.len()).map(|i| {
         if s.summary[i] || s.off[i] {
@@ -230,8 +231,7 @@ fn weights(c: &Calc, how: &str) -> Vec<f64> {
             _ => p.tasks[i].dur.max(1) as f64,
         }
     }).collect();
-    // A plan without costs or work falls back to duration weights.
-    if how != "duration" && w.iter().sum::<f64>() <= 0.0 { weights(c, "duration") } else { w }
+    if how != "duration" && w.iter().sum::<f64>() <= 0.0 { weights(c, "duration") } else { (w, how.into()) }
 }
 
 /// Share (0–1) of a task's work done by instant `t` if it runs evenly from `a` to `b`.
@@ -267,13 +267,15 @@ pub struct SCurve {
     pub total: f64,
     pub status_day: i64,
     pub name: String,
+    /// The weighting used: duration, cost, work or physical.
+    pub weight: String,
 }
 
 /// Cumulative progress S-curve for the project or one summary (`scope` uid), weighted by
 /// `how` (duration, cost, work, physical), sampled at period ends ("week", "month") or days.
 pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
     let p = c.p;
-    let w = weights(c, how);
+    let (w, weight) = weights(c, how);
     let tasks: Vec<usize> = match scope.and_then(|u| p.idx(u)) {
         Some(k) => p.subtree(k).filter(|&i| w[i] > 0.0).collect(),
         None => (0..p.tasks.len()).filter(|&i| w[i] > 0.0).collect(),
@@ -284,7 +286,7 @@ pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
     days.retain(|&d| d >= lo - 7);
     days.insert(0, lo - 1);
     let dd = c.status_at();
-    let mut out = SCurve { days: vec![], planned: vec![], actual: vec![], forecast: vec![], total, status_day: dd / DAY - 1, name: scope.and_then(|u| p.idx(u)).map_or(p.name.clone(), |k| p.tasks[k].name.clone()) };
+    let mut out = SCurve { days: vec![], planned: vec![], actual: vec![], forecast: vec![], total, status_day: dd / DAY - 1, name: scope.and_then(|u| p.idx(u)).map_or(p.name.clone(), |k| p.tasks[k].name.clone()), weight };
     for d in days {
         let t = (d + 1) * DAY;
         let (mut a, mut b, mut f) = (0.0, 0.0, 0.0);
@@ -348,7 +350,7 @@ pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
     let k = ends.iter().position(|&e| e == to);
     let prev = k.and_then(|k| k.checked_sub(1)).map_or(to - if kind == "month" { 30 } else { 7 }, |k| ends[k]);
     let before = k.and_then(|k| k.checked_sub(2)).map_or(prev - (to - prev), |k| ends[k]);
-    let w = weights(c, &p.periods.weight);
+    let (w, _) = weights(c, &p.periods.weight);
     let total: f64 = w.iter().sum::<f64>().max(1e-9);
     let at = |d: i64, which: usize| (0..p.tasks.len()).filter(|&i| w[i] > 0.0).map(|i| { let v = progress_at(c, i, (d + 1) * DAY); w[i] * [v.0, v.1, v.2][which] }).sum::<f64>() / total * 100.0;
     let row = |i: usize, note: &str| PRow {

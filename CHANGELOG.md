@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.3.1 — 2026-10-24
+
+A rebuilt foundation: a real spreadsheet grid, Excel formulas, period reporting and a cleaner look.
+
+**A spreadsheet that works like Excel**
+- The task sheet is rebuilt. Header and rows share one scroll area, so columns always line up (fixes the misaligned headings).
+- Select cells like in Excel: click and drag, Shift+click, Ctrl+click for several ranges, click a column heading for the whole column or the ID column for whole rows, Ctrl+A for everything.
+- Delete clears the selected cells (Delete on whole rows, or Ctrl+−, deletes tasks). Type and press Ctrl+Enter to fill every selected cell. Ctrl+D fills down, and the fill handle at the corner of a selection drags values down.
+- Copy and paste blocks of cells to and from Excel. Pasting below the last task adds new tasks.
+- Formula bar above the sheet shows the active cell, and Sum, Average and Count of the selected numbers.
+- Double-click any column heading to rename it. Right-click a task and choose Rename Task, or press F2.
+- Excel-style filter buttons on every heading: sort, tick the values to show, custom filter.
+- The task name and ID columns stay in view when you scroll sideways.
+
+**Formula columns (Excel formulas, by column, as in MS Project)**
+- New Formula Column (right-click a heading, the fx button or Format › Formula Column): name it, choose Number, Text, Date, Duration, Cost or Yes/No, and write an Excel formula that refers to other columns by name, e.g. `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","On time")`. It is calculated for every task.
+- Powered by the GridCraft engine: about 400 Excel functions (IF, IFS, SUMIFS, XLOOKUP, WORKDAY, NETWORKDAYS, TEXT, ROUND, LET…). Formula columns can use each other.
+- New fields: Baseline % Complete (where the baseline says a task should be at the status date) and % Complete Variance.
+
+**Sheets: spreadsheets inside your plan**
+- Add sheet tabs for quantities, estimates or progress measurement, with Excel formulas, number formats, copy and paste.
+- Sheets read your tasks through the Plan sheet, e.g. `=SUMIF(Plan!I:I,100,Plan!M:M)`.
+
+**Progress reporting by period**
+- Reporting periods are yours to set per plan: the weekday a week ends on, the day a month closes, and how progress is weighted (duration, cost, hours or physical %). Set them in Project Setup or Project › Reporting Periods.
+- Weekly and monthly Progress report for any period: actual and planned progress with the change since last period, progress this period vs planned, variance, forecast finish, SPI and CPI; charts; progress by phase last period vs this period; completed, started, in progress, behind baseline, look-ahead and milestones.
+- Notes for each period: executive summary, progress, issues, actions, look-ahead and photos, saved inside the plan and printed with the report.
+
+**S-curves and charts**
+- Interactive charts in a clean, GraphPad Prism-like style: hover anywhere to read every value, a status-date line, colour-blind-safe colours, and a PNG button on every chart.
+- S-curves page: project progress, progress per period, cost and hours S-curves, one S-curve per phase, and the data table; weekly or monthly, weighted as you choose.
+- The Dashboard now shows KPIs with the change since last period, the project S-curve, progress per period, progress by phase, cost and earned value, and a manpower histogram.
+- Reports saved as HTML keep their charts as pictures.
+
+**Look and feel**
+- The CentriForge design language on the MS Project layout: IBM Plex fonts, a calmer palette and square, clean controls.
+- Light, Dark and Auto themes (Auto follows Windows). Switch from the title bar or File › Options.
+
+**Fixes**
+- Right-click menu commands did nothing in 0.3.0; they work now.
+- Selecting a cell sometimes highlighted the wrong column.
+
 ## 0.3.0 — 2026-10-24
 
 The biggest release so far: the MS Project look and feel with Primavera P6 power, rebuilt from the engine up. Everything planned for 0.2.1 to 0.5.2 is in this one release, including the network diagram.

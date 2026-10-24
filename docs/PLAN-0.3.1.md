@@ -1,6 +1,6 @@
 # Datum Plan 0.3.1+: spreadsheet core, CentriForge design, period reporting
 
-Status: **brainstorm, waiting for the user's answers (section 7) and bug write-up.** Nothing is built yet.
+Status: **answered and built as 0.3.1** (decisions in MEMORY.md §2). The user kept the MS Project ribbon (style only), so §2.C's command bar was dropped; reporting moved into 0.3.1.
 
 ## 1. What went wrong in 0.3.0 (honest diagnosis)
 

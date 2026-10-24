@@ -54,6 +54,10 @@ export const Setup = () => {
           <label>Calendar<select value={p().calendar} onChange={e => act({ Project: { name: p().name, start: p().start, status: p().status ?? "", calendar: e.currentTarget.value, day_hours: p().day_min / 60, manual_default: p().manual_default } })}><For each={p().calendars}>{c => <option>{c.name}</option>}</For></select></label>
           <label>Hours per day<input type="number" value={p().day_min / 60} onChange={e => act({ Project: { name: p().name, start: p().start, status: p().status ?? "", calendar: p().calendar, day_hours: +e.currentTarget.value, manual_default: p().manual_default } })} /></label>
           <button class="btn" onClick={() => D.calendars()}>Change working time…</button>
+          <p class="muted">Reporting periods: weekly and monthly cut-offs for progress reports and S-curves.</p>
+          <label>Week ends on<select value={p().periods.week_end} onChange={e => put("periods", { ...p().periods, week_end: +e.currentTarget.value })}><For each={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}>{(d, k) => <option value={k()}>{d}</option>}</For></select></label>
+          <label>Month closes on<select value={p().periods.month_end} onChange={e => put("periods", { ...p().periods, month_end: +e.currentTarget.value })}><option value="0">Last day of the month</option><For each={Array.from({ length: 28 }, (_, k) => k + 1)}>{d => <option value={d}>Day {d}</option>}</For></select></label>
+          <label>Weight progress by<select value={p().periods.weight} onChange={e => put("periods", { ...p().periods, weight: e.currentTarget.value })}><option value="duration">Duration</option><option value="cost">Cost</option><option value="work">Hours</option><option value="physical">Physical %</option></select></label>
         </Show>
         <Show when={step() === 2}>
           <p class="muted">Costs, reports and exports use this currency. Any ISO 4217 code works.</p>

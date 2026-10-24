@@ -1,7 +1,7 @@
 // Dialogs: information, settings and editors, MS Project style.
 import { For, Show, createSignal, createMemo, Index } from "solid-js";
 import { createStore, produce } from "solid-js/store";
-import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay } from "./api";
+import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay, invoke } from "./api";
 import { act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query } from "./store";
 import { Dialog, Row, Text, Pick, Check, Tabs } from "./ui";
 import { TaskTab, useInfo, TABS } from "./details";
@@ -448,3 +448,69 @@ export const confirmClose = (then: () => void) => openDialog(() => (
   </Dialog>
 ));
 export { produce, opts, grid, query };
+
+// ---------- formula columns (Excel style, by column) ----------
+const TYPES: [string, string][] = [["number", "Number"], ["text", "Text"], ["date", "Date"], ["duration", "Duration"], ["cost", "Cost"], ["flag", "Yes/No"]];
+const FUNCS: [string, string][] = [
+  ["IF(test, then, else)", "IF(, , )"], ["IFS(test1, v1, test2, v2)", "IFS(, , , )"], ["AND / OR / NOT", "AND(, )"], ["ROUND(x, digits)", "ROUND(, 0)"], ["MIN / MAX", "MAX(, )"], ["ABS(x)", "ABS()"],
+  ["SUM / AVERAGE", "SUM(, )"], ["IFERROR(x, alt)", "IFERROR(, 0)"], ["TODAY()", "TODAY()"], ["WORKDAY(date, days)", "WORKDAY(, )"], ["NETWORKDAYS(a, b)", "NETWORKDAYS(, )"],
+  ["DATEDIF / DAYS(end, start)", "DAYS(, )"], ["EDATE(date, months)", "EDATE(, 1)"], ["YEAR / MONTH / WEEKNUM", "WEEKNUM()"], ["TEXT(x, format)", 'TEXT(, "dd-mmm-yy")'],
+  ["LEFT / RIGHT / MID", "LEFT(, 3)"], ["CONCAT(a, b)", "CONCAT(, )"], ["UPPER / LOWER / TRIM", "UPPER()"], ["SWITCH(x, v1, r1, …)", "SWITCH(, , )"],
+];
+export const formulaColumn = (key?: string, insertAt?: number) => openDialog(() => {
+  const existing = key ? P().fields.find(f => f.key === key) : undefined;
+  const [kind, setKind] = createSignal(key ? key.replace(/\d+$/, "") : "number");
+  const [title, setTitle] = createSignal(existing?.alias ?? "");
+  const [f, setF] = createSignal(existing?.formula?.startsWith("=") ? existing.formula : existing?.formula ? `=${existing.formula}` : "=");
+  const [err, setErr] = createSignal("");
+  let box!: HTMLTextAreaElement;
+  const insert = (t: string) => { const a = box.selectionStart ?? f().length, b = box.selectionEnd ?? a; setF(f().slice(0, a) + t + f().slice(b)); setTimeout(() => { box.focus(); box.selectionStart = box.selectionEnd = a + t.length; }); };
+  const free = () => { const used = new Set([...P().fields.map(x => x.key), ...cols().map(c => c[0].replace(/^c:/, ""))]); for (let k = 1; k <= 30; k++) { const x = `${kind()}${k}`; if (!used.has(x) && fields().task.some(t => t.key === `c:${x}`)) return x; } return null; };
+  const [find, setFind] = createSignal("");
+  const list = createMemo(() => fields().task.filter(x => !x.key.startsWith("c:") || P().fields.some(d => `c:${d.key}` === x.key && d.alias)).map(x => [x.key, P().fields.find(d => `c:${d.key}` === x.key)?.alias || P().titles?.[x.key] || x.name] as [string, string]).filter(x => x[1].toLowerCase().includes(find().toLowerCase())).slice(0, 120));
+  const save = async () => {
+    const k = key ?? free();
+    if (!k) { setErr(`All ${kind()} fields are in use.`); return false; }
+    if (!title().trim()) { setErr("Give the column a name."); return false; }
+    const def = { ...(existing ?? { lookup: [], restrict: false, default: "", rollup: "None", indicators: [], show_icons: false }), key: k, alias: title().trim(), formula: f().trim() === "=" ? "" : f().trim() };
+    try { await invoke("apply", { op: { FieldDef: { def } } }).then(o => setOut(o as Out)); } catch (e) { setErr(String(e)); return false; }
+    if (!cols().some(c => c[0] === `c:${k}`)) { const v = [...cols()]; v.splice(insertAt ?? v.length, 0, [`c:${k}`, 110]); saveCols(v); }
+    toast(`${title()} = ${def.formula || "(no formula)"}`, true);
+  };
+  return (
+    <Dialog title={key ? `Formula for ${existing?.alias || key}` : "New Formula Column"} wide ok={save} okText={key ? "Save" : "Add column"}>
+      <div class="cols2">
+        <div class="form">
+          <Row label="Column name"><Text value={title()} set={setTitle} placeholder="e.g. Progress variance" /></Row>
+          <Row label="Type"><Pick value={kind()} set={setKind} options={key ? TYPES.filter(t => t[0] === kind()) : TYPES} /></Row>
+          <Row label="Formula"><div>
+            <textarea class="formula" ref={box} value={f()} onInput={e => { setF(e.currentTarget.value); setErr(""); }} placeholder="=[% Complete]-[Baseline % Complete]" />
+            <div class="ptools"><For each={["+", "-", "*", "/", "&", "=", "<>", ">", "<", "(", ")"]}>{o => <button class="btn sm" onClick={() => insert(o)}>{o}</button>}</For></div>
+            <Show when={err()}><div class="late">{err()}</div></Show>
+            <p class="muted">Excel formulas, one per column: it is worked out for every task. Refer to other columns by name in square brackets, e.g. <code>=[Cost]-[Baseline Cost]</code>, <code>=IF([Finish]&gt;[Baseline Finish],"Late","On time")</code>. Dates are Excel dates; durations are in days.</p>
+          </div></Row>
+          <Row label="Functions"><select onChange={e => { insert(e.currentTarget.value); e.currentTarget.value = ""; }}><option value="">Insert function…</option><For each={FUNCS}>{x => <option value={x[1]}>{x[0]}</option>}</For></select></Row>
+        </div>
+        <div>
+          <input class="find" placeholder="Find a field to insert" value={find()} onInput={e => setFind(e.currentTarget.value)} />
+          <div class="fieldlist short"><table class="tbl"><tbody><For each={list()}>{([, n]) => <tr class="link" onClick={() => insert(`[${n}]`)}><td>[{n}]</td></tr>}</For></tbody></table></div>
+        </div>
+      </div>
+    </Dialog>
+  );
+});
+
+// ---------- reporting periods ----------
+export const periodSettings = () => openDialog(() => {
+  const [o, setO] = createStore({ ...P().periods });
+  return (
+    <Dialog title="Reporting Periods" ok={() => act({ ProjectSet: { field: "periods", value: { ...o } } })}>
+      <div class="form">
+        <Row label="Week ends on"><Pick value={String(o.week_end)} set={x => setO("week_end", +x)} options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d, k) => [String(k), d] as [string, string])} /></Row>
+        <Row label="Month closes on"><Pick value={String(o.month_end)} set={x => setO("month_end", +x)} options={[["0", "Last day of the month"], ...Array.from({ length: 28 }, (_, k) => [String(k + 1), `Day ${k + 1}`] as [string, string])]} /></Row>
+        <Row label="Weight progress by"><Pick value={o.weight} set={x => setO("weight", x)} options={[["duration", "Duration"], ["cost", "Cost (baseline)"], ["work", "Hours"], ["physical", "Physical % complete"]]} /></Row>
+      </div>
+      <p class="muted">Weekly and monthly reports and S-curves use these cut-offs. They are saved with this plan.</p>
+    </Dialog>
+  );
+});

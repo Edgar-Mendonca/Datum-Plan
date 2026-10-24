@@ -7,9 +7,16 @@ export const [tick, setTick] = createSignal(0);
 export const setOut = (o: Out | null | undefined) => { if (o) batch(() => { setOutRaw(o); setTick(t => t + 1); }); };
 export const P = () => out()!.project;
 export const [fields, setFields] = createSignal<FieldList>({ task: [], resource: [], filters: [] });
-export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", autosave: 5, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: true });
+/** auto, light or dark; auto follows Windows. */
+export const [theme, setThemeRaw] = createSignal("auto");
+const darkMq = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
+export const applyTheme = () => { document.documentElement.dataset.theme = theme() === "auto" ? (darkMq?.matches ? "dark" : "light") : theme(); setThemeTick(t => t + 1); };
+export const [themeTick, setThemeTick] = createSignal(0);
+darkMq?.addEventListener("change", () => theme() === "auto" && applyTheme());
+export const setTheme = (t: string) => { setThemeRaw(t); applyTheme(); invoke("set_options", { opts: { ...opts(), theme: t } }).then(o => setOut(o as Out)).catch(() => {}); setOpts({ ...opts(), theme: t }); };
+export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", autosave: 5, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: true, theme: "auto" });
 
-export type View = "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "checks" | "timeline";
+export type View = "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "checks" | "timeline" | "progress" | "scurve" | "sheets";
 export const [view, setView] = createSignal<View>("gantt");
 export const [backstage, setBackstage] = createSignal<string | null>("home");
 export const [tab, setTab] = createSignal("task");

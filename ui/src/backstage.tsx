@@ -1,7 +1,7 @@
 // File (backstage): home with templates and recent plans, export, print, options, updates.
 import { For, Show, createSignal, createResource, onMount } from "solid-js";
 import { Currency, Options, Out } from "./api";
-import { backstage, setBackstage, call, loadOut, out, setOut, opts, setOpts, toast, setSetupOpen, act } from "./store";
+import { backstage, setBackstage, call, loadOut, out, setOut, opts, setOpts, toast, setSetupOpen, act, setThemeRaw, applyTheme } from "./store";
 import { C } from "./cmds";
 import * as D from "./dialogs";
 import { Icon, Row, Text, Pick, Check } from "./ui";
@@ -112,6 +112,7 @@ const OptionsPage = () => {
       <div class="form wideform">
         <h4>General</h4><span />
         <Row label="Date format"><Pick value={o().dateFmt} set={v => put("dateFmt", v)} options={[["%d-%b-%y", "24-Oct-26"], ["%d/%m/%Y", "24/10/2026"], ["%m/%d/%Y", "10/24/2026"], ["%Y-%m-%d", "2026-10-24"], ["%d %b %Y", "24 Oct 2026"], ["%a %d-%b-%y", "Sat 24-Oct-26"]]} /></Row>
+        <Row label="Theme"><Pick value={o().theme || "auto"} set={v => { put("theme", v); setThemeRaw(v); applyTheme(); }} options={[["auto", "Auto (follow Windows)"], ["light", "Light"], ["dark", "Dark"]]} /></Row>
         <Row label="Recovery save every"><span><input type="number" min="0" style={{ width: "60px" }} value={o().autosave} onChange={e => put("autosave", +e.currentTarget.value)} /> minutes (0 = off)</span></Row>
         <Row label=""><Check label="Show the Project Setup panel for new plans" value={o().setupPanel} set={v => put("setupPanel", v)} /></Row>
         <h4>Currency for new plans</h4><span />

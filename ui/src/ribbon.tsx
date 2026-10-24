@@ -1,6 +1,6 @@
 // Title bar, quick access toolbar, Tell Me and the ribbon.
 import { For, Show, JSX, createSignal, createMemo, onMount } from "solid-js";
-import { out, tab, setTab, setBackstage, view, openMenu, Item, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, setHideSum, hideSum, baseline, setBaseline, details, timeline, setupOpen, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols } from "./store";
+import { out, tab, setTab, setBackstage, view, openMenu, Item, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, setHideSum, hideSum, baseline, setBaseline, details, timeline, setupOpen, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import * as D from "./dialogs";
 import { Icon } from "./ui";
@@ -77,6 +77,7 @@ export const TitleBar = (p: { update: string | null }) => (
       <div class="title">{out() ? `${out()!.project.name}${out()!.dirty ? " •" : ""} — Datum Plan` : "Datum Plan"}</div>
       <button class="search" onClick={palette} title="Tell me what you want to do (Alt+Q)"><Icon n="search" /><span>Tell me what you want to do</span><kbd>Ctrl+K</kbd></button>
       <Show when={p.update}><button class="upd" onClick={() => setBackstage("about")}>Update {p.update} available</button></Show>
+      <button class="theme" title="Theme: Auto follows Windows" onClick={() => setTheme(theme() === "auto" ? "light" : theme() === "light" ? "dark" : "auto")}>Theme · {theme()}</button>
     </div>
     <nav class="tabs">
       <button class="file" onClick={() => setBackstage("home")}>File</button>
@@ -110,7 +111,7 @@ export const Ribbon = () => (
       <G l="Level"><B big i="level" l="Level All" run={() => C.level()} /><S><B i="level" l="Level Selection" run={() => C.level(false)} /><B i="del" l="Clear Leveling" run={C.clearLevel} /><B i="opts" l="Leveling Options" run={() => D.scheduleOptions()} /></S></G>
     </Show>
     <Show when={tab() === "report"}>
-      <G l="View Reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="report" l="Reports" run={() => C.view("reports")} /><B big i="ev" l="Earned Value" run={() => C.view("reports")} /></G>
+      <G l="View Reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="report" l="Reports" run={() => C.view("reports")} /></G>
       <G l="Health"><B big i="check" l="Check Schedule" run={() => C.view("checks")} /><B big i="risk" l="Risks" run={() => C.view("risks")} /></G>
       <G l="Portfolio"><B big i="folder" l="Portfolio" run={() => C.view("portfolio")} /><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
       <G l="Export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /></G>
@@ -118,7 +119,7 @@ export const Ribbon = () => (
     <Show when={tab() === "project"}>
       <G l="Properties"><B big i="proj" l="Project Information" run={() => D.projectInfo()} /><S><B i="cols" l="Custom Fields" run={() => D.customFields()} /><B i="group" l="Activity Codes" run={() => D.activityCodes()} /><B i="calendar2" l="Change Working Time" run={() => D.calendars()} /></S>
         <S><B i="detail" l="Project Setup" run={C.setup} on={setupOpen()} /><B i="opts" l="Schedule Options" run={() => D.scheduleOptions()} /></S></G>
-      <G l="Schedule"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="track" l="Update Project" run={C.update} /><B i="calendar2" l="Status Date" run={() => D.projectInfo()} /><B i="report" l="Store Snapshot" run={() => D.snapshot()} /></S></G>
+      <G l="Schedule"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="track" l="Update Project" run={C.update} /><B i="calendar2" l="Status Date" run={() => D.projectInfo()} /><B i="report" l="Store Snapshot" run={() => D.snapshot()} /></S><S><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /></S></G>
       <G l="Status"><S><B i="crit" l="Critical Path" run={() => { setShowCrit(true); setFilter(fields().filters.find(f => f.name === "Critical") ?? ALL); }} /><B i="crit" l="Longest Path" run={() => setFilter(fields().filters.find(f => f.name === "Longest Path") ?? ALL)} /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
       <G l="Proofing"><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
     </Show>
@@ -133,7 +134,7 @@ export const Ribbon = () => (
       <G l="Split View"><S><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
     </Show>
     <Show when={tab() === "format"}>
-      <G l="Columns"><B big i="cols" l="Insert Column" dd={e => openMenu(e, fieldMenu(k => saveCols([...cols(), [k, 90]])))} /><S><B i="table" l="Column Settings" run={() => D.fieldSettings(0)} /><B i="cols" l="Custom Fields" run={() => D.customFields()} /></S></G>
+      <G l="Columns"><B big i="cols" l="Formula Column" run={() => D.formulaColumn()} /><B big i="cols" l="Insert Column" dd={e => openMenu(e, fieldMenu(k => saveCols([...cols(), [k, 90]])))} /><S><B i="table" l="Column Settings" run={() => D.fieldSettings(0)} /><B i="cols" l="Custom Fields" run={() => D.customFields()} /></S></G>
       <G l="Bar Styles"><S><label class="chk"><input type="checkbox" checked={showCrit()} onChange={e => setShowCrit(e.currentTarget.checked)} />Critical Tasks</label><label class="chk"><input type="checkbox" checked={showSlack()} onChange={e => setShowSlack(e.currentTarget.checked)} />Slack</label><label class="chk"><input type="checkbox" checked={showLate()} onChange={e => setShowLate(e.currentTarget.checked)} />Late Tasks</label></S>
         <B big i="base" l="Baseline" dd={e => openMenu(e, baselineMenu())} on={showBase()} /></G>
       <G l="Show/Hide"><S><label class="chk"><input type="checkbox" checked={projSum()} onChange={e => setProjSum(e.currentTarget.checked)} />Project Summary Task</label><label class="chk"><input type="checkbox" checked={!hideSum()} onChange={e => setHideSum(!e.currentTarget.checked)} />Summary Tasks</label><label class="chk"><input type="checkbox" checked={showLabels()} onChange={e => setShowLabels(e.currentTarget.checked)} />Bar Labels</label></S></G>
