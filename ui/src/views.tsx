@@ -9,53 +9,127 @@ const Page = (p: { title: string; tools?: JSX.Element; children: JSX.Element }) 
   <section class="page"><div class="ptools"><h1>{p.title}</h1><span class="grow" />{p.tools}</div>{p.children}</section>
 );
 
-// ---------- Network Diagram (MS Project style boxes) ----------
+// ---------- Network Diagram (MS Project / P6 style boxes) ----------
+/** Box sizes for the three box layouts. */
+export const NET_BOX: Record<string, { W: number; H: number }> = { compact: { W: 160, H: 50 }, standard: { W: 214, H: 72 }, detailed: { W: 230, H: 104 } };
+const NET_COLS = ["code", "name", "dur", "start", "finish", "pct", "tf", "res"];
+export const [netBox, setNetBox] = createSignal<"compact" | "standard" | "detailed">("standard");
+/** One network box: shape by type, outline by criticality, cross or slash for progress, amber flag when late. */
+export const NetBox = (p: { v: (k: string) => string; r: Row; W: number; H: number; mode: string; sel?: boolean; dim?: boolean }) => {
+  const done = p.r.bar.pct >= 100, prog = p.r.bar.pct > 0 && !done, sum = p.r.kind !== "task", W = p.W, H = p.H;
+  const name = p.r.name.length > (W / 6.4 | 0) ? p.r.name.slice(0, (W / 6.4 | 0) - 1) + "…" : p.r.name;
+  const lines: [string, string][][] = p.mode === "compact" ? [[["ID", String(p.r.id)], ["Dur", p.v("dur")]]]
+    : [[["Start", p.v("start")], ["ID", String(p.r.id)]], [["Finish", p.v("finish")], ["Dur", p.v("dur")]], ...(p.mode === "detailed" ? [[["Float", p.v("tf")], ["Done", p.v("pct")]] as [string, string][], [["Res", p.v("res")], ["", ""]] as [string, string][]] : [])];
+  return (
+    <g class="nbox" classList={{ crit: p.r.crit, ms: p.r.ms, sum, sel: p.sel, dim: p.dim }}>
+      {p.r.ms ? <path class="shape" d={`M12 0H${W - 12}L${W} ${H / 2}L${W - 12} ${H}H12L0 ${H / 2}z`} /> : <rect class="shape" width={W} height={H} rx={sum ? 0 : 3} />}
+      <Show when={done || prog}><path d={done ? `M4 4L${W - 4} ${H - 4}M${W - 4} 4L4 ${H - 4}` : `M4 ${H - 4}L${W - 4} 4`} class="x" /></Show>
+      {p.r.late && <path d={`M${W - 14} 0H${W}V14z`} fill="#F2B233"><title>Late: finishes after its baseline or deadline</title></path>}
+      <text x="8" y="16" class="t">{p.v("code") ? `${p.v("code")} ` : ""}{name}<title>{p.r.name}</title></text>
+      <line x1="0" x2={W} y1="23" y2="23" />
+      <For each={lines}>{(l, i) => <><text x="8" y={39 + i() * 16}>{l[0][0] && `${l[0][0]}: `}{l[0][1]}</text><text x={W * 0.6} y={39 + i() * 16}>{l[1][0] && `${l[1][0]}: `}{l[1][1]}</text></>}</For>
+    </g>
+  );
+};
+/** The legend: what the box shapes, outlines and link labels mean. */
+export const NetLegend = () => (
+  <div class="netleg">
+    <b>Legend</b>
+    <svg width="560" height="44" class="net">
+      <g transform="translate(0,4)"><g class="nbox crit"><rect class="shape" width="34" height="18" rx="3" /></g><text x="40" y="13">Critical</text></g>
+      <g transform="translate(96,4)"><g class="nbox"><rect class="shape" width="34" height="18" rx="3" /></g><text x="40" y="13">Not critical</text></g>
+      <g transform="translate(200,4)"><g class="nbox"><path class="shape" d="M6 0H28L34 9L28 18H6L0 9z" /></g><text x="40" y="13">Milestone</text></g>
+      <g transform="translate(296,4)"><g class="nbox"><rect class="shape" width="34" height="18" rx="3" /><path class="x" d="M3 3L31 15M31 3L3 15" /></g><text x="40" y="13">Completed</text></g>
+      <g transform="translate(400,4)"><g class="nbox"><rect class="shape" width="34" height="18" rx="3" /><path class="x" d="M3 15L31 3" /></g><text x="40" y="13">In progress</text></g>
+      <g transform="translate(0,28)"><path d="M0 6H30" stroke="#D64545" stroke-width="2.6" /><text x="40" y="10">Driving link (sets the date)</text></g>
+      <g transform="translate(200,28)"><path d="M0 6H30" stroke="#6E7F99" /><text x="40" y="10">Link</text></g>
+      <g transform="translate(296,28)"><path d="M0 0H14V14z" fill="#F2B233" /><text x="22" y="10">Late</text></g>
+    </svg>
+    <span class="muted">Labels on links: <b>FS</b> Finish-to-Start (the usual, not labelled) · <b>SS</b> Start-to-Start · <b>FF</b> Finish-to-Finish · <b>SF</b> Start-to-Finish · <b>+2d</b> lag, <b>−2d</b> lead. <button class="help" title="Glossary" onClick={() => import("./dialogs").then(d => d.glossary())}>?</button></span>
+  </div>
+);
+
+/** Links and boxes of a network, shared by the view and the printout. */
+export const NetDraw = (p: { n: Net; rows: Map<number, Row>; mode: string; chain?: Set<number> | null; sel?: number[]; click?: (uid: number) => void }) => {
+  const box = () => NET_BOX[p.mode], GX = () => box().W + 54, GY = () => box().H + 28;
+  const pos = (n: { col: number; row: number }) => [20 + n.col * GX(), 20 + n.row * GY()];
+  const at = createMemo(() => new Map(p.n.nodes.map(n => [n.uid, pos(n)])));
+  const v = (r: Row) => (k: string) => r.cells[NET_COLS.indexOf(k)] ?? "";
+  return <>
+    <defs><For each={[["ar", "#6E7F99"], ["arc", "#D64545"]]}>{([id, c]) => <marker id={id} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill={c} /></marker>}</For></defs>
+    <For each={p.n.links}>{l => {
+      const a = at().get(l.from), b = at().get(l.to);
+      if (!a || !b) return null;
+      const { W, H } = box(), fromS = l.kind[0] === "S", toF = l.kind[1] === "F";
+      const x1 = fromS ? a[0] : a[0] + W, y1 = a[1] + H / 2, x2 = toF ? b[0] + W : b[0], y2 = b[1] + H / 2, mx = toF ? Math.max(x1, x2) + 16 : x2 - 18;
+      const lab = `${l.kind === "FS" ? "" : l.kind}${l.lag ? (l.lag.startsWith("-") ? l.lag.replace("-", "−") : `+${l.lag}`) : ""}`;
+      const dim = () => !!p.chain && !(p.chain.has(l.from) && p.chain.has(l.to));
+      return <g class="nlink" classList={{ dim: dim() }}>
+        <path d={`M${x1} ${y1}H${mx}V${y2}H${x2 + (toF ? 1 : -1)}`} fill="none" stroke={l.crit ? "#D64545" : "#6E7F99"} stroke-width={l.driving ? 2.4 : 1} marker-end={`url(#${l.crit ? "arc" : "ar"})`}>
+          <title>{`${p.rows.get(l.from)?.name ?? ""} → ${p.rows.get(l.to)?.name ?? ""}: ${{ FS: "Finish-to-Start", SS: "Start-to-Start", FF: "Finish-to-Finish", SF: "Start-to-Finish" }[l.kind]}${l.lag ? `, lag ${l.lag}` : ""}${l.driving ? " (driving)" : ""}`}</title></path>
+        {lab && <text x={mx + 3} y={(y1 + y2) / 2 + (y1 === y2 ? -4 : 0)} class="nlab">{lab}</text>}
+      </g>;
+    }}</For>
+    <For each={p.n.nodes}>{nd => <Show when={p.rows.get(nd.uid)}>{r => { const [x, y] = pos(nd); return (
+      <g transform={`translate(${x},${y})`} onClick={() => p.click?.(nd.uid)} onDblClick={() => p.click && C.info()}>
+        <NetBox v={v(r())} r={r()} W={box().W} H={box().H} mode={p.mode} sel={p.sel?.includes(nd.uid)} dim={!!p.chain && !p.chain.has(nd.uid)} />
+      </g>); }}</Show>}</For>
+  </>;
+};
+export const netSize = (n: Net, mode: string) => [n.cols * (NET_BOX[mode].W + 54) + 40, n.rows * (NET_BOX[mode].H + 28) + 40];
+export { NET_COLS };
+
 export const Network = () => {
-  const [scale, setScale] = createSignal(1);
+  const [scale, setScale] = createSignal(1), [legend, setLegend] = createSignal(true), [path, setPath] = createSignal(true);
   const [net] = createResource(() => [tick(), JSON.stringify(query())], () => call<Net>("network", { q: query() }));
-  const rows = createMemo(() => new Map(grid().rows.map(r => [r.uid, r])));
-  const W = 176, H = 82, GX = 222, GY = 104;
-  const pos = (n: { col: number; row: number }) => [20 + n.col * GX, 20 + n.row * GY];
-  const at = createMemo(() => new Map((net()?.nodes ?? []).map(n => [n.uid, pos(n)])));
+  const [data] = createResource(() => [tick(), JSON.stringify(query())], () => call<{ rows: Row[] }>("query", { q: { ...query(), cols: NET_COLS } }));
+  const rows = createMemo(() => new Map((data()?.rows ?? []).map(r => [r.uid, r])));
+  const box = () => NET_BOX[netBox()], GX = () => box().W + 54, GY = () => box().H + 28;
+  const pos = (n: { col: number; row: number }) => [20 + n.col * GX(), 20 + n.row * GY()];
+  const size = () => (net() ? netSize(net()!, netBox()) : [100, 100]);
+  // The selected task's whole chain (all predecessors and successors), for "Highlight path".
+  const chain = createMemo(() => {
+    const s = sel(); if (!path() || s.length !== 1 || !net()) return null;
+    const out = new Set([s[0]]), links = net()!.links;
+    for (const dir of [0, 1]) { const q = [s[0]]; while (q.length) { const u = q.pop()!; for (const l of links) { const [a, b] = dir ? [l.to, l.from] : [l.from, l.to]; if (a === u && !out.has(b)) { out.add(b); q.push(b); } } } }
+    return out;
+  });
+  let wrap!: HTMLDivElement;
+  const [vp, setVp] = createSignal([0, 0, 1, 1]);
+  const track = () => wrap && setVp([wrap.scrollLeft / scale(), wrap.scrollTop / scale(), wrap.clientWidth / scale(), wrap.clientHeight / scale()]);
+  const fit = () => { if (!wrap) return; const [w, h] = size(); setScale(Math.max(0.2, Math.min(1.5, Math.min(wrap.clientWidth / w, wrap.clientHeight / h)))); requestAnimationFrame(track); };
+  const pan = (e: MouseEvent) => {
+    if (e.button !== 0 || (e.target as Element).closest(".nbox")) return;
+    const x0 = e.clientX, y0 = e.clientY, l0 = wrap.scrollLeft, t0 = wrap.scrollTop; wrap.style.cursor = "grabbing";
+    const mv = (m: MouseEvent) => { wrap.scrollLeft = l0 - (m.clientX - x0); wrap.scrollTop = t0 - (m.clientY - y0); };
+    const up = () => { wrap.style.cursor = ""; removeEventListener("mousemove", mv); removeEventListener("mouseup", up); };
+    addEventListener("mousemove", mv); addEventListener("mouseup", up);
+  };
+  createEffect(() => { scale(); net(); requestAnimationFrame(track); });
   return (
     <Page title="Network Diagram" tools={<>
       <span class="muted">{net()?.nodes.length ?? 0} tasks</span>
-      <button class="btn" onClick={() => setScale(Math.max(0.3, scale() / 1.25))}>−</button><button class="btn" onClick={() => setScale(Math.min(2, scale() * 1.25))}>+</button>
+      <Seg value={netBox()} set={x => setNetBox(x as "standard")} options={[["compact", "Compact"], ["standard", "Standard"], ["detailed", "Detailed"]]} />
+      <Chk label="Highlight path" value={path()} set={setPath} /><Chk label="Legend" value={legend()} set={setLegend} />
+      <button class="btn" title="Zoom out" onClick={() => setScale(Math.max(0.2, scale() / 1.25))}>−</button><button class="btn" title="Zoom in" onClick={() => setScale(Math.min(2, scale() * 1.25))}>+</button>
+      <button class="btn" onClick={fit}>Fit</button><button class="btn" onClick={() => setScale(1)}>100%</button>
       <button class="btn" onClick={() => C.print()}>Print</button>
     </>}>
-      <div class="netwrap" onWheel={e => { if (e.ctrlKey) { e.preventDefault(); setScale(Math.max(0.3, Math.min(2, scale() * (e.deltaY < 0 ? 1.1 : 1 / 1.1)))); } }}>
+      <Show when={legend()}><NetLegend /></Show>
+      <div class="netouter"><div class="netwrap" ref={wrap} onMouseDown={pan} onScroll={track} onWheel={e => { if (e.ctrlKey) { e.preventDefault(); setScale(Math.max(0.2, Math.min(2, scale() * (e.deltaY < 0 ? 1.1 : 1 / 1.1)))); } }}>
         <Show when={net()} fallback={<p class="empty">Loading…</p>}>{n => (
-          <svg class="net" width={(n().cols * GX + 40) * scale()} height={(n().rows * GY + 40) * scale()} viewBox={`0 0 ${n().cols * GX + 40} ${n().rows * GY + 40}`}>
-            <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#6E7F99" /></marker>
-              <marker id="arc" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#D64545" /></marker></defs>
-            <For each={n().links}>{l => {
-              const a = at().get(l.from), b = at().get(l.to);
-              if (!a || !b) return null;
-              const x1 = a[0] + W, y1 = a[1] + H / 2, x2 = b[0], y2 = b[1] + H / 2, mx = x2 - 18;
-              return <path d={`M${x1} ${y1}H${mx}V${y2}H${x2 - 1}`} fill="none" stroke={l.crit ? "#D64545" : "#6E7F99"} stroke-width={l.crit ? 1.6 : 1} marker-end={`url(#${l.crit ? "arc" : "ar"})`} />;
-            }}</For>
-            <For each={n().nodes}>{nd => {
-              const r = () => rows().get(nd.uid);
-              const [x, y] = pos(nd);
-              const cells = (r: Row) => { const g = grid(); const v = (k: string) => r.cells[g.cols.findIndex(c => c.key === k)] ?? ""; return v; };
-              return <Show when={r()}>{row => {
-                const v = cells(row());
-                const done = row().bar.pct === 100, prog = row().bar.pct > 0 && !done;
-                return (
-                  <g transform={`translate(${x},${y})`} class="nbox" classList={{ crit: row().crit, sel: sel().includes(nd.uid) }} onClick={() => selectUid(nd.uid)} onDblClick={() => C.info()}>
-                    {row().ms ? <path d={`M10 0H${W - 10}L${W} ${H / 2}L${W - 10} ${H}H10L0 ${H / 2}z`} /> : <rect width={W} height={H} rx="3" />}
-                    <Show when={done || prog}><path d={done ? `M4 4L${W - 4} ${H - 4}M${W - 4} 4L4 ${H - 4}` : `M4 4L${W - 4} ${H - 4}`} class="x" /></Show>
-                    <text x="8" y="16" class="t">{row().name.length > 30 ? row().name.slice(0, 29) + "…" : row().name}</text>
-                    <line x1="0" x2={W} y1="23" y2="23" />
-                    <text x="8" y="38">Start: {fmtDay(row().bar.s)}</text><text x={W / 2 + 6} y="38">ID: {row().id}</text>
-                    <text x="8" y="54">Finish: {fmtDay(row().bar.f % 1 ? row().bar.f : row().bar.f - 1)}</text><text x={W / 2 + 6} y="54">Dur: {v("dur") || Math.round((row().bar.f - row().bar.s) * 10) / 10 + "d"}</text>
-                    <text x="8" y="70" class="m">{row().res.length > 30 ? row().res.slice(0, 29) + "…" : row().res}</text>
-                  </g>
-                );
-              }}</Show>;
-            }}</For>
+          <svg class="net" width={size()[0] * scale()} height={size()[1] * scale()} viewBox={`0 0 ${size()[0]} ${size()[1]}`}>
+            <NetDraw n={n()} rows={rows()} mode={netBox()} chain={chain()} sel={sel()} click={uid => selectUid(uid)} />
           </svg>
         )}</Show>
+      </div>
+        <Show when={net() && (size()[0] * scale() > 900 || size()[1] * scale() > 500)}>
+          <svg class="minimap" width="180" height={180 * size()[1] / size()[0]} viewBox={`0 0 ${size()[0]} ${size()[1]}`} onMouseDown={e => { e.stopPropagation(); const r = (e.currentTarget as SVGElement).getBoundingClientRect(), k = size()[0] / r.width; wrap.scrollLeft = ((e.clientX - r.left) * k - vp()[2] / 2) * scale(); wrap.scrollTop = ((e.clientY - r.top) * k - vp()[3] / 2) * scale(); }}>
+            <rect width={size()[0]} height={size()[1]} fill="var(--panel)" />
+            <For each={net()!.nodes}>{nd => { const [x, y] = pos(nd); return <rect x={x} y={y} width={box().W} height={box().H} fill={rows().get(nd.uid)?.crit ? "#E8A0A0" : "#A9CAF6"} />; }}</For>
+            <rect x={vp()[0]} y={vp()[1]} width={vp()[2]} height={vp()[3]} fill="rgba(11,92,173,.12)" stroke="#0B5CAD" stroke-width={size()[0] / 180 * 1.5} />
+          </svg>
+        </Show>
       </div>
     </Page>
   );
@@ -93,6 +167,7 @@ export const CalendarView = () => {
 
 // ---------- Task Usage, Resource Usage ----------
 const fmtB = (b: number, unit: string) => unit === "month" ? fmtDay(b, "month") : unit === "quarter" ? `Q${Math.floor(dayDate(b).getMonth() / 3) + 1} ${dayDate(b).getFullYear()}` : fmtDay(b);
+export { RES_COLS, fmtB };
 export const UsageView = (p: { by: "task" | "resource" }) => {
   const [unit, setUnit] = createSignal("week");
   const [what, setWhat] = createSignal("work");

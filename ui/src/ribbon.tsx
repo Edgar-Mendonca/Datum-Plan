@@ -1,6 +1,6 @@
 // Title bar, quick access toolbar, Tell Me and the ribbon.
 import { For, Show, JSX, createSignal, createMemo, onMount } from "solid-js";
-import { out, tab, setTab, setBackstage, view, openMenu, Item, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
+import { call, out, tab, setTab, setBackstage, view, openMenu, Item, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import * as D from "./dialogs";
 import { Icon } from "./ui";
@@ -9,6 +9,8 @@ import { showCrit, setShowCrit, showBase, setShowBase, showSlack, setShowSlack, 
 import { fieldMenu } from "./grid";
 import * as F from "./fmt";
 
+const GH = "https://github.com/Edgar-Mendonca/Datum-Plan";
+export const FONTS = ["Aptos", "Calibri", "Arial", "Segoe UI", "Tahoma", "Verdana", "Times New Roman", "Cambria", "Georgia", "Garamond", "Consolas", "IBM Plex Sans"];
 const COLORS: [string, string][] = [["Red", "#C0392B"], ["Orange", "#E67E22"], ["Amber", "#B7950B"], ["Green", "#1E8449"], ["Blue", "#0B5CAD"], ["Dark Blue", "#0C1A2B"], ["Purple", "#7D3C98"], ["Grey", "#7F8C8D"]];
 const FILLS: [string, string][] = [["Yellow", "#FFF2CC"], ["Green", "#E2F0D9"], ["Blue", "#DDEBF7"], ["Red", "#FADBD8"], ["Orange", "#FCE4D6"], ["Purple", "#E8DAEF"], ["Grey", "#EDEDED"]];
 const pickColor = (k: "c" | "f") => { const i = document.createElement("input"); i.type = "color"; i.value = F.current()[k] || (k === "c" ? "#000000" : "#ffffff"); i.onchange = () => F.setProp(k, i.value); i.click(); };
@@ -20,11 +22,12 @@ const Font = () => {
   const A = (p: { a: string; i: string; t: string }) => <button class="rb fb" classList={{ on: (s().a || "") === p.a }} title={p.t} onClick={() => F.setProp("a", p.a || undefined)}><Icon n={p.i} /></button>;
   return <>
     <G l="Font"><div class="fontg">
-      <div><select class="fsize" title="Font size" value={String(s().z || 12)} onChange={e => F.setProp("z", +e.currentTarget.value === 12 ? undefined : +e.currentTarget.value)}><For each={[8, 9, 10, 11, 12, 13, 14]}>{z => <option value={z}>{z}</option>}</For></select>
+      <div><select class="ffam" title="Font" value={s().n || ""} onChange={e => F.setProp("n", e.currentTarget.value || undefined)}><option value="">Default font</option><For each={FONTS}>{f => <option value={f} style={{ "font-family": `'${f}'` }}>{f}</option>}</For></select>
+        <select class="fsize" title="Font size" value={String(s().z || 12)} onChange={e => F.setProp("z", +e.currentTarget.value === 12 ? undefined : +e.currentTarget.value)}><For each={[8, 9, 10, 11, 12, 13, 14]}>{z => <option value={z}>{z}</option>}</For></select>
         <button class="rb fb" title="Increase font size" onClick={() => F.setProp("z", Math.min(14, (s().z || 12) + 1))}><span>A<sup>+</sup></span></button><button class="rb fb" title="Decrease font size" onClick={() => F.setProp("z", Math.max(8, (s().z || 12) - 1))}><span>A<sup>−</sup></span></button></div>
       <div><T k="b" l="B" t="Bold (Ctrl+B)" st={{ "font-weight": 700 }} /><T k="i" l="I" t="Italic (Ctrl+I)" st={{ "font-style": "italic" }} /><T k="u" l="U" t="Underline (Ctrl+U)" st={{ "text-decoration": "underline" }} /><T k="s" l="S" t="Strikethrough" st={{ "text-decoration": "line-through" }} />
         <span class="fcol"><button class="rb fb" title="Font color" onClick={() => F.setProp("c", last()[0])}><span class="ca">A<i style={{ background: last()[0] }} /></span></button><button class="rb split" onClick={e => openMenu(e, colorMenu("c").map(x => x === "-" || !x.run ? x : { ...x, run: () => { x.run!(); const v = F.current().c; if (v) setLast([v, last()[1]]); } }))}>▾</button></span>
-        <span class="fcol"><button class="rb fb" title="Fill color" onClick={() => F.setProp("f", last()[1])}><span class="ca">▰<i style={{ background: last()[1] }} /></span></button><button class="rb split" onClick={e => openMenu(e, colorMenu("f").map(x => x === "-" || !x.run ? x : { ...x, run: () => { x.run!(); const v = F.current().f; if (v) setLast([last()[0], v]); } }))}>▾</button></span></div>
+        <span class="fcol"><button class="rb fb" title="Fill color" onClick={() => F.setProp("f", last()[1])}><span class="ca"><Icon n="bucket" /><i style={{ background: last()[1] }} /></span></button><button class="rb split" onClick={e => openMenu(e, colorMenu("f").map(x => x === "-" || !x.run ? x : { ...x, run: () => { x.run!(); const v = F.current().f; if (v) setLast([last()[0], v]); } }))}>▾</button></span></div>
     </div></G>
     <G l="Alignment"><div class="fontg"><div><A a="" i="al" t="Align left" /><A a="c" i="ac" t="Center" /><A a="r" i="ar" t="Align right" /></div><div><button class="rb fb" title="Clear Formatting" onClick={F.clearFmt}><Icon n="clear" /></button></div></div></G>
   </>;
@@ -119,19 +122,30 @@ export const TitleBar = (p: { update: string | null }) => (
 
 /** Shrinks the ribbon in steps (labels of small buttons, then of big ones) instead of scrolling sideways. */
 const fitRibbon = (el: HTMLElement) => {
-  const fit = () => { for (const k of [0, 1, 2, 3]) { el.dataset.fit = String(k); if (el.scrollWidth <= el.clientWidth + 1) break; } };
+  // Tighten everything first, then fold groups from the right: small-button labels, then big-button labels.
+  const fit = () => {
+    const gs = [...el.querySelectorAll<HTMLElement>(":scope > .grp")];
+    el.dataset.fit = "0"; gs.forEach(g => delete g.dataset.fit);
+    const over = () => el.scrollWidth > el.clientWidth + 1;
+    if (!over()) return;
+    el.dataset.fit = "1";
+    for (const lvl of ["2", "3"]) for (let i = gs.length - 1; i >= 0 && over(); i--) gs[i].dataset.fit = lvl;
+  };
   new ResizeObserver(fit).observe(el);
-  new MutationObserver(() => requestAnimationFrame(fit)).observe(el, { childList: true, subtree: true });
+  new MutationObserver(() => requestAnimationFrame(fit)).observe(el, { childList: true, subtree: false });
 };
 export const Ribbon = () => (
   <section class="ribbon" ref={fitRibbon}>
     <Show when={tab() === "task"}>
       <G l="View"><B big i="gantt" l="Gantt Chart" run={() => C.view("gantt")} dd={e => openMenu(e, viewMenu())} /></G>
-      <G l="Clipboard"><B big i="paste" l="Paste" run={C.paste} /><S><B i="cut" l="Cut" run={C.cut} /><B i="copy" l="Copy" run={C.copy} /><B i="paint" l="Format Painter" run={F.paint} on={F.painter() !== null} /></S></G>
+      <G l="Clipboard"><B big i="paste" l="Paste" run={C.paste} dd={e => openMenu(e, [{ label: "Paste", icon: "paste", run: C.paste, keys: "Ctrl+V" }, { label: "Paste Special…", icon: "paste", run: () => D.pasteSpecial(), keys: "Ctrl+Alt+V" }, "-", { label: "Paste Values", run: () => F.target()?.paste?.("values", false) }, { label: "Paste Formatting", icon: "paint", run: () => F.target()?.paste?.("formats", false) }, { label: "Transpose", run: () => F.target()?.paste?.("all", true) }])} /><S><B i="cut" l="Cut" run={C.cut} /><B i="copy" l="Copy" run={C.copy} /><B i="paint" l="Format Painter" run={F.paint} on={F.painter() !== null} /></S></G>
       <Font />
       <G l="Insert"><B big i="task" l="Task" run={() => C.newTask()} dd={e => openMenu(e, [{ label: "Task", run: () => C.newTask() }, { label: "Blank Row", run: () => C.newTask() }, { label: "Summary Task", run: C.summary }, { label: "Milestone", run: () => C.newTask(true) }, { label: "Recurring Task…", icon: "repeat", run: C.recurring }])} />
         <S><B i="proj" l="Summary" run={C.summary} /><B i="ms" l="Milestone" run={() => C.newTask(true)} /><B i="repeat" l="Recurring" run={C.recurring} /></S><S><B i="del" l="Delete" run={C.del} /></S></G>
+      <G l="Schedule"><div class="pcts"><For each={[0, 25, 50, 75, 100]}>{v => <button class="rb" title={`Mark the selected tasks ${v}% complete`} onClick={() => C.pct(v)}><Icon n="pct" /><span>{v}%</span></button>}</For></div>
+        <S><B i="track" l="Mark on Track" run={C.onTrack} /><B i="link" l="Link" title="Link the selected tasks Finish-to-Start (Ctrl+F2)" run={C.link} /><B i="unlink" l="Unlink" run={C.unlink} /></S><S><B i="outdent" l="Outdent" run={C.outdent} /><B i="indent" l="Indent" run={C.indent} /></S></G>
       <G l="Properties"><B big i="info" l="Information" run={C.info} /><S><B i="note" l="Notes" run={C.notes} /><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Add to Timeline" run={C.timeline} /></S></G>
+      <G l="Editing"><S><B i="find" l="Find" run={palette} /><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="filldown" l="Fill Down" title="Copy the top cell of the selection down (Ctrl+D)" run={() => document.querySelector(".gscroll")?.dispatchEvent(new KeyboardEvent("keydown", { key: "d", ctrlKey: true, bubbles: true }))} /></S></G>
     </Show>
     <Show when={tab() === "schedule"}>
       <G l="Links"><B big i="link" l="Link Tasks" run={C.link} /><S><B i="unlink" l="Unlink" run={C.unlink} /><B i="link" l="Relationships" run={() => C.view("relations")} /></S></G>
@@ -186,7 +200,9 @@ export const Ribbon = () => (
       <G l="Show/Hide"><S><label class="chk"><input type="checkbox" checked={projSum()} onChange={e => setProjSum(e.currentTarget.checked)} />Project Summary Task</label><label class="chk"><input type="checkbox" checked={!hideSum()} onChange={e => setHideSum(!e.currentTarget.checked)} />Summary Tasks</label><label class="chk"><input type="checkbox" checked={showLabels()} onChange={e => setShowLabels(e.currentTarget.checked)} />Bar Labels</label></S></G>
     </Show>
     <Show when={tab() === "help"}>
-      <G l="Help"><B big i="keys" l="Shortcuts" run={() => D.shortcuts()} /><B big i="upd" l="Check for Updates" run={() => setBackstage("about")} /><B big i="search" l="Tell Me" run={palette} /></G>
+      <G l="Learn"><B big i="report" l="Getting Started" run={() => D.gettingStarted()} /><B big i="info" l="Glossary" title="What FS, SS, float, baseline and other terms mean" run={() => D.glossary()} /><B big i="keys" l="Shortcuts" run={() => D.shortcuts()} /><B big i="search" l="Tell Me" run={palette} /></G>
+      <G l="Datum Plan on GitHub"><B big i="github" l="GitHub" title="The project and its code" run={() => call("open_url", { url: GH })} /><B big i="tag" l="Releases" title="Every version and its change log" run={() => call("open_url", { url: `${GH}/releases` })} /><B big i="bug" l="Report an Issue" run={() => call("open_url", { url: `${GH}/issues/new` })} /></G>
+      <G l="Updates"><B big i="upd" l="Check for Updates" run={() => setBackstage("about")} /></G>
     </Show>
   </section>
 );

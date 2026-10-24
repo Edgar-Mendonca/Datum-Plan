@@ -1,11 +1,13 @@
 // File › Print: MS Project-style print settings with a live page preview. Pages are laid out
 // here (table + vector Gantt per page, headers, footers, logos, legend, page numbers) and printed
 // with the WebView's print dialog, where "Save as PDF" makes a PDF.
-import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
+import { For, Show, Switch, Match, JSX, createMemo, createSignal, createResource, onCleanup, lazy } from "solid-js";
 import { Portal } from "solid-js/web";
 import { createStore } from "solid-js/store";
-import { Row, fmtDay, iso, dateDay } from "./api";
-import { grid, out, opts, P, act, cols, zoom, call, view, setBackstage, toast, query } from "./store";
+import { Row, Net, Usage, SheetOut, fmtDay, iso, dateDay, dayDate } from "./api";
+import { grid, out, opts, P, act, cols, zoom, call, view, toast, query, tick } from "./store";
+import { NetDraw, netSize, netBox, setNetBox, NET_COLS, RES_COLS, fmtB } from "./views";
+import { sheetK } from "./sheets";
 import { gstyle, floorU, nextU, label, off, Unit } from "./gantt";
 import * as F from "./fmt";
 import { Pick, Check, Seg } from "./ui";
@@ -94,11 +96,12 @@ const allPages = createMemo(() => {
   return out;
 });
 /** Pages chosen in "Pages" (e.g. 1-3,5), or all. */
-const chosen = () => {
-  const want = ps.pages.trim(); if (!want) return allPages();
+const pick = <T extends { n: number }>(all: T[]) => {
+  const want = ps.pages.trim(); if (!want) return all;
   const ok = new Set<number>(); want.split(",").forEach(x => { const [a, b] = x.split("-").map(v => +v.trim()); for (let n = a; n <= (b || a); n++) ok.add(n); });
-  return allPages().filter(p => ok.has(p.n));
+  return all.filter(p => ok.has(p.n));
 };
+const chosen = () => pick(allPages());
 const unit = (pd: number): [Unit, Unit] => { const u = ps.unit; if (u === "day") return ["week", "day"]; if (u === "week") return ["month", "week"]; if (u === "month") return ["quarter", "month"]; if (u === "quarter") return ["year", "quarter"]; return pd >= 16 ? ["week", "day"] : pd >= 4 ? ["month", "week"] : pd >= 1.2 ? ["quarter", "month"] : ["year", "quarter"]; };
 const RIGHT = ["Num", "Int", "Dur", "Cost", "Pct", "Work"];
 
@@ -132,7 +135,7 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
               const lines = two ? (() => { const n = Math.max(8, Math.floor((c.w - 8 - ind) / (z * 0.55))), cut = t.lastIndexOf(" ", n); const k = cut > 4 ? cut : n; return [t.slice(0, k), t.slice(k).trim()]; })() : [t];
               return <g>{f.f && <rect x={0} y={y} width={c.w} height={h} fill={f.f} />}
                 <text x={al === "r" ? c.w - 4 : al === "c" ? c.w / 2 : 4 + ind} y={y + (two ? 0 : h / 2 + 3.5)} font-size={String(z)} text-anchor={al === "r" ? "end" : al === "c" ? "middle" : "start"} fill={f.c || (r.off ? "#9AA3AE" : "#1B2733")}
-                  style={{ "font-weight": f.b || r.kind !== "task" ? 600 : 400, "font-style": f.i ? "italic" : "normal", "text-decoration": [f.u && "underline", f.s && "line-through"].filter(Boolean).join(" ") || "none" }}>
+                  style={{ ...(f.n ? { "font-family": `'${f.n}', sans-serif` } : {}), "font-weight": f.b || r.kind !== "task" ? 600 : 400, "font-style": f.i ? "italic" : "normal", "text-decoration": [f.u && "underline", f.s && "line-through"].filter(Boolean).join(" ") || "none" }}>
                   {two ? <For each={lines}>{(l, n) => <tspan x={4 + ind} dy={n() ? z + 2 : z + 3}>{l}</tspan>}</For> : t}</text></g>;
             }}</For>
           </svg>
@@ -155,56 +158,208 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
   );
 };
 
-/** One printed page at real size (CSS px at 96 dpi). */
+/** The paper, header, footer and legend around a page's content (CSS px at 96 dpi). */
+const Frame = (p: { pw: number; ph: number; k: number; W: number; H: number; headH: number; footH: number; legH: number; n: number; pages: number; legend?: JSX.Element | false; children: JSX.Element }) => (
+  <div class="ppage" style={{ width: `${p.pw * MM}px`, height: `${p.ph * MM}px` }}>
+    <div class="pin" style={{ left: `${ps.margins[3] * MM}px`, top: `${ps.margins[0] * MM}px`, width: `${p.W}px`, height: `${p.H}px`, transform: `scale(${p.k})` }}>
+      <Show when={p.headH}><div class="phead" style={{ height: `${p.headH - 8}px` }}><For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={ps.header[i]} page={p.n} pages={p.pages} h={p.headH - 12} /></div>}</For></div></Show>
+      {p.children}
+      <Show when={p.legend}><div class="plegend" style={{ height: `${p.legH - 8}px` }}><div class="plt"><Slot t={ps.legendText} page={p.n} pages={p.pages} h={40} /></div>{p.legend}</div></Show>
+      <Show when={p.footH}><div class="pfoot" style={{ height: `${p.footH - 6}px` }}><For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={ps.footer[i]} page={p.n} pages={p.pages} h={p.footH - 8} /></div>}</For></div></Show>
+    </div>
+  </div>
+);
+const legendOn = (n: number, pages: number) => ps.legend === "every" || (ps.legend === "last" && n === pages);
+const GanttLegend = () => { const st = gstyle(); return (
+  <svg width="430" height="44" font-size="9.5" fill="#1B2733" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
+    <rect x="4" y="6" width="30" height="9" fill={st.fill} stroke={st.edge} stroke-width=".8" /><text x="40" y="14">Task</text>
+    <rect x="4" y="26" width="30" height="9" fill={st.cfill} stroke={st.crit} stroke-width=".8" /><text x="40" y="34">Critical</text>
+    <rect x="110" y="6" width="30" height="9" fill={st.fill} stroke={st.edge} stroke-width=".8" /><rect x="110" y="8.5" width="16" height="4" fill={st.edge} /><text x="146" y="14">Progress</text>
+    <path d="M125 24l6 6l-6 6l-6-6z" fill={st.sum} /><text x="146" y="34">Milestone</text>
+    <g fill={st.sum}><rect x="220" y="7" width="30" height="4" /><path d="M220 7h5l-5 8z" /><path d="M250 7h-5l5 8z" /></g><text x="256" y="14">Summary</text>
+    <line x1="220" x2="250" y1="31" y2="31" stroke="#2E9D57" stroke-dasharray="4 3" /><text x="256" y="34">Status date</text>
+  </svg>); };
+
+/** One Gantt page. */
 const Sheet = (p: { pg: Page; pages: number }) => {
-  const L = layout()!, st = gstyle();
+  const L = layout()!;
   const rows = () => L.rows.slice(p.pg.rows[0], p.pg.rows[1]), hs = () => L.rowsH.slice(p.pg.rows[0], p.pg.rows[1]);
   const ys = () => { let y = SCALE_H; return hs().map(h => { const v = y; y += h; return v; }); };
   const bodyH = () => SCALE_H + hs().reduce((a, b) => a + b, 0) + 1;
   const rep = () => p.pg.x[0] > 0 ? L.RW : 0, w = () => rep() + p.pg.x[1] - p.pg.x[0];
-  const showLeg = () => !p.pg.notes && (ps.legend === "every" || (ps.legend === "last" && p.pg.n === L.pages.length));
   return (
-    <div class="ppage" style={{ width: `${L.pw * MM}px`, height: `${L.ph * MM}px` }}>
-      <div class="pin" style={{ left: `${ps.margins[3] * MM}px`, top: `${ps.margins[0] * MM}px`, width: `${L.W}px`, height: `${L.H}px`, transform: `scale(${L.k})` }}>
-        <Show when={L.headH}><div class="phead" style={{ height: `${L.headH - 8}px` }}><For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={ps.header[i]} page={p.pg.n} pages={p.pages} h={L.headH - 12} /></div>}</For></div></Show>
-        <Show when={!p.pg.notes} fallback={<div class="pnotes"><h3>Notes</h3><For each={p.pg.notes}>{n => <div><b>{n[0]} {n[1]}</b><p>{n[2]}</p></div>}</For></div>}>
-          <svg width={w()} height={bodyH()} class="psvg" text-rendering="geometricPrecision" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
-            {rep() > 0 && <Strip a={0} b={L.RW} dx={0} rows={rows()} ys={ys()} hs={hs()} bodyH={bodyH()} />}
-            <Strip a={p.pg.x[0]} b={p.pg.x[1]} dx={rep()} rows={rows()} ys={ys()} hs={hs()} bodyH={bodyH()} />
-            <rect x={0} y={0} width={w()} height={bodyH()} fill="none" stroke="#8D99A8" stroke-width=".8" />
-          </svg>
-        </Show>
-        <Show when={showLeg()}>
-          <div class="plegend" style={{ height: `${L.legH - 8}px` }}>
-            <div class="plt"><Slot t={ps.legendText} page={p.pg.n} pages={p.pages} h={40} /></div>
-            <svg width="430" height="44" font-size="9.5" fill="#1B2733" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
-              <rect x="4" y="6" width="30" height="9" fill={st.fill} stroke={st.edge} stroke-width=".8" /><text x="40" y="14">Task</text>
-              <rect x="4" y="26" width="30" height="9" fill={st.cfill} stroke={st.crit} stroke-width=".8" /><text x="40" y="34">Critical</text>
-              <rect x="110" y="6" width="30" height="9" fill={st.fill} stroke={st.edge} stroke-width=".8" /><rect x="110" y="8.5" width="16" height="4" fill={st.edge} /><text x="146" y="14">Progress</text>
-              <path d="M125 24l6 6l-6 6l-6-6z" fill={st.sum} /><text x="146" y="34">Milestone</text>
-              <g fill={st.sum}><rect x="220" y="7" width="30" height="4" /><path d="M220 7h5l-5 8z" /><path d="M250 7h-5l5 8z" /></g><text x="256" y="14">Summary</text>
-              <line x1="220" x2="250" y1="31" y2="31" stroke="#2E9D57" stroke-dasharray="4 3" /><text x="256" y="34">Status date</text>
-            </svg>
-          </div>
-        </Show>
-        <Show when={L.footH}><div class="pfoot" style={{ height: `${L.footH - 6}px` }}><For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={ps.footer[i]} page={p.pg.n} pages={p.pages} h={L.footH - 8} /></div>}</For></div></Show>
-      </div>
-    </div>
+    <Frame {...L} n={p.pg.n} pages={p.pages} legend={!p.pg.notes && legendOn(p.pg.n, L.pages.length) && <GanttLegend />}>
+      <Show when={!p.pg.notes} fallback={<div class="pnotes"><h3>Notes</h3><For each={p.pg.notes}>{n => <div><b>{n[0]} {n[1]}</b><p>{n[2]}</p></div>}</For></div>}>
+        <svg width={w()} height={bodyH()} class="psvg" text-rendering="geometricPrecision" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
+          {rep() > 0 && <Strip a={0} b={L.RW} dx={0} rows={rows()} ys={ys()} hs={hs()} bodyH={bodyH()} />}
+          <Strip a={p.pg.x[0]} b={p.pg.x[1]} dx={rep()} rows={rows()} ys={ys()} hs={hs()} bodyH={bodyH()} />
+          <rect x={0} y={0} width={w()} height={bodyH()} fill="none" stroke="#8D99A8" stroke-width=".8" />
+        </svg>
+      </Show>
+    </Frame>
   );
 };
 
-/** The task views print through the page layout; other views print as shown on screen. */
-export const printable = () => ["gantt", "tracking", "timeline"].includes(view());
+// ---------- Other views: what they print and how ----------
+/** gantt: table + chart strip · net: diagram tiles · cal: a month per page · table: rows down, columns across · flow: the page as on screen. */
+export type PKind = "gantt" | "net" | "cal" | "table" | "flow";
+export const pkind = (): PKind => { const v = view(); return ["gantt", "tracking", "timeline"].includes(v) ? "gantt" : v === "network" ? "net" : v === "calendar" ? "cal" : ["ressheet", "taskusage", "resusage", "team", "sheets"].includes(v) ? "table" : "flow"; };
+const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet" };
+/** Paper and margins for the views other than the Gantt chart. */
+const geom = createMemo(() => {
+  const p = PAPERS.find(x => x[0] === ps.paper) ?? PAPERS[0], [pw, ph] = ps.landscape ? [p[2], p[1]] : [p[1], p[2]];
+  const k = ps.scale / 100, W = (pw - ps.margins[1] - ps.margins[3]) * MM / k, H = (ph - ps.margins[0] - ps.margins[2]) * MM / k;
+  return { pw, ph, k, W, H, headH: ps.header.some(x => x.trim()) ? 52 : 0, footH: ps.footer.some(x => x.trim()) ? 30 : 0, legH: ps.legend === "none" ? 0 : 58 };
+});
+type PT = { head: string[]; w: number[]; right: boolean[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
+type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
+const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
+const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox()] as const), async ([v]) => {
+  if (v === "network") { const [n, g] = await Promise.all([call<Net>("network", { q: query() }), call<{ rows: Row[] }>("query", { q: { ...query(), cols: NET_COLS } })]); return { net: n, rows: new Map((g?.rows ?? []).map(r => [r.uid, r])) }; }
+  if (v === "calendar") return {};
+  const t: PT = { head: [], w: [], right: [], rows: [] };
+  if (v === "ressheet") {
+    const rs = await call<[number, boolean, string[]][]>("resources", { cols: RES_COLS.map(c => c[0]) });
+    Object.assign(t, { head: RES_COLS.map(c => c[1]), w: RES_COLS.map(c => c[2]), right: RES_COLS.map(c => ["max", "rate", "ovt", "per_use", "work", "cost"].includes(c[0])), rows: (rs ?? []).map(r => ({ c: r[2] })) });
+  } else if (v === "taskusage" || v === "resusage") {
+    const u = await call<Usage>("usage", { by: v === "taskusage" ? "task" : "resource", what: "work", unit: unitOf() });
+    const f = (x: number) => (x === 0 ? "" : `${Math.round(x * 10) / 10}h`);
+    Object.assign(t, { head: [v === "taskusage" ? "Task / assignment" : "Resource / assignment", "Total", ...(u?.buckets ?? []).map(b => fmtB(b, unitOf()))], w: [230, 64, ...(u?.buckets ?? []).map(() => 58)], right: [false, true, ...(u?.buckets ?? []).map(() => true)],
+      rows: (u?.rows ?? []).map(r => ({ c: [r.name, f(r.total), ...r.vals.map(f)], b: r.sum || r.of === null, ind: r.lvl })) });
+  } else if (v === "team") {
+    Object.assign(t, { head: ["Resource / task", "Start", "Finish", "Duration", "% Complete"], w: [260, 90, 90, 80, 80], right: [false, false, false, true, true], rows: [] });
+    const tasks = grid().rows.filter(r => r.kind === "task" && !r.off);
+    for (const res of P().resources.filter(r => r.kind === "Work")) {
+      t.rows.push({ c: [res.name, "", "", "", ""], b: true });
+      tasks.filter(r => r.res.split(/,\s*/).some(x => x.replace(/\[.*\]/, "").trim() === res.name)).forEach(r => t.rows.push({ c: [r.name, fmtDay(r.bar.s, "long"), fmtDay(r.bar.f % 1 ? r.bar.f : r.bar.f - 1, "long"), `${Math.round((r.bar.f - r.bar.s) * 10) / 10}d`, `${r.bar.pct}%`], ind: 1 }));
+    }
+    const un = tasks.filter(r => !r.res); if (un.length) { t.rows.push({ c: ["Unassigned tasks", "", "", "", ""], b: true }); un.forEach(r => t.rows.push({ c: [r.name, fmtDay(r.bar.s, "long"), fmtDay(r.bar.f, "long"), "", `${r.bar.pct}%`], ind: 1 })); }
+  } else if (v === "sheets" && P().sheets.length) {
+    const k = Math.min(sheetK(), P().sheets.length - 1), sv = await call<SheetOut>("sheet_view", { k }), st = P().sheets[k]?.style ?? {};
+    const cells = new Map((sv?.cells ?? []).map(c => [c[0], c])), nr = Math.max(1, sv?.rows ?? 1), nc = Math.max(1, sv?.cols ?? 1);
+    const col = (c: number) => { let s = ""; c += 1; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = Math.floor((c - 1) / 26); } return s; };
+    Object.assign(t, { head: ["", ...Array.from({ length: nc }, (_, c) => col(c))], w: [34, ...Array.from({ length: nc }, (_, c) => P().sheets[k].widths?.[c] ?? 96)], right: [true, ...Array.from({ length: nc }, () => false)],
+      rows: Array.from({ length: nr }, (_, r) => ({ c: [String(r + 1), ...Array.from({ length: nc }, (_, c) => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...Array.from({ length: nc }, (_, c) => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
+  }
+  return { table: t };
+});
+/** Splits the view into pages. */
+const vpages = createMemo((): VPage[] => {
+  const G = geom(), d = vdata(), K = pkind(), out_: VPage[] = [];
+  if (K === "cal") {
+    const s = out()?.summary; if (!s) return [];
+    const a = ps.range === "dates" && ps.from ? new Date(ps.from) : dayDate(s.s), b = ps.range === "dates" && ps.to ? new Date(ps.to) : dayDate(s.f);
+    for (let m = new Date(a.getFullYear(), a.getMonth(), 1); m <= b; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) out_.push({ n: out_.length + 1, month: m.getTime() });
+    return out_;
+  }
+  if (!d) return [];
+  const room = G.H - G.headH - G.footH - (ps.legend === "every" && K === "net" ? G.legH : 0) - 6;
+  if (K === "net" && "net" in d && d.net) {
+    const [cw, ch] = netSize(d.net, netBox()), sc = ps.fit > 0 ? Math.max(0.5, Math.min(1.2, (ps.fit * G.W) / cw)) : 1, pw = G.W / sc, ph = room / sc;
+    for (let y = 0; y < ch; y += ph) for (let x = 0; x < cw; x += pw) out_.push({ n: out_.length + 1, win: [x, y, pw, ph] });
+    return out_;
+  }
+  if (K === "table" && "table" in d && d.table) {
+    const t = d.table, RH = ps.rowH, per = Math.max(1, Math.floor((room - RH) / RH)), key = t.w[0] ?? 0;
+    const across: number[][] = []; let cur: number[] = [], w = key;
+    for (let c = 1; c < t.w.length; c++) { if (w + t.w[c] > G.W && cur.length) { across.push(cur); cur = []; w = key; } cur.push(c); w += t.w[c]; }
+    across.push(cur);
+    for (let r = 0; r < Math.max(1, t.rows.length); r += per) for (const cols of across) out_.push({ n: out_.length + 1, rows: [r, Math.min(t.rows.length, r + per)], cols: [0, ...cols] });
+  }
+  return out_;
+});
+/** One page of a view other than the Gantt chart. */
+const ViewPage = (p: { pg: VPage; pages: number }) => {
+  const G = geom(), d = vdata();
+  const room = () => G.H - G.headH - G.footH - (legendOn(p.pg.n, p.pages) && pkind() === "net" ? G.legH : 0) - 6;
+  return (
+    <Frame {...G} n={p.pg.n} pages={p.pages} legend={pkind() === "net" && legendOn(p.pg.n, p.pages) && <NetLegendSvg />}>
+      <Switch>
+        <Match when={p.pg.win && d && "net" in d && d.net}>
+          <svg class="net psvg" width={G.W} height={room()} viewBox={p.pg.win!.join(" ")} preserveAspectRatio="xMinYMin meet" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
+            <NetDraw n={(d as { net: Net }).net} rows={(d as { rows: Map<number, Row> }).rows} mode={netBox()} />
+          </svg>
+        </Match>
+        <Match when={p.pg.month !== undefined}><MonthPage month={p.pg.month!} W={G.W} H={room()} /></Match>
+        <Match when={p.pg.rows && d && "table" in d && d.table}>{(() => { const t = (d as { table: PT }).table; return (
+          <table class="ptable" style={{ "font-size": `${ps.font}px` }}>
+            <colgroup><For each={p.pg.cols}>{c => <col style={{ width: `${t.w[c]}px` }} />}</For></colgroup>
+            <thead><tr style={{ height: `${ps.rowH}px` }}><For each={p.pg.cols}>{c => <th classList={{ r: t.right[c] }}>{t.head[c]}</th>}</For></tr></thead>
+            <tbody><For each={t.rows.slice(p.pg.rows![0], p.pg.rows![1])}>{r => <tr style={{ height: `${ps.rowH}px` }} classList={{ b: r.b }}><For each={p.pg.cols}>{c => <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r.st?.[c]) }}>{r.c[c]}</td>}</For></tr>}</For></tbody>
+          </table>); })()}</Match>
+      </Switch>
+    </Frame>
+  );
+};
+const NetLegendSvg = () => (
+  <svg width="460" height="44" class="net" font-size="9.5" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
+    <g transform="translate(0,4)"><g class="nbox crit"><rect class="shape" width="30" height="16" rx="3" /></g><text x="36" y="12">Critical</text></g>
+    <g transform="translate(90,4)"><g class="nbox"><rect class="shape" width="30" height="16" rx="3" /></g><text x="36" y="12">Not critical</text></g>
+    <g transform="translate(190,4)"><g class="nbox"><path class="shape" d="M5 0H25L30 8L25 16H5L0 8z" /></g><text x="36" y="12">Milestone</text></g>
+    <g transform="translate(280,4)"><g class="nbox"><rect class="shape" width="30" height="16" rx="3" /><path class="x" d="M3 3L27 13M27 3L3 13" /></g><text x="36" y="12">Completed</text></g>
+    <g transform="translate(370,4)"><g class="nbox"><rect class="shape" width="30" height="16" rx="3" /><path class="x" d="M3 13L27 3" /></g><text x="36" y="12">In progress</text></g>
+    <g transform="translate(0,28)"><path d="M0 6H30" stroke="#D64545" stroke-width="2.4" /><text x="36" y="10">Driving link</text></g>
+    <text x="120" y="38">SS Start-to-Start · FF Finish-to-Finish · SF Start-to-Finish · +2d lag</text>
+  </svg>
+);
+/** A calendar month: weeks as rows, tasks as bars across the days they run. */
+const MonthPage = (p: { month: number; W: number; H: number }) => {
+  const m = new Date(p.month), first = new Date(m); first.setDate(1 - ((first.getDay() + 6) % 7));
+  const weeks = Array.from({ length: 6 }, (_, w) => dateDay(new Date(first.getFullYear(), first.getMonth(), first.getDate() + w * 7))).filter((d, w) => w < 4 || dayDate(d).getMonth() === m.getMonth());
+  const cw = p.W / 7, wh = (p.H - 44) / weeks.length, tasks = grid().rows.filter(r => r.uid > 0 && r.kind === "task" && !r.off);
+  return (
+    <svg width={p.W} height={p.H} class="psvg pcal" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
+      <text x={0} y={18} font-size="16" font-weight="600" fill="#0C1A2B">{m.toLocaleString("en-GB", { month: "long", year: "numeric" })}</text>
+      <For each={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}>{(d, i) => <text x={i() * cw + 4} y={38} font-size="10" fill="#55606E">{d}</text>}</For>
+      <For each={weeks}>{(w0, wi) => {
+        const y = 44 + wi() * wh, lanes: number[] = [];
+        const bars = tasks.filter(r => r.bar.s < w0 + 7 && (r.bar.f > w0 || r.bar.s >= w0)).sort((a, b) => a.bar.s - b.bar.s).map(r => {
+          const a = Math.max(0, Math.floor(r.bar.s) - w0), b = Math.min(7, Math.max(a + 1, Math.ceil(r.bar.f) - w0)); let l = lanes.findIndex(e => e <= a); if (l < 0) l = lanes.length; lanes[l] = b; return { r, a, b, l };
+        });
+        const max = Math.max(1, Math.floor((wh - 18) / 14)), more = (d: number) => bars.filter(x => x.l >= max && x.a <= d && x.b > d).length;
+        return <g>
+          <For each={[0, 1, 2, 3, 4, 5, 6]}>{d => { const day = dayDate(w0 + d); return <g><rect x={d * cw} y={y} width={cw} height={wh} fill={off(w0 + d) ? "#F4F6F8" : "#fff"} stroke="#C9CFD8" stroke-width=".6" />
+            <text x={d * cw + 4} y={y + 12} font-size="10" fill={day.getMonth() === m.getMonth() ? "#1B2733" : "#A5ADB8"}>{day.getDate()}</text>{more(d) > 0 && <text x={d * cw + cw - 4} y={y + 12} font-size="9" text-anchor="end" fill="#0B5CAD">+{more(d)} more</text>}</g>; }}</For>
+          <For each={bars.filter(x => x.l < max)}>{x => <g><rect x={x.a * cw + 2} y={y + 16 + x.l * 14} width={(x.b - x.a) * cw - 4} height={12} rx="2" fill={x.r.ms ? "#0C1A2B" : x.r.crit ? "#F2B0B0" : "#A9CAF6"} stroke={x.r.crit ? "#C73B3B" : "#2F6FCF"} stroke-width=".6" />
+            <svg x={x.a * cw + 4} y={y + 16 + x.l * 14} width={(x.b - x.a) * cw - 8} height={12}><text x={0} y={9.5} font-size="9" fill={x.r.ms ? "#fff" : "#1B2733"}>{x.r.name}</text></svg></g>}</For>
+        </g>;
+      }}</For>
+    </svg>
+  );
+};
+
+/** Reports and other pages print as they look, with the header and footer on every page. */
+const FLOWS: Record<string, () => Promise<{ default: () => JSX.Element }>> = {
+  dashboard: () => import("./reports").then(m => ({ default: m.Dashboard })), progress: () => import("./reports").then(m => ({ default: m.Progress })), scurve: () => import("./reports").then(m => ({ default: m.SCurves })),
+  reports: () => import("./reports").then(m => ({ default: m.Reports })), builder: () => import("./tools").then(m => ({ default: m.ReportBuilder })), update: () => import("./tools").then(m => ({ default: m.UpdateProgress })),
+  relations: () => import("./tools").then(m => ({ default: m.Relationships })), checks: () => import("./views").then(m => ({ default: m.Checks })), risks: () => import("./views").then(m => ({ default: m.Risks })),
+  portfolio: () => import("./views").then(m => ({ default: m.Portfolio })), resgraph: () => import("./views").then(m => ({ default: m.ResourceGraph })), setup: () => import("./setup").then(m => ({ default: m.Setup })),
+};
+const Flow = () => { const C2 = lazy(FLOWS[view()] ?? FLOWS.dashboard); return <C2 />; };
+const FlowDoc = (p: { preview?: boolean }) => {
+  const G = geom(), noPage = (t: string) => t.replace(/[^&]*&\[Pages?\][^&]*/g, "").trim();
+  return (
+    <table class="pflow" style={{ width: `${G.W}px` }}>
+      <thead><tr><td><div class="phead">{[0, 1, 2].map(i => <div class={`ps${i}`}><Slot t={ps.header[i]} page={1} pages={1} h={40} /></div>)}</div></td></tr></thead>
+      <tbody><tr><td class="pflowbody"><Flow /></td></tr></tbody>
+      <tfoot><tr><td><div class="pfoot">{[0, 1, 2].map(i => <div class={`ps${i}`}><Slot t={noPage(ps.footer[i])} page={1} pages={1} h={20} /></div>)}</div>{p.preview && <small class="muted">Page numbers are added when printed.</small>}</td></tr></tfoot>
+    </table>
+  );
+};
+
+/** Every view can be printed; the Gantt chart, network, calendar and tables get exact pages. */
+export const printable = () => true;
+const pagesNow = () => (pkind() === "gantt" ? allPages().length : vpages().length);
 const [printing, setPrinting] = createSignal(false);
 export const printNow = () => {
   save();
-  const L = layout(); if (!L) return;
+  const G = pkind() === "gantt" ? layout() : geom(); if (!G) return;
   setPrinting(true);
-  const css = document.createElement("style");
-  css.textContent = `@page { size: ${L.pw}mm ${L.ph}mm; margin: 0 }`;
+  const css = document.createElement("style"), flow = pkind() === "flow";
+  css.textContent = flow ? `@page { size: ${G.pw}mm ${G.ph}mm; margin: ${ps.margins[0]}mm ${ps.margins[1]}mm ${ps.margins[2]}mm ${ps.margins[3]}mm; @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 9pt 'IBM Plex Sans', sans-serif; color: #55606E; } }` : `@page { size: ${G.pw}mm ${G.ph}mm; margin: 0 }`;
   document.head.append(css);
   document.documentElement.classList.add("printing");
-  setTimeout(() => { window.print(); document.documentElement.classList.remove("printing"); css.remove(); setPrinting(false); }, 120);
+  setTimeout(() => { window.print(); document.documentElement.classList.remove("printing"); css.remove(); setPrinting(false); }, flow ? 900 : 150);
 };
 
 const Slots = (p: { k: "header" | "footer"; label: string }) => (
@@ -226,13 +381,14 @@ export const PrintPage = () => {
     <div class="printpage">
       <div class="pset">
         <h1>Print</h1>
-        <Show when={printable()} fallback={<><p>This view prints as shown on screen.</p><button class="btn pri" onClick={() => { setBackstage(null); setTimeout(() => window.print(), 80); }}>Print</button><p class="muted">Page Setup, headers, footers and page ranges apply to the Gantt Chart and Tracking Gantt. Open one of them to use them.</p></>}>
+        <p class="pwhat">Printing: <b>{pkind() === "gantt" ? (view() === "tracking" ? "Tracking Gantt" : "Gantt Chart") : VIEW_NAMES[view()] ?? (document.querySelector(".content h1")?.textContent || "This page")}</b><br /><span class="muted">Open another view first to print it.</span></p>
+        <Show when={printable()}>
           <div class="pbtns"><button class="btn pri big" onClick={printNow}><svg class="ic"><use href="#i-print" /></svg> Print / Save as PDF</button></div>
-          <p class="muted">In the print window choose your printer, or <b>Save as PDF</b>. {allPages().length} {allPages().length === 1 ? "page" : "pages"} · {ps.paper} {ps.landscape ? "landscape" : "portrait"}.</p>
+          <p class="muted">In the print window choose your printer, or <b>Save as PDF</b>. {pkind() === "flow" ? "As many pages as needed" : `${pagesNow()} ${pagesNow() === 1 ? "page" : "pages"}`} · {ps.paper} {ps.landscape ? "landscape" : "portrait"}.</p>
           <h4>Settings</h4>
           <label class="pl">What to print</label><Pick value={ps.range} set={v => setPs("range", v as "all")} options={[["all", "Entire project"], ["dates", "Specific dates"]]} />
           <Show when={ps.range === "dates"}><div class="prow"><label>From<input type="date" value={ps.from || iso(out()!.summary.s)} onChange={e => setPs("from", e.currentTarget.value)} /></label><label>To<input type="date" value={ps.to || iso(out()!.summary.f)} onChange={e => setPs("to", e.currentTarget.value)} /></label></div></Show>
-          <label class="pl">Pages <span class="muted">(e.g. 1-3, 5; empty = all)</span></label><input value={ps.pages} placeholder={`1-${allPages().length || 1}`} onInput={e => setPs("pages", e.currentTarget.value)} />
+          <label class="pl">Pages <span class="muted">(e.g. 1-3, 5; empty = all)</span></label><input value={ps.pages} placeholder={`1-${pagesNow() || 1}`} onInput={e => setPs("pages", e.currentTarget.value)} />
           <div class="prow"><label>Paper<Pick value={ps.paper} set={v => setPs("paper", v)} options={PAPERS.map(p => p[0])} /></label><label>Orientation<Pick value={ps.landscape ? "1" : "0"} set={v => setPs("landscape", v === "1")} options={[["1", "Landscape"], ["0", "Portrait"]]} /></label></div>
           <h4>Page Setup</h4>
           <Seg value={tab()} set={setTab} options={[["page", "Page"], ["margins", "Margins"], ["header", "Header"], ["footer", "Footer"], ["legend", "Legend"], ["view", "View"]]} />
@@ -240,8 +396,8 @@ export const PrintPage = () => {
             <Show when={tab() === "page"}>
               <label class="pl">Scaling</label>
               <div class="prow"><label><input type="radio" checked={!ps.fit} onChange={() => setPs("fit", 0)} /> Adjust to <input type="number" min="20" max="200" style={{ width: "62px" }} value={ps.scale} onChange={e => setPs("scale", Math.min(200, Math.max(20, +e.currentTarget.value)))} /> % size</label></div>
-              <div class="prow"><label><input type="radio" checked={ps.fit > 0} onChange={() => setPs("fit", 1)} /> Fit timescale to <input type="number" min="1" max="20" style={{ width: "52px" }} value={ps.fit || 1} onChange={e => setPs("fit", Math.max(1, +e.currentTarget.value))} /> page(s) wide</label></div>
-              <p class="muted">Adjust prints at that size with the Gantt chart's current zoom. Fit sizes the dates (and shrinks the page if needed) so table and chart fill that many pages wide.</p>
+              <div class="prow"><label><input type="radio" checked={ps.fit > 0} onChange={() => setPs("fit", 1)} /> {pkind() === "gantt" ? "Fit timescale to" : "Fit to"} <input type="number" min="1" max="20" style={{ width: "52px" }} value={ps.fit || 1} onChange={e => setPs("fit", Math.max(1, +e.currentTarget.value))} /> page(s) wide</label></div>
+              <p class="muted">{pkind() === "gantt" ? "Adjust prints at that size with the Gantt chart's current zoom. Fit sizes the dates (and shrinks the page if needed) so table and chart fill that many pages wide." : pkind() === "net" ? "Fit sizes the diagram to that many pages wide; it never goes below half size so the boxes stay readable, and continues on more pages instead." : "Adjust scales the whole page."}</p>
             </Show>
             <Show when={tab() === "margins"}>
               <div class="prow">{(["Top", "Right", "Bottom", "Left"] as const).map((l, i) => <label>{l} (mm)<input type="number" min="0" max="60" value={ps.margins[i]} onChange={e => setPs("margins", i, +e.currentTarget.value)} /></label>)}</div>
@@ -252,7 +408,13 @@ export const PrintPage = () => {
               <label class="pl">Legend on</label><Seg value={ps.legend} set={v => setPs("legend", v as "every")} options={[["every", "Every page"], ["last", "Last page"], ["none", "None"]]} />
               <label class="pl">Legend text</label><textarea rows="3" value={ps.legendText} onInput={e => setPs("legendText", e.currentTarget.value)} /><Codes />
             </Show>
-            <Show when={tab() === "view"}>
+            <Show when={tab() === "view" && pkind() !== "gantt"}>
+              <Show when={pkind() === "net"}><label class="pl">Boxes</label><Seg value={netBox()} set={x => setNetBox(x as "standard")} options={[["compact", "Compact"], ["standard", "Standard"], ["detailed", "Detailed"]]} /></Show>
+              <Show when={pkind() === "table"}><div class="prow"><label>Text size<input type="number" min="6" max="14" step="0.5" value={ps.font} onChange={e => setPs("font", Math.min(14, Math.max(6, +e.currentTarget.value)))} /></label><label>Row height<input type="number" min="12" max="40" value={ps.rowH} onChange={e => setPs("rowH", Math.min(40, Math.max(12, +e.currentTarget.value)))} /></label></div></Show>
+              <Show when={["table", "cal"].includes(pkind()) && ["taskusage", "resusage", "calendar"].includes(view())}><label class="pl">Timescale</label><Pick value={ps.unit} set={v => setPs("unit", v)} options={[["auto", "Weeks"], ["day", "Days"], ["week", "Weeks"], ["month", "Months"], ["quarter", "Quarters"]]} /></Show>
+              <Show when={pkind() === "flow"}><p class="muted">Reports print as shown, at the paper width, with your header and footer on every page and page numbers at the bottom.</p></Show>
+            </Show>
+            <Show when={tab() === "view" && pkind() === "gantt"}>
               <label class="pl">Columns to print</label>
               <div class="prow"><label><input type="radio" checked={!ps.colKeys} onChange={() => setPs("colKeys", null)} /> All columns of the table</label></div>
               <div class="prow"><label><input type="radio" checked={!!ps.colKeys} onChange={() => setPs("colKeys", tableKeys())} /> Choose columns</label></div>
@@ -272,13 +434,21 @@ export const PrintPage = () => {
           <p><button class="btn sm" onClick={() => setPs(defaults())}>Reset to defaults</button></p>
         </Show>
       </div>
-      <Show when={printable() && L()}>
-        <div class="pprev">
-          <div class="pzoom"><span class="muted">Preview</span><input type="range" min="0.25" max="1.2" step="0.05" value={zoomP()} onInput={e => setZoomP(+e.currentTarget.value)} /><span class="muted">{Math.round(zoomP() * 100)}%</span></div>
-          <For each={chosen()}>{pg => <div class="pwrap" style={{ width: `${L()!.pw * MM * zoomP()}px`, height: `${L()!.ph * MM * zoomP()}px` }}><div style={{ transform: `scale(${zoomP()})`, "transform-origin": "0 0" }}><Sheet pg={pg} pages={allPages().length} /></div><small>Page {pg.n} of {allPages().length}</small></div>}</For>
-        </div>
-      </Show>
-      <Show when={printing()}><Portal mount={document.body}><div id="printroot"><For each={chosen()}>{pg => <Sheet pg={pg} pages={allPages().length} />}</For></div></Portal></Show>
+      <div class="pprev">
+        <div class="pzoom"><span class="muted">Preview</span><input type="range" min="0.25" max="1.2" step="0.05" value={zoomP()} onInput={e => setZoomP(+e.currentTarget.value)} /><span class="muted">{Math.round(zoomP() * 100)}%</span></div>
+        <Switch>
+          <Match when={pkind() === "gantt" && L()}><For each={chosen()}>{pg => <div class="pwrap" style={{ width: `${L()!.pw * MM * zoomP()}px`, height: `${L()!.ph * MM * zoomP()}px` }}><div style={{ transform: `scale(${zoomP()})`, "transform-origin": "0 0" }}><Sheet pg={pg} pages={allPages().length} /></div><small>Page {pg.n} of {allPages().length}</small></div>}</For></Match>
+          <Match when={pkind() === "flow"}><div class="pwrap pflowprev" style={{ width: `${geom().pw * MM * zoomP()}px` }}><div style={{ zoom: zoomP(), padding: `${ps.margins[0] * MM}px ${ps.margins[1] * MM}px ${ps.margins[2] * MM}px ${ps.margins[3] * MM}px`, width: `${geom().pw * MM}px` }}><FlowDoc preview /></div></div></Match>
+          <Match when={true}><Show when={vpages().length} fallback={<p class="pempty">{vdata.loading ? "Preparing pages…" : "Nothing to print in this view."}</p>}><For each={pick(vpages())}>{pg => <div class="pwrap" style={{ width: `${geom().pw * MM * zoomP()}px`, height: `${geom().ph * MM * zoomP()}px` }}><div style={{ transform: `scale(${zoomP()})`, "transform-origin": "0 0" }}><ViewPage pg={pg} pages={vpages().length} /></div><small>Page {pg.n} of {vpages().length}</small></div>}</For></Show></Match>
+        </Switch>
+      </div>
+      <Show when={printing()}><Portal mount={document.body}><div id="printroot" classList={{ flow: pkind() === "flow" }}>
+        <Switch>
+          <Match when={pkind() === "gantt"}><For each={chosen()}>{pg => <Sheet pg={pg} pages={allPages().length} />}</For></Match>
+          <Match when={pkind() === "flow"}><FlowDoc /></Match>
+          <Match when={true}><For each={pick(vpages())}>{pg => <ViewPage pg={pg} pages={vpages().length} />}</For></Match>
+        </Switch>
+      </div></Portal></Show>
     </div>
   );
 };

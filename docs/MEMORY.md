@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.5** (released 2026-10-24). Earlier: 0.1.0 … 0.3.4 |
+| **Current version** | **0.3.6** (released 2026-10-24). Earlier: 0.1.0 … 0.3.5 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -104,7 +104,8 @@ flowchart LR
 | `ui/src/grid.tsx` | Excel-like task sheet: one scroller with sticky header and frozen ID/name, ranges (`ranges` signal), fill handle, TSV clipboard via copy/paste events, `Cells` op for range edits, AutoFilter menus, header rename (`Title` op), `FormulaBar`. |
 | `ui/src/charts.tsx` | Chart.js wrapper in a Prism style (Okabe-Ito colours, crosshair, status marker, PNG save). |
 | `ui/src/sheets.tsx` | Sheet tabs (A1 grid, formula bar, formats, clipboard). |
-| `ui/src/print.tsx` | File › Print: `PageSetup` (saved in `project.ui.page`), `layout()` makes one strip (table columns + chart) and cuts it into page windows (across then down), `Strip` draws a window, `Sheet` draws one page as SVG (table + Gantt + legend) with header/footer codes and logos; `printNow` renders `#printroot` and sets `@page` size, then `window.print()`. `PAPERS`. |
+| `ui/src/print.tsx` | File › Print (every view; `pkind()` = gantt / net / cal / table / flow; `Frame` draws paper + header/footer/legend; `vdata`/`vpages`/`ViewPage` for network tiles, calendar months and tables; `FlowDoc` prints report pages in a table whose thead/tfoot repeat, with page numbers from `@page` margin boxes): `PageSetup` (saved in `project.ui.page`), `layout()` makes one strip (table columns + chart) and cuts it into page windows (across then down), `Strip` draws a window, `Sheet` draws one page as SVG (table + Gantt + legend) with header/footer codes and logos; `printNow` renders `#printroot` and sets `@page` size, then `window.print()`. `PAPERS`. |
+| `ui/src/cells.ts` | Shared by both grids: `parseTsv`/`toTsv`/`transpose`, `series` (Excel fill rules), `clip` (last copy: values + styles for Paste Special). |
 | `ui/src/fmt.ts` | Text formatting: style strings `b;i;u;s;c:#hex;f:#hex;z:12;a:c`, `css()`, the focused grid registers a `Target` (get/set selected cells), toggle/setProp/clear, Format Painter. |
 | `ui/src/tools.tsx` | Update Progress page, Relationship Diagram (SVG), Report Builder (sections, `TEMPLATES`, saved in `ui.reports`). |
 | `tests_ui/run.cjs` | Playwright UI tests against the built UI with a mocked shell and `dump` fixture (alignment, ranges, menus, ribbon, sidebar, every view). Runs in CI. |
@@ -184,6 +185,9 @@ flowchart LR
 | 0.3.2 | Recurring tasks are a summary with SNET-constrained occurrences | Same as MS Project; occurrences stay ordinary tasks. |
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
+| 0.3.6 | Other views print through one `Frame`; reports print as flowing documents (thead/tfoot repeat the header/footer, `@page @bottom-center` numbers pages) | Exact pages where the layout is ours (Gantt, network, calendar, tables); flowing pages where it is HTML. |
+| 0.3.6 | Fill series follow Excel (numbers, text+number, dates by step; Ctrl copies) but durations, links and resources copy as in MS Project | Matches what users of both tools expect. |
+| 0.3.6 | `open_url` only opens github.com/Edgar-Mendonca/Datum-Plan links | The window cannot be used to open arbitrary URLs. |
 | 0.3.5 | Ribbon tabs: Task, Schedule, Progress (user rejected "Home"); the ribbon shrinks in steps (`data-fit` 0–3) and never scrolls | User feedback: crowded Task tab and a sideways scrollbar. |
 | 0.3.5 | Hidden columns stay in the table with a negative width (`Project.columns` is now `i32`); `cols()` = shown, `allCols()` = all | Hide/unhide without losing the position; files stay compatible. |
 | 0.3.5 | Print lays the table and chart out as one strip; pages are windows on it; ID + name repeat; column edges snap | Every column prints, like MS Project, with no overlap. |
@@ -209,7 +213,8 @@ flowchart LR
 | 0.3.3 | Hotfix | Grid row selection stuck after the first click | ✅ |
 | 0.3.4 | Print & format | Print page with Page Setup (ranges, paper, scaling, margins, header/footer codes, logos, legend, columns), vector pages; Font/Alignment formatting for task sheet and Sheets; Options page rebuilt | ✅ |
 | 0.3.5 | Ribbon, Setup, columns, print ([PLAN-0.3.5.md](PLAN-0.3.5.md)) | Task/Schedule/Progress tabs, ribbon fits without scrolling, Setup page in the sidebar, nested menus, hide/unhide/delete columns + Columns dialog, print every column (strip layout) | ✅ |
-| 0.3.6 | Print every view, Network, timeline zoom ([PLAN-0.3.6.md](PLAN-0.3.6.md)) | Font family + fill icon, everyday commands on the Task tab, Check-again feedback + GitHub link, timeline zoom box, Network Diagram with legend/box styles/zoom, page layout for every view, xlsx formatting, shared grid + series fill + Paste Special, icons | 🔜 (waiting for OK) |
+| 0.3.6 | Print every view, Network, timeline zoom ([PLAN-0.3.6.md](PLAN-0.3.6.md)) | Font family + fill icon, everyday commands on the Task tab, Check-again feedback + GitHub/Releases/Issues links, Getting Started + Glossary, timeline zoom box, Network Diagram (legend, box styles, zoom, pan, mini-map, path), page layout for every view, xlsx formatting, series fill + Paste Special in both grids, Sheets freeze panes | ✅ |
+| 0.3.7 | One grid, icons | Merge the task sheet and Sheets into one grid component; redraw all icons in one style; Network layout by WBS | ⬜ |
 | 0.4.0 | Risk & resources | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -332,13 +337,18 @@ flowchart LR
 - User feedback on 0.3.5 (4 screenshots): wrong fill icon and no font family; empty space on the Task tab; "Check again" gives no feedback; wants a GitHub link; wants MS Project's timeline zoom box; the Network Diagram lacks a legend and print layout; do all of 0.3.6 (every view printable, the rest of the 0.3.4 limits).
 - Plan and questions in [PLAN-0.3.6.md](PLAN-0.3.6.md).
 
+### 2026-10-24: Session 6, continued (0.3.6)
+- Answers: fonts as listed; Task tab extras as proposed; network boxes as proposed; everything in 0.3.6; add GitHub, Releases and Report-an-issue links; explain terms (SS, FF…) for new users.
+- Built: font family (`n:` style), bucket icon, Task tab Schedule/Editing groups, ribbon folds per group from the right, `open_url`, Check-again spinner + time, Getting Started + Glossary dialogs, link-type labels in details, timeline zoom box (`inView`, `gantt-range`), Network (`NetBox`, `NetDraw`, `NetLegend`, Compact/Standard/Detailed, driving links, labels, zoom/fit/pan, mini-map, path highlight; engine `NetLink.driving/lag`), printing for every view, xlsx styles (`styled`, `task_style`), `cells.ts` series + Paste Special in both grids, Sheets fill handle, Ctrl+D/R, freeze panes. 23 engine tests; UI tests for every view's print pages, network legend, Help links, glossary, fonts.
+- Not done: the task sheet and Sheets are still two components (they now share `cells.ts` and `fmt.ts`); full icon redraw; network layout by WBS. Moved to 0.3.7.
+
 ---
 
 ## 5. Known limits and next steps
 - Windows SmartScreen warns on the first install (unsigned). Updates after that are silent.
 - XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).
-- Not built yet: the shared grid (0.3.5), xlsx export of cell formatting, page layout for views other than Gantt/Tracking (they print as on screen), the reference's C2 scenario tests.
+- Not built yet: one grid component for the task sheet and Sheets (0.3.7), full icon redraw, network layout by WBS, the reference's C2 scenario tests. Report pages print as flowing HTML (no per-page preview).
 - Templates have no resources or costs, so cost reports are empty until resources are added.
 - Actual progress history is modelled linearly from actual start to the current % (snapshots are stored but not yet used as history points).
 - Fill handle and paste were checked by code review and in the harness, not with a real clipboard in the app.

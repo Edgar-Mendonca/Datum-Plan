@@ -4,6 +4,7 @@ import { createStore, produce } from "solid-js/store";
 import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay, invoke } from "./api";
 import { allCols, saveAll, deleteCol, act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query } from "./store";
 import { Dialog, Row, Text, Pick, Check, Tabs } from "./ui";
+import * as F from "./fmt";
 import { TaskTab, useInfo, TABS } from "./details";
 
 const KINDS = ["text", "number", "flag", "date", "cost", "duration", "start", "finish", "outline"];
@@ -468,6 +469,66 @@ export const compare = async () => {
     </Dialog>
   ));
 };
+/** Paste Special (Ctrl+Alt+V): values only, formats only or both, optionally transposed. */
+export const pasteSpecial = () => {
+  const t = F.target();
+  if (!t?.paste) return toast("Click in the task sheet or a sheet first.");
+  openDialog(() => {
+    const [what, setWhat] = createSignal<"all" | "values" | "formats">("all"), [tr, setTr] = createSignal(false);
+    return (
+      <Dialog title="Paste Special" okText="Paste" ok={() => { t.paste!(what(), tr()); }}>
+        <div class="form">
+          <Row label="Paste"><div class="stackr">{([["all", "All (values and formats)"], ["values", "Values only"], ["formats", "Formats only"]] as const).map(([k, l]) => <label class="chk"><input type="radio" name="ps" checked={what() === k} onChange={() => setWhat(k)} />{l}</label>)}</div></Row>
+          <Row label=""><Check label="Transpose (rows become columns)" value={tr()} set={setTr} /></Row>
+        </div>
+        <p class="muted">Pastes what you last copied in Datum Plan. Text copied from Excel or elsewhere pastes as values.</p>
+      </Dialog>
+    );
+  });
+};
+
+/** A one-page guide for people who know MS Project or Excel. */
+export const gettingStarted = () => openDialog(() => (
+  <Dialog title="Getting started" wide>
+    <div class="gloss">
+      <h4>If you know MS Project</h4>
+      <dl><dt>Same layout</dt><dd>Ribbon on top, task sheet on the left, Gantt chart on the right, timeline above. Type a task name, a duration ("5d", "2w", "0" for a milestone) and predecessors ("3", "4SS+2d").</dd>
+        <dt>Where things are</dt><dd><b>Task</b>: clipboard, font, insert, % complete, link and indent. <b>Schedule</b>: links, outline, leveling, critical path. <b>Progress</b>: status date, Update Progress, baselines. <b>Report</b>: dashboards, S-curves, print.</dd>
+        <dt>Views</dt><dd>The left sidebar switches views: Setup, Gantt, Tracking, Network, Calendar, usage, resources, Sheets, reports.</dd></dl>
+      <h4>If you know Primavera P6</h4>
+      <dl><dt>Activity IDs, codes, steps</dt><dd>Activity ID is a column; activity codes, steps, notebook and expenses are tabs in the details pane under the chart.</dd>
+        <dt>Longest path and float</dt><dd>Schedule › Longest Path; Total Float and Free Float are columns (right-click a heading › Insert Column › Schedule).</dd></dl>
+      <h4>If you know Excel</h4>
+      <dl><dt>The sheet works like Excel</dt><dd>Drag to select, Ctrl+C / Ctrl+V with Excel, the fill handle (drag the small square; Ctrl copies), Ctrl+D, Ctrl+Alt+V for Paste Special, Ctrl+B/I/U.</dd>
+        <dt>Formulas</dt><dd>Right-click a heading › New Formula Column, e.g. =[% Complete]-[Baseline % Complete]. The Sheets view holds free spreadsheets that can read the plan.</dd></dl>
+      <h4>Finding things</h4>
+      <dl><dt>Tell me (Ctrl+K)</dt><dd>Type what you want to do, e.g. "baseline", "print", "critical".</dd><dt>Glossary</dt><dd>Help › Glossary explains FS, SS, float, baseline and other terms.</dd></dl>
+    </div>
+  </Dialog>
+));
+
+/** Plain-language explanations of planning terms, for people coming from Excel. */
+export const GLOSSARY: [string, [string, string][]][] = [
+  ["Links (dependencies)", [["FS: Finish-to-Start", "The task starts after its predecessor finishes. The usual link (e.g. pour, then cure)."], ["SS: Start-to-Start", "The task starts when (or after) its predecessor starts. Both can run together."],
+    ["FF: Finish-to-Finish", "The task finishes when (or after) its predecessor finishes."], ["SF: Start-to-Finish", "The task finishes when its predecessor starts. Rare: used for hand-overs."],
+    ["Lag (+2d) and lead (−2d)", "A wait after the link (+2 days), or an overlap (−2 days or −20%). Written after the type: 4FS+2d."], ["Driving link", "The link that actually sets the task's date. Shown bold."]]],
+  ["Float and the critical path", [["Total float (slack)", "How long a task can slip before it delays the project finish."], ["Free float", "How long a task can slip before it delays its next task."],
+    ["Critical task", "A task with no float: if it slips, the finish slips. Shown in red."], ["Critical path", "The chain of critical tasks from start to finish."], ["Longest path", "The chain that drives the finish date, counting calendars and constraints (as in P6)."]]],
+  ["Tasks", [["Summary task", "A parent row that rolls up its subtasks' dates, work and cost (the WBS)."], ["Milestone", "A moment with no duration, such as an approval. Shown as a diamond."],
+    ["Manual / Auto scheduled", "Auto tasks move with their links and calendars; manual ones stay where you put them."], ["Constraint", "A fixed date rule, e.g. Start No Earlier Than (SNET) or Must Finish On (MFO). As Soon As Possible means none."],
+    ["Deadline", "A target date that flags the task when missed without moving it."], ["Activity ID", "A short code for each task (A1010…), as in P6."], ["Task type", "Which of duration, work and units stays fixed when you change one of them."]]],
+  ["Progress", [["Status date", "The date the progress is reported to. Work before it should be done; after it, still to do."], ["% complete", "How much of the duration is done."], ["Baseline", "A saved copy of the plan, used to compare later (variance)."],
+    ["Snapshot", "A record of the plan at a reporting period, used for trends."], ["SPI / CPI", "Earned value indices: below 1 means behind schedule (SPI) or over budget (CPI)."]]],
+];
+export const glossary = () => openDialog(() => {
+  const [q, setQ] = createSignal("");
+  return (
+    <Dialog title="Glossary" wide>
+      <input class="find" placeholder="Search terms" value={q()} onInput={e => setQ(e.currentTarget.value)} />
+      <div class="gloss"><For each={GLOSSARY}>{([h, list]) => { const f = () => list.filter(x => (x[0] + x[1]).toLowerCase().includes(q().toLowerCase())); return <Show when={f().length}><h4>{h}</h4><dl><For each={f()}>{([t, d]) => <><dt>{t}</dt><dd>{d}</dd></>}</For></dl></Show>; }}</For></div>
+    </Dialog>
+  );
+});
 export const shortcuts = () => openDialog(() => (
   <Dialog title="Keyboard Shortcuts">
     <table class="keys"><tbody><For each={[["Insert", "New task"], ["Delete", "Delete tasks"], ["Alt+Shift+→ / ←", "Indent / outdent"], ["Ctrl+F2", "Link selected tasks"], ["Shift+F2", "Task information"], ["F2 / Enter", "Edit cell"],

@@ -27,18 +27,19 @@ export const RO = (p: { info: TaskInfo; k: string; label?: string }) => {
   return <><label>{p.label ?? f()?.[1]}</label><span class="ro">{f()?.[3] || "—"}</span></>;
 };
 
+export const LINKS: [string, string][] = [["FS", "Finish-to-Start"], ["SS", "Start-to-Start"], ["FF", "Finish-to-Finish"], ["SF", "Start-to-Finish"]];
 const Rels = (p: { info: TaskInfo; list: Rel[]; preds: boolean }) => {
   const uid = p.info.task.uid;
   const put = (other: number, kind: string | null, lag: string) => act({ LinkSet: p.preds ? { pred: other, succ: uid, kind, lag } : { pred: uid, succ: other, kind, lag } });
   let add!: HTMLInputElement;
   return (
     <table class="tbl">
-      <thead><tr><th>ID</th><th>Activity ID</th><th>Name</th><th>Type</th><th>Lag</th><th>Driving</th><th>Total float</th><th /></tr></thead>
+      <thead><tr><th>ID</th><th>Activity ID</th><th>Name</th><th>Type <button class="help" title="What FS, SS, FF and SF mean" onClick={() => import("./dialogs").then(d => d.glossary())}>?</button></th><th title="Wait (+2d) or overlap (−2d, −20%) after the link">Lag</th><th>Driving</th><th>Total float</th><th /></tr></thead>
       <tbody>
         <For each={p.list}>{r => (
           <tr>
             <td class="link" onClick={() => selectUid(r.uid)}>{r.id}</td><td>{r.code}</td><td>{r.name}</td>
-            <td><select value={r.kind} onChange={e => put(r.uid, e.currentTarget.value, r.lag)}><For each={["FS", "SS", "FF", "SF"]}>{k => <option>{k}</option>}</For></select></td>
+            <td><select value={r.kind} onChange={e => put(r.uid, e.currentTarget.value, r.lag)}><For each={LINKS}>{([k, l]) => <option value={k} title={l}>{k} · {l}</option>}</For></select></td>
             <td><input size="6" value={r.lag} onChange={e => put(r.uid, r.kind, e.currentTarget.value)} /></td>
             <td>{r.driving ? "Yes" : ""}</td><td>{r.tf}</td>
             <td><button class="x" title="Remove link" onClick={() => put(r.uid, null, "")}>×</button></td>

@@ -188,6 +188,34 @@ pub fn write_csv(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
 
 /// Excel workbook: the table with real numbers and dates, formula columns as live Excel formulas,
 /// the plan's sheet tabs, and a Plan sheet those tabs can read.
+/// Applies a cell style (`b;i;u;s;c:#hex;f:#hex;z:12;a:c;n:Font`, see the UI's fmt.ts) to an Excel format.
+fn styled(mut f: rust_xlsxwriter::Format, st: &str) -> rust_xlsxwriter::Format {
+    use rust_xlsxwriter::{FormatAlign, FormatUnderline};
+    let hex = |v: &str| u32::from_str_radix(v.trim_start_matches('#'), 16).ok();
+    for t in st.split(';').filter(|t| !t.is_empty()) {
+        let (k, v) = t.split_once(':').unwrap_or((t, ""));
+        f = match k {
+            "b" => f.set_bold(),
+            "i" => f.set_italic(),
+            "u" => f.set_underline(FormatUnderline::Single),
+            "s" => f.set_font_strikethrough(),
+            "c" => match hex(v) { Some(x) => f.set_font_color(x), None => f },
+            "f" => match hex(v) { Some(x) => f.set_background_color(x), None => f },
+            "z" => match v.parse::<f64>() { Ok(z) => f.set_font_size(z * 0.75), Err(_) => f },
+            "a" => f.set_align(match v { "c" => FormatAlign::Center, "r" => FormatAlign::Right, _ => FormatAlign::Left }),
+            "n" if !v.is_empty() => f.set_font_name(v),
+            _ => f,
+        };
+    }
+    f
+}
+
+/// The style of one task cell: the row's style, then the column's.
+fn task_style(t: &crate::model::Task, key: &str) -> String {
+    let get = |k: &str| t.style.get(k).and_then(|v| v.as_str()).unwrap_or("");
+    [get("*"), get(key)].iter().filter(|x| !x.is_empty()).copied().collect::<Vec<_>>().join(";")
+}
+
 pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
     use rust_xlsxwriter::{Format, Workbook, Worksheet};
     let e = |x: rust_xlsxwriter::XlsxError| x.to_string();
@@ -197,10 +225,10 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
     let days_fmt = Format::new().set_num_format("0.0# \"d\"");
     let money_fmt = Format::new().set_num_format(format!("\"{}\"#,##0.{}", c.p.currency.symbol, "0".repeat(c.p.currency.decimals as usize)).replace(".\"", "\""));
     // One typed cell: dates as Excel dates, durations in days, money as numbers.
-    let put = |ws: &mut Worksheet, r: u32, k: u16, i: usize, key: &str, bold: bool| -> Result<(), String> {
+    let put = |ws: &mut Worksheet, r: u32, k: u16, i: usize, key: &str, bold: bool, st: &str| -> Result<(), String> {
         let kind = c.kind(key);
         let v = c.val(i, key);
-        let fx = |f: &Format| if bold { f.clone().set_bold() } else { f.clone() };
+        let fx = |f: &Format| styled(if bold { f.clone().set_bold() } else { f.clone() }, st);
         match (&v, kind) {
             (F::Null, _) => Ok(()),
             (F::Date(m), _) => ws.write_number_with_format(r, k, *m as f64 / 1440.0 + 25569.0 - if kind == Kind::Fin && m.rem_euclid(1440) == 0 { 1.0 } else { 0.0 }, &fx(&date_fmt)).map(|_| ()).map_err(e),
@@ -223,10 +251,11 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         for (k, key) in keys.iter().enumerate() {
             let formula = key.strip_prefix("c:").and_then(|f| c.p.fields.iter().find(|d| d.key == f)).map(|d| d.formula.clone()).filter(|f| crate::sheet::is_excel(f));
             let live = formula.and_then(|f| crate::sheet::translate(&f, |n| c.key_of(n).and_then(|kk| keys.iter().position(|x| *x == kk)).map(|j| format!("{}{}", crate::sheet::col_name(j as u32), r + 1))).ok());
+            let st = task_style(&c.p.tasks[i], key);
             match live {
-                Some(f) => { ws.write_formula(r, k as u16, format!("={f}").as_str()).map_err(e)?; }
-                None if key == "name" => { ws.write_string_with_format(r, k as u16, c.text(i, key), &{ let f = Format::new().set_indent(c.p.tasks[i].level); if c.s.summary[i] { f.set_bold() } else { f } }).map_err(e)?; }
-                None => put(ws, r, k as u16, i, key, c.s.summary[i])?,
+                Some(f) => { ws.write_formula_with_format(r, k as u16, format!("={f}").as_str(), &styled(Format::new(), &st)).map_err(e)?; }
+                None if key == "name" => { ws.write_string_with_format(r, k as u16, c.text(i, key), &styled({ let f = Format::new().set_indent(c.p.tasks[i].level); if c.s.summary[i] { f.set_bold() } else { f } }, &st)).map_err(e)?; }
+                None => put(ws, r, k as u16, i, key, c.s.summary[i], &st)?,
             }
         }
     }
@@ -236,10 +265,15 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         ws.set_name(s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).take(31).collect::<String>()).map_err(e)?;
         for (a1, input) in &s.cells {
             let Some((r, k)) = a1_index(a1) else { continue };
-            if input.starts_with('=') { ws.write_formula(r, k, input.as_str()).map_err(e)?; }
-            else if let Ok(n) = input.replace(',', "").parse::<f64>() { ws.write_number(r, k, n).map_err(e)?; }
-            else { ws.write_string(r, k, input).map_err(e)?; }
+            let f = styled(Format::new(), s.style.get(a1).map(String::as_str).unwrap_or(""));
+            if input.starts_with('=') { ws.write_formula_with_format(r, k, input.as_str(), &f).map_err(e)?; }
+            else if let Ok(n) = input.replace(',', "").parse::<f64>() { ws.write_number_with_format(r, k, n, &f).map_err(e)?; }
+            else { ws.write_string_with_format(r, k, input, &f).map_err(e)?; }
         }
+        for (a1, st) in s.style.iter().filter(|(a1, _)| !s.cells.contains_key(*a1)) {
+            if let Some((r, k)) = a1_index(a1) { ws.write_blank(r, k, &styled(Format::new(), st)).map_err(e)?; }
+        }
+        for (k, w) in &s.widths { ws.set_column_width_pixels(*k as u16, *w as u32).map_err(e)?; }
     }
     if !c.p.sheets.is_empty() {
         let ws = wb.add_worksheet();
@@ -247,7 +281,7 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         for (k, key) in crate::sheet::PLAN_COLS.iter().enumerate() {
             ws.write_string_with_format(0, k as u16, c.name(key), &head_fmt).map_err(e)?;
             for i in 0..c.p.tasks.len() {
-                put(ws, i as u32 + 1, k as u16, i, key, false)?;
+                put(ws, i as u32 + 1, k as u16, i, key, false, "")?;
             }
         }
     }

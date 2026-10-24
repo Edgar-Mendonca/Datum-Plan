@@ -628,6 +628,19 @@ fn startup_file(app: AppHandle, st: State<St>) -> Option<String> {
     std::env::args().skip(1).find(|a| a.to_lowercase().ends_with(".dplan")).or_else(last)
 }
 
+/// Opens one of the project's GitHub pages in the browser (only those, so the window cannot open anything else).
+#[tauri::command]
+fn open_url(url: String) -> R<()> {
+    if !url.starts_with("https://github.com/Edgar-Mendonca/Datum-Plan") {
+        return Err("Only the Datum Plan GitHub pages can be opened.".into());
+    }
+    #[cfg(windows)]
+    let r = std::process::Command::new("explorer").arg(&url).spawn();
+    #[cfg(not(windows))]
+    let r = std::process::Command::new("xdg-open").arg(&url).spawn();
+    r.map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -671,7 +684,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
             query, resources, field_list, task_info, usage, curve, checks, network, compare, workspace, snapshot_rows, sheet_view, scurve, periods, period_report,
-            options, set_options, autosave, recovery, recover, recent, startup_file, version, quit, check_update, install_update
+            options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update
         ])
         .run(tauri::generate_context!())
         .expect("Datum Plan failed to start");

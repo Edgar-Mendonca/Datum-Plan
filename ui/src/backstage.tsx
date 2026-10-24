@@ -11,7 +11,21 @@ import { listen, invoke } from "./api";
 type Tpl = { id: string; name: string; desc: string; color: string; tasks: number; days: number; bars: [number, number, number][] };
 type Info = { current: string; latest: string | null; beta: boolean; available: boolean; notes: string; published: string; url: string | null; sums: string | null; size: number; page: string };
 export const [update, setUpdate] = createSignal<Info | null>(null);
-export const checkUpdate = async (quiet: boolean) => { try { setUpdate(await invoke<Info>("check_update")); } catch (e) { if (!quiet) toast(String(e)); } };
+export const [checking, setChecking] = createSignal(false), [checkedAt, setCheckedAt] = createSignal("");
+export const checkUpdate = async (quiet: boolean) => {
+  setChecking(true);
+  try { setUpdate(await invoke<Info>("check_update")); setCheckedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })); if (!quiet) toast(update()?.available ? `Version ${update()!.latest} is available.` : "You have the latest version.", true); }
+  catch (e) { if (!quiet) toast(`Could not check for updates: ${e}`); }
+  finally { setChecking(false); }
+};
+const GH = "https://github.com/Edgar-Mendonca/Datum-Plan";
+/** Links to the project on GitHub: code, releases (change log) and issues (report a problem). */
+export const GitHubLinks = () => (
+  <div class="ghlinks">
+    <For each={[["", "GitHub", "The project and its code"], ["/releases", "Releases", "Every version and its change log"], ["/issues/new", "Report an issue", "Tell us about a bug or an idea"]]}>{([path, l, t]) =>
+      <button class="btn" title={t} onClick={() => call("open_url", { url: GH + path })}><svg class="ic"><use href={path === "/issues/new" ? "#i-bug" : path ? "#i-tag" : "#i-github"} /></svg>{l}</button>}</For>
+  </div>
+);
 
 const CURRENCIES: [string, string, number][] = [
   ["USD", "$", 2], ["EUR", "€", 2], ["GBP", "£", 2], ["INR", "₹", 2], ["AED", "AED", 2], ["SAR", "SAR", 2], ["QAR", "QAR", 2], ["KWD", "KWD", 3], ["OMR", "OMR", 3], ["BHD", "BHD", 3],
@@ -71,11 +85,13 @@ const UpdateCard = () => {
   return (
     <div class="card">
       <div class="brand"><img src="logo.svg" alt="" /><div><b>Datum Plan</b><span class="muted">Version {ver()}{opts().beta ? " · beta channel" : ""}</span></div></div>
-      <Show when={update()} fallback={<><span class="pill">Checking for updates…</span><button class="btn wide" onClick={() => checkUpdate(false)}>Check for updates</button></>}>{u => <>
+      <Show when={update()} fallback={<><span class="pill">{checking() ? "Checking for updates…" : "Not checked yet"}</span><button class="btn wide" disabled={checking()} onClick={() => checkUpdate(false)}>{checking() ? <><i class="spin" /> Checking…</> : "Check for updates"}</button><GitHubLinks /></>}>{u => <>
         <Show when={u().available} fallback={<span class="pill ok">You have the latest version</span>}><span class="pill warn">Version {u().latest}{u().beta ? " (beta)" : ""} is ready</span></Show>
         <Show when={u().available && u().url}><button class="btn pri wide" disabled={pct() !== null} onClick={install}>{pct() === null ? `Update now (${Math.round(u().size / 1048576)} MB)` : `Downloading… ${pct()}%`}</button></Show>
         <Show when={pct() !== null}><div class="prog"><i style={{ width: `${pct()}%` }} /></div></Show>
-        <button class="btn wide" onClick={() => checkUpdate(false)}>Check again</button>
+        <button class="btn wide" disabled={checking()} onClick={() => checkUpdate(false)}>{checking() ? <><i class="spin" /> Checking…</> : "Check again"}</button>
+        <Show when={checkedAt() && !checking()}><span class="muted small">Checked at {checkedAt()}</span></Show>
+        <GitHubLinks />
         <div class="notes"><h4>What's new{u().latest ? ` in ${u().latest}` : ""}</h4><div innerHTML={md(u().notes || "Release notes will appear here.")} /></div>
       </>}</Show>
     </div>

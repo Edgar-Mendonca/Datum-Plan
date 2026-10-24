@@ -1,5 +1,5 @@
 // Commands shared by the ribbon, menus, keys and Tell Me.
-import { view, act, call, cur, curRow, grid, loadOut, out, refresh, selRows, setBackstage, setCollapsed, setCur, setLevel, setOut, setSel, setView, setZoom, toast, zoom, View, setDetails, details, setTimeline, timeline, setupOpen, setSetupOpen, openDialog, collapsed } from "./store";
+import { act, call, cur, curRow, grid, loadOut, out, refresh, selRows, setBackstage, setCollapsed, setCur, setLevel, setOut, setSel, setView, setZoom, toast, zoom, View, setDetails, details, setTimeline, timeline, setupOpen, setSetupOpen, openDialog, collapsed } from "./store";
 import { Out } from "./api";
 import * as D from "./dialogs";
 
@@ -63,7 +63,7 @@ export const C = {
   clearLevel: () => act({ Level: { uids: [], clear: true } }),
   baseline: () => D.setBaseline(uids()),
   update: () => D.updateProject(),
-  print: () => (["gantt", "tracking", "timeline"].includes(view()) ? setBackstage("print") : setTimeout(() => window.print(), 50)),
+  print: () => setBackstage("print"),
   pageSetup: () => setBackstage("print"),
   exportAs: (kind: string) => D.exportAs(kind),
   file: (page: string) => setBackstage(page),
@@ -79,7 +79,7 @@ export const ALL_CMDS: [string, () => void, string?][] = [
   ["Move up", () => C.move(true)], ["Move down", () => C.move(false)], ["Mark on track", C.onTrack], ["Split task", C.split], ["Inactivate task", C.inactive],
   ["Manually schedule", () => C.mode(true)], ["Auto schedule", () => C.mode(false)], ["Add to timeline", C.timeline], ["Task information", C.info, "Shift+F2"],
   ["Notes", C.notes], ["Copy", C.copy, "Ctrl+C"], ["Cut", C.cut, "Ctrl+X"], ["Paste", C.paste, "Ctrl+V"], ["Undo", C.undo, "Ctrl+Z"], ["Redo", C.redo, "Ctrl+Y"],
-  ["Save", () => C.save(), "Ctrl+S"], ["Save as", () => C.save(true)], ["Open", C.open, "Ctrl+O"], ["Import", C.importFile], ["Print", C.print, "Ctrl+P"], ["Page Setup", C.pageSetup], ["Bold", () => import("./fmt").then(f => f.toggle("b")), "Ctrl+B"], ["Italic", () => import("./fmt").then(f => f.toggle("i")), "Ctrl+I"], ["Underline", () => import("./fmt").then(f => f.toggle("u")), "Ctrl+U"], ["Clear Formatting", () => import("./fmt").then(f => f.clearFmt())], ["Format Painter", () => import("./fmt").then(f => f.paint())],
+  ["Save", () => C.save(), "Ctrl+S"], ["Save as", () => C.save(true)], ["Open", C.open, "Ctrl+O"], ["Import", C.importFile], ["Print", C.print, "Ctrl+P"], ["Page Setup", C.pageSetup], ["Getting started", () => D.gettingStarted()], ["Glossary", () => D.glossary()], ["Paste Special", () => D.pasteSpecial(), "Ctrl+Alt+V"], ["GitHub page", () => call("open_url", { url: "https://github.com/Edgar-Mendonca/Datum-Plan" })], ["Report an issue", () => call("open_url", { url: "https://github.com/Edgar-Mendonca/Datum-Plan/issues/new" })], ["Bold", () => import("./fmt").then(f => f.toggle("b")), "Ctrl+B"], ["Italic", () => import("./fmt").then(f => f.toggle("i")), "Ctrl+I"], ["Underline", () => import("./fmt").then(f => f.toggle("u")), "Ctrl+U"], ["Clear Formatting", () => import("./fmt").then(f => f.clearFmt())], ["Format Painter", () => import("./fmt").then(f => f.paint())],
   ["Gantt Chart", () => C.view("gantt")], ["Tracking Gantt", () => C.view("tracking")], ["Network Diagram", () => C.view("network")], ["Calendar view", () => C.view("calendar")],
   ["Task Usage", () => C.view("taskusage")], ["Resource Sheet", () => C.view("ressheet")], ["Resource Usage", () => C.view("resusage")], ["Resource Graph", () => C.view("resgraph")],
   ["Team Planner", () => C.view("team")], ["Dashboard", () => C.view("dashboard")], ["Reports", () => C.view("reports")], ["Portfolio", () => C.view("portfolio")],

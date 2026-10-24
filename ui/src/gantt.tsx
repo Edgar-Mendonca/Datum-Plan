@@ -11,6 +11,8 @@ export const [showBase, setShowBase] = createSignal(false);
 export const [showSlack, setShowSlack] = createSignal(false);
 export const [showLate, setShowLate] = createSignal(false);
 export const [showLabels, setShowLabels] = createSignal(true);
+/** The dates in view in the Gantt chart: the timeline draws them as its zoom box. */
+export const [inView, setInView] = createSignal<[number, number] | null>(null);
 
 export type Unit = "day" | "week" | "month" | "quarter" | "year";
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -79,7 +81,7 @@ export const Gantt = () => {
   type Drag = { r: Row; i: number; mode: "move" | "size" | "link" | "pct"; x: number; y: number; dd: number; mx: number; my: number; pct: number };
   let drag: Drag | null = null;
   let pending = false;
-  const draw = () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; if (body) { pal(); drawScale(); drawBars(); } }); };
+  const draw = () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; if (body) { pal(); drawScale(); drawBars(); const a = d0() + body.scrollLeft / zoom(); setInView([a, a + body.clientWidth / zoom()]); } }); };
 
   const drawScale = () => {
     const w = size().w, x0 = body.scrollLeft, pd = zoom();
@@ -247,6 +249,8 @@ export const Gantt = () => {
     body.scrollLeft = (day - d0()) * zoom() - body.clientWidth / 2;
   };
   const fitAll = () => { const s = out()?.summary; if (!s) return; setZoom(Math.max(0.3, (body.clientWidth - 160) / Math.max(7, s.f - s.s + 4))); body.scrollLeft = (s.s - d0() - 2) * zoom(); };
+  /** Shows the dates a..b across the chart (the timeline's zoom box). */
+  const range = (e: Event) => { const [a, b] = (e as CustomEvent<[number, number]>).detail; setZoom(Math.max(0.3, Math.min(120, body.clientWidth / Math.max(1, b - a)))); body.scrollLeft = (a - d0()) * zoom(); draw(); };
   const scrollDay = (e: Event) => { body.scrollLeft = Math.max(0, ((e as CustomEvent).detail - d0()) * zoom() - 60); };
   const syncY = (e: Event) => { const v = (e as CustomEvent).detail; if (Math.abs(body.scrollTop - v) > 1) body.scrollTop = v; };
 
@@ -254,13 +258,14 @@ export const Gantt = () => {
   onMount(() => {
     ro.observe(body);
     addEventListener("mousemove", move); addEventListener("mouseup", up);
-    document.addEventListener("gantt-fit", fitAll); document.addEventListener("gantt-scroll", scrollDay); document.addEventListener("chart-scroll", syncY);
+    document.addEventListener("gantt-fit", fitAll); document.addEventListener("gantt-range", range); document.addEventListener("gantt-scroll", scrollDay); document.addEventListener("chart-scroll", syncY);
     const s = out()?.summary;
     if (s) body.scrollLeft = Math.max(0, (s.s - d0() - 2) * zoom());
   });
   onCleanup(() => {
+    setInView(null);
     ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up);
-    document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
+    document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-range", range); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
   });
   createEffect(() => { themeTick(); out(); grid(); sel(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); draw(); });
 
@@ -315,15 +320,33 @@ export const Timeline = () => {
     }
     if (!items().length) { ctx.fillStyle = K.muted; ctx.fillText("Right-click a task and choose Add to Timeline", L + 8, 32); }
     const t = today(); ctx.strokeStyle = "#F2B233"; ctx.beginPath(); ctx.moveTo(px(t), 18); ctx.lineTo(px(t), 46); ctx.stroke();
+    if (s.status_day) { ctx.strokeStyle = "#2E9D57"; ctx.setLineDash([3, 2]); ctx.beginPath(); ctx.moveTo(px(s.status_day), 18); ctx.lineTo(px(s.status_day), 46); ctx.stroke(); ctx.setLineDash([]); }
+    // Zoom box: the part of the project shown in the Gantt chart.
+    const v = inView();
+    if (v) {
+      const x1 = Math.max(L - 4, px(v[0])), x2 = Math.min(R + 4, px(v[1]));
+      ctx.fillStyle = "rgba(11,92,173,.08)"; ctx.fillRect(x1, 18, x2 - x1, 28);
+      ctx.strokeStyle = K.blue; ctx.lineWidth = 1.5; ctx.strokeRect(x1 + 0.5, 18.5, x2 - x1 - 1, 27); ctx.lineWidth = 1;
+      ctx.fillStyle = K.blue; ctx.fillRect(x1 - 2, 26, 4, 12); ctx.fillRect(x2 - 2, 26, 4, 12);
+    }
   };
   const ro = new ResizeObserver(() => setW(cv.parentElement!.clientWidth));
   onMount(() => { ro.observe(cv.parentElement!); document.addEventListener("tl-redraw", draw); });
   onCleanup(() => { ro.disconnect(); document.removeEventListener("tl-redraw", draw); });
-  createEffect(() => { themeTick(); items(); w(); timeline(); out(); draw(); });
-  const click = (e: MouseEvent) => {
-    const s = out()?.summary; if (!s) return;
-    const L = 76, R = w() - 76, d = s.s + (e.offsetX - L) / (R - L) * (Math.max(s.f, s.s + 1) - s.s);
-    document.dispatchEvent(new CustomEvent("gantt-scroll", { detail: d - 7 }));
+  createEffect(() => { themeTick(); items(); w(); timeline(); out(); inView(); draw(); });
+  // Drag the box to scroll, drag an edge to zoom, click outside it to jump there, double-click for the whole project.
+  const geo = () => { const s = out()!.summary, L = 76, R = w() - 76, a = s.s, b = Math.max(s.f, a + 1); return { L, R, day: (x: number) => a + (x - L) / (R - L) * (b - a), px: (d: number) => L + (d - a) / (b - a) * (R - L) }; };
+  const part = (x: number) => { const v = inView(); if (!v || !out()) return ""; const g = geo(), x1 = g.px(v[0]), x2 = g.px(v[1]); return Math.abs(x - x1) < 6 ? "l" : Math.abs(x - x2) < 6 ? "r" : x > x1 && x < x2 ? "m" : ""; };
+  const send = (a: number, b: number) => document.dispatchEvent(new CustomEvent("gantt-range", { detail: [a, b] }));
+  const down = (e: MouseEvent) => {
+    const v = inView(); if (!out() || !v || e.button !== 0) return;
+    const g = geo(), k = part(e.offsetX), x0 = e.clientX, [a0, b0] = v, per = (g.day(1) - g.day(0));
+    if (!k) { const d = g.day(e.offsetX), half = (b0 - a0) / 2; return send(d - half, d + half); }
+    const mv = (m: MouseEvent) => { const dd = (m.clientX - x0) * per; if (k === "m") send(a0 + dd, b0 + dd); else if (k === "l") send(Math.min(a0 + dd, b0 - 2), b0); else send(a0, Math.max(b0 + dd, a0 + 2)); };
+    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); };
+    addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
-  return <div class="tlwrap"><canvas ref={cv} onClick={click} onContextMenu={e => openMenu(e, [{ label: "Hide Timeline", run: C.timelineBar }])} /></div>;
+  return <div class="tlwrap" title="Drag the box to scroll the Gantt chart, drag its edges to zoom, double-click for the whole project">
+    <canvas ref={cv} onMouseDown={down} onMouseMove={e => { cv.style.cursor = { l: "ew-resize", r: "ew-resize", m: "grab", "": "pointer" }[part(e.offsetX)]!; }} onDblClick={() => document.dispatchEvent(new CustomEvent("gantt-fit"))}
+      onContextMenu={e => openMenu(e, [{ label: "Show Entire Project", run: () => document.dispatchEvent(new CustomEvent("gantt-fit")) }, { label: "Hide Timeline", run: C.timelineBar }])} /></div>;
 };

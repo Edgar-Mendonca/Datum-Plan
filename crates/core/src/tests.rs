@@ -561,3 +561,19 @@ fn delete_custom_field_removes_values() {
     op(&mut doc, Op::DeleteField { key: "text1".into() }).unwrap();
     assert!(doc.p.fields.is_empty() && doc.p.tasks[0].custom.is_empty());
 }
+
+#[test]
+fn excel_export_keeps_cell_formatting() {
+    let mut doc = Doc::new(plan(&[(2, ""), (3, "1")]));
+    let u = doc.p.tasks[0].uid;
+    op(&mut doc, Op::Style { cells: vec![(u, "name".into(), "b;c:#C0392B;f:#FFF2CC;n:Georgia".into())] }).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2));
+    let f = std::env::temp_dir().join(format!("dp-style-{}.xlsx", std::process::id()));
+    crate::io::table::write_xlsx(&c, &["name".into(), "dur".into()], &f).unwrap();
+    // The styles part of the workbook carries the colours and font (checked with unzip where available).
+    if let Ok(out) = std::process::Command::new("unzip").arg("-p").arg(&f).arg("xl/styles.xml").output() {
+        let x = String::from_utf8_lossy(&out.stdout);
+        if !x.is_empty() { assert!(x.contains("FFC0392B") && x.contains("FFFFF2CC") && x.contains("Georgia"), "{x}"); }
+    }
+    let _ = std::fs::remove_file(f);
+}

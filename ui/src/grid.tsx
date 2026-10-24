@@ -7,6 +7,7 @@ import { grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, set
 import { C } from "./cmds";
 import * as D from "./dialogs";
 import * as F from "./fmt";
+import { parseTsv, transpose, series, clip } from "./cells";
 import { Icon } from "./ui";
 
 export const RH = 20;
@@ -104,6 +105,7 @@ export const Grid = (p: { width?: number }) => {
       return out;
     },
     set: list => act({ Style: { cells: list.map(([id, v]) => { const [u, key] = id.split("|"); return [+u, key, v]; }) } }),
+    paste: (what, tr) => pasteSpecial(what, tr),
   };
   onMount(() => { ro.observe(box); document.addEventListener("grid-scroll", sync); F.setTarget(fmtTarget); });
   onCleanup(() => { ro.disconnect(); document.removeEventListener("grid-scroll", sync); if (F.target() === fmtTarget) F.setTarget(null); });
@@ -152,31 +154,28 @@ export const Grid = (p: { width?: number }) => {
   };
   const fillDrag = (e: MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
+    let ctrl = e.ctrlKey;
+    addEventListener("keydown", k => { if (k.key === "Control") ctrl = true; }, { once: true });
     const g = norm(ranges()[ranges().length - 1]);
     const mv = (m: MouseEvent) => setFillTo(Math.max(g.r1, cellAt(m)[0]));
     const up = async () => {
       removeEventListener("mousemove", mv); removeEventListener("mouseup", up);
       const to = fillTo(); setFillTo(null);
       if (to === null || to <= g.r1) return;
-      await fill(g, to);
+      await fill(g, to, ctrl);
     };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
-  /** Copies the range's rows down to row `to`, repeating them (a single number counts up). */
-  const fill = async (g: Range, to: number) => {
+  /** Fills the rows below the range down to row `to`: series as in Excel (1, 2, 3; Phase 1, 2; dates), Ctrl copies. */
+  const fill = async (g: Range, to: number, copy = false) => {
     const out: [number, string, string][] = [];
-    const h = g.r1 - g.r0 + 1;
-    for (let r = g.r1 + 1; r <= to; r++) {
-      const target = rows()[r];
-      if (!target || target.uid <= 0) continue;
-      for (let c = g.c0; c <= g.c1; c++) {
-        const col = grid().cols[c];
-        if (!col.edit) continue;
-        const src = rows()[g.r0 + ((r - g.r1 - 1) % h)].cells[c];
-        const n = num(src);
-        const series = h === 1 && col.kind !== "Text" && col.key !== "name" && ["Num", "Int", "Cost"].includes(col.kind) && !isNaN(n);
-        out.push([target.uid, col.key, series ? String(n + (r - g.r1)) : src]);
-      }
+    for (let c = g.c0; c <= g.c1; c++) {
+      const col = grid().cols[c];
+      if (!col?.edit) continue;
+      const src = Array.from({ length: g.r1 - g.r0 + 1 }, (_, i) => rows()[g.r0 + i]?.cells[c] ?? "");
+      // Durations, links and resources copy (as MS Project does); numbers, text, dates and IDs continue a series.
+      const ser = ["Num", "Int", "Cost", "Pct", "Text", "Date", "Fin"].includes(col.kind) && !["preds", "succs", "res"].includes(col.key);
+      for (let r = g.r1 + 1; r <= to; r++) { const target = rows()[r]; if (target && target.uid > 0) out.push([target.uid, col.key, series(src, r - g.r1, copy || !ser)]); }
     }
     if (out.length) await act({ Cells: { cells: out } });
     setRanges([{ ...g, r1: to }]);
@@ -221,30 +220,32 @@ export const Grid = (p: { width?: number }) => {
     const text = rangeText();
     e.clipboardData?.setData("text/plain", text);
     lastCopy = { text, rows: wholeRows() };
+    const g = norm(ranges()[ranges().length - 1] ?? { r0: cur().row, c0: cur().col, r1: cur().row, c1: cur().col });
+    clip.text = text; clip.styles = Array.from({ length: g.r1 - g.r0 + 1 }, (_, i) => Array.from({ length: g.c1 - g.c0 + 1 }, (_, j) => { const x = rows()[g.r0 + i], k = grid().cols[g.c0 + j]?.key ?? ""; return [x?.style?.["*"], x?.style?.[k]].filter(Boolean).join(";"); }));
     if (wholeRows()) { if (cut) C.cut(); else C.copy(); }
     else if (cut) clear();
-  };
-  const parseTsv = (t: string): string[][] => {
-    const out: string[][] = [[]];
-    let cell = "", q = false;
-    for (let i = 0; i < t.length; i++) {
-      const ch = t[i];
-      if (q) { if (ch === '"' && t[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
-      else if (ch === '"' && cell === "") q = true;
-      else if (ch === "\t") { out[out.length - 1].push(cell); cell = ""; }
-      else if (ch === "\n" || ch === "\r") { if (ch === "\r" && t[i + 1] === "\n") i++; out[out.length - 1].push(cell); cell = ""; out.push([]); }
-      else cell += ch;
-    }
-    out[out.length - 1].push(cell);
-    while (out.length > 1 && out[out.length - 1].every(x => !x)) out.pop();
-    return out;
   };
   const onPaste = async (e: ClipboardEvent) => {
     if (edit()) return;
     e.preventDefault();
     const text = e.clipboardData?.getData("text/plain") ?? "";
     if (lastCopy.rows && text === lastCopy.text) return C.paste();
-    const m = parseTsv(text);
+    await pasteMatrix(parseTsv(text));
+  };
+  /** Paste Special: values, formats or both, optionally transposed (rows become columns). */
+  const pasteSpecial = async (what: "all" | "values" | "formats", tr: boolean) => {
+    const text = clip.text || (await navigator.clipboard?.readText().catch(() => "")) || "";
+    if (!text) return toast("Copy some cells first.");
+    let m = parseTsv(text), st = clip.text === text ? clip.styles : [];
+    if (tr) { m = transpose(m); st = st.length ? transpose(st) : st; }
+    if (what !== "formats") await pasteMatrix(m);
+    if (what !== "values" && st.length) {
+      const g = norm(ranges()[ranges().length - 1] ?? { r0: cur().row, c0: cur().col, r1: cur().row, c1: cur().col }), out: [number, string, string][] = [];
+      st.forEach((line, i) => line.forEach((v, j) => { const x = rows()[g.r0 + i], k = grid().cols[g.c0 + j]?.key; if (x && x.uid > 0 && k) out.push([x.uid, k, v]); }));
+      if (out.length) await act({ Style: { cells: out } });
+    }
+  };
+  const pasteMatrix = async (m: string[][]) => {
     const g = norm(ranges()[ranges().length - 1] ?? { r0: cur().row, c0: cur().col, r1: cur().row, c1: cur().col });
     const out: [number, string, string][] = [];
     const extra: [string, string][][] = [];
@@ -295,6 +296,7 @@ export const Grid = (p: { width?: number }) => {
       case "Escape": return setRanges([{ r0: row, c0: col, r1: row, c1: col }]);
     }
     const k = e.key.toLowerCase();
+    if (ctrl && e.altKey && k === "v") { e.preventDefault(); return D.pasteSpecial(); }
     if (ctrl && !e.shiftKey && (k === "b" || k === "i" || k === "u")) { e.preventDefault(); return F.toggle(k); }
     if (ctrl && k === "a") { e.preventDefault(); setRanges([{ r0: 0, c0: 0, r1: rows().length - 1, c1: ncols() - 1 }]); return; }
     if (ctrl && k === "d" && last) { e.preventDefault(); const n = norm(last); return n.r1 > n.r0 ? fill({ ...n, r1: n.r0 }, n.r1) : undefined; }
@@ -308,7 +310,7 @@ export const Grid = (p: { width?: number }) => {
     if (!inRange(r, Math.max(0, c))) pick(r, Math.max(0, c));
     const k = cur().row;
     openMenu(e, [
-      { label: "Cut", icon: "cut", run: () => document.execCommand("cut"), keys: "Ctrl+X" }, { label: "Copy", icon: "copy", run: () => document.execCommand("copy"), keys: "Ctrl+C" }, { label: "Paste", icon: "paste", run: () => toast("Press Ctrl+V to paste."), keys: "Ctrl+V" },
+      { label: "Cut", icon: "cut", run: () => document.execCommand("cut"), keys: "Ctrl+X" }, { label: "Copy", icon: "copy", run: () => document.execCommand("copy"), keys: "Ctrl+C" }, { label: "Paste", icon: "paste", run: () => toast("Press Ctrl+V to paste."), keys: "Ctrl+V" }, { label: "Paste Special…", icon: "paste", run: () => D.pasteSpecial(), keys: "Ctrl+Alt+V" },
       { label: "Clear Contents", icon: "clear", run: clear, keys: "Delete" }, "-",
       { label: "Rename Task", icon: "rename", run: () => { const nc = grid().cols.findIndex(x => x.key === "name"); if (nc >= 0) startEdit(k, nc); }, keys: "F2" },
       { label: "Insert Task", icon: "task", run: () => C.newTask(), keys: "Insert" }, { label: "Insert Milestone", icon: "ms", run: () => C.newTask(true) }, { label: "Delete Task", icon: "del", run: C.del, keys: "Ctrl+−" }, "-",

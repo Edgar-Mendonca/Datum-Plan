@@ -1,6 +1,6 @@
 # Datum Plan 0.3.6: print every view, a complete Network Diagram, timeline zoom, finishing touches
 
-Status: **draft, waiting for the user's OK** (questions in section 4).
+Status: **answered and built as 0.3.6.** Not done, moved to 0.3.7: merging the two grids into one component, the full icon redraw, network layout by WBS.
 
 ## 1. User feedback on 0.3.5 (screenshots, 24 Oct 2026)
 1. Task tab, Font group: the fill-colour icon is wrong. There is no font choice (Aptos, Times New Roman…, depending on the user).

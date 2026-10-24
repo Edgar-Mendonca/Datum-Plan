@@ -131,6 +131,32 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Setup opens as a page from the sidebar", !!(await p.$(".setuppage .setup")));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);
 
+  // 0.3.6: every view prints: exact pages for Gantt, Network, Calendar and tables; reports as a flowing document.
+  const noPages = [];
+  for (const v of ["Gantt", "Network", "Calendar", "Resources", "Task Usage", "Res. Usage", "Team", "Dashboard", "Progress", "S-Curves", "Builder"]) {
+    if (!(await p.$(`.side button[title="${v}"]`))) continue;
+    await p.click(`.side button[title="${v}"]`); await p.waitForTimeout(300);
+    await p.click(".tabs .file"); await p.waitForTimeout(100); await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(700);
+    const n = await p.evaluate(() => document.querySelectorAll(".pprev .ppage, .pprev .pflow").length);
+    if (!n) noPages.push(v);
+    await p.click(".bs aside .back"); await p.waitForTimeout(150);
+  }
+  check("every view gives print pages", noPages.length === 0, noPages.join(", "));
+  await p.click('.side button[title="Network"]'); await p.waitForTimeout(400);
+  check("Network Diagram has a legend and link labels explained", (await p.textContent(".netleg")).includes("Start-to-Start") && (await p.$$(".net .nbox")).length > 3);
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(400);
+  check("timeline shows the zoom box", await p.evaluate(() => !!document.querySelector(".tlwrap canvas")));
+
+  // 0.3.6: Help tab links and glossary; font list.
+  await p.click(".tabs > button:text-is('Help')"); await p.waitForTimeout(150);
+  check("Help tab has GitHub, Releases and Report an Issue", (await p.$$eval(".ribbon .rb span", s => s.map(x => x.textContent))).filter(t => ["GitHub", "Releases", "Report an Issue", "Glossary", "Getting Started"].includes(t)).length === 5);
+  await p.click(".ribbon button[title*='FS, SS']"); await p.waitForTimeout(200);
+  await p.fill(".dlg .find", "start-to-start"); await p.waitForTimeout(100);
+  check("Glossary explains link types", (await p.textContent(".dlg .gloss")).includes("Start-to-Start"));
+  await p.keyboard.press("Escape");
+  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  check("Font list on the Task tab", (await p.$$eval(".ffam option", o => o.map(x => x.textContent))).includes("Times New Roman"));
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

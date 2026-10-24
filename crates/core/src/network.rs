@@ -7,7 +7,7 @@ use serde::Serialize;
 pub struct Node { pub uid: u32, pub col: usize, pub row: usize }
 
 #[derive(Serialize)]
-pub struct NetLink { pub from: u32, pub to: u32, pub kind: crate::model::LinkType, pub crit: bool }
+pub struct NetLink { pub from: u32, pub to: u32, pub kind: crate::model::LinkType, pub crit: bool, pub driving: bool, pub lag: String }
 
 #[derive(Serialize)]
 pub struct Net { pub nodes: Vec<Node>, pub links: Vec<NetLink>, pub cols: usize, pub rows: usize }
@@ -18,9 +18,9 @@ pub fn layout(c: &Calc, rows: &[usize]) -> Net {
     let n = p.tasks.len();
     let mut shown = vec![false; n];
     rows.iter().for_each(|&i| shown[i] = true);
-    let edges: Vec<&crate::sched::Edge> = s.edges.iter().filter(|e| shown[e.p] && shown[e.s]).collect();
+    let edges: Vec<(usize, &crate::sched::Edge)> = s.edges.iter().enumerate().filter(|(_, e)| shown[e.p] && shown[e.s]).collect();
     let mut preds: Vec<Vec<usize>> = vec![vec![]; n];
-    edges.iter().filter(|e| e.p != e.s).for_each(|e| preds[e.s].push(e.p));
+    edges.iter().filter(|(_, e)| e.p != e.s).for_each(|(_, e)| preds[e.s].push(e.p));
     // Columns: longest chain of predecessors, in schedule order so predecessors come first.
     let mut order: Vec<usize> = rows.to_vec();
     order.sort_by_key(|&i| (s.es[i], s.ef[i], i));
@@ -58,7 +58,10 @@ pub fn layout(c: &Calc, rows: &[usize]) -> Net {
     }
     Net {
         nodes: rows.iter().map(|&i| Node { uid: p.tasks[i].uid, col: col[i], row: row[i] }).collect(),
-        links: edges.iter().map(|e| NetLink { from: p.tasks[e.p].uid, to: p.tasks[e.s].uid, kind: e.kind, crit: s.critical(p, e.p) && s.critical(p, e.s) }).collect(),
+        links: edges.iter().map(|&(k, e)| NetLink {
+            from: p.tasks[e.p].uid, to: p.tasks[e.s].uid, kind: e.kind, crit: s.critical(p, e.p) && s.critical(p, e.s),
+            driving: s.drive.get(k).copied().unwrap_or(false), lag: if e.lag == 0 { String::new() } else { crate::parse::fmt_lag(e.lag, p.day_min) },
+        }).collect(),
         cols, rows: height,
     }
 }

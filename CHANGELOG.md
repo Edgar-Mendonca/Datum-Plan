@@ -1,6 +1,53 @@
 # Changelog
 
-## 0.3.5 — 2026-10-24
+## 0.3.6 — 2026-10-24
+
+Every view prints properly, a complete Network Diagram, MS Project's timeline zoom box, and the finishing touches from your 0.3.5 review.
+
+**Task tab, fonts and formatting**
+- Font list (Aptos, Calibri, Arial, Segoe UI, Tahoma, Verdana, Times New Roman, Cambria, Georgia, Garamond, Consolas, IBM Plex Sans), each shown in its own font. Used in the sheet, Sheets tabs and printouts.
+- Fill colour has a proper paint-bucket icon.
+- The Task tab now also holds the everyday commands: % complete, Mark on Track, Link, Unlink, Indent, Outdent, Find, Scroll to Task, Fill Down.
+- Paste is a split button: Paste, Paste Special… (Ctrl+Alt+V), Paste Values, Paste Formatting, Transpose.
+
+**Fill and paste, like Excel (task sheet and Sheets)**
+- The fill handle continues series:
+  - numbers 1, 2, 3 (or any step);
+  - "Phase 1" → "Phase 2";
+  - dates continue their step.
+- Hold Ctrl to copy instead. Durations, links and resources are copied, as MS Project does.
+- Paste Special: all, values only or formats only, and transpose.
+- Sheets tabs: a fill handle (down or right), Ctrl+D, Ctrl+R and Freeze Panes.
+
+**Timeline zoom box**
+- The timeline shows the part of the plan in view as a box: drag it to scroll, drag its edges to zoom, double-click for the whole project. It follows the Gantt chart. The status date is marked.
+
+**Network Diagram**
+- Box styles with a legend:
+  - critical (red), not critical (blue);
+  - milestone (hexagon), summary (dashed);
+  - completed (crossed), in progress (slashed), late (amber corner).
+- Compact, Standard and Detailed boxes. Detailed adds total float, % complete and resources.
+- Driving links in bold. Link labels for SS, FF, SF and lags, with a tooltip on every link.
+- Zoom, Fit, 100%, Ctrl+wheel, drag to pan, and a mini-map for large networks.
+- Highlight path: select a task to light up its whole chain of predecessors and successors.
+
+**Printing for every view (File › Print)**
+- Network Diagram: across pages, with its legend. It stays readable and continues on more pages.
+- Calendar: a month per page with task bars.
+- Resource Sheet, Task Usage, Resource Usage, Team Planner and Sheets tabs: as tables, split down and across with the first column repeated. Sheets print with their cell formatting.
+- Dashboard, Progress, S-curves, Report Builder, reports and other pages: as shown, with your header and footer on every page and page numbers.
+- All views use the same paper, margins, scaling, headers, footers and logos.
+
+**Excel export keeps formatting**
+- Bold, italic, underline, strikethrough, font, size, colours, fill and alignment are kept for tasks and sheet cells, along with sheet column widths.
+
+**Help and links**
+- File › Home: "Check again" shows a spinner, then the time it checked. GitHub, Releases and Report an Issue buttons open the project's pages.
+- Help tab: Getting Started (for people who know MS Project, P6 or Excel), a Glossary (FS, SS, FF, SF, lag, float, critical and longest path, baseline, status date, SPI/CPI…), GitHub links.
+- The link type in the details pane reads "FS · Finish-to-Start", with a ? button that opens the Glossary.
+
+ 2026-10-24
 
 A cleaner ribbon, Setup in the sidebar, full control of columns, and printing that includes every column.
 
