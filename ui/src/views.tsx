@@ -14,6 +14,9 @@ const Page = (p: { title: string; tools?: JSX.Element; children: JSX.Element }) 
 export const NET_BOX: Record<string, { W: number; H: number }> = { compact: { W: 160, H: 50 }, standard: { W: 214, H: 72 }, detailed: { W: 230, H: 104 } };
 const NET_COLS = ["code", "name", "dur", "start", "finish", "pct", "tf", "res"];
 export const [netBox, setNetBox] = createSignal<"compact" | "standard" | "detailed">("standard");
+/** Show summary tasks as boxes, and lay the network out in WBS bands (one per top-level phase). */
+export const [netSums, setNetSums] = createSignal(false), [netWbs, setNetWbs] = createSignal(false);
+export const loadNet = () => call<Net>("network", { q: query(), summaries: netSums() || netWbs(), wbs: netWbs() });
 /** One network box: shape by type, outline by criticality, cross or slash for progress, amber flag when late. */
 export const NetBox = (p: { v: (k: string) => string; r: Row; W: number; H: number; mode: string; sel?: boolean; dim?: boolean }) => {
   const done = p.r.bar.pct >= 100, prog = p.r.bar.pct > 0 && !done, sum = p.r.kind !== "task", W = p.W, H = p.H;
@@ -22,12 +25,14 @@ export const NetBox = (p: { v: (k: string) => string; r: Row; W: number; H: numb
     : [[["Start", p.v("start")], ["ID", String(p.r.id)]], [["Finish", p.v("finish")], ["Dur", p.v("dur")]], ...(p.mode === "detailed" ? [[["Float", p.v("tf")], ["Done", p.v("pct")]] as [string, string][], [["Res", p.v("res")], ["", ""]] as [string, string][]] : [])];
   return (
     <g class="nbox" classList={{ crit: p.r.crit, ms: p.r.ms, sum, sel: p.sel, dim: p.dim }}>
-      {p.r.ms ? <path class="shape" d={`M12 0H${W - 12}L${W} ${H / 2}L${W - 12} ${H}H12L0 ${H / 2}z`} /> : <rect class="shape" width={W} height={H} rx={sum ? 0 : 3} />}
+      {p.r.ms ? <path class="shape" d={`M12 0H${W - 12}L${W} ${H / 2}L${W - 12} ${H}H12L0 ${H / 2}z`} />
+        : sum ? <path class="shape" d={`M8 0H${W}L${W - 8} ${H}H0z`} /> : <rect class="shape" width={W} height={H} rx="6" />}
+      {!p.r.ms && !sum && <rect class="accent" x="0" y="0" width="4" height={H} rx="2" />}
       <Show when={done || prog}><path d={done ? `M4 4L${W - 4} ${H - 4}M${W - 4} 4L4 ${H - 4}` : `M4 ${H - 4}L${W - 4} 4`} class="x" /></Show>
       {p.r.late && <path d={`M${W - 14} 0H${W}V14z`} fill="#F2B233"><title>Late: finishes after its baseline or deadline</title></path>}
-      <text x="8" y="16" class="t">{p.v("code") ? `${p.v("code")} ` : ""}{name}<title>{p.r.name}</title></text>
+      <text x="12" y="16" class="t">{p.v("code") ? `${p.v("code")} ` : ""}{name}<title>{p.r.name}</title></text>
       <line x1="0" x2={W} y1="23" y2="23" />
-      <For each={lines}>{(l, i) => <><text x="8" y={39 + i() * 16}>{l[0][0] && `${l[0][0]}: `}{l[0][1]}</text><text x={W * 0.6} y={39 + i() * 16}>{l[1][0] && `${l[1][0]}: `}{l[1][1]}</text></>}</For>
+      <For each={lines}>{(l, i) => <><text x="12" y={39 + i() * 16}>{l[0][0] && `${l[0][0]}: `}{l[0][1]}</text><text x={W * 0.6} y={39 + i() * 16}>{l[1][0] && `${l[1][0]}: `}{l[1][1]}</text></>}</For>
     </g>
   );
 };
@@ -56,6 +61,7 @@ export const NetDraw = (p: { n: Net; rows: Map<number, Row>; mode: string; chain
   const at = createMemo(() => new Map(p.n.nodes.map(n => [n.uid, pos(n)])));
   const v = (r: Row) => (k: string) => r.cells[NET_COLS.indexOf(k)] ?? "";
   return <>
+    <For each={p.n.bands ?? []}>{(b, i) => <g class="nband"><rect x="6" y={20 + b.row * GY() - 12} width={netSize(p.n, p.mode)[0] - 12} height={b.rows * GY() - 6} rx="8" classList={{ alt: i() % 2 === 1 }} /><text x="16" y={20 + b.row * GY() - 1}>{b.name}</text></g>}</For>
     <defs><For each={[["ar", "#6E7F99"], ["arc", "#D64545"]]}>{([id, c]) => <marker id={id} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill={c} /></marker>}</For></defs>
     <For each={p.n.links}>{l => {
       const a = at().get(l.from), b = at().get(l.to);
@@ -81,7 +87,7 @@ export { NET_COLS };
 
 export const Network = () => {
   const [scale, setScale] = createSignal(1), [legend, setLegend] = createSignal(true), [path, setPath] = createSignal(true);
-  const [net] = createResource(() => [tick(), JSON.stringify(query())], () => call<Net>("network", { q: query() }));
+  const [net] = createResource(() => [tick(), JSON.stringify(query()), netSums(), netWbs()], loadNet);
   const [data] = createResource(() => [tick(), JSON.stringify(query())], () => call<{ rows: Row[] }>("query", { q: { ...query(), cols: NET_COLS } }));
   const rows = createMemo(() => new Map((data()?.rows ?? []).map(r => [r.uid, r])));
   const box = () => NET_BOX[netBox()], GX = () => box().W + 54, GY = () => box().H + 28;
@@ -110,6 +116,7 @@ export const Network = () => {
     <Page title="Network Diagram" tools={<>
       <span class="muted">{net()?.nodes.length ?? 0} tasks</span>
       <Seg value={netBox()} set={x => setNetBox(x as "standard")} options={[["compact", "Compact"], ["standard", "Standard"], ["detailed", "Detailed"]]} />
+      <Chk label="Summary tasks" value={netSums()} set={setNetSums} /><Chk label="By WBS" value={netWbs()} set={setNetWbs} />
       <Chk label="Highlight path" value={path()} set={setPath} /><Chk label="Legend" value={legend()} set={setLegend} />
       <button class="btn" title="Zoom out" onClick={() => setScale(Math.max(0.2, scale() / 1.25))}>−</button><button class="btn" title="Zoom in" onClick={() => setScale(Math.min(2, scale() * 1.25))}>+</button>
       <button class="btn" onClick={fit}>Fit</button><button class="btn" onClick={() => setScale(1)}>100%</button>

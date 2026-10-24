@@ -221,7 +221,8 @@ tr.link:hover td { background: var(--pale); }
 .chip.crit { border-left-color: var(--crit); }
 .chip.sel { background: var(--sel); }
 .chip.more { background: none; border: 0; color: var(--muted); }
-.netwrap { flex: 1; overflow: auto; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; position: relative; cursor: grab; }
+.netwrap { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 8px; position: relative; cursor: grab;
+  background-color: var(--panel); background-image: radial-gradient(circle, var(--line3) 1px, transparent 1.2px); background-size: 18px 18px; }
 .net .nbox .shape { fill: var(--bg2); stroke: #6E9FE6; stroke-width: 1.4; }
 .net .nbox.crit .shape { fill: var(--err-bg); stroke: var(--crit); }
 .net .nbox.sum .shape { fill: var(--panel2); stroke: var(--muted); stroke-dasharray: 4 3; }
@@ -634,3 +635,20 @@ button.help { width: 15px; height: 15px; border-radius: 50%; border: 1px solid v
 .sfrozen .row:last-child { border-bottom: 2px solid var(--line3); }
 .sheetgrid .c.fz { background: var(--bg2); }
 .fillprev { position: absolute; border: 1px dashed var(--blue); pointer-events: none; z-index: 3; }
+.trkbar { display: flex; gap: 12px; align-items: center; padding: 5px 12px; background: var(--pale); border-bottom: 1px solid var(--line); font-size: 12px; flex-wrap: wrap; }
+.trkbar .warn { color: var(--crit); font-weight: 600; }
+/* 0.3.7: network cards on a whiteboard */
+.net .nbox .shape { fill: var(--bg2); stroke: #7FA6DA; stroke-width: 1.2; }
+.netwrap .net .nbox .shape { filter: drop-shadow(0 1px 2px rgba(12,26,43,.12)); }
+.net .nbox .accent { fill: #2F6FCF; }
+.net .nbox.crit .shape { fill: var(--bg2); stroke: var(--crit); }
+.net .nbox.crit .accent { fill: var(--crit); }
+.net .nbox.sum .shape { fill: var(--panel2); stroke: var(--navy); stroke-width: 1.6; stroke-dasharray: none; }
+.net .nbox.ms .shape { fill: #FFF8E6; stroke: #B7791F; }
+.net .nbox.ms.crit .shape { fill: #FDEDED; stroke: var(--crit); }
+.net .nbox.sel .shape { stroke-width: 2.6; stroke: var(--blue); }
+.net .nbox text.t { font-weight: 600; fill: var(--text); }
+.nband rect { fill: rgba(11,92,173,.035); stroke: rgba(11,92,173,.18); stroke-dasharray: 4 4; }
+.nband rect.alt { fill: rgba(46,157,87,.035); stroke: rgba(46,157,87,.2); }
+.nband text { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; fill: var(--muted); }
+.fbar .agg { order: 5; }

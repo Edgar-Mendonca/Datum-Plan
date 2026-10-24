@@ -157,6 +157,19 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
   check("Font list on the Task tab", (await p.$$eval(".ffam option", o => o.map(x => x.textContent))).includes("Times New Roman"));
 
+  // 0.3.7: Tracking Gantt is its own view (banner + Tracking table), network WBS bands.
+  await p.click('.side button[title="Tracking"]'); await p.waitForTimeout(400);
+  const trkCols = await p.evaluate(() => window.__calls.filter(c => c[0] === "query").map(c => c[1]?.q?.cols ?? []).filter(c => c.length > 2).pop() ?? []);
+  check("Tracking Gantt explains itself and uses the Tracking table", !!(await p.$(".trkbar")) && trkCols.includes("astart") && trkCols.includes("pct"), JSON.stringify(trkCols));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300);
+  const ganttCols = await p.evaluate(() => window.__calls.filter(c => c[0] === "query").map(c => c[1]?.q?.cols ?? []).filter(c => c.length > 2).pop() ?? []);
+  check("back on the Gantt chart the Entry table returns", !ganttCols.includes("astart") && !(await p.$(".trkbar")), JSON.stringify(ganttCols));
+  await p.click('.side button[title="Network"]'); await p.waitForTimeout(300);
+  await p.click("label.chk:has-text('By WBS') input"); await p.waitForTimeout(300);
+  check("Network by WBS asks the engine for bands", await p.evaluate(() => window.__calls.some(c => c[0] === "network" && c[1]?.wbs === true)));
+  check("Network has the whiteboard canvas", (await p.$eval(".netwrap", e => getComputedStyle(e).backgroundImage)).includes("radial-gradient"));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

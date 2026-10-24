@@ -43,6 +43,11 @@ const GanttView = () => {
   };
   return (
     <div class="ganttview">
+      <Show when={view() === "tracking"}>
+        <div class="trkbar"><b>Tracking Gantt</b><span>Grey bars: the baseline (the plan you saved). Coloured bars: today's dates, solid where done. Labels: % complete.</span>
+          <Show when={!grid().rows.some(r => r.bar.bs !== null)}><span class="warn">No baseline yet, so there is nothing to compare with.</span><button class="btn sm pri" onClick={C.baseline}>Set Baseline</button></Show>
+          <span class="grow" /><button class="btn sm" onClick={() => D.glossary()}>What do these mean?</button></div>
+      </Show>
       <Show when={timeline()}><Timeline /></Show>
       <FormulaBar />
       <div class="gmain">

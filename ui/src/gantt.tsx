@@ -104,7 +104,7 @@ export const Gantt = () => {
   };
 
   const drawBars = () => {
-    const { w, h } = size(), top = body.scrollTop, pd = zoom(), rows = grid().rows, crit = showCrit() || view() === "tracking", base = showBase() || view() === "tracking";
+    const { w, h } = size(), top = body.scrollTop, pd = zoom(), rows = grid().rows, trk = view() === "tracking", crit = showCrit() || trk, base = showBase() || trk;
     const ctx = fit(barsCv, w, h);
     if (pd >= 6) { ctx.fillStyle = K.off; for (let d = d0() + Math.floor(body.scrollLeft / pd); X(d) < w; d++) if (off(d)) ctx.fillRect(X(d), 0, pd, h); }
     const a = Math.floor(top / RH), b = Math.min(rows.length, a + Math.ceil(h / RH) + 1);
@@ -170,7 +170,9 @@ export const Gantt = () => {
           const a1 = X(s), wd = Math.max(X(f) - a1, 2);
           if (n) { ctx.strokeStyle = edge; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(X(segs[n - 1][1]), by + bh / 2); ctx.lineTo(a1, by + bh / 2); ctx.stroke(); ctx.setLineDash([]); }
           ctx.fillStyle = fill; ctx.fillRect(a1, by, wd, bh);
-          ctx.fillStyle = edge; ctx.fillRect(a1, by + bh / 2 - 2, Math.max(0, Math.min(X(f), X(done)) - a1), 4);
+          // Tracking Gantt: the done part solid, the rest light; Gantt: a progress line through the bar.
+          if (trk) { ctx.fillStyle = edge; ctx.fillRect(a1, by, Math.max(0, Math.min(X(f), X(done)) - a1), bh); }
+          else { ctx.fillStyle = edge; ctx.fillRect(a1, by + bh / 2 - 2, Math.max(0, Math.min(X(f), X(done)) - a1), 4); }
           ctx.strokeStyle = edge;
           if (r.manual) { ctx.fillRect(a1, by, 3, bh); ctx.fillRect(a1 + wd - 3, by, 3, bh); } else ctx.strokeRect(a1 + 0.5, by + 0.5, wd - 1, bh - 1);
         });
@@ -180,7 +182,8 @@ export const Gantt = () => {
         ctx.fillStyle = B.dl < B.f ? K.crit : "#2E9D57";
         ctx.beginPath(); ctx.moveTo(dx - 4, y + 1); ctx.lineTo(dx + 4, y + 1); ctx.lineTo(dx, y + 7); ctx.fill(); ctx.fillRect(dx - 0.5, y + 5, 1, 13);
       }
-      if (showLabels() && r.kind !== "group") { ctx.fillStyle = K.text; ctx.fillText(r.ms ? `${fmtDay(B.s)}` : r.res, lx, y + RH / 2); }
+      if (trk && r.kind !== "group") { ctx.fillStyle = K.text; ctx.fillText(r.ms ? `${fmtDay(B.s)}` : `${B.pct}%`, r.ms ? lx : Math.max(lx, X(B.bf ?? B.f) + 6), y + RH / 2); }
+      else if (showLabels() && r.kind !== "group") { ctx.fillStyle = K.text; ctx.fillText(r.ms ? `${fmtDay(B.s)}` : r.res, lx, y + RH / 2); }
       ctx.globalAlpha = 1;
     }
     if (drag) {

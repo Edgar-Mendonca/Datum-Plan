@@ -64,7 +64,7 @@ export interface TaskInfo {
 export interface Usage { buckets: number[]; unit: string; rows: { uid: number; of: number | null; name: string; lvl: number; sum: boolean; total: number; vals: number[]; over: boolean[] }[] }
 export interface Curve { buckets: number[]; planned: number[]; forecast: number[]; actual: number[]; earned: number[] }
 export interface Check { key: string; name: string; about: string; count: number; total: number; value: number; limit: string; pass: boolean; uids: number[] }
-export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean; driving: boolean; lag: string }[]; cols: number; rows: number }
+export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean; driving: boolean; lag: string }[]; cols: number; rows: number; bands?: { name: string; row: number; rows: number }[] }
 export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }
 export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; setupPanel: boolean; theme: string;
   openLast: boolean; startView: string; manualDefault: boolean; weekEnd: number; monthEnd: number; paper: string; landscape: boolean }

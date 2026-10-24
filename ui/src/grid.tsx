@@ -1,19 +1,20 @@
 // The task sheet, built like Excel: one scroller with a sticky header (so columns always line
 // up), frozen ID and name columns, range selection, fill handle, clipboard ranges, a formula bar,
 // AutoFilter buttons and inline header rename.
-import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, untrack, batch, on, JSX } from "solid-js";
+import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, untrack, on, JSX } from "solid-js";
 import { Col, Row } from "./api";
 import { grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
 import { C } from "./cmds";
 import * as D from "./dialogs";
 import * as F from "./fmt";
 import { parseTsv, transpose, series, clip } from "./cells";
+import { Range, norm, createSel, aggregate } from "./selection";
 import { Icon } from "./ui";
 
 export const RH = 20;
 const IDW = 44;
 export const [scrollTop, setScrollTop] = createSignal(0);
-export type Range = { r0: number; c0: number; r1: number; c1: number };
+export type { Range } from "./selection";
 export const [ranges, setRanges] = createSignal<Range[]>([]);
 /** Sum, average and count of the selected numbers, for the status bar. */
 export const [agg, setAgg] = createSignal("");
@@ -37,7 +38,6 @@ const choices = (k: string): string[] | undefined => {
   return undefined;
 };
 const right = (c: Col) => ["Num", "Int", "Cost", "Pct", "Work", "Dur"].includes(c.kind);
-const num = (s: string) => { const v = parseFloat(s.replace(/[^\d.\-]/g, "")); return /\d/.test(s) && !/[a-z]{3,}-/i.test(s) ? v : NaN; };
 export const formulaOf = (key: string) => key.startsWith("c:") ? P().fields.find(f => f.key === key.slice(2))?.formula ?? "" : "";
 
 /** Field picker menu (Insert Column, Group by, Sort by). */
@@ -73,18 +73,16 @@ export const Grid = (p: { width?: number }) => {
   const first = () => Math.max(0, Math.floor(scrollTop() / RH) - 4);
   const visible = createMemo(() => rows().slice(first(), first() + Math.ceil(viewH() / RH) + 10).map((r, j) => [r, first() + j] as [Row, number]));
   const selSet = createMemo(() => new Set(sel()));
-  const inRange = (r: number, c: number) => ranges().some(g => r >= Math.min(g.r0, g.r1) && r <= Math.max(g.r0, g.r1) && c >= Math.min(g.c0, g.c1) && c <= Math.max(g.c0, g.c1));
-  const norm = (g: Range): Range => ({ r0: Math.min(g.r0, g.r1), r1: Math.max(g.r0, g.r1), c0: Math.min(g.c0, g.c1), c1: Math.max(g.c0, g.c1) });
-  const wholeRows = () => ranges().length > 0 && ranges().every(g => norm(g).c0 === 0 && norm(g).c1 === ncols() - 1);
+  // The shared grid engine's selection (also used by the Sheets tabs), kept in the store's signals.
+  const S = createSel(() => [rows().length, ncols()], (r, c) => reveal(r, c), { ranges, setRanges, cur, setCur });
+  const inRange = S.inRange, wholeRows = S.wholeRows;
 
   // Keep the task selection (used by commands and the Gantt) in step with the ranges.
   createEffect(() => {
     const u = new Set<number>();
     ranges().forEach(g => { const n = norm(g); for (let r = n.r0; r <= n.r1; r++) { const x = rows()[r]; if (x && x.uid > 0) u.add(x.uid); } });
     setSel([...u]);
-    const vals: number[] = [];
-    ranges().forEach(g => { const n = norm(g); if ((n.r1 - n.r0 + 1) * (n.c1 - n.c0 + 1) > 1) for (let r = n.r0; r <= Math.min(n.r1, n.r0 + 5000); r++) for (let c = n.c0; c <= n.c1; c++) { const v = num(rows()[r]?.cells[c] ?? ""); if (!isNaN(v)) vals.push(v); } });
-    setAgg(vals.length ? `Sum ${+vals.reduce((a, b) => a + b, 0).toFixed(2)} · Average ${+(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)} · Count ${vals.length}` : "");
+    setAgg(aggregate(S, (r, c) => rows()[r]?.cells[c] ?? ""));
   });
   // Selection from elsewhere (Gantt, network, find) moves the active cell.
   // Runs only when the selection changes (not on a cell click, which would race the sync above and jump back).
@@ -120,16 +118,7 @@ export const Grid = (p: { width?: number }) => {
       else if (l + w > box.scrollLeft + box.clientWidth - 16) box.scrollLeft = l + w - box.clientWidth + 16;
     }
   };
-  /** Moves the active cell; with `extend` the last range grows to it, with `add` a new range starts. */
-  const pick = (row: number, col: number, extend = false, add = false) => {
-    row = Math.max(0, Math.min(rows().length, row));
-    col = Math.max(0, Math.min(ncols() - 1, col));
-    batch(() => {
-      if (extend && ranges().length) setRanges([...ranges().slice(0, -1), { ...ranges()[ranges().length - 1], r1: row, c1: col }]);
-      else { setCur({ row, col }); setRanges([...(add ? ranges() : []), { r0: row, c0: col, r1: row, c1: col }]); }
-    });
-    reveal(row, col);
-  };
+  const pick = S.pick;
   const cellAt = (e: MouseEvent): [number, number] => {
     const b = box.getBoundingClientRect();
     const y = e.clientY - b.top + box.scrollTop - 40, xAbs = e.clientX - b.left;
@@ -333,7 +322,7 @@ export const Grid = (p: { width?: number }) => {
       { label: "Unhide Columns", icon: "cols", off: !hiddenCols().length, sub: [...hiddenCols().map(h => ({ label: fieldName(h), run: () => unhideCol(h) })), "-", { label: "Unhide All", run: () => hiddenCols().forEach(unhideCol) }] },
       { label: "Delete Column", icon: "del", run: () => D.deleteColumn(c.key), off: cols().length < 2 },
       { label: "Columns…", icon: "table", run: () => D.columnsDialog() },
-      { label: "Field Settings…", icon: "table", run: () => D.fieldSettings(k) }, { label: "Custom Fields…", icon: "cols", run: () => D.customFields(c?.key.startsWith("c:") ? c.key.slice(2) : undefined) }, "-",
+      { label: "Field Settings…", icon: "table", run: () => D.fieldSettings(k) }, { label: "Custom Fields…", icon: "fields", run: () => D.customFields(c?.key.startsWith("c:") ? c.key.slice(2) : undefined) }, "-",
       { label: "Sort A to Z", icon: "az", run: () => setSort([[c.key, false]]), on: sort()[0]?.[0] === c.key && !sort()[0][1] }, { label: "Sort Z to A", icon: "za", run: () => setSort([[c.key, true]]), on: sort()[0]?.[0] === c.key && sort()[0][1] },
       { label: "No Sort", icon: "sort", run: () => setSort([]) }, { label: "Group by This Field", icon: "group", run: () => setGroup([c.key]) }, { label: "Filter…", icon: "filter", run: () => autoFilter(e, k) }, "-",
       { label: "Conditional Formatting…", icon: "style", run: () => D.condFormat(c.key) }, { label: "Best Fit", icon: "fit", run: () => bestFit(k) }, { label: `Table: ${table()}`, icon: "table", sub: [{ label: "Tables…", run: () => D.tablesDialog() }] },

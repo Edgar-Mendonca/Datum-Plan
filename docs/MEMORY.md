@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.6** (released 2026-10-24). Earlier: 0.1.0 … 0.3.5 |
+| **Current version** | **0.3.7** (released 2026-10-24). Earlier: 0.1.0 … 0.3.6 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -105,6 +105,7 @@ flowchart LR
 | `ui/src/charts.tsx` | Chart.js wrapper in a Prism style (Okabe-Ito colours, crosshair, status marker, PNG save). |
 | `ui/src/sheets.tsx` | Sheet tabs (A1 grid, formula bar, formats, clipboard). |
 | `ui/src/print.tsx` | File › Print (every view; `pkind()` = gantt / net / cal / table / flow; `Frame` draws paper + header/footer/legend; `vdata`/`vpages`/`ViewPage` for network tiles, calendar months and tables; `FlowDoc` prints report pages in a table whose thead/tfoot repeat, with page numbers from `@page` margin boxes): `PageSetup` (saved in `project.ui.page`), `layout()` makes one strip (table columns + chart) and cuts it into page windows (across then down), `Strip` draws a window, `Sheet` draws one page as SVG (table + Gantt + legend) with header/footer codes and logos; `printNow` renders `#printroot` and sets `@page` size, then `window.print()`. `PAPERS`. |
+| `ui/src/selection.ts` | The grid engine's selection, shared by the task sheet and Sheets: `createSel` (ranges, active cell, pick/drag/rows/cols/all/each), `aggregate` (Sum/Average/Count). |
 | `ui/src/cells.ts` | Shared by both grids: `parseTsv`/`toTsv`/`transpose`, `series` (Excel fill rules), `clip` (last copy: values + styles for Paste Special). |
 | `ui/src/fmt.ts` | Text formatting: style strings `b;i;u;s;c:#hex;f:#hex;z:12;a:c`, `css()`, the focused grid registers a `Target` (get/set selected cells), toggle/setProp/clear, Format Painter. |
 | `ui/src/tools.tsx` | Update Progress page, Relationship Diagram (SVG), Report Builder (sections, `TEMPLATES`, saved in `ui.reports`). |
@@ -185,6 +186,9 @@ flowchart LR
 | 0.3.2 | Recurring tasks are a summary with SNET-constrained occurrences | Same as MS Project; occurrences stay ordinary tasks. |
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
+| 0.3.7 | Templates carry `people`/`assign`/`costs`; Work is titled "Man-hours" | New users see loading, cost and man-hours immediately (the user's Cairn did this). |
+| 0.3.7 | One grid *engine* (selection, clipboard, fill, formatting, keys) with two renderers (task outline vs A1 sheet) | The views differ in what a row is; sharing the behaviour removes the duplication without forcing one layout on both. |
+| 0.3.7 | Network: `layout_with(rows, sums, wbs)`; bands returned with the layout | WBS banding and summary boxes come from the engine, so screen and print agree. |
 | 0.3.6 | Other views print through one `Frame`; reports print as flowing documents (thead/tfoot repeat the header/footer, `@page @bottom-center` numbers pages) | Exact pages where the layout is ours (Gantt, network, calendar, tables); flowing pages where it is HTML. |
 | 0.3.6 | Fill series follow Excel (numbers, text+number, dates by step; Ctrl copies) but durations, links and resources copy as in MS Project | Matches what users of both tools expect. |
 | 0.3.6 | `open_url` only opens github.com/Edgar-Mendonca/Datum-Plan links | The window cannot be used to open arbitrary URLs. |
@@ -214,7 +218,8 @@ flowchart LR
 | 0.3.4 | Print & format | Print page with Page Setup (ranges, paper, scaling, margins, header/footer codes, logos, legend, columns), vector pages; Font/Alignment formatting for task sheet and Sheets; Options page rebuilt | ✅ |
 | 0.3.5 | Ribbon, Setup, columns, print ([PLAN-0.3.5.md](PLAN-0.3.5.md)) | Task/Schedule/Progress tabs, ribbon fits without scrolling, Setup page in the sidebar, nested menus, hide/unhide/delete columns + Columns dialog, print every column (strip layout) | ✅ |
 | 0.3.6 | Print every view, Network, timeline zoom ([PLAN-0.3.6.md](PLAN-0.3.6.md)) | Font family + fill icon, everyday commands on the Task tab, Check-again feedback + GitHub/Releases/Issues links, Getting Started + Glossary, timeline zoom box, Network Diagram (legend, box styles, zoom, pan, mini-map, path), page layout for every view, xlsx formatting, series fill + Paste Special in both grids, Sheets freeze panes | ✅ |
-| 0.3.7 | One grid, icons | Merge the task sheet and Sheets into one grid component; redraw all icons in one style; Network layout by WBS | ⬜ |
+| 0.3.7 | Tracking, templates, network, one grid | Real Tracking Gantt (baseline bars, Tracking table, banner); templates with people/8h/assignments/man-hours/costs; whiteboard network with summaries and WBS bands; shared grid engine (`selection.ts` + `cells.ts` + `fmt.ts`); icon set | ✅ |
+| 0.3.8 | Next | To be agreed with the user | ⬜ |
 | 0.4.0 | Risk & resources | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -342,13 +347,17 @@ flowchart LR
 - Built: font family (`n:` style), bucket icon, Task tab Schedule/Editing groups, ribbon folds per group from the right, `open_url`, Check-again spinner + time, Getting Started + Glossary dialogs, link-type labels in details, timeline zoom box (`inView`, `gantt-range`), Network (`NetBox`, `NetDraw`, `NetLegend`, Compact/Standard/Detailed, driving links, labels, zoom/fit/pan, mini-map, path highlight; engine `NetLink.driving/lag`), printing for every view, xlsx styles (`styled`, `task_style`), `cells.ts` series + Paste Special in both grids, Sheets fill handle, Ctrl+D/R, freeze panes. 23 engine tests; UI tests for every view's print pages, network legend, Help links, glossary, fonts.
 - Not done: the task sheet and Sheets are still two components (they now share `cells.ts` and `fmt.ts`); full icon redraw; network layout by WBS. Moved to 0.3.7.
 
+### 2026-10-24: Session 6, continued (0.3.7)
+- User: Gantt and Tracking looked identical; wanted Cairn's whiteboard network look and cards; man-hours with 8-hour shifts and resources in the templates; finish the 0.3.7 carry-overs.
+- Built: Tracking Gantt (view switches table, baseline grey bars, solid done part, % labels, banner + Set Baseline), templates with people/assignments/costs and Man-hours title, `network::layout_with` (summaries, WBS bands) + whiteboard cards, icon redraw, `selection.ts` shared by both grids (Sheets: multi-range, row/column selection, aggregates). 25 engine tests; UI tests for Tracking, WBS network, whiteboard.
+
 ---
 
 ## 5. Known limits and next steps
 - Windows SmartScreen warns on the first install (unsigned). Updates after that are silent.
 - XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).
-- Not built yet: one grid component for the task sheet and Sheets (0.3.7), full icon redraw, network layout by WBS, the reference's C2 scenario tests. Report pages print as flowing HTML (no per-page preview).
+- Not built yet: the reference's C2 scenario tests. The task sheet and Sheets share one engine but keep two renderers. Report pages print as flowing HTML (no per-page preview).
 - Templates have no resources or costs, so cost reports are empty until resources are added.
 - Actual progress history is modelled linearly from actual start to the current % (snapshots are stored but not yet used as history points).
 - Fill handle and paste were checked by code review and in the harness, not with a real clipboard in the app.

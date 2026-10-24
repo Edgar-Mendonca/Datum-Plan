@@ -577,3 +577,34 @@ fn excel_export_keeps_cell_formatting() {
     }
     let _ = std::fs::remove_file(f);
 }
+
+#[test]
+fn templates_come_with_people_man_hours_and_costs() {
+    for t in crate::templates::TEMPLATES {
+        let p = crate::templates::build(t, d(2026, 11, 2));
+        let c = Calc::new(&p, "%d-%b-%y", d(2026, 11, 2));
+        let num = |i: usize, k: &str| if let crate::formula::F::Num(n) = c.val(i, k) { n } else { 0.0 };
+        let work: f64 = (0..p.tasks.len()).filter(|&i| !c.s.summary[i]).map(|i| num(i, "work")).sum();
+        let cost: f64 = (0..p.tasks.len()).filter(|&i| !c.s.summary[i]).map(|i| num(i, "cost")).sum();
+        assert!(p.resources.len() >= 4 && work > 100.0 && cost > 1000.0, "{}: {} people, {work} h, {cost}", t.name, p.resources.len());
+        assert_eq!(p.titles.get("work").map(String::as_str), Some("Man-hours"));
+    }
+}
+
+#[test]
+fn network_by_wbs_bands_and_summaries() {
+    let p = crate::templates::build(&crate::templates::TEMPLATES[0], d(2026, 11, 2));
+    let c = Calc::new(&p, "%d-%b-%y", d(2026, 11, 2));
+    let tasks: Vec<usize> = (0..p.tasks.len()).filter(|&i| !c.s.summary[i]).collect();
+    let sums: Vec<usize> = (0..p.tasks.len()).filter(|&i| c.s.summary[i]).collect();
+    let n = crate::network::layout_with(&c, &tasks, &sums, true);
+    assert_eq!(n.bands.len(), sums.len(), "one band per phase");
+    assert_eq!(n.nodes.len(), p.tasks.len());
+    // Every task sits inside its phase's band, below the phase's own box.
+    for (b, &sm) in n.bands.iter().zip(&sums) {
+        assert_eq!(b.name, p.tasks[sm].name);
+        let at = |i: usize| n.nodes.iter().find(|x| x.uid == p.tasks[i].uid).unwrap().row;
+        assert_eq!(at(sm), b.row);
+        (sm + 1..p.tasks.len()).take_while(|&k| p.tasks[k].level > 0).for_each(|k| assert!(at(k) > b.row && at(k) < b.row + b.rows));
+    }
+}

@@ -1,5 +1,5 @@
 // Commands shared by the ribbon, menus, keys and Tell Me.
-import { act, call, cur, curRow, grid, loadOut, out, refresh, selRows, setBackstage, setCollapsed, setCur, setLevel, setOut, setSel, setView, setZoom, toast, zoom, View, setDetails, details, setTimeline, timeline, setupOpen, setSetupOpen, openDialog, collapsed } from "./store";
+import { table, useTable, act, call, cur, curRow, grid, loadOut, out, refresh, selRows, setBackstage, setCollapsed, setCur, setLevel, setOut, setSel, setView, setZoom, toast, zoom, View, setDetails, details, setTimeline, timeline, setupOpen, setSetupOpen, openDialog, collapsed } from "./store";
 import { Out } from "./api";
 import * as D from "./dialogs";
 
@@ -48,7 +48,13 @@ export const C = {
   recurring: () => D.recurring(insertAt()),
   globalChange: () => D.globalChange(uids()),
   scrollTo: () => { const r = curRow(); if (r) document.dispatchEvent(new CustomEvent("gantt-scroll", { detail: r.bar.s })); },
-  view: (v: View) => { setBackstage(null); setView(v); },
+  view: (v: View) => {
+    setBackstage(null);
+    // The Tracking Gantt shows the Tracking table, as in MS Project; leaving it brings the Entry table back.
+    if (v === "tracking" && table() !== "Tracking") useTable("Tracking");
+    else if (v !== "tracking" && table() === "Tracking" && ["gantt", "timeline"].includes(v)) useTable("Entry");
+    setView(v);
+  },
   zoomIn: () => setZoom(Math.min(400, zoom() * 1.5)),
   zoomOut: () => setZoom(Math.max(0.6, zoom() / 1.5)),
   fit: () => document.dispatchEvent(new CustomEvent("gantt-fit")),

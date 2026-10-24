@@ -6,7 +6,7 @@ import { Portal } from "solid-js/web";
 import { createStore } from "solid-js/store";
 import { Row, Net, Usage, SheetOut, fmtDay, iso, dateDay, dayDate } from "./api";
 import { grid, out, opts, P, act, cols, zoom, call, view, toast, query, tick } from "./store";
-import { NetDraw, netSize, netBox, setNetBox, NET_COLS, RES_COLS, fmtB } from "./views";
+import { NetDraw, netSize, netBox, setNetBox, netSums, netWbs, loadNet, NET_COLS, RES_COLS, fmtB } from "./views";
 import { sheetK } from "./sheets";
 import { gstyle, floorU, nextU, label, off, Unit } from "./gantt";
 import * as F from "./fmt";
@@ -214,8 +214,8 @@ const geom = createMemo(() => {
 type PT = { head: string[]; w: number[]; right: boolean[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
 const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
-const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox()] as const), async ([v]) => {
-  if (v === "network") { const [n, g] = await Promise.all([call<Net>("network", { q: query() }), call<{ rows: Row[] }>("query", { q: { ...query(), cols: NET_COLS } })]); return { net: n, rows: new Map((g?.rows ?? []).map(r => [r.uid, r])) }; }
+const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox(), netSums(), netWbs()] as const), async ([v]) => {
+  if (v === "network") { const [n, g] = await Promise.all([loadNet(), call<{ rows: Row[] }>("query", { q: { ...query(), cols: NET_COLS } })]); return { net: n, rows: new Map((g?.rows ?? []).map(r => [r.uid, r])) }; }
   if (v === "calendar") return {};
   const t: PT = { head: [], w: [], right: [], rows: [] };
   if (v === "ressheet") {

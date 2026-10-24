@@ -1,6 +1,35 @@
 # Changelog
 
-## 0.3.6 — 2026-10-24
+## 0.3.7 — 2026-10-24
+
+A real Tracking Gantt, templates with a team and man-hours, a whiteboard-style Network Diagram, one grid engine and a consistent icon set.
+
+**Tracking Gantt (now different from the Gantt chart)**
+- Grey bars show the baseline under each task. Coloured bars show the current dates, solid where the work is done and light where it remains. Each bar shows its % complete.
+- Opens with the Tracking table: actual start, actual finish, % complete, physical %, actual and remaining duration, actual cost and work. Going back to the Gantt chart brings the Entry table back.
+- A banner explains what you see. When there is no baseline yet, it says so and offers Set Baseline.
+
+**Templates with people, man-hours and costs**
+- Every template has its team, on 8-hour days on the Standard calendar, with groups, hourly rates and available units: project managers, engineers, crews, technicians…
+- Tasks are assigned to people (e.g. "Design Engineer[200%]"), so man-hours, costs, resource usage, the histogram and overallocation work from the first click.
+- Purchases and contracts have fixed costs.
+- New Man-hours (Work) and Cost columns in the task sheet.
+
+**Network Diagram**
+- A dotted whiteboard canvas on screen; printing stays on white paper.
+- Cards: white with a coloured edge (red for critical, blue otherwise) and a soft shadow. Milestones are amber hexagons; summaries are slanted boxes.
+- Summary tasks: show the phases as boxes over their first task.
+- By WBS: each top-level phase in its own band, with its name.
+
+**One grid engine for the task sheet and Sheets**
+- Both views now share one engine for selection, keyboard, clipboard, fill and formatting.
+- Sheets gains several ranges with Ctrl+click, whole columns from the column letters, whole rows from the row numbers, Shift to extend, and Sum, Average and Count in the formula bar.
+- Clear, number formats and text formatting act on every selected range.
+
+**Icons**
+- Redrawn in one line style: the progress, scroll, track, baseline, split, manual, auto, inactive and style icons, and a new Custom Fields icon.
+
+ 2026-10-24
 
 Every view prints properly, a complete Network Diagram, MS Project's timeline zoom box, and the finishing touches from your 0.3.5 review.
 

@@ -430,12 +430,13 @@ fn checks(st: State<St>, limits: check::Limits) -> Vec<check::Check> {
 
 /// Network Diagram of the tasks the query shows (summaries left out).
 #[tauri::command]
-fn network(st: State<St>, q: Query) -> network::Net {
+fn network(st: State<St>, q: Query, summaries: Option<bool>, wbs: Option<bool>) -> network::Net {
     let a = st.0.lock().unwrap();
     let c = calc(&a);
     let g = c.grid(&q);
-    let rows: Vec<usize> = g.rows.iter().filter(|r| r.kind == "task").filter_map(|r| c.p.idx(r.uid)).collect();
-    network::layout(&c, &rows)
+    let pick = |k: &str| g.rows.iter().filter(|r| r.kind == k).filter_map(|r| c.p.idx(r.uid)).collect::<Vec<usize>>();
+    let sums = if summaries.unwrap_or(false) { pick("summary") } else { vec![] };
+    network::layout_with(&c, &pick("task"), &sums, wbs.unwrap_or(false))
 }
 
 /// Compares the open plan with another plan file.
