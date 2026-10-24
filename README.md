@@ -4,7 +4,7 @@
 
 # Datum Plan
 
-**Project scheduling for Windows: the strengths of Microsoft Project and Primavera P6 in one small, fast app.**
+**Project Plan, Schedule, Report, Analyse: in one small, fast app.**
 
 [Download for Windows](https://github.com/Edgar-Mendonca/Datum-Plan/releases/latest) · [What's new](CHANGELOG.md) · [Project memory and roadmap](docs/MEMORY.md)
 
