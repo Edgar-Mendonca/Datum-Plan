@@ -20,19 +20,22 @@
 
 ## What it does today
 
-- **MS Project look, P6 power:** ribbon, task sheet and Gantt chart, a timeline strip, and a Primavera-style details pane (General, Relationships, Resources, Notes).
-- **Scheduling to the minute:** calendars with working hours and holidays, task calendars, all constraints and deadlines, manual and inactive tasks, FS/SS/FF/SF links with lags in hours or days, and critical path with total and free float.
-- **Progress:** status date, actual dates, remaining duration, Mark on Track, baselines with variance and baseline bars.
-- **Resources:** a resource sheet (work, material and cost), assignments, costs, and workload with overallocation.
-- **Views:** Gantt, Task List, Calendar, Resources, Workload, Dashboard (S-curve) and weekly/monthly Reports.
-- **Exchange:** import and export MS Project XML, Primavera P6 XER, Excel and CSV.
-- **Speed:** any column you need, cut/copy/paste (also from Excel), fill down, find/replace, Ctrl+K command search, Ctrl+J quick add, and recovery of unsaved work.
-- **Updates:** one-click updates from GitHub Releases, with SHA-256 checksum verification.
+- **MS Project look, P6 power:** ribbon with dropdowns, Tell Me command search, a dense task sheet with about 450 fields, an interactive Gantt chart with a timeline, and a Primavera-style details pane (General, Status, Resources, Predecessors, Successors, Codes, Steps, Notebook, Expenses, Documents, Custom Fields, Risks, Notes).
+- **Scheduling to the minute:** calendars with working hours and holidays, task and resource calendars, all constraints and deadlines, manual and inactive tasks, elapsed durations, percentage lags, splits, task types, P6 activity types, retained logic or progress override, longest path, float paths, schedule from finish, and resource leveling.
+- **Custom fields and formulas:** aliases, lookup tables, MS Project formulas, rollups and graphical indicators; P6 activity codes.
+- **Views:** Gantt, Tracking Gantt, Network Diagram, Calendar, Task Usage, Resource Sheet, Resource Usage, Resource Graph, Team Planner, Dashboard, Reports, Check Schedule, Risks and Portfolio. Tables, filters, groups and sorts like MS Project.
+- **Progress and cost control:** status date, Update Project, 11 baselines, snapshots, rate tables, fixed costs and expenses, any currency, and earned value (SPI, CPI, EAC, TCPI).
+- **Reports:** dashboard with S-curves, weekly and monthly progress reports, earned value, cost and cash flow, milestones, DCMA 14-point schedule check, compare projects; your logo on every page; print to PDF or save as HTML.
+- **Exchange:** MS Project XML, Primavera P6 XER and P6 XML, MPX, Excel, CSV, iCalendar, HTML and JSON.
+- **New projects:** a skippable Project Setup panel (details, Activity IDs, calendar, currency, WBS, resources, branding) and six templates.
+- **Local and private:** plans are `.dplan` files on your computer. The only network call is the update check. One-click updates with SHA-256 verification, with an optional beta channel.
 
-<img src="docs/images/details.png" alt="Details pane with relationships" width="100%">
+<img src="docs/images/network.png" alt="Network Diagram" width="100%">
+<img src="docs/images/details.png" alt="Task Information" width="100%">
 <img src="docs/images/dashboard.png" alt="Dashboard" width="100%">
+<img src="docs/images/checks.png" alt="Check Schedule" width="100%">
 
-See the [changelog](CHANGELOG.md) for details and the [roadmap](docs/MEMORY.md#roadmap) for what comes next.
+See the [changelog](CHANGELOG.md) for details and the [roadmap](docs/MEMORY.md#3-roadmap) for what comes next.
 
 ## Build from source
 
@@ -40,7 +43,7 @@ You need Rust (stable) and Node.js 20+. On Linux, also install `libwebkit2gtk-4.
 
 ```bash
 npm ci
-npm run dev        # run the app
+npm run dev        # build the UI (Vite + SolidJS) and run the app
 cargo test         # engine tests
 npm run build      # Windows installer (on Windows)
 ```

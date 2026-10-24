@@ -12,7 +12,7 @@ User preferences:
 - Ship in small numbered releases (0.1.0, 0.1.1, …). Every release appears in the in-app updater.
 - A light theme with blue accents (since 0.1.1), MS Project layout, P6 power features, Cairn-style sidebar.
 - Keep code compact and match the surrounding style. Engine logic belongs in `crates/core` (pure Rust, unit-tested), not in the UI.
-- The UI is 7 script files in `ui-src/` sharing one global scope, joined by tsc in the order set in `ui-src/tsconfig.json`.
+- The UI is SolidJS + Vite in `ui/src/*.tsx` (built to `ui/dist`). State lives in `ui/src/store.ts`; the engine computes all values, the window only shows them.
 
 Checks before pushing:
 - `cargo clippy --workspace --all-targets -- -D warnings`

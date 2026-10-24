@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.3.0 — 2026-10-24
+
+The biggest release so far: the MS Project look and feel with Primavera P6 power, rebuilt from the engine up. Everything planned for 0.2.1 to 0.5.2 is in this one release, including the network diagram.
+
+**A new window (SolidJS)**
+- MS Project ribbon: Task, Resource, Report, Project, View and the Gantt Chart Tools Format tab, with dropdown and split buttons (Gantt Chart, Filter, Group by, Sort, Tables, Outline, Timescale, Baseline, Export).
+- Tell Me (Ctrl+K or Alt+Q) searches every command. Quick access toolbar with Save, Undo, Redo and Print.
+- Task sheet at MS Project density (20 px rows): drag columns to reorder, resize, double-click a heading for Field Settings, right-click a heading to insert, hide, sort, group or filter, and an "Add New Column" picker over about 450 fields.
+- Inline editing with choice lists, Tab/Enter navigation, type-to-edit, a blank row for new tasks, indicators for late and manual tasks, and a task mode column.
+- Status bar with filter state, task count, project figures, view shortcuts and a zoom slider.
+
+**Fields, custom fields and formulas**
+- About 450 task fields: general, schedule, progress, work and cost, 11 baselines (start, finish, duration, cost, work), variances, earned value, and custom Text1–30, Number1–20, Flag1–20, Date, Cost, Duration, Start, Finish and Outline Code fields.
+- Custom Fields dialog: rename (alias), lookup tables with restricted values and defaults, MS Project formulas (`IIf`, `Switch`, `ProjDateDiff`, `DateAdd`, 34 functions, `[Field]` references), summary rollups and graphical indicators.
+- Activity codes (P6) with values and colours: show as columns, group and filter by them.
+- Inspect shows every field of a task.
+
+**Views**
+- Gantt Chart and Tracking Gantt with critical path, slack, late bars, baseline 0–10, splits, deadlines, today and status lines, bar labels, and drag to move, resize, link or set progress.
+- MS Project timeline across the top.
+- Network Diagram (MS Project style boxes, critical links, progress crosses, milestones).
+- Calendar, Task Usage, Resource Usage (days, weeks, months, quarters; work or cost; overallocation in red), Resource Sheet, Resource Graph and Team Planner.
+- Tables: Entry, Schedule, Tracking, Cost, Work, Variance, Earned Value, Summary, Baseline and P6 Activities, plus your own.
+- Filters (20 built-in plus your own, with and/or conditions, related summaries and highlight mode), groups (several levels, with rolled-up dates and costs) and sorts that keep the outline. Outline levels, expand and collapse, project summary task.
+
+**Primavera P6 power**
+- Details pane with P6 tabs: General, Status, Resources, Predecessors, Successors (with driving links and float), Codes, Steps (weighted physical %), Notebook, Expenses, WPs & Docs, Custom Fields, Risks and Notes.
+- Activity types (task dependent, resource dependent, level of effort, start/finish milestone, WBS summary) and % complete types (duration, units, physical).
+- Schedule options: retained logic or progress override, critical by float or longest path, lag calendar, float paths, schedule from finish, open ends.
+- Elapsed durations (`3ed`), percentage lags (`2SS+50%`), task splits, priorities and leveling delay.
+- Resource leveling (standard, priority or ID order, within slack) and clearing it.
+- Task types: fixed duration, fixed units and fixed work, effort driven.
+
+**Costs, progress and earned value**
+- Cost rate tables A–E with dated rate changes, overtime rates, availability periods and resource calendars.
+- Fixed costs and expenses with start, prorated or end accrual.
+- 11 baselines, Update Project, Store Period Performance (snapshots) and trend reports.
+- Earned value per task and project: PV, EV, AC, SV, CV, SPI, CPI, BAC, EAC, VAC, TCPI.
+- Currencies: any ISO 4217 code, chosen per plan, with symbol and decimals.
+
+**Reports and dashboards**
+- Dashboard: complete, finish, cost, SPI, CPI, late and critical counts, cost S-curve (planned, forecast, earned, actual), progress and cost by phase, milestones and late tasks.
+- Report gallery: Project Overview, Weekly/Monthly Progress, Earned Value, Cost Overview with cash flow, Work Overview, Critical Tasks, Late & Slipping, Milestones, Upcoming Tasks and Trend.
+- Your logo and company name on every report. Print or save as PDF, save as HTML, save the Gantt chart as a PNG picture.
+- Check Schedule: the DCMA 14-point assessment plus P6 checks (long lags, SF links, soft constraints, manual tasks, summary links, out of sequence, missed deadlines), with your thresholds; click a check to filter its tasks.
+- Risk register with probability × impact scoring, a heat map and links to tasks.
+- Compare Projects: added, removed and changed tasks against another .dplan, XML or XER file.
+- Portfolio: every plan in a folder with its dates, progress, cost, SPI, CPI and late tasks.
+
+**New projects**
+- Project Setup panel on the right (skippable): project details, Activity ID numbering (A1000, step 10), calendar, currency, WBS typed as an indented list, resources, and branding.
+- Change Working Time, Project Information (with statistics), Resource Information (costs, availability, notes) and Task Information dialogs.
+
+**Files**
+- New export formats: Primavera P6 XML (.pmxml), MPX, iCalendar (.ics), HTML and JSON. Excel and CSV export the current table's columns.
+- JSON import. Plans from 0.2 open as before; a copy is kept as `name.backup.dplan` before they are upgraded.
+
+**Updates**
+- Opt in to beta versions in Options.
+
+**Under the hood**
+- The engine computes every field, filter, group and sort, so the window stays fast with large plans (20,000 tasks schedule and display in about 0.15 seconds).
+- 18 engine tests, including earned value, formulas, leveling, splits, schedule from finish and the schedule checks.
+
+**Coming in 0.3.1:** report designer, Page Setup, bar and text style editors, recurring tasks, Relationship diagram, global change, an EPS tree, and custom fields and codes in XER and MS Project XML.
+
 ## 0.2.0 — 2026-10-24
 
 A big step towards MS Project and Primavera P6: real calendars, constraints, resources, progress tracking, baselines, file exchange, and a lot more control in the grid and the Gantt chart.

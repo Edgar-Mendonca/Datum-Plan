@@ -184,7 +184,7 @@ export const Grid = (p: { width?: number }) => {
             draggable onDragStart={() => setDrag(k())} onDragEnd={() => setDrag(null)} onDragOver={e => e.preventDefault()}
             onDrop={() => { const f = drag(); if (f === null || f === k()) return; const v = [...cols()]; const [m] = v.splice(f, 1); v.splice(k(), 0, m); saveCols(v); setDrag(null); }}
             onContextMenu={e => headMenu(e, k())} onDblClick={() => D.fieldSettings(k())}>
-            <span>{c.name}</span><button class="dd" onClick={e => headMenu(e, k())}><Icon n="chev" /></button><i class="rz" onMouseDown={e => resize(e, k())} />
+            <span>{c.key === "mode" && widths()[k()] < 50 ? "" : c.name}</span><button class="dd" onClick={e => headMenu(e, k())}><Icon n="chev" /></button><i class="rz" onMouseDown={e => resize(e, k())} />
           </div>
         )}</For>
         <div class="hc add" onClick={e => openMenu(e, fieldMenu(key => saveCols([...cols(), [key, 90]])))}>Add New Column ▾</div>

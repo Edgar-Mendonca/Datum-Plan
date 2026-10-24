@@ -6,11 +6,11 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.2.0** (released 2026-10-24). Earlier: 0.1.0, 0.1.1 |
+| **Current version** | **0.3.0** (released 2026-10-24). Earlier: 0.1.0, 0.1.1, 0.2.0 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
-| **Stack** | Rust (engine + shell), Tauri 2, WebView2, strict TypeScript UI with no framework, plain CSS |
-| **Code size** | About 5,400 lines: core 3,000 (with 311 lines of tests), shell 520, UI 1,550 TypeScript + CSS |
-| **Installer** | NSIS `.exe`, per-user install. 1.7 MB (0.1.0), 1.8 MB (0.1.1); 2.4 MB (0.2.0) |
+| **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS |
+| **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
+| **Installer** | NSIS `.exe`, per-user install. 1.7 MB (0.1.0), 1.8 MB (0.1.1), 2.4 MB (0.2.0); UI bundle 200 kB JS (61 kB gzip) in 0.3.0 |
 | **Reference repos** | `Edgar-Mendonca/Cairn` (the earlier web planner: feature and template reference) · `Compressor-Engineering-Suite` (the Home/update pattern) |
 
 ---
@@ -19,42 +19,43 @@
 
 ```mermaid
 flowchart LR
-  subgraph UI["Window (WebView2) · ui/ + ui-src/*.ts"]
-    Ribbon[Ribbon: Task · Resource · Project · View · Help<br/>Ctrl+K search · Ctrl+J quick add]
-    Grid[grid.ts: any-field columns, editing,<br/>clipboard, find, row menus]
-    Gantt[gantt.ts: canvas Gantt + timeline strip,<br/>drag move/resize/progress/link]
-    Det[details.ts: P6-style pane<br/>General · Relationships · Resources · Notes]
-    Pages[pages.ts: Calendar · Resource Sheet ·<br/>Workload · Dashboard · Reports]
-    Dlg[dialogs.ts: Project Info · Working Time ·<br/>Options · Import mapping · Palette]
-    Home[main.ts: backstage Home/Templates/<br/>Import/Export/Updates]
+  subgraph UI["Window (WebView2) · ui/src/*.tsx → Vite → ui/dist"]
+    Store[store.ts: signals for plan, view, table, filter,<br/>group, sort, selection; act(op) and refresh()]
+    Rib[ribbon.tsx: tabs, dropdowns, QAT, Tell Me]
+    Grid[grid.tsx: virtual rows, inline edit,<br/>header menus, column drag/resize]
+    Gantt[gantt.tsx: canvas Gantt + timeline]
+    Det[details.tsx: P6 tabs]
+    Views[views.tsx: network, calendar, usage, resources,<br/>graph, team, risks, checks, portfolio]
+    Rep[reports.tsx: dashboard, report gallery, charts]
+    Dlg[dialogs.tsx: information, calendars, custom fields,<br/>filters, groups, sorts, baselines, import, compare]
+    BS[backstage.tsx + setup.tsx: File, Options, updates,<br/>Project Setup panel]
   end
   subgraph Shell["src-tauri (Rust)"]
-    Cmd[main.rs commands: state · apply · history · new_plan · templates<br/>open · save · import · import_table · export · copy · paste<br/>detail · workload · options · autosave · recovery]
-    Upd[update.rs: GitHub API · SHA-256 · silent install]
+    Cmd[main.rs: state · apply · history · query · resources · field_list<br/>task_info · usage · curve · checks · network · compare · workspace<br/>open · save · import · export · save_file · pick_logo · options · recovery]
+    Upd[update.rs: GitHub API · beta channel · SHA-256 · silent install]
   end
-  subgraph Core["crates/core (pure Rust, 13 tests)"]
+  subgraph Core["crates/core (pure Rust, 18 tests)"]
     Doc[doc.rs: Op enum · undo/redo · .dplan]
-    Sched[sched.rs: multi-calendar CPM · constraints<br/>progress · summary links · ALAP]
-    Cal[cal.rs: minute-precision working time]
-    Load[load.rs: work · cost · overallocation · workload]
-    View[view.rs: rows with ~35 fields · resource rows · details]
-    IO[io/: mspdi.rs · xer.rs · table.rs csv+xlsx · xml.rs]
-    Model[model.rs: Project · Task · Calendar · Resource<br/>format 2 + migration from 0.1 files]
+    Sched[sched.rs: CPM · calendars · progress · LOE<br/>longest path · float paths · from finish]
+    Level[level.rs: resource leveling]
+    Fields[fields.rs: Calc · ~450 fields · EV · custom fields<br/>formulas · indicators · filter tests]
+    Query[query.rs: filter · group · sort · outline → Grid + bars]
+    Rep2[report.rs · check.rs · network.rs<br/>usage · curves · compare · DCMA · layout]
+    Form[formula.rs: MSP formula language]
+    Load[load.rs: timephased work and cost]
+    IO[io/: mspdi · xer · table · formats pmxml/mpx/ics/html/json]
   end
   UI -- "invoke(cmd, args)" --> Cmd
-  Cmd -- "View JSON (camelCase)" --> UI
-  Home -- check_update / install_update --> Upd
-  Cmd --> Doc & View & IO & Load
-  Doc --> Sched --> Cal
-  View --> Sched & Load
-  IO --> Model
+  Cmd --> Doc & Query & Rep2 & IO
+  Doc --> Sched
+  Query --> Fields --> Sched & Load & Form
+  Rep2 --> Fields
 ```
 
 **Rules:**
-- The UI never calculates dates.
-- Every edit is an `Op` sent to Rust. The core applies it to a copy, normalises it, schedules it, and keeps it only if it is valid (so cycles are refused).
-- The core then returns a complete `View`, formatted in the user's date format.
-- Dashboard and report numbers are computed in the UI from that `View`.
+- The UI never calculates dates, values or filters. Every edit is an `Op`; the core applies it to a copy, normalises, schedules and keeps it only if valid.
+- After an edit `apply` returns `Out` (project settings without tasks + `Summary`). The window then calls `query(Query)` for the rows it shows; `Calc` (fields.rs) evaluates any field for any row.
+- Window-only settings (saved filters, extra tables) live in `Project.ui`; the Entry table's columns in `Project.columns`.
 
 ### Time model (since 0.2)
 - **Instants** are minutes since 1970-01-01 00:00 local time. **Durations and lags** are working minutes.
@@ -75,28 +76,30 @@ flowchart LR
 
 | Path | What it does |
 | --- | --- |
-| `crates/core/src/model.rs` | Model and file format 2: Task (dur, unit, preds, pct, constraint/cdate, deadline, manual/mstart, inactive, cal, actuals, res, bl, timeline, code, notes), Calendar, Exception, Resource, Project (status, day_min, manual_default, calendars, resources, columns). `from_json` upgrades 0.1 files. `normalize()` repairs data. |
-| `crates/core/src/cal.rs` | `WorkCal`: `add`, `sub`, `between`, `next_start`, `prev_end`, `in_or_end`, `end_of`, `day_minutes`. `at(date)` and `date_of(t)` convert between dates and instants. |
-| `crates/core/src/sched.rs` | CPM as described above. Returns `Sched` with es/ef/ls/lf/tf/ff, summary/off flags, calendar index per task, the calendars, and start/finish. |
-| `crates/core/src/load.rs` | Work and cost per task and resource, daily load, overallocation, and `workload(weekly)` buckets for the Workload view. |
-| `crates/core/src/parse.rs` | Durations with units, dates (display format first), predecessors `3SS+4h`, resources `Name[50%]`, constraint names, and the quick-add sentence parser. |
-| `crates/core/src/doc.rs` | Ops: Insert, InsertRows, QuickAdd, Paste, Delete, Set (about 20 fields), Indent, Outdent, Move, Link, LinkSet, Unlink, MarkOnTrack, Baseline, Project, CalPut, CalDelete, ResInsert, ResSet, ResDelete, Columns, Batch. Also undo/redo (200 steps), `copy()`, and `set()` (reused by the importers). |
-| `crates/core/src/view.rs` | `build(p, date_fmt, today)` → View (rows, resources, calendars, columns, totals, baseline finish and variance). `detail(uid)` → relationships and assignments. |
-| `crates/core/src/templates.rs` | 5 starter plans as `level\|name\|duration\|preds` lines. |
-| `crates/core/src/io/` | `mod.rs` dispatches by extension. `mspdi.rs`: MS Project XML in/out (calendars with exceptions, tasks, links, baselines, resources, assignments). `xer.rs`: P6 XER in/out (CALENDAR with clndr_data parser/writer, PROJECT, PROJWBS ↔ summaries, TASK, TASKPRED, RSRC, TASKRSRC). `table.rs`: CSV/XLSX read with header guessing + mapping → plan; CSV/XLSX write. `xml.rs`: a 60-line XML reader. |
-| `crates/core/src/tests.rs` | 13 tests: calendar arithmetic, CPM/float, link types and hour lags, constraints/deadline/ALAP, task calendars, summary links, inactive tasks, progress/status date, edits/undo/move/paste, resources/costs/baseline/workload, calendar ops/project settings, quick add/rows, parsing, templates + 0.1 migration, and round trips for XML, XER, CSV and XLSX. |
-| `src-tauri/src/main.rs` | App state (Doc, options, clipboard, pending import table), file dialogs, recent files, options.json, recovery.dplan in AppData (written by the `autosave` command on a UI timer; offered at start-up; cleared on save or a clean quit). |
-| `src-tauri/src/update.rs` | Updater (unchanged since 0.1.0). |
-| `ui/index.html` | Layout: title bar with search, ribbon, sidebar, timeline strip, grid, Gantt, details pane, page area, backstage, and the icon sprite (about 55 icons). |
-| `ui/styles.css` | Light theme tokens, all components, print styles. |
-| `ui-src/base.ts` | Types, the field catalogue `FIELDS`, state, core calls, dates, `dialog()` (resolves before removing, so inputs stay readable), `menu()`, toast. |
-| `ui-src/grid.ts` | Columns from `V.columns`, render/virtualise, edit with choice lists, column picker/header menu/resize, row commands, clipboard (DOM copy/cut/paste events; internal marker plus TSV for Excel), find/replace, row menu. |
-| `ui-src/gantt.ts` | Timescale (day/week/month/quarter/year), bars (baseline, manual, inactive, deadline, progress), links, today and status lines, timeline strip, zoom, drag modes `move`/`size`/`pct`/`link`. |
-| `ui-src/details.ts` | The details pane and its tabs; edits go through `Set` and `LinkSet` ops. |
-| `ui-src/pages.ts` | Calendar, Resource Sheet (inline editing), Workload heat table, Dashboard (KPIs, S-curve with baseline, phases, milestones, late), Reports (weekly/monthly, look-ahead, slipped vs baseline, print). |
-| `ui-src/dialogs.ts` | Project Information, Change Working Time, Options, Import (mapping), Export, Ctrl+K palette, Ctrl+J quick add, shortcuts. |
-| `ui-src/main.ts` | `CMDS` registry (ribbon, palette and keys share it), `RIBBON` layout, view sidebar, backstage, files, updates, keyboard, start-up (recovery prompt, autosave timer). |
-| `ui-src/tsconfig.json` | Joins the 7 files in order into `ui/main.js` (no modules, one global scope). |
+| `crates/core/src/model.rs` | File format 3: Task (also task type, effort, activity/% complete type, physical %, elapsed, splits, leveling delay, priority, fixed cost + accrual, custom values, codes, steps, notebook, expenses, docs, 11 baselines in `bls`), Resource (rate tables, availability, calendar, overtime), Project (setup fields, logo, currency, Activity ID numbering, `SchedOpts`, custom field defs, codes, risks, snapshots, `ui`). Migrates formats 1–2. |
+| `crates/core/src/cal.rs` | `WorkCal`: working-time arithmetic. |
+| `crates/core/src/sched.rs` | CPM → `Sched` (es/ef/ls/lf/tf/ff, edges with driving flags, longest path, float paths, calendars incl. a 24-hour one). `critical()` follows the options. |
+| `crates/core/src/level.rs` | Serial leveling with a fixed rank; `clear`. |
+| `crates/core/src/load.rs` | Work/cost per task, assignment and day (rate tables, accruals, actuals); `buckets(day/week/month/quarter)`. |
+| `crates/core/src/formula.rs` | MS Project formula parser and evaluator (34 functions). |
+| `crates/core/src/fields.rs` | Field registry (`task_fields`, `resource_fields`), `Calc` (one scheduled plan + loads + EV), `val/text/format/icon`, filter `test`, `money`. |
+| `crates/core/src/query.rs` | `Query` → `Grid` (cols, rows with cells, icons, bar geometry), built-in filters, `Summary`. |
+| `crates/core/src/report.rs` | Usage grids, cost/EV curves, compare. |
+| `crates/core/src/check.rs` | DCMA 14 + P6 checks with limits. |
+| `crates/core/src/network.rs` | Network Diagram layout (columns by logic, rows by predecessor position). |
+| `crates/core/src/parse.rs` | Durations (also elapsed), dates, predecessors (also % lags), resources, quick add. |
+| `crates/core/src/doc.rs` | Ops (see the enum: edits, Level, Split, Interim, UpdateProject, Snapshot, ProjectSet, FieldDef, CodeDef, Risk, TaskList, ResJson, Ui, Baseline n, …), undo/redo, `.dplan`. |
+| `crates/core/src/io/` | `mspdi.rs`, `xer.rs`, `table.rs` (CSV/XLSX in with mapping; out with chosen columns), `formats.rs` (JSON, HTML, ICS, MPX, PMXML out), `xml.rs`. JSON/dplan import. |
+| `crates/core/examples/` | `bench.rs` (20k-task timing), `dump.rs` (JSON fixtures for UI tests). |
+| `crates/core/src/tests.rs` | 18 tests. |
+| `src-tauri/src/main.rs` | Commands listed in the diagram; options (date format, autosave, beta, default currency, company, logo, workspace, setup panel); backups of format < 3 files; recovery. |
+| `src-tauri/src/update.rs` | Updater; `check(beta)` reads `/releases` when beta is on; versions compare with pre-release tags. |
+| `ui/index.html` | Root and the icon sprite (about 65 icons). `ui/public/logo.svg`. |
+| `ui/src/api.ts` | Types matching the Rust JSON, `invoke`, date and money helpers. |
+| `ui/src/store.ts` | Global signals, built-in tables, `query()`, `refresh()`, `act()`, menus, dialogs, toast. |
+| `ui/src/cmds.ts` | Command functions `C` and the `ALL_CMDS` list for Tell Me. |
+| `ui/src/ui.tsx` | Icon, Menu (with submenus), Dialog, Tabs, form helpers. |
+| `ui/src/grid.tsx`, `gantt.tsx`, `details.tsx`, `views.tsx`, `reports.tsx`, `dialogs.tsx`, `ribbon.tsx`, `backstage.tsx`, `setup.tsx`, `main.tsx` | As in the diagram. `styles.css` holds the light theme and print styles. |
 
 ### Update flow
 
@@ -155,6 +158,10 @@ flowchart LR
 | 0.3 plan | **Datum scheduling style** (PLAN-0.3 §3.P): fixed duration, single Progress field, retained logic, slack ≤ 0 critical with a longest-path switch, auto actuals, an Explain panel, calculated cells marked | The user wants something easier than both MSP and P6. |
 | 0.3 plan | **Project Setup** panel (skippable, docked right) as step one of every new plan; all ISO currencies; logo and company branding; Activity IDs A1000+10; MSP-style network; MSP density; English only; beta backups | The user's answers, 2026-10-24. |
 | 0.3 plan | `docs/reference/MSP-P6-feature-reference.md` (from the user) is the behaviour spec; its C2 scenarios become tests and a checklist | A shared, written definition of done. |
+| 0.3.0 | Shipped as one release (no betas) because the user asked to "build and release 0.3" | Betas stay available through the opt-in channel for later versions. |
+| 0.3.0 | The engine owns fields, filters, groups and sorts (`Calc` + `query`); the window asks for rows per view | One place for values, exports use the same text; 20k tasks query in ~50 ms. |
+| 0.3.0 | Print/PDF through the WebView print dialog ("Save as PDF") with print CSS, instead of a PDF library | No extra dependency; works for every view and report. |
+| 0.3.0 | Templates still use the Project Setup panel (setup_done = false) | Setup is step one of every new plan, as agreed. |
 
 ---
 
@@ -167,7 +174,8 @@ flowchart LR
 | **0.1.0** | Shell + updater + core | Installer, Home, updater, ribbon, grid, summaries, links, CPM, Gantt, undo, `.dplan` | ✅ |
 | **0.1.1** | Look, views, reports | Light theme, logo, sidebar, templates, drag bars, Calendar, Dashboard, weekly/monthly report | ✅ |
 | **0.2.0** | The big one | Grid power (any column, clipboard, fill, move, find/replace, menus), Gantt power (timeline, progress drag, details pane, link editing), Ctrl+K, Ctrl+J, Options, recovery, minute calendars + exceptions + task calendars, all constraints + deadlines, manual/inactive tasks, summary links, status date + actuals + Mark on Track, baselines + variance, resources + costs + workload, import/export XML/XER/XLSX/CSV | ✅ |
-| **0.3.0** | MSP look + P6 power (one big release, shipped as betas) | Everything planned for 0.2.1 → 0.5.2, network diagram included. Full scope and beta milestones in **[PLAN-0.3.md](PLAN-0.3.md)**: MSP ribbon with dropdowns and Format tabs, about 450 fields + custom fields/formulas/lookups/indicators, Field Settings, Information dialogs, tables, filters, groups and views, formatting, task types, leveling, P6 activity types, longest path, usage views, Team Planner, Network Diagram, 11 baselines, Update Project, earned value, costs, report gallery and designer, page setup/PDF, DCMA check, compare, risks, EPS workspace, new formats (P6 XML, MPX, ICS, HTML, JSON) | 🔜 plan under review |
+| **0.3.0** | MSP look + P6 power (one big release) | Everything planned for 0.2.1 → 0.5.2, network diagram included. Full scope and beta milestones in **[PLAN-0.3.md](PLAN-0.3.md)**: MSP ribbon with dropdowns and Format tabs, about 450 fields + custom fields/formulas/lookups/indicators, Field Settings, Information dialogs, tables, filters, groups and views, formatting, task types, leveling, P6 activity types, longest path, usage views, Team Planner, Network Diagram, 11 baselines, Update Project, earned value, costs, report gallery and designer, page setup/PDF, DCMA check, compare, risks, EPS workspace, new formats (P6 XML, MPX, ICS, HTML, JSON) | ✅ (see 0.3.1 for what slipped) |
+| 0.3.1 | Polish | Report designer, Page Setup dialog, bar/text styles editor, recurring tasks, Relationship diagram, global change, EPS hierarchy, XER/MSPDI custom fields and codes, the reference's C2 scenarios as tests | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
@@ -177,7 +185,8 @@ flowchart LR
 - Dashboard with S-curve and baseline curve ✅
 - Command search ✅ and quick-add sentences ✅
 - Recovery copies ✅
-- Later: period snapshots with comments and photos, schedule health score, one-click report pack, what-if comparison
+- Project Setup panel, DCMA check with drill-down, risk register, snapshots with trend ✅ (0.3.0)
+- Later: schedule health score, one-click report pack, what-if comparison
 
 ### Gap analysis (MSP, P6 and Cairn vs Datum Plan)
 | Area | MS Project | Primavera P6 | Cairn 0.8 | Datum Plan |
@@ -187,15 +196,15 @@ flowchart LR
 | Column picker | ✓ | ✓ | ✓ | ✓ 0.2 (custom fields and formulas in 0.3) |
 | Calendars (hours, exceptions, many) | ✓ | ✓ | ✓ | ✓ 0.2 (resource calendars in 0.3) |
 | Constraints, deadlines, manual, inactive | ✓ | ✓ | ✓ | ✓ 0.2 |
-| Task types, effort-driven, recurring, split | ✓ | duration types | ✓ | 0.3 |
+| Task types, effort-driven, recurring, split | ✓ | duration types | ✓ | ✓ 0.3 (recurring in 0.3.1) |
 | File exchange (XLSX, CSV, XML, XER) | ✓ | ✓ | ✓ | ✓ 0.2 |
 | Resources, costs, workload | ✓ | ✓ | ✓ | ✓ 0.2 (leveling in 0.3, rates over time in 0.3) |
 | Baseline, actuals, status date | ✓ | ✓ | ✓ | ✓ 0.2 (11 baselines and earned value in 0.3) |
-| EPS, activity codes, multi-project | master projects | ✓ | — | 0.3 |
-| Filters, groups, layouts, global change | ✓ | ✓ | ✓ | 0.3 |
-| Schedule check, longest path, float paths | — | ✓ | partial | 0.3 |
-| Network diagram | ✓ | ✓ | ✓ | 0.3 |
-| Dashboards and periodic reports | basic | basic | 16 reports | ✓ 0.1.1/0.2, more in 0.3 |
+| EPS, activity codes, multi-project | master projects | ✓ | — | ✓ 0.3 codes + portfolio folder |
+| Filters, groups, layouts, global change | ✓ | ✓ | ✓ | ✓ 0.3 (global change 0.3.1) |
+| Schedule check, longest path, float paths | — | ✓ | partial | ✓ 0.3 |
+| Network diagram | ✓ | ✓ | ✓ | ✓ 0.3 |
+| Dashboards and periodic reports | basic | basic | 16 reports | ✓ 0.3 (10 reports + dashboard) |
 
 ---
 
@@ -239,9 +248,19 @@ flowchart LR
 
 ---
 
+### 2026-10-24: Session 5 (0.3.0)
+- The user said "build and release 0.3". Built it as one release.
+- Engine: model format 3; scheduler upgrades (elapsed, % lags, splits, LOE/WBS summary, retained logic/progress override, schedule from finish, longest path, float paths, lag calendars); leveling; task types; formula language; field registry with EV; query API; usage/curves/compare; DCMA + P6 checks; network layout; new export formats. Benchmark: 20k tasks schedule 36 ms, calc 44 ms, grid 49 ms (release).
+- Shell: new commands, beta channel, backups of older plans, logo picker, file saving for pictures and HTML.
+- UI: rewritten in SolidJS + Vite (10 TSX files). Ribbon with dropdowns, Tell Me, grid with header menus, Gantt + timeline, P6 details tabs, all views, reports, dialogs, Project Setup panel.
+- Tested in the real app under Xvfb: templates, Project Setup, inline edits rescheduling, context menu, Task Information, baseline + progress, Tracking Gantt, weekly report, Network Diagram, Calendar, Task Usage, Checks, Dashboard. Bugs fixed: a global `svg` size rule hid the network diagram; Enter in a dialog's first select did not press OK; select text clipped in WebKitGTK; keys only worked with focus inside the app div.
+- UI test harness: `cargo run -p datum-core --example dump > fix.json`, then a Playwright script that serves `ui/dist` with a mocked `window.__TAURI__` (kept in the session scratchpad; rebuild it from this note if needed).
+
+---
+
 ## 5. Known limits and next steps
-- Windows SmartScreen warns on the first install (unsigned). Updates after that are silent. **Confirm with the user that 0.1.x → 0.2.0 updated in-app.**
-- XER export is checked against our own importer only. MSPDI export is checked against our own reader; it needs a real MS Project test.
-- Large plans: the grid is virtualised, but `view::build` and links run on every edit. Profile 10k+ tasks in 0.6.1.
-- Printing prints the current view only. Page setup comes in 0.2.1.
-- All decisions are answered and the reference is stored. Waiting for the user's "yes" to start the 0.3 build (beta.1 first). Read PLAN-0.3.md §3.P–T and the reference before building.
+- Windows SmartScreen warns on the first install (unsigned). Updates after that are silent.
+- XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
+- The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).
+- Not built yet (0.3.1): report designer, Page Setup dialog, bar/text style editors, recurring tasks, Relationship diagram, global change, EPS tree, the reference's C2 scenario tests.
+- Templates have no resources or costs, so cost reports are empty until resources are added.

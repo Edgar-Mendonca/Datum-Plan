@@ -48,7 +48,7 @@ export const Dialog = (p: { title: string; wide?: boolean; children: JSX.Element
     if (e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); done(); }
   };
   let el!: HTMLDivElement;
-  onMount(() => (el.querySelector("input,select,textarea") as HTMLElement | null)?.focus());
+  onMount(() => ((el.querySelector("input:not([type=checkbox]),textarea") ?? el.querySelector(".btn.pri")) as HTMLElement | null)?.focus());
   return (
     <div class="ov" onKeyDown={key}>
       <div class="dlg" classList={{ wide: p.wide }} ref={el}>
