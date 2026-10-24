@@ -1,8 +1,9 @@
-//! The plan model (file format 2). Instants are minutes since 1970-01-01 00:00 local time;
+//! The plan model (file format 3). Instants are minutes since 1970-01-01 00:00 local time;
 //! durations and lags are working minutes.
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,17 +26,58 @@ pub enum Unit { M, H, #[default] D, W, Mo }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResKind { #[default] Work, Material, Cost }
 
+/// What stays fixed when work, units or duration change (MSP task types).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TaskType { #[default] FixedDuration, FixedUnits, FixedWork }
+
+/// Primavera activity types.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActType { #[default] Task, ResourceDep, Loe, StartMs, FinishMs, WbsSummary }
+
+/// How % complete is measured (P6 percent complete types).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PctType { #[default] Duration, Units, Physical }
+
+/// When a fixed cost or expense is charged.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Accrual { Start, #[default] Prorated, End }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Step { pub name: String, pub weight: f64, pub done: bool }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NoteTopic { pub topic: String, pub text: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Expense { pub name: String, pub category: String, pub vendor: String, pub planned: f64, pub actual: f64, pub accrual: Accrual }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DocRef { pub title: String, pub path: String, pub status: String, pub deliverable: bool }
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Link {
     pub pred: u32,
     pub kind: LinkType,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub lag: i64,
+    /// The lag is a percentage of the predecessor's duration (`lag` holds the percent).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pct: bool,
 }
 
 /// Work resources: units 1.0 = 100%. Material: quantity. Cost: amount.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Assign { pub res: u32, pub units: f64 }
+pub struct Assign {
+    pub res: u32,
+    pub units: f64,
+    /// Cost rate table A–E (0–4).
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub table: u8,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Baseline { pub start: i64, pub finish: i64, pub dur: i64, #[serde(default)] pub cost: f64 }
@@ -75,8 +117,60 @@ pub struct Task {
     pub act_finish: Option<NaiveDate>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub res: Vec<Assign>,
+    /// Baselines 0–10.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub bls: BTreeMap<u8, Baseline>,
+    #[serde(skip_serializing_if = "is_fixed_dur")]
+    pub task_type: TaskType,
+    #[serde(skip_serializing_if = "is_false")]
+    pub effort: bool,
+    #[serde(skip_serializing_if = "is_task_act")]
+    pub act_type: ActType,
+    #[serde(skip_serializing_if = "is_dur_pct")]
+    pub pct_type: PctType,
+    /// Physical % complete (P6), used for earned value when the type is Physical.
+    #[serde(skip_serializing_if = "is_zero_u8")]
+    pub phys: u8,
+    /// Elapsed duration: runs around the clock, ignoring calendars.
+    #[serde(skip_serializing_if = "is_false")]
+    pub elapsed: bool,
+    /// Pauses in the work: (after working minutes, gap working minutes).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub splits: Vec<(i64, i64)>,
+    /// Working minutes added by resource leveling.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub level_delay: i64,
+    /// Leveling priority 0–1000 (500 when not set).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bl: Option<Baseline>,
+    pub priority: Option<u16>,
+    #[serde(skip_serializing_if = "is_zero_f")]
+    pub fixed_cost: f64,
+    #[serde(skip_serializing_if = "is_prorated")]
+    pub accrual: Accrual,
+    /// Custom field values by key (text1, number3, flag2…).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub custom: BTreeMap<String, Value>,
+    /// Activity code values by code name.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub codes: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<Step>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notebook: Vec<NoteTopic>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub expenses: Vec<Expense>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<DocRef>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub hyperlink: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub cost_account: String,
+    /// Responsible person or team (OBS).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub responsible: String,
+    /// Display formatting chosen in the UI (font, colours, bar style overrides).
+    #[serde(skip_serializing_if = "Value::is_null")]
+    pub style: Value,
     #[serde(skip_serializing_if = "is_false")]
     pub timeline: bool,
     /// Activity ID (P6) or any short code.
@@ -135,13 +229,170 @@ pub struct Resource {
     pub per_use: f64,
     /// Material unit, such as m3 or t.
     pub label: String,
+    pub initials: String,
+    pub email: String,
+    pub code: String,
+    pub notes: String,
+    /// Resource calendar; the project calendar when empty.
+    pub cal: Option<String>,
+    /// Overtime rate per hour.
+    pub ovt: f64,
+    /// Cost rate tables A–E; table A falls back to `rate`/`per_use` when empty.
+    pub tables: Vec<Vec<Rate>>,
+    /// Availability over time (max units between dates).
+    pub avail: Vec<Avail>,
+    pub custom: BTreeMap<String, Value>,
 }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Rate { pub from: Option<NaiveDate>, pub std: f64, pub ovt: f64, pub per_use: f64 }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Avail { pub from: Option<NaiveDate>, pub to: Option<NaiveDate>, pub max: f64 }
 
 impl Default for Resource {
     fn default() -> Self {
-        Self { uid: 0, name: String::new(), kind: ResKind::Work, group: String::new(), max: 1.0, rate: 0.0, per_use: 0.0, label: String::new() }
+        Self {
+            uid: 0, name: String::new(), kind: ResKind::Work, group: String::new(), max: 1.0, rate: 0.0, per_use: 0.0, label: String::new(),
+            initials: String::new(), email: String::new(), code: String::new(), notes: String::new(), cal: None, ovt: 0.0, tables: vec![], avail: vec![], custom: BTreeMap::new(),
+        }
     }
 }
+
+impl Resource {
+    /// (standard rate per hour, cost per use) of table `t` on day `d`.
+    pub fn rate_on(&self, t: u8, d: NaiveDate) -> (f64, f64) {
+        match self.tables.get(t as usize).filter(|v| !v.is_empty()) {
+            Some(v) => v.iter().filter(|r| r.from.is_none_or(|f| f <= d)).last().or(v.first()).map_or((self.rate, self.per_use), |r| (r.std, r.per_use)),
+            None => (self.rate, self.per_use),
+        }
+    }
+    /// Max units on day `d`.
+    pub fn max_on(&self, d: NaiveDate) -> f64 {
+        self.avail.iter().find(|a| a.from.is_none_or(|f| f <= d) && a.to.is_none_or(|t| d <= t)).map_or(self.max, |a| a.max)
+    }
+}
+
+/// Currency of costs: ISO code, symbol, decimals and whether the symbol follows the number.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Currency { pub code: String, pub symbol: String, pub decimals: u8, pub after: bool }
+
+impl Default for Currency {
+    fn default() -> Self { Self { code: "USD".into(), symbol: "$".into(), decimals: 2, after: false } }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LagCal { #[default] Successor, Predecessor, H24, Project }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LevelOrder { IdOnly, #[default] Standard, Priority }
+
+/// Scheduling policy (Schedule Options). Defaults are the Datum style.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SchedOpts {
+    /// Retained logic (true) or progress override (false) for out-of-sequence progress.
+    pub retained: bool,
+    /// Critical when total float ≤ this many working minutes…
+    pub critical_float: i64,
+    /// …or when on the longest path.
+    pub longest_path: bool,
+    pub lag_cal: LagCal,
+    /// Number of float paths to calculate (0 = off).
+    pub float_paths: u8,
+    /// Open-ended tasks are shown as critical (diagnostic).
+    pub open_ends_critical: bool,
+    pub level_within_slack: bool,
+    pub level_split: bool,
+    pub level_order: LevelOrder,
+    /// New tasks are effort-driven.
+    pub effort_default: bool,
+    pub task_type_default: TaskType,
+    /// Schedule backward from `finish_date`.
+    pub from_finish: bool,
+    pub finish_date: Option<NaiveDate>,
+}
+
+impl Default for SchedOpts {
+    fn default() -> Self {
+        Self {
+            retained: true, critical_float: 0, longest_path: false, lag_cal: LagCal::Successor, float_paths: 0, open_ends_critical: false,
+            level_within_slack: false, level_split: false, level_order: LevelOrder::Standard, effort_default: false,
+            task_type_default: TaskType::FixedDuration, from_finish: false, finish_date: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LookupItem { pub value: String, pub desc: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct IndicatorRule {
+    /// 0 = tasks, 1 = summary rows, 2 = project summary.
+    pub scope: u8,
+    pub test: String,
+    pub value: String,
+    pub icon: String,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Rollup { #[default] None, Max, Min, Sum, Average, Count, Formula }
+
+/// A custom field definition (Custom Fields dialog).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomDef {
+    /// Field key, e.g. text1, number3, flag2, rtext1 for resources.
+    pub key: String,
+    pub alias: String,
+    pub lookup: Vec<LookupItem>,
+    pub restrict: bool,
+    pub default: String,
+    pub formula: String,
+    pub rollup: Rollup,
+    pub indicators: Vec<IndicatorRule>,
+    /// Show indicators instead of the value.
+    pub show_icons: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CodeValue { pub value: String, pub desc: String, pub color: String }
+
+/// An activity code (P6): a classification with a list of values.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CodeDef { pub name: String, pub scope: String, pub values: Vec<CodeValue> }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Risk {
+    pub id: u32,
+    pub name: String,
+    pub cause: String,
+    /// 1–5.
+    pub prob: u8,
+    pub impact: u8,
+    pub owner: String,
+    pub response: String,
+    pub status: String,
+    pub tasks: Vec<u32>,
+    pub kind: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SnapRow { pub uid: u32, pub start: i64, pub finish: i64, pub pct: u8, pub cost: f64 }
+
+/// A frozen copy of the plan at a reporting date (P6 "store period performance").
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Snapshot { pub date: Option<NaiveDate>, pub label: String, pub comment: String, pub finish: i64, pub pct: f64, pub cost: f64, pub rows: Vec<SnapRow> }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -163,6 +414,29 @@ pub struct Project {
     pub next_uid: u32,
     /// Grid columns: field and width.
     pub columns: Vec<(String, u16)>,
+    // Project Setup.
+    pub code: String,
+    pub description: String,
+    pub client: String,
+    pub manager: String,
+    pub location: String,
+    pub company: String,
+    /// Logo as a data URL, used on reports and printouts.
+    pub logo: String,
+    pub currency: Currency,
+    pub setup_done: bool,
+    /// Activity ID numbering: prefix, first number, step.
+    pub id_prefix: String,
+    pub id_start: u32,
+    pub id_step: u32,
+    pub opts: SchedOpts,
+    pub fields: Vec<CustomDef>,
+    pub codes: Vec<CodeDef>,
+    pub risks: Vec<Risk>,
+    pub snapshots: Vec<Snapshot>,
+    /// Settings owned by the window: saved views, tables, filters, groups, bar and text styles,
+    /// page setup, reports, timeline. The engine stores them but does not read them.
+    pub ui: Value,
 }
 
 impl Default for Project {
@@ -179,13 +453,22 @@ fn is_zero_u8(v: &u8) -> bool { *v == 0 }
 fn is_false(v: &bool) -> bool { !*v }
 fn is_day(u: &Unit) -> bool { *u == Unit::D }
 fn is_asap(c: &Constraint) -> bool { *c == Constraint::ASAP }
+fn is_zero_f(v: &f64) -> bool { *v == 0.0 }
+fn is_fixed_dur(v: &TaskType) -> bool { *v == TaskType::FixedDuration }
+fn is_task_act(v: &ActType) -> bool { *v == ActType::Task }
+fn is_dur_pct(v: &PctType) -> bool { *v == PctType::Duration }
+fn is_prorated(v: &Accrual) -> bool { *v == Accrual::Prorated }
 
 impl Project {
     pub fn new(name: &str, start: NaiveDate) -> Self {
         Self {
-            format: 2, name: name.into(), start, status: None, day_min: 480, manual_default: false,
+            format: 3, name: name.into(), start, status: None, day_min: 480, manual_default: false,
             calendar: "Standard".into(), calendars: vec![Calendar::standard("Standard")], tasks: vec![], resources: vec![],
             next_uid: 1, columns: DEFAULT_COLUMNS.iter().map(|(f, w)| (f.to_string(), *w)).collect(),
+            code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
+            company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
+            id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], ui: Value::Null,
         }
     }
 
@@ -210,6 +493,15 @@ impl Project {
                 }
             }
             v["format"] = json!(2);
+        }
+        if v["format"].as_u64().unwrap_or(2) < 3 {
+            // 0.2 files kept one baseline per task in `bl`.
+            for t in v.get_mut("tasks").and_then(Value::as_array_mut).into_iter().flatten() {
+                if let Some(b) = t.as_object_mut().and_then(|o| o.remove("bl")) {
+                    t["bls"] = json!({ "0": b });
+                }
+            }
+            v["format"] = json!(3);
         }
         let mut p: Project = serde_json::from_value(v).map_err(|e| e.to_string())?;
         p.normalize();
@@ -241,7 +533,22 @@ impl Project {
     pub fn new_task(&mut self, name: &str, level: u8, dur: i64) -> Task {
         let uid = self.next_uid;
         self.next_uid += 1;
-        Task { uid, name: name.into(), level, dur, manual: self.manual_default, ..Default::default() }
+        let code = self.next_code();
+        Task { uid, name: name.into(), level, dur, manual: self.manual_default, code, task_type: self.opts.task_type_default, effort: self.opts.effort_default, ..Default::default() }
+    }
+
+    /// The next Activity ID (A1000, A1010…), or empty when numbering is off.
+    pub fn next_code(&self) -> String {
+        if self.id_prefix.is_empty() && self.id_step == 0 {
+            return String::new();
+        }
+        let n = self.tasks.iter().filter_map(|t| t.code.strip_prefix(self.id_prefix.as_str())?.parse::<u32>().ok()).max();
+        format!("{}{}", self.id_prefix, n.map_or(self.id_start, |n| n + self.id_step.max(1)))
+    }
+
+    /// Effective leveling priority.
+    pub fn priority(&self, i: usize) -> u16 {
+        self.tasks[i].priority.unwrap_or(500)
     }
 
     /// Finds a resource by name, adding a work resource if there is none.
@@ -300,6 +607,14 @@ impl Project {
         }
         if self.columns.is_empty() {
             self.columns = Project::new("", self.start).columns;
+        }
+        for r in &mut self.resources {
+            if r.cal.as_ref().is_some_and(|c| !cals.contains(c)) {
+                r.cal = None;
+            }
+        }
+        if self.currency.code.is_empty() {
+            self.currency = Currency::default();
         }
     }
 }

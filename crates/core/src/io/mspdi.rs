@@ -114,11 +114,11 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
             let _ = write!(o, "<Text1>{}</Text1>", esc(&t.code));
         }
         for l in &t.preds {
-            let _ = write!(o, "<PredecessorLink><PredecessorUID>{}</PredecessorUID><Type>{}</Type><CrossProject>0</CrossProject><LinkLag>{}</LinkLag><LagFormat>7</LagFormat></PredecessorLink>",
-                l.pred, LINKS.iter().position(|k| *k == l.kind).unwrap(), l.lag * 10);
+            let _ = write!(o, "<PredecessorLink><PredecessorUID>{}</PredecessorUID><Type>{}</Type><CrossProject>0</CrossProject><LinkLag>{}</LinkLag><LagFormat>{}</LagFormat></PredecessorLink>",
+                l.pred, LINKS.iter().position(|k| *k == l.kind).unwrap(), l.lag * 10, if l.pct { 19 } else { 7 });
         }
-        if let Some(b) = t.bl {
-            let _ = write!(o, "<Baseline><Number>0</Number><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><Cost>{:.2}</Cost></Baseline>", dt(b.start), dt(b.finish), dur(b.dur), b.cost);
+        for (n, b) in &t.bls {
+            let _ = write!(o, "<Baseline><Number>{n}</Number><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><Cost>{:.2}</Cost></Baseline>", dt(b.start), dt(b.finish), dur(b.dur), b.cost);
         }
         o.push_str("</Task>\n");
     }
@@ -230,13 +230,14 @@ pub fn read(text: &str) -> Result<Project, String> {
             if let Ok(pred) = l.val("PredecessorUID").parse() {
                 let lag = l.val("LinkLag").parse::<i64>().unwrap_or(0) / 10;
                 let pct = matches!(l.val("LagFormat"), "19" | "20");
-                k.preds.push(Link { pred, kind: l.val("Type").parse::<usize>().ok().and_then(|i| LINKS.get(i).copied()).unwrap_or(LinkType::FS), lag: if pct { 0 } else { lag } });
+                k.preds.push(Link { pred, kind: l.val("Type").parse::<usize>().ok().and_then(|i| LINKS.get(i).copied()).unwrap_or(LinkType::FS), lag, pct });
             }
         }
-        if let Some(b) = t.all("Baseline").find(|b| b.val("Number") == "0") {
-            if let (Some(bs), Some(bf)) = (date(b.val("Start")), date(b.val("Finish"))) {
+        for b in t.all("Baseline") {
+            let Ok(n) = b.val("Number").parse::<u8>() else { continue };
+            if let (Some(bs), Some(bf), true) = (date(b.val("Start")), date(b.val("Finish")), n <= 10) {
                 let tm = |s: &str| s.get(11..16).and_then(|x| Some(x.get(..2)?.parse::<i64>().ok()? * 60 + x.get(3..)?.parse::<i64>().ok()?)).unwrap_or(0);
-                k.bl = Some(Baseline { start: at(bs) + tm(b.val("Start")), finish: at(bf) + tm(b.val("Finish")), dur: read_dur(b.val("Duration")), cost: b.val("Cost").parse().unwrap_or(0.0) });
+                k.bls.insert(n, Baseline { start: at(bs) + tm(b.val("Start")), finish: at(bf) + tm(b.val("Finish")), dur: read_dur(b.val("Duration")), cost: b.val("Cost").parse().unwrap_or(0.0) });
             }
         }
         tasks.push((t.val("ID").parse().unwrap_or(i64::MAX), k));
@@ -252,12 +253,14 @@ pub fn read(text: &str) -> Result<Project, String> {
             uid, name: r.val("Name").into(), group: r.val("Group").into(), label: r.val("MaterialLabel").into(),
             kind: match r.val("Type") { "0" => ResKind::Material, "2" => ResKind::Cost, _ => ResKind::Work },
             max: r.val("MaxUnits").parse().unwrap_or(1.0), rate: r.val("StandardRate").parse().unwrap_or(0.0), per_use: r.val("CostPerUse").parse().unwrap_or(0.0),
+            initials: r.val("Initials").into(), email: r.val("EmailAddress").into(), ovt: r.val("OvertimeRate").parse().unwrap_or(0.0),
+            ..Default::default()
         });
     }
     for a in root.get("Assignments").into_iter().flat_map(|x| x.all("Assignment")) {
         let (tu, ru): (u32, u32) = (a.val("TaskUID").parse().unwrap_or(0), a.val("ResourceUID").parse().unwrap_or(0));
         if let Some(t) = p.tasks.iter_mut().find(|t| t.uid == tu) {
-            t.res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0) });
+            t.res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0), table: 0 });
         }
     }
     p.normalize();

@@ -22,7 +22,7 @@ pub enum Op {
     Unlink { uids: Vec<u32> },
     MarkOnTrack { uids: Vec<u32> },
     /// Saves (or clears) the baseline of the given tasks, or of all tasks when empty.
-    Baseline { uids: Vec<u32>, clear: bool },
+    Baseline { uids: Vec<u32>, clear: bool, #[serde(default)] n: u8 },
     Project { name: String, start: String, status: String, calendar: String, day_hours: f64, manual_default: bool },
     CalPut { old: Option<String>, cal: Calendar },
     CalDelete { name: String },
@@ -383,7 +383,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 let pred = p.tasks[w[0]].uid;
                 let t = &mut p.tasks[w[1]];
                 if !t.preds.iter().any(|l| l.pred == pred) {
-                    t.preds.push(Link { pred, kind: LinkType::FS, lag: 0 });
+                    t.preds.push(Link { pred, kind: LinkType::FS, lag: 0, pct: false });
                 }
             }
         }
@@ -397,8 +397,8 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let t = &mut p.tasks[i];
             let at = t.preds.iter().position(|l| l.pred == pred);
             match (kind, at) {
-                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag },
-                (Some(kind), None) => t.preds.push(Link { pred, kind, lag }),
+                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag, pct: false },
+                (Some(kind), None) => t.preds.push(Link { pred, kind, lag, pct: false }),
                 (None, Some(k)) => { t.preds.remove(k); }
                 (None, None) => {}
             }
@@ -419,13 +419,13 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 set_pct(p, i, n as u8)?;
             }
         }
-        Op::Baseline { uids, clear } => {
+        Op::Baseline { uids, clear, n } => {
             let s = sched::schedule(p)?;
             let cost = load::compute(p, &s).cost;
             let all = uids.is_empty();
             let pick: HashSet<u32> = uids.into_iter().collect();
             for (i, t) in p.tasks.iter_mut().enumerate().filter(|(_, t)| all || pick.contains(&t.uid)) {
-                t.bl = if clear { None } else { Some(Baseline { start: s.es[i], finish: s.ef[i], dur: if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur }, cost: cost[i] }) };
+                if clear { t.bls.remove(&n); } else { t.bls.insert(n.min(10), Baseline { start: s.es[i], finish: s.ef[i], dur: if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur }, cost: cost[i] }); }
             }
         }
         Op::Project { name, start, status, calendar, day_hours, manual_default } => {

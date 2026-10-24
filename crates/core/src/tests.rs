@@ -100,7 +100,7 @@ fn task_calendars_summary_links_and_inactive() {
     assert_eq!(when(s.ef[2]), "04 09:00"); // 16 working hours on a 24-hour calendar
     assert_eq!(when(s.es[3]), "04 09:00"); // the link from the summary waits for all its tasks
     assert_eq!(s.finish, s.ef[3]); // the inactive task does not extend the project
-    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0 }];
+    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0, pct: false }];
     assert!(schedule(&p).err().unwrap().contains("own summary"));
 }
 
@@ -175,7 +175,7 @@ fn resources_costs_and_baseline() {
     assert_eq!(l.cost[0], 800.0 + 600.0);
     assert!(l.over[1]); // both tasks run on the same days
     assert_eq!(parse::fmt_res(&doc.p.tasks[0].res, &doc.p), "Engineer[50%], Concrete[12]");
-    op(&mut doc, Op::Baseline { uids: vec![], clear: false }).unwrap();
+    op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
     op(&mut doc, Op::Set { uid: u[0], field: "dur".into(), value: "4d".into() }).unwrap();
     let v = view::build(&doc.p, "%d-%b-%y", d(2026, 11, 1));
     assert_eq!(v.rows[0].vfinish, "2 days");

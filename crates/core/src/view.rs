@@ -165,7 +165,7 @@ pub fn build(p: &Project, fmt: &str, today: NaiveDate) -> View {
         } else { t.pct };
         let dur = if sum { c.between(es, ef) } else { t.dur };
         let unit = if sum { Unit::D } else { t.unit };
-        let bl = t.bl;
+        let bl = t.bls.get(&0).copied();
         let var = |a: i64, b: i64| days(if b >= a { c.between(a, b) } else { -c.between(b, a) }, day);
         Row {
             uid: t.uid, id: i + 1,
@@ -204,7 +204,7 @@ pub fn build(p: &Project, fmt: &str, today: NaiveDate) -> View {
     }).collect();
     off_days.sort_unstable();
     let top: Vec<usize> = (0..p.tasks.len()).filter(|&i| p.tasks[i].level == 0 && !s.off[i]).collect();
-    let bl_end = p.tasks.iter().filter_map(|t| t.bl.map(|b| b.finish)).max();
+    let bl_end = p.tasks.iter().filter_map(|t| t.bls.get(&0).map(|b| b.finish)).max();
     View {
         name: p.name.clone(), start: df(start), start_iso: p.start.to_string(), finish: df(fin),
         status: od(p.status), status_iso: p.status.map(|d| d.to_string()).unwrap_or_default(),

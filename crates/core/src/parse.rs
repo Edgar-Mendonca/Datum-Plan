@@ -90,7 +90,7 @@ pub fn preds(s: &str, ids: &[u32], day: i64) -> Result<Vec<Link>, String> {
             Some('-') => -dur(&rest[1..], day)?.0,
             _ => return Err(format!("Write the lag in \"{tok}\" as +2d or -4h.")),
         };
-        out.push(Link { pred: uid, kind, lag });
+        out.push(Link { pred: uid, kind, lag, pct: false });
     }
     Ok(out)
 }
@@ -124,7 +124,7 @@ pub fn res(s: &str, p: &mut Project) -> Result<Vec<Assign>, String> {
             }
         };
         out.retain(|a| a.res != uid);
-        out.push(Assign { res: uid, units });
+        out.push(Assign { res: uid, units, table: 0 });
     }
     Ok(out)
 }

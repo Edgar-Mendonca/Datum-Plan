@@ -286,7 +286,7 @@ pub fn read(text: &str) -> Result<Project, String> {
         let kind = match g(l, "pred_type").as_str() { "PR_SS" => LinkType::SS, "PR_FF" => LinkType::FF, "PR_SF" => LinkType::SF, _ => LinkType::FS };
         let lag = (g(l, "lag_hr_cnt").parse::<f64>().unwrap_or(0.0) * 60.0).round() as i64;
         if let Some(t) = p.tasks.iter_mut().find(|t| t.uid == s) {
-            t.preds.push(Link { pred: q, kind, lag });
+            t.preds.push(Link { pred: q, kind, lag, pct: false });
         }
     }
     for r in rows("RSRC") {
@@ -300,7 +300,7 @@ pub fn read(text: &str) -> Result<Project, String> {
         let work = p.resources.iter().any(|r| r.uid == ru && r.kind == ResKind::Work);
         if let Some(t) = p.tasks.iter_mut().find(|t| t.uid == tu) {
             let units = if work { per_hr.unwrap_or(if t.dur > 0 { qty * 60.0 / t.dur as f64 } else { 1.0 }) } else { qty };
-            t.res.push(Assign { res: ru, units });
+            t.res.push(Assign { res: ru, units, table: 0 });
         }
     }
     p.normalize();
