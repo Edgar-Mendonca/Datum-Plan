@@ -10,7 +10,7 @@
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, strict TypeScript UI with no framework, plain CSS |
 | **Code size** | About 2,100 lines in total: core about 880, shell about 310, UI about 900 |
-| **Installer** | NSIS `.exe`, per-user install (size to be confirmed from the first release) |
+| **Installer** | NSIS `.exe`, per-user install, **1.7 MB** (v0.1.0) |
 | **Reference repos** | `Edgar-Mendonca/Cairn` (the earlier web planner, used only as a feature reference) · `Compressor-Engineering-Suite` (the Home/update pattern) |
 
 ---
@@ -160,7 +160,7 @@ flowchart LR
 - The user approved the name, Windows only, no `.mpp`, everything in Rust/Tauri 2, and small step-by-step releases. They sent MS Project screenshots (Home backstage, ribbons, Gantt with timeline, column list, Task Information).
 - Built 0.1.0: the Rust core with 8 tests, the Tauri shell, the custom updater, the TypeScript UI, CI and release workflows, CHANGELOG, README and this file.
 - Checked by running the real app under Xvfb: Home, sample plan, grid typing, Task Information, indent + undo, View tab, Save dialog → `.dplan`, Recent list, update check against GitHub.
-- Tagged `v0.1.0` so release.yml publishes the installer.
+- Released v0.1.0 through release.yml (workflow_dispatch, because the session proxy blocks pushing tags). CI and Release both green. Installer: `DatumPlan-0.1.0-setup.exe`, 1.7 MB.
 
 ---
 
