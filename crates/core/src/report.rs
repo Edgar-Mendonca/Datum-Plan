@@ -14,6 +14,8 @@ pub struct UseRow {
     pub of: Option<u32>,
     pub name: String,
     pub lvl: u8,
+    /// Summary task or resource row (shown bold).
+    pub sum: bool,
     pub total: f64,
     pub vals: Vec<f64>,
     pub over: Vec<bool>,
@@ -56,9 +58,9 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
                 let end = b.get(j + 1).copied().unwrap_or(d0 + 1);
                 r.kind == ResKind::Work && (d0..end).any(|d| l.daily.get(&(k, d)).is_some_and(|&m| m > r.max_on(date_of(d * DAY)) * pc.day_minutes(date_of(d * DAY)) as f64 + 0.5))
             }).collect();
-            rows.push(UseRow { uid: r.uid, of: None, name: r.name.clone(), lvl: 0, total: vals.iter().sum(), vals, over });
+            rows.push(UseRow { uid: r.uid, of: None, name: r.name.clone(), lvl: 0, sum: true, total: vals.iter().sum(), vals, over });
             for ((_, i), v) in kids {
-                rows.push(UseRow { uid: p.tasks[*i].uid, of: Some(r.uid), name: p.tasks[*i].name.clone(), lvl: 1, total: v.iter().sum(), vals: v.clone(), over: vec![] });
+                rows.push(UseRow { uid: p.tasks[*i].uid, of: Some(r.uid), name: p.tasks[*i].name.clone(), lvl: 1, sum: false, total: v.iter().sum(), vals: v.clone(), over: vec![] });
             }
         }
     } else {
@@ -75,7 +77,7 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
             }
         }
         for (i, t) in p.tasks.iter().enumerate().filter(|&(i, _)| !s.off[i]) {
-            rows.push(UseRow { uid: t.uid, of: None, name: t.name.clone(), lvl: t.level, total: per[i].iter().sum(), vals: per[i].clone(), over: vec![] });
+            rows.push(UseRow { uid: t.uid, of: None, name: t.name.clone(), lvl: t.level, sum: s.summary[i], total: per[i].iter().sum(), vals: per[i].clone(), over: vec![] });
             if s.summary[i] {
                 continue;
             }
@@ -87,7 +89,7 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
                         v[j] += if cost { m / 60.0 * rate(k, i, d) } else { m / 60.0 };
                     }
                 }
-                rows.push(UseRow { uid: p.resources[k].uid, of: Some(t.uid), name: p.resources[k].name.clone(), lvl: t.level + 1, total: v.iter().sum(), vals: v, over: vec![] });
+                rows.push(UseRow { uid: p.resources[k].uid, of: Some(t.uid), name: p.resources[k].name.clone(), lvl: t.level + 1, sum: false, total: v.iter().sum(), vals: v, over: vec![] });
             }
         }
     }

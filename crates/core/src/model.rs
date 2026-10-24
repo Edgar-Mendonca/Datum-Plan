@@ -445,8 +445,8 @@ impl Default for Project {
     }
 }
 
-pub const DEFAULT_COLUMNS: [(&str, u16); 7] =
-    [("name", 250), ("dur", 78), ("start", 86), ("finish", 86), ("preds", 100), ("res", 140), ("pct", 78)];
+pub const DEFAULT_COLUMNS: [(&str, u16); 8] =
+    [("mode", 34), ("name", 260), ("dur", 74), ("start", 92), ("finish", 92), ("preds", 90), ("res", 140), ("pct", 64)];
 
 fn is_zero(v: &i64) -> bool { *v == 0 }
 fn is_zero_u8(v: &u8) -> bool { *v == 0 }

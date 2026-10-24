@@ -1,0 +1,135 @@
+// Datum Plan window: layout, sidebar, status bar, keyboard shortcuts, startup and recovery.
+import { render } from "solid-js/web";
+import { For, Show, Switch, Match, createSignal, onMount } from "solid-js";
+import "./styles.css";
+import { invoke, listen, Out, FieldList, Options } from "./api";
+import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setupOpen, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut } from "./store";
+import { C } from "./cmds";
+import { TitleBar, Ribbon, palette } from "./ribbon";
+import { Grid } from "./grid";
+import { Gantt, Timeline } from "./gantt";
+import { Details } from "./details";
+import { Network, CalendarView, UsageView, ResourceSheet, ResourceGraph, TeamPlanner, Risks, Checks, Portfolio } from "./views";
+import { Dashboard, Reports } from "./reports";
+import { Backstage, update, checkUpdate } from "./backstage";
+import { Setup } from "./setup";
+import { Menu, Toast, Icon, Dialog } from "./ui";
+import * as D from "./dialogs";
+
+const SIDE: ([View, string, string] | "-")[] = [
+  ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
+  ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["team", "team", "Team"], "-",
+  ["dashboard", "dash", "Dashboard"], ["reports", "report", "Reports"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["portfolio", "folder", "Portfolio"],
+];
+
+const GanttView = () => {
+  const [detH, setDetH] = createSignal(240);
+  const drag = (e: MouseEvent, set: (v: number) => void, v0: number, axis: "x" | "y", sign = 1) => {
+    e.preventDefault();
+    const a0 = axis === "x" ? e.clientX : e.clientY;
+    const mv = (m: MouseEvent) => set(Math.max(120, v0 + sign * ((axis === "x" ? m.clientX : m.clientY) - a0)));
+    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); };
+    addEventListener("mousemove", mv); addEventListener("mouseup", up);
+  };
+  return (
+    <div class="ganttview">
+      <Show when={timeline()}><Timeline /></Show>
+      <div class="gmain">
+        <Grid width={gridW()} />
+        <div class="split" onMouseDown={e => drag(e, setGridW, gridW(), "x")} onDblClick={() => setGridW(gridW() > 300 ? 120 : 620)} />
+        <Gantt />
+      </div>
+      <Show when={details()}><div class="dsplit" onMouseDown={e => drag(e, setDetH, detH(), "y", -1)} /><div style={{ height: `${detH()}px`, display: "flex", "flex-direction": "column" }}><Details /></div></Show>
+    </div>
+  );
+};
+
+const Status = () => {
+  const s = () => out()?.summary;
+  return (
+    <footer class="status">
+      <span classList={{ late: !!s()?.error }}>{s()?.error ?? "Ready"}</span>
+      <button class="mode" onClick={() => out() && act({ Project: { name: P().name, start: P().start, status: P().status ?? "", calendar: P().calendar, day_hours: P().day_min / 60, manual_default: !P().manual_default } })}>
+        New Tasks: {out()?.project.manual_default ? "Manually Scheduled" : "Auto Scheduled"}</button>
+      <Show when={filter().rules.length}><button class="mode" onClick={() => setFilter(ALL)}>Filter applied: {filter().name || "custom"} ✕</button></Show>
+      <span class="muted">{grid().shown} of {grid().total} tasks{sel().length > 1 ? ` · ${sel().length} selected` : ""}</span>
+      <span class="muted">{s() ? `${s()!.start} – ${s()!.finish} · ${s()!.dur} · ${Math.round(s()!.pct)}% · ${s()!.cost}` : ""}</span>
+      <span class="grow" />
+      <span class="vsc">
+        <button title="Gantt Chart" onClick={() => C.view("gantt")}><Icon n="gantt" /></button><button title="Task Usage" onClick={() => C.view("taskusage")}><Icon n="table" /></button>
+        <button title="Team Planner" onClick={() => C.view("team")}><Icon n="team" /></button><button title="Resource Sheet" onClick={() => C.view("ressheet")}><Icon n="res" /></button><button title="Reports" onClick={() => C.view("reports")}><Icon n="report" /></button>
+      </span>
+      <button onClick={C.zoomOut}>−</button><input class="zoom" type="range" min="0" max="100" value={Math.round(Math.log(zoom() / 0.3) / Math.log(400) * 100)} onInput={e => setZoom(0.3 * Math.pow(400, +e.currentTarget.value / 100))} /><button onClick={C.zoomIn}>+</button>
+    </footer>
+  );
+};
+
+const App = () => {
+  onMount(async () => {
+    try {
+      setFields(await invoke<FieldList>("field_list"));
+      const o = await invoke<Options>("options"); setOpts(o);
+      setOut(await invoke<Out>("state"));
+      useTable("Entry");
+      const start = await invoke<string | null>("startup_file");
+      if (start) await loadOut("open", { path: start });
+      const rec = await invoke<{ name: string; saved: string } | null>("recovery");
+      if (rec) openDialog(() => (
+        <Dialog title="Recover unsaved work?" okText="Recover" cancel="Discard" ok={async () => { const r = await call<Out>("recover", { keep: true }); if (r) { setOut(r); setBackstage(null); useTable("Entry"); } }}>
+          <p>Datum Plan closed before “{rec.name}” was saved. A copy from {rec.saved} was kept.</p>
+        </Dialog>
+      ));
+      checkUpdate(true);
+      setInterval(() => { if (opts().autosave > 0) invoke("autosave").catch(() => {}); }, Math.max(1, opts().autosave) * 60000);
+      listen("close-requested", () => D.confirmClose(() => invoke("quit")));
+    } catch (e) { toast(String(e)); }
+  });
+  const keys = (e: KeyboardEvent) => {
+    const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (dialogs().length) return;
+    if ((ctrl && k === "k") || (e.altKey && k === "q")) { e.preventDefault(); palette(); }
+    else if (ctrl && k === "s") { e.preventDefault(); C.save(e.shiftKey); }
+    else if (ctrl && k === "o") { e.preventDefault(); C.open(); }
+    else if (ctrl && k === "n") { e.preventDefault(); setBackstage("home"); }
+    else if (ctrl && k === "p") { e.preventDefault(); C.print(); }
+    else if (ctrl && k === "z" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) { e.preventDefault(); C.undo(); }
+    else if (ctrl && k === "y" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) { e.preventDefault(); C.redo(); }
+    else if (e.key === "F1") { e.preventDefault(); D.shortcuts(); }
+    else if (e.key === "Escape" && backstage() && out()) setBackstage(null);
+  };
+  return (
+    <div class="app" ref={() => document.addEventListener("keydown", keys)}>
+      <TitleBar update={update()?.available ? update()!.latest : null} />
+      <Ribbon />
+      <main class="work">
+        <nav class="side"><For each={SIDE}>{x => x === "-" ? <hr /> : <button classList={{ on: view() === x[0] }} onClick={() => C.view(x[0])} title={x[2]}><Icon n={x[1]} /><span>{x[2]}</span></button>}</For></nav>
+        <div class="content">
+          <Show when={out()}>
+            <Switch fallback={<GanttView />}>
+              <Match when={view() === "network"}><Network /></Match>
+              <Match when={view() === "calendar"}><CalendarView /></Match>
+              <Match when={view() === "taskusage"}><UsageView by="task" /></Match>
+              <Match when={view() === "resusage"}><UsageView by="resource" /></Match>
+              <Match when={view() === "ressheet"}><ResourceSheet /></Match>
+              <Match when={view() === "resgraph"}><ResourceGraph /></Match>
+              <Match when={view() === "team"}><TeamPlanner /></Match>
+              <Match when={view() === "dashboard"}><Dashboard /></Match>
+              <Match when={view() === "reports"}><Reports /></Match>
+              <Match when={view() === "risks"}><Risks /></Match>
+              <Match when={view() === "checks"}><Checks /></Match>
+              <Match when={view() === "portfolio"}><Portfolio /></Match>
+            </Switch>
+          </Show>
+        </div>
+        <Show when={setupOpen() && out()}><Setup /></Show>
+      </main>
+      <Status />
+      <Show when={backstage()}><Backstage /></Show>
+      <For each={dialogs()}>{d => d()}</For>
+      <Menu /><Toast />
+    </div>
+  );
+};
+
+render(() => <App />, document.getElementById("app")!);
+export { table, closeDialog, setSetupOpen };

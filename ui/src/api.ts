@@ -1,0 +1,83 @@
+// Calls into the Rust shell and the shapes it returns.
+declare global {
+  interface Window { __TAURI__?: { core: { invoke: (cmd: string, args?: object) => Promise<any> }; event: { listen: (e: string, f: (x: { payload: any }) => void) => Promise<() => void> } } }
+}
+
+export const invoke = <T = any>(cmd: string, args?: object): Promise<T> =>
+  window.__TAURI__ ? window.__TAURI__.core.invoke(cmd, args) : Promise.reject("Datum Plan must run inside its desktop window.");
+export const listen = (e: string, f: (p: any) => void) => window.__TAURI__?.event.listen(e, x => f(x.payload));
+
+export type Kind = "Text" | "Num" | "Int" | "Dur" | "Date" | "Fin" | "Cost" | "Flag" | "Pct" | "Work";
+export type LinkType = "FS" | "SS" | "FF" | "SF";
+
+export interface Currency { code: string; symbol: string; decimals: number; after: boolean }
+export interface Calendar { name: string; week: [number, number][][]; exceptions: { name: string; from: string; to: string; hours: [number, number][] }[] }
+export interface Rate { from: string | null; std: number; ovt: number; per_use: number }
+export interface Resource {
+  uid: number; name: string; kind: "Work" | "Material" | "Cost"; group: string; max: number; rate: number; per_use: number; label: string;
+  initials: string; email: string; code: string; notes: string; cal: string | null; ovt: number; tables: Rate[][];
+  avail: { from: string | null; to: string | null; max: number }[]; custom: Record<string, any>;
+}
+export interface Indicator { scope: number; test: string; value: string; icon: string }
+export interface CustomDef { key: string; alias: string; lookup: { value: string; desc: string }[]; restrict: boolean; default: string; formula: string; rollup: string; indicators: Indicator[]; show_icons: boolean }
+export interface CodeDef { name: string; scope: string; values: { value: string; desc: string; color: string }[] }
+export interface Risk { id: number; name: string; cause: string; prob: number; impact: number; owner: string; response: string; status: string; tasks: number[]; kind: string }
+export interface SchedOpts {
+  retained: boolean; critical_float: number; longest_path: boolean; lag_cal: string; float_paths: number; open_ends_critical: boolean;
+  level_within_slack: boolean; level_split: boolean; level_order: string; effort_default: boolean; task_type_default: string; from_finish: boolean; finish_date: string | null;
+}
+export interface Project {
+  format: number; name: string; start: string; status: string | null; day_min: number; manual_default: boolean; calendar: string; calendars: Calendar[];
+  resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
+  company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
+  fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
+}
+export interface Summary {
+  name: string; start: string; finish: string; s: number; f: number; status: string; status_day: number | null; dur: string; pct: number; work: string; cost: string;
+  bl_finish: string; var_finish: string; pv: string; ev: string; ac: string; spi: number | null; cpi: number | null; tasks: number; done: number; late: number;
+  critical: number; milestones: number; error: string | null; week: boolean[]; off_days: number[];
+}
+export interface Out { project: Project; summary: Summary; path: string | null; dirty: boolean; undo: boolean; redo: boolean; clip: number; rev: number }
+
+export interface Bar { s: number; f: number; ls: number; lf: number; bs: number | null; bf: number | null; dl: number | null; pct: number; segs: [number, number][]; links: [number, LinkType][] }
+export interface Row {
+  uid: number; id: number; lvl: number; kind: "task" | "summary" | "group" | "project"; ms: boolean; crit: boolean; late: boolean; manual: boolean; off: boolean; lp: boolean;
+  kids: boolean; open: boolean; hl: boolean; name: string; res: string; cells: string[]; icons?: [number, string][]; bar: Bar;
+}
+export interface Col { key: string; name: string; kind: Kind; edit: boolean }
+export interface Grid { cols: Col[]; rows: Row[]; shown: number; total: number }
+export interface Rule { field: string; test: string; value: string; value2: string; or: boolean }
+export interface Filter { name: string; rules: Rule[]; summaries: boolean; highlight: boolean }
+export interface Query {
+  cols: string[]; filter: Filter; group: string[]; sort: [string, boolean][]; flat: boolean; collapsed: number[]; level: number;
+  hide_summaries: boolean; project_summary: boolean; baseline: number;
+}
+export interface FieldDef { key: string; name: string; kind: Kind; group: string; edit: boolean }
+export interface FieldList { task: FieldDef[]; resource: FieldDef[]; filters: Filter[] }
+
+export interface Rel { uid: number; id: number; code: string; name: string; kind: LinkType; lag: string; driving: boolean; tf: string }
+export interface TaskInfo {
+  task: any; fields: [string, string, string, string][]; preds: Rel[]; succs: Rel[];
+  assigns: { res: number; name: string; kind: string; units: string; work: string; cost: string }[];
+}
+export interface Usage { buckets: number[]; unit: string; rows: { uid: number; of: number | null; name: string; lvl: number; sum: boolean; total: number; vals: number[]; over: boolean[] }[] }
+export interface Curve { buckets: number[]; planned: number[]; forecast: number[]; actual: number[]; earned: number[] }
+export interface Check { key: string; name: string; about: string; count: number; total: number; value: number; limit: string; pass: boolean; uids: number[] }
+export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean }[]; cols: number; rows: number }
+export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }
+export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; setupPanel: boolean }
+
+/** Days since 1970-01-01 (local) to a Date at local midnight + fraction. */
+export const dayDate = (d: number) => { const x = new Date(1970, 0, 1); x.setDate(x.getDate() + Math.floor(d)); x.setMinutes(Math.round((d - Math.floor(d)) * 1440)); return x; };
+export const dateDay = (x: Date) => Math.round((Date.UTC(x.getFullYear(), x.getMonth(), x.getDate()) - Date.UTC(1970, 0, 1)) / 864e5);
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const fmtDay = (d: number, style: "short" | "long" | "month" = "short") => {
+  const x = dayDate(d);
+  if (style === "month") return `${MON[x.getMonth()]} ${x.getFullYear()}`;
+  return style === "long" ? `${x.getDate()} ${MON[x.getMonth()]} ${x.getFullYear()}` : `${x.getDate()} ${MON[x.getMonth()]}`;
+};
+export const iso = (d: number) => { const x = dayDate(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+export const money = (v: number, c: Currency) => {
+  const s = Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: c.decimals, maximumFractionDigits: c.decimals });
+  return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
+};

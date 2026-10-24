@@ -3,7 +3,7 @@
   "productName": "Datum Plan",
   "identifier": "com.edgarmendonca.datumplan",
   "build": {
-    "frontendDist": "../ui",
+    "frontendDist": "../ui/dist",
     "beforeBuildCommand": "npm run build:ui",
     "beforeDevCommand": "npm run build:ui"
   },

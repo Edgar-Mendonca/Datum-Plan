@@ -74,6 +74,9 @@ pub struct GRow {
     pub kids: bool,
     pub open: bool,
     pub hl: bool,
+    /// Name and resources for bar labels and tips.
+    pub name: String,
+    pub res: String,
     pub cells: Vec<String>,
     /// Indicator icons per column, where a custom field shows icons.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -163,7 +166,7 @@ impl Calc<'_> {
             uid: t.uid, id: i + 1, lvl: t.level, kind: if s.summary[i] { "summary" } else { "task" },
             ms: !s.summary[i] && (t.dur == 0 || matches!(t.act_type, ActType::StartMs | ActType::FinishMs)),
             crit: s.critical(p, i), late: self.val(i, "late").truth(), manual: t.manual, off: s.off[i], lp: s.lp[i],
-            kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, cells, icons, bar: self.bar(i, q.baseline),
+            kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, name: t.name.clone(), res: self.text(i, "res"), cells, icons, bar: self.bar(i, q.baseline),
         }
     }
 
@@ -197,7 +200,7 @@ impl Calc<'_> {
                 _ => String::new(),
             }
         }).collect();
-        GRow { kind: "project", kids: true, open: true, cells, bar: Bar { s: day(s.start), f: day(s.finish), ls: day(s.start), lf: day(s.finish), pct: pct.round() as u8, ..Bar::default() }, ..GRow::default() }
+        GRow { kind: "project", kids: true, open: true, name: p.name.clone(), cells, bar: Bar { s: day(s.start), f: day(s.finish), ls: day(s.start), lf: day(s.finish), pct: pct.round() as u8, ..Bar::default() }, ..GRow::default() }
     }
 
     /// A group header with rolled-up values for the rows under it.
@@ -211,7 +214,7 @@ impl Calc<'_> {
             Kind::Cost | Kind::Work => self.format(first, k, &F::Num(rows.iter().map(|&i| self.val(i, k).num()).sum())),
             _ => String::new(),
         }).collect();
-        GRow { kind: "group", lvl: depth, kids: true, open: true, cells, bar: Bar { s: day(s), f: day(e), ls: day(s), lf: day(e), ..Bar::default() }, ..GRow::default() }
+        GRow { kind: "group", lvl: depth, kids: true, open: true, name: label.clone(), cells, bar: Bar { s: day(s), f: day(e), ls: day(s), lf: day(e), ..Bar::default() }, ..GRow::default() }
     }
 
     pub fn grid(&self, q: &Query) -> Grid {

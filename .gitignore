@@ -1,4 +1,4 @@
 /target
 /node_modules
-/ui/main.js
+/ui/dist
 /src-tauri/gen
