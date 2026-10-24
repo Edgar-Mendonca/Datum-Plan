@@ -178,18 +178,18 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | Grid, outline, links, CPM | ✓ | ✓ | ✓ | ✓ 0.1 |
 | Interactive Gantt, timeline | ✓ | partial | ✓ | ✓ 0.2 |
-| Column picker | ✓ | ✓ | ✓ | ✓ 0.2 (custom fields and formulas in 0.4.1) |
-| Calendars (hours, exceptions, many) | ✓ | ✓ | ✓ | ✓ 0.2 (resource calendars in 0.2.2) |
+| Column picker | ✓ | ✓ | ✓ | ✓ 0.2 (custom fields and formulas in 0.3) |
+| Calendars (hours, exceptions, many) | ✓ | ✓ | ✓ | ✓ 0.2 (resource calendars in 0.3) |
 | Constraints, deadlines, manual, inactive | ✓ | ✓ | ✓ | ✓ 0.2 |
-| Task types, effort-driven, recurring, split | ✓ | duration types | ✓ | 0.2.2 |
+| Task types, effort-driven, recurring, split | ✓ | duration types | ✓ | 0.3 |
 | File exchange (XLSX, CSV, XML, XER) | ✓ | ✓ | ✓ | ✓ 0.2 |
-| Resources, costs, workload | ✓ | ✓ | ✓ | ✓ 0.2 (leveling in 0.2.2, rates over time in 0.3.0) |
-| Baseline, actuals, status date | ✓ | ✓ | ✓ | ✓ 0.2 (11 baselines and earned value in 0.3.1) |
-| EPS, activity codes, multi-project | master projects | ✓ | — | 0.4.0 |
-| Filters, groups, layouts, global change | ✓ | ✓ | ✓ | 0.4.1 |
-| Schedule check, longest path, float paths | — | ✓ | partial | 0.5.0 |
-| Network diagram | ✓ | ✓ | ✓ | 0.5.1 |
-| Dashboards and periodic reports | basic | basic | 16 reports | ✓ 0.1.1/0.2, more in 0.3.2 |
+| Resources, costs, workload | ✓ | ✓ | ✓ | ✓ 0.2 (leveling in 0.3, rates over time in 0.3) |
+| Baseline, actuals, status date | ✓ | ✓ | ✓ | ✓ 0.2 (11 baselines and earned value in 0.3) |
+| EPS, activity codes, multi-project | master projects | ✓ | — | 0.3 |
+| Filters, groups, layouts, global change | ✓ | ✓ | ✓ | 0.3 |
+| Schedule check, longest path, float paths | — | ✓ | partial | 0.3 |
+| Network diagram | ✓ | ✓ | ✓ | 0.3 |
+| Dashboards and periodic reports | basic | basic | 16 reports | ✓ 0.1.1/0.2, more in 0.3 |
 
 ---
 
