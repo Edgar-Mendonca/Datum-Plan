@@ -17,6 +17,8 @@ pub enum Op {
     Outdent { uids: Vec<u32> },
     Move { uids: Vec<u32>, up: bool },
     Link { uids: Vec<u32> },
+    /// Adds, changes or (with no kind) removes the link from `pred` to `succ`.
+    LinkSet { pred: u32, succ: u32, kind: Option<LinkType>, lag: String },
     Unlink { uids: Vec<u32> },
     MarkOnTrack { uids: Vec<u32> },
     /// Saves (or clears) the baseline of the given tasks, or of all tasks when empty.
@@ -376,6 +378,22 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 if !t.preds.iter().any(|l| l.pred == pred) {
                     t.preds.push(Link { pred, kind: LinkType::FS, lag: 0 });
                 }
+            }
+        }
+        Op::LinkSet { pred, succ, kind, lag } => {
+            let i = p.idx(succ).ok_or("That task no longer exists.")?;
+            p.idx(pred).ok_or("There is no such predecessor.")?;
+            if pred == succ {
+                return Err("A task cannot be its own predecessor.".into());
+            }
+            let lag = if lag.trim().is_empty() { 0 } else { let l = lag.trim(); let neg = l.starts_with('-'); let m = parse::dur(l.trim_start_matches(['+', '-']), p.day_min)?.0; if neg { -m } else { m } };
+            let t = &mut p.tasks[i];
+            let at = t.preds.iter().position(|l| l.pred == pred);
+            match (kind, at) {
+                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag },
+                (Some(kind), None) => t.preds.push(Link { pred, kind, lag }),
+                (None, Some(k)) => { t.preds.remove(k); }
+                (None, None) => {}
             }
         }
         Op::Unlink { uids } => {

@@ -5,6 +5,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Row {
     pub uid: u32,
     pub id: usize,
@@ -55,6 +56,7 @@ pub struct Row {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ResRow {
     pub uid: u32,
     pub id: usize,
@@ -71,6 +73,7 @@ pub struct ResRow {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct View {
     pub name: String,
     pub start: String,
@@ -224,12 +227,15 @@ pub fn build(p: &Project, fmt: &str, today: NaiveDate) -> View {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Rel { pub uid: u32, pub id: usize, pub name: String, pub kind: LinkType, pub lag: String }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AssignRow { pub res: u32, pub name: String, pub kind: String, pub units: String, pub work: String, pub cost: String }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Detail { pub preds: Vec<Rel>, pub succs: Vec<Rel>, pub assigns: Vec<AssignRow> }
 
 /// Relationships and assignments of one task, for the details pane.

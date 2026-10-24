@@ -240,7 +240,7 @@ pub fn read(text: &str) -> Result<Project, String> {
     for t in rows("TASK").iter().filter(mine) {
         acts.entry(g(t, "wbs_id")).or_default().push(t);
     }
-    acts.values_mut().for_each(|v| v.sort_by(|a, b| (g(a, "early_start_date"), g(a, "task_code")).cmp(&(g(b, "early_start_date"), g(b, "task_code")))));
+    acts.values_mut().for_each(|v| v.sort_by_key(|a| (g(a, "early_start_date"), g(a, "task_code"))));
     let cons = |s: &str| CS.iter().find(|(_, n)| *n == s).map(|(c, _)| *c).unwrap_or_default();
     let mut uid = 1_000_000u32;
     fn walk(id: &str, level: u8, p: &mut Project, kids: &HashMap<String, Vec<&HashMap<String, String>>>, acts: &HashMap<String, Vec<&HashMap<String, String>>>,
