@@ -222,6 +222,51 @@
 
 ---
 
+### P. Datum scheduling style (our own mix of MSP and P6)
+Goal: MSP's ease with P6's rigour, without either one's traps. Defaults for every new plan (each one can be changed in Schedule Options):
+
+| Topic | Datum default | Why |
+| --- | --- | --- |
+| Words | Plain names with the MSP/P6 term in brackets, e.g. "Status date (data date)", "Slack (total float)" | Easy to learn, and the vocabulary is recognisable to both camps |
+| Task type | **Fixed duration**; adding people changes work, not dates (effort-driven off) | Avoids MSP's biggest surprise, where adding a resource shortens the task |
+| % complete | One **Progress** field. It defaults to duration-based, with a per-task switch to physical or units (P6 types) | A single number for most users, P6 precision when needed |
+| Actual dates | Filled in automatically from progress and the status date; editable | No missing-actuals errors |
+| Out-of-sequence progress | **Retained logic** | The realistic forecast (P6 default) |
+| Critical | Slack ≤ 0, with one click to switch to **Longest path** | Clear for everyone, rigorous on demand |
+| Lag calendar | Successor's calendar | Predictable |
+| Deadlines vs constraints | A deadline only warns (red marker, negative slack); hard constraints need a confirmation | No silent date locks |
+| Calculation | Automatic, with an **Explain** panel ("why this date") and a message bar for conflicts | Never a silent change, as the reference requires |
+| Entered vs calculated | Calculated cells shown in a softer colour with a ƒ hint; baseline and actual values tagged | Reference C1.3 |
+| New tasks | Auto-scheduled, 1 day, Activity ID auto-numbered **A1000, A1010…** (step and prefix editable) | Clean P6-style IDs without effort |
+
+### Q. New project workflow (step one for every plan)
+- **New project** opens a **Project Setup** panel docked on the right (like the details pane, not a pop-up). You can skip it at any point and come back from Project › Project Setup.
+  1. **Project:** name, code, description, client, manager, location, start date (or schedule from finish), priority.
+  2. **Calendar and units:** project calendar (Standard / 6-day / 24-hour / custom), hours per day, week start, holidays.
+  3. **Currency and costs:** the full ISO 4217 currency list (about 180, searchable, symbol and decimals), default rates.
+  4. **Structure:** WBS levels or phases, from a template or empty.
+  5. **Resources:** add people, equipment and materials now or later.
+  6. **Branding:** company name and **logo upload** for reports and printouts, and header/footer text.
+  7. **Finish** → opens the schedule (Gantt) with the WBS ready.
+- The default currency, logo and company name are **user preferences** in Options, applied to new projects. Each project can override them.
+
+### R. Branding, currency and safety
+- **Logo upload** in Options (company default) and in Project Setup (per project). It is used in report headers, page setup and exports. The image is stored inside the `.dplan` file so it travels with it.
+- **Currency** is per project: code, symbol, symbol position and decimals. It is used by every cost field, report and export (MSPDI `CurrencyCode`, XER `currtype`).
+- **Beta safety:** before a beta opens a plan saved by an older version, it writes `name.backup.dplan` next to it.
+
+### S. Capacity, look and language
+- **Plan size:** smooth editing at 20,000 activities, workable at 100,000 (virtualised grid and canvases, incremental scheduling, visible columns only).
+- **Look:** MS Project density (Segoe UI 9 pt, 20 px rows, header dropdown arrows) with Datum's clean light theme.
+- **Language:** English only for now. Text is kept in one place so translations can be added later.
+
+### T. Behaviour rules from the reference
+Every item in `docs/reference/MSP-P6-feature-reference.md` is in scope for 0.3:
+- Task Information tabs (A1), Field Settings vs Custom Fields (A2/A3), the Lookup, Formula and Graphical Indicators dialogs (A3–A5), Bar Styles (A6), Timescale (A7), Page Setup (A8), Reports gallery and editor (A9), Network Diagram (A10), Team Planner (A11), Resource Usage (A12), view management (A13) and Timeline (A14)
+- P6: Activity Details tabs (B1: General, Status, Resources, Predecessors, Successors, Relationships, Codes, Steps, Notebook, Expenses, WPs & Docs, UDFs, Summary; Risks too), Layouts (B2), Activity Codes (B3), Schedule Options including retained logic, progress override, actual dates, longest path and multiple float paths (B4), and Check Schedule with all 19 checks, thresholds and drill-down (B5)
+
+The **acceptance scenarios in reference C2** become automated tests where the engine can check them, and a manual checklist for each beta.
+
 ## 4. Architecture changes
 
 | Change | Why |
@@ -264,7 +309,13 @@
 - **Multi-project: local files only.** Each project is a `.dplan` file, and a workspace file lists them. Nothing is hosted; everything stays on the user's computer (open source, local-first).
 - **Beta channel: yes**, opt-in through the updater.
 - **Priority: everything.** Reports, network diagram and earned value matter most. If something slips, it moves to 0.3.1 and is listed there.
-- **Feature write-up:** the user is preparing an MS Project feature write-up in Markdown. Build starts after it arrives.
+- **Feature write-up:** received and stored as `docs/reference/MSP-P6-feature-reference.md`. It is in scope (section 3.T).
+- **Scheduling style:** our own Datum style, a simpler mix of MSP and P6 (section 3.P).
+- **Currency:** all ISO 4217 currencies; a user preference with a per-project override.
+- **New project workflow:** a skippable Project Setup panel docked on the right comes before the schedule (section 3.Q).
+- **Activity IDs:** auto-numbered (A1000 + 10). **Network diagram:** MS Project style. **Plan size:** as large as possible (target 20k smooth, 100k workable). **Fonts:** MS Project density, clean style. **Language:** English.
+- **Branding:** logo upload and company name, for reports and printing. **Beta backups:** yes.
+- **Next:** the user says "yes" to start the 0.3 build (beta.1).
 
 ### Original questions
 

@@ -152,6 +152,9 @@ flowchart LR
 | 0.3 plan | **SolidJS + Vite** for the UI (not Astro) | Small reactive components for MSP-level dialogs, ribbon and report designer. Astro targets content sites. |
 | 0.3 plan | **Local-first:** `.dplan` files plus a workspace file; no server, no cloud, no telemetry (the only network call is the update check) | Open source, everything stays on the user's computer. |
 | 0.3 plan | Betas through an opt-in updater channel; slipped items go to 0.3.1 | The user wants to check the big release step by step. |
+| 0.3 plan | **Datum scheduling style** (PLAN-0.3 §3.P): fixed duration, single Progress field, retained logic, slack ≤ 0 critical with a longest-path switch, auto actuals, an Explain panel, calculated cells marked | The user wants something easier than both MSP and P6. |
+| 0.3 plan | **Project Setup** panel (skippable, docked right) as step one of every new plan; all ISO currencies; logo and company branding; Activity IDs A1000+10; MSP-style network; MSP density; English only; beta backups | The user's answers, 2026-10-24. |
+| 0.3 plan | `docs/reference/MSP-P6-feature-reference.md` (from the user) is the behaviour spec; its C2 scenarios become tests and a checklist | A shared, written definition of done. |
 
 ---
 
@@ -232,6 +235,7 @@ flowchart LR
   - wants MSP's timeline and more save formats
 - Shared MSP screenshots: the column header menu, the Custom Fields dialog, the Task ribbon and the timeline.
 - Agreed that 0.2.1 → 0.5.2 become a single 0.3 release. Wrote [PLAN-0.3.md](PLAN-0.3.md) (audit, principles, feature catalogue A–O, architecture changes, beta milestones, open decisions). Waiting for the user's review and decisions before building.
+- The user answered all questions and supplied `docs/reference/MSP-P6-feature-reference.md`. Plan updated with the Datum scheduling style, the Project Setup workflow, currency, branding, capacity and behaviour rules (§3.P–T).
 
 ---
 
@@ -240,4 +244,4 @@ flowchart LR
 - XER export is checked against our own importer only. MSPDI export is checked against our own reader; it needs a real MS Project test.
 - Large plans: the grid is virtualised, but `view::build` and links run on every edit. Profile 10k+ tasks in 0.6.1.
 - Printing prints the current view only. Page setup comes in 0.2.1.
-- Decisions are answered (see PLAN-0.3.md section 6). Next session: read the user's MS Project feature write-up (.md) and the answers to the follow-up questions, then start beta.1.
+- All decisions are answered and the reference is stored. Waiting for the user's "yes" to start the 0.3 build (beta.1 first). Read PLAN-0.3.md §3.P–T and the reference before building.
