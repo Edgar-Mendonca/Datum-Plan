@@ -149,3 +149,32 @@ pub fn curve(c: &Calc, unit: &str) -> Curve {
     }
     Curve { buckets: b, planned, forecast, actual, earned }
 }
+
+/// One task's difference between two versions of a plan (Compare Projects).
+#[derive(Serialize)]
+pub struct Diff { pub uid: u32, pub name: String, pub change: &'static str, pub was: [String; 4], pub now: [String; 4], pub finish_var: String }
+
+/// Compares `old` with the current plan by unique ID: start, finish, duration and cost.
+pub fn compare(old: &Calc, new: &Calc) -> Vec<Diff> {
+    let keys = ["start", "finish", "dur", "cost"];
+    let pick = |c: &Calc, i: usize| keys.map(|k| c.text(i, k));
+    let mut out = vec![];
+    for (i, t) in new.p.tasks.iter().enumerate() {
+        match old.p.idx(t.uid) {
+            None => out.push(Diff { uid: t.uid, name: t.name.clone(), change: "Added", was: Default::default(), now: pick(new, i), finish_var: String::new() }),
+            Some(j) => {
+                let (a, b) = (pick(old, j), pick(new, i));
+                if a != b || old.p.tasks[j].name != t.name {
+                    let c = &new.s.cals[new.s.ci[i]];
+                    let (x, y) = (old.s.ef[j], new.s.ef[i]);
+                    let var = if y >= x { c.between(x, y) } else { -c.between(y, x) };
+                    out.push(Diff { uid: t.uid, name: t.name.clone(), change: "Changed", was: a, now: b, finish_var: crate::parse::fmt_dur(var, crate::model::Unit::D, new.p.day_min) });
+                }
+            }
+        }
+    }
+    for (j, t) in old.p.tasks.iter().enumerate().filter(|(_, t)| new.p.idx(t.uid).is_none()) {
+        out.push(Diff { uid: t.uid, name: t.name.clone(), change: "Removed", was: pick(old, j), now: Default::default(), finish_var: String::new() });
+    }
+    out
+}

@@ -11,6 +11,7 @@ const REPO: &str = "Edgar-Mendonca/Datum-Plan";
 pub struct Info {
     current: &'static str,
     latest: Option<String>,
+    beta: bool,
     available: bool,
     notes: String,
     published: String,
@@ -29,16 +30,34 @@ fn agent() -> ureq::Agent {
         .build()
 }
 
+/// 0.3.0-beta.2 → [0, 3, 0, 0, 2]; 0.3.0 → [0, 3, 0, 1, 0], so a release beats its betas.
 fn parts(v: &str) -> Vec<u64> {
-    v.trim_start_matches('v').split('.').map(|p| p.parse().unwrap_or(0)).collect()
+    let v = v.trim_start_matches('v');
+    let (main, pre) = v.split_once('-').unwrap_or((v, ""));
+    let mut out: Vec<u64> = main.split('.').map(|p| p.parse().unwrap_or(0)).collect();
+    out.resize(3, 0);
+    out.push(pre.is_empty() as u64);
+    out.push(pre.rsplit('.').next().and_then(|n| n.parse().ok()).unwrap_or(0));
+    out
 }
 
-pub fn check() -> Result<Info, String> {
+/// The newest release; with `beta`, pre-releases count too.
+pub fn check(beta: bool) -> Result<Info, String> {
     let current = env!("CARGO_PKG_VERSION");
     let page = format!("https://github.com/{REPO}/releases");
-    let none = |page| Info { current, latest: None, available: false, notes: String::new(), published: String::new(), url: None, sums: None, size: 0, page };
-    let rel: serde_json::Value = match agent().get(&format!("https://api.github.com/repos/{REPO}/releases/latest")).call() {
-        Ok(r) => r.into_json().map_err(|e| e.to_string())?,
+    let none = |page| Info { current, latest: None, beta: false, available: false, notes: String::new(), published: String::new(), url: None, sums: None, size: 0, page };
+    let url = if beta { format!("https://api.github.com/repos/{REPO}/releases?per_page=10") } else { format!("https://api.github.com/repos/{REPO}/releases/latest") };
+    let rel: serde_json::Value = match agent().get(&url).call() {
+        Ok(r) => {
+            let v: serde_json::Value = r.into_json().map_err(|e| e.to_string())?;
+            match v.as_array() {
+                Some(list) => match list.iter().filter(|r| !r["draft"].as_bool().unwrap_or(false)).max_by(|a, b| parts(a["tag_name"].as_str().unwrap_or("")).cmp(&parts(b["tag_name"].as_str().unwrap_or("")))) {
+                    Some(r) => r.clone(),
+                    None => return Ok(none(page)),
+                },
+                None => v,
+            }
+        }
         Err(ureq::Error::Status(404, _)) => return Ok(none(page)),
         Err(ureq::Error::Status(c, _)) => return Err(format!("GitHub answered {c}. Try again later.")),
         Err(_) => return Err("Could not reach GitHub. Check your internet connection.".into()),
@@ -51,6 +70,7 @@ pub fn check() -> Result<Info, String> {
         current,
         available: !latest.is_empty() && parts(&latest) > parts(current),
         latest: Some(latest),
+        beta: rel["prerelease"].as_bool().unwrap_or(false),
         notes: rel["body"].as_str().unwrap_or("").into(),
         published: rel["published_at"].as_str().unwrap_or("").get(..10).unwrap_or("").into(),
         url: exe.and_then(|a| a["browser_download_url"].as_str()).map(Into::into),

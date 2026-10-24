@@ -73,6 +73,7 @@ impl Doc {
 
     pub fn can_undo(&self) -> bool { !self.undo.is_empty() }
     pub fn can_redo(&self) -> bool { !self.redo.is_empty() }
+    pub fn undo_len(&self) -> usize { self.undo.len() + self.redo.len() * 7919 }
 
     /// Applies `op` to a copy and keeps it only if the plan still schedules.
     /// `fmt` is the date format the user types in.
