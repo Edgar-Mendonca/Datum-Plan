@@ -295,6 +295,7 @@ fn insert_rows(p: &mut Project, at: usize, rows: Vec<Vec<(String, String)>>, fmt
     let at = at.min(p.tasks.len());
     let level = level_at(p, at);
     let mut later = vec![];
+    let n = rows.len();
     for (k, row) in rows.into_iter().enumerate() {
         let t = p.new_task("", level, p.day_min);
         p.tasks.insert(at + k, t);
@@ -302,7 +303,13 @@ fn insert_rows(p: &mut Project, at: usize, rows: Vec<Vec<(String, String)>>, fmt
             if f == "preds" { later.push((at + k, v)) } else if !v.trim().is_empty() || f == "name" { set(p, at + k, &f, &v, fmt)? }
         }
     }
-    later.into_iter().try_for_each(|(i, v)| set(p, i, "preds", &v, fmt))
+    // Predecessor IDs are the ones the user saw before the rows went in.
+    let shift_ids = |v: &str, n: usize| v.split([',', ';']).map(|tok| {
+        let tok = tok.trim();
+        let cut = tok.find(|c: char| !c.is_ascii_digit()).unwrap_or(tok.len());
+        match tok[..cut].parse::<usize>() { Ok(id) if id > at => format!("{}{}", id + n, &tok[cut..]), _ => tok.to_string() }
+    }).collect::<Vec<_>>().join(",");
+    later.into_iter().try_for_each(|(i, v)| set(p, i, "preds", &shift_ids(&v, n), fmt))
 }
 
 fn res_set(p: &mut Project, uid: u32, field: &str, v: &str) -> Result<(), String> {

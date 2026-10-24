@@ -209,10 +209,11 @@ fn quick_add_and_rows() {
     let t = &doc.p.tasks[1];
     assert_eq!((t.name.as_str(), t.dur, t.preds.len(), t.deadline), ("Pour slab", 5 * D, 1, Some(d(2026, 11, 20))));
     assert_eq!(doc.p.resources[0].name, "Site Crew");
-    let rows = vec![vec![("name".into(), "A".into()), ("dur".into(), "3h".into())], vec![("name".into(), "B".into()), ("preds".into(), "3".into())]];
-    op(&mut doc, Op::InsertRows { at: 2, rows }).unwrap();
-    assert_eq!(doc.p.tasks[2].dur, 3 * H);
-    assert_eq!(doc.p.tasks[3].preds[0].pred, doc.p.tasks[2].uid);
+    let rows = vec![vec![("name".into(), "A".into()), ("dur".into(), "3h".into())], vec![("name".into(), "B".into()), ("preds".into(), "1, 2".into())]];
+    op(&mut doc, Op::InsertRows { at: 1, rows }).unwrap();
+    assert_eq!(doc.p.tasks[1].dur, 3 * H);
+    // IDs typed with new rows are the ones shown before the insert: 2 was "Pour slab", now row 4.
+    assert_eq!(doc.p.tasks[2].preds.iter().map(|l| l.pred).collect::<Vec<_>>(), vec![doc.p.tasks[0].uid, doc.p.tasks[3].uid]);
 }
 
 #[test]
@@ -299,5 +300,12 @@ fn exchange_round_trips() {
         assert!(q.is_summary(0) && q.tasks[3].dur == 0);
         assert_eq!(q.tasks[10].preds[0].kind, LinkType::SS);
     }
+    // Codes as IDs, and headers that look alike.
+    let f = dir.join("codes.csv");
+    std::fs::write(&f, "Activity,Description,Days,Depends on,Who\nA1,Survey,3,,Surveyor\nA2,Design,5,A1,Engineer\nA10,Build,8,\"A2SS+2d, A1\",Crew[200%]\n").unwrap();
+    let crate::io::Imported::Table(t) = crate::io::import(&f).unwrap() else { panic!() };
+    assert_eq!(t.guess, ["id", "name", "dur", "preds", "res"]);
+    let (q, bad) = crate::io::table::to_project(&t, &t.guess, "Q", d(2026, 11, 2), "%d-%b-%y").unwrap();
+    assert_eq!((bad, q.tasks[2].preds.len(), q.tasks[2].preds[0].kind), (0, 2, LinkType::SS));
     std::fs::remove_dir_all(dir).ok();
 }

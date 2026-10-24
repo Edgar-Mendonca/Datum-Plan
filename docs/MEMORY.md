@@ -6,12 +6,12 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.1.1** (released 2026-10-24) · 0.1.0 released the same day |
+| **Current version** | **0.2.0** (released 2026-10-24). Earlier: 0.1.0, 0.1.1 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, strict TypeScript UI with no framework, plain CSS |
-| **Code size** | About 2,700 lines in total: core about 1,000, shell about 340, UI about 1,350 |
-| **Installer** | NSIS `.exe`, per-user install, **1.7 MB** (v0.1.0) |
-| **Reference repos** | `Edgar-Mendonca/Cairn` (the earlier web planner, used only as a feature reference) · `Compressor-Engineering-Suite` (the Home/update pattern) |
+| **Code size** | About 5,400 lines: core 3,000 (with 311 lines of tests), shell 520, UI 1,550 TypeScript + CSS |
+| **Installer** | NSIS `.exe`, per-user install. 1.7 MB (0.1.0), 1.8 MB (0.1.1); 0.2.0 is larger because of the Excel libraries |
+| **Reference repos** | `Edgar-Mendonca/Cairn` (the earlier web planner: feature and template reference) · `Compressor-Engineering-Suite` (the Home/update pattern) |
 
 ---
 
@@ -19,60 +19,84 @@
 
 ```mermaid
 flowchart LR
-  subgraph UI["Window (WebView2) · ui/ + ui-src/main.ts"]
-    Ribbon[Ribbon tabs<br/>Task · Project · View · Help]
-    Grid[Virtualised task grid<br/>inline editing]
-    Gantt[Canvas Gantt<br/>timescale, bars, links]
-    Home[File backstage<br/>Home · Templates · Recent · Updates]
-    Side[View sidebar<br/>Gantt · List · Calendar · Dashboard · Reports]
+  subgraph UI["Window (WebView2) · ui/ + ui-src/*.ts"]
+    Ribbon[Ribbon: Task · Resource · Project · View · Help<br/>Ctrl+K search · Ctrl+J quick add]
+    Grid[grid.ts: any-field columns, editing,<br/>clipboard, find, row menus]
+    Gantt[gantt.ts: canvas Gantt + timeline strip,<br/>drag move/resize/progress/link]
+    Det[details.ts: P6-style pane<br/>General · Relationships · Resources · Notes]
+    Pages[pages.ts: Calendar · Resource Sheet ·<br/>Workload · Dashboard · Reports]
+    Dlg[dialogs.ts: Project Info · Working Time ·<br/>Options · Import mapping · Palette]
+    Home[main.ts: backstage Home/Templates/<br/>Import/Export/Updates]
   end
   subgraph Shell["src-tauri (Rust)"]
-    Cmd[main.rs commands<br/>state · apply · history · open · save<br/>recent · new_plan · templates · startup_file]
-    Upd[update.rs<br/>GitHub API · download · SHA-256 · silent install]
+    Cmd[main.rs commands: state · apply · history · new_plan · templates<br/>open · save · import · import_table · export · copy · paste<br/>detail · workload · options · autosave · recovery]
+    Upd[update.rs: GitHub API · SHA-256 · silent install]
   end
-  subgraph Core["crates/core (pure Rust, unit-tested)"]
-    Doc[doc.rs<br/>Op enum · undo/redo · .dplan IO]
-    Sched[sched.rs<br/>CPM forward/backward<br/>float · rollups · cycle check]
-    Cal[cal.rs<br/>working-day ordinals]
-    Parse[parse.rs<br/>durations · dates · predecessors]
-    View[view.rs<br/>rows for the screen]
-    Model[model.rs<br/>Project · Task · Link · Calendar]
-    Tpl[templates.rs<br/>5 starter plans]
+  subgraph Core["crates/core (pure Rust, 13 tests)"]
+    Doc[doc.rs: Op enum · undo/redo · .dplan]
+    Sched[sched.rs: multi-calendar CPM · constraints<br/>progress · summary links · ALAP]
+    Cal[cal.rs: minute-precision working time]
+    Load[load.rs: work · cost · overallocation · workload]
+    View[view.rs: rows with ~35 fields · resource rows · details]
+    IO[io/: mspdi.rs · xer.rs · table.rs csv+xlsx · xml.rs]
+    Model[model.rs: Project · Task · Calendar · Resource<br/>format 2 + migration from 0.1 files]
   end
-  Ribbon & Grid & Gantt & Home & Side -- "invoke(cmd, args)" --> Cmd
-  Cmd --> Tpl
-  Cmd -- "View JSON" --> Grid & Gantt
+  UI -- "invoke(cmd, args)" --> Cmd
+  Cmd -- "View JSON (camelCase)" --> UI
   Home -- check_update / install_update --> Upd
-  Upd -- "update-progress events" --> Home
-  Cmd --> Doc --> Sched --> Cal
-  Doc --> Parse
-  Cmd --> View --> Sched
-  Doc & Sched & View --> Model
+  Cmd --> Doc & View & IO & Load
+  Doc --> Sched --> Cal
+  View --> Sched & Load
+  IO --> Model
 ```
 
-**Rule:** the UI never calculates dates. Every edit is an `Op` sent to Rust. The core applies it to a copy, normalises it, re-schedules it, and only keeps it if it is valid (so cycles are refused). It then returns a complete `View` that the UI draws.
+**Rules:**
+- The UI never calculates dates.
+- Every edit is an `Op` sent to Rust. The core applies it to a copy, normalises it, schedules it, and keeps it only if it is valid (so cycles are refused).
+- The core then returns a complete `View`, formatted in the user's date format.
+- Dashboard and report numbers are computed in the UI from that `View`.
+
+### Time model (since 0.2)
+- **Instants** are minutes since 1970-01-01 00:00 local time. **Durations and lags** are working minutes.
+- `Project.day_min` (default 480) converts days. A week is 5 days and a month is 20 days.
+- `Task.unit` remembers how the duration was typed (h, d, w, mo) so it is shown the same way.
+- **Calendars:** `week: [Vec<(start_min, end_min)>; 7]` (Monday first) plus `exceptions` (date ranges; empty hours mean not working).
+- The project calendar is `Project.calendar`. Each task can use its own `Task.cal`.
+- **Scheduling:**
+  - Forward pass: `ES = max(link requirements, constraints, data date)`, snapped to working time. Milestones may sit at the end of a shift.
+  - Backward pass: works on late dates, which SNLT, FNLT, MSO, MFO and deadlines all limit.
+  - Lags count on the successor's calendar.
+  - Total float = working time between EF and LF.
+  - A link to or from a summary applies to every leaf task under it.
+  - `normalize()` drops links between a task and its own ancestors.
+- **Progress:** an actual finish fixes the task. An actual start with % < 100 puts the remaining work after the status date (status date + 1 day, 00:00). Unstarted tasks cannot start before the status date. Setting % fills in actual dates; 0% clears them.
 
 ### Files
 
 | Path | What it does |
 | --- | --- |
-| `crates/core/src/model.rs` | Plan model. `Project{name,start,calendar,tasks,next_uid}`, `Task{uid,name,level,dur,preds,pct,snet,notes}`. Outline by `level`, MSP-style: a task is a summary if the next row is deeper. `normalize()` repairs levels and links. |
-| `crates/core/src/cal.rs` | `WorkCal`: maps working-day ordinal ↔ date (week mask + holidays), growing lazily. |
-| `crates/core/src/sched.rs` | CPM. Kahn topological order over leaf tasks. ES/EF forward, LS/LF backward, TF and FF. Summaries roll up from their leaves. SNET constraint. |
-| `crates/core/src/parse.rs` | `5d / 2w / 1mo` durations, `24-Oct-26` dates, `3SS+2d` predecessor syntax (row IDs ↔ uids). |
-| `crates/core/src/doc.rs` | `Op` (Insert, Delete, Set, Indent, Outdent, Link, Unlink, Project, Batch), undo/redo of up to 200 snapshots, open and save of `.dplan` (pretty JSON). |
-| `crates/core/src/view.rs` | Builds `View{rows,start,finish,week,...}` with display strings and epoch-day numbers for the Gantt. |
-| `crates/core/src/templates.rs` | 5 starter plans (engineering, EPC, software, building, research), one line per task: `level\|name\|duration\|predecessors`. |
-| `crates/core/src/lib.rs` | Module list. |
-| `crates/core/src/tests.rs` | 9 tests: calendar, CPM and float, link types and lags, constraint and rollup, cycle and undo, indent/link/delete, parsing, templates round-trip, finish → duration. |
-| `src-tauri/src/main.rs` | Tauri commands, recent-files list (`%APPDATA%/com.edgarmendonca.datumplan/recent.json`), the unsaved-changes guard on close, `.dplan` passed on the command line. |
-| `src-tauri/src/update.rs` | Reads `releases/latest` from the GitHub API, picks the `*-setup.exe` and `SHA256SUMS.txt` assets, streams the download with progress events, verifies the hash, then runs `cmd /C ping … & start /wait setup.exe /S & start app.exe` and exits. Only accepts URLs under this repo's releases. Uses the system certificate store and proxy environment variables. |
-| `src-tauri/tauri.conf.json` | Window, CSP, NSIS (`installMode: currentUser`), `.dplan` file association, icons. |
-| `ui/index.html` | Layout skeleton plus the SVG icon sprite. |
-| `ui/styles.css` | Light theme tokens (text navy `#14325E`, primary `#2F6FCF`, sky `#9CC2F7`, amber `#F2B233`, critical `#D64545`, panels `#F7F9FC`), ribbon, sidebar, grid, pages, backstage, dialogs, print styles. |
-| `ui-src/main.ts` | The whole UI: grid virtualisation, cell editor, keyboard, canvas Gantt (timescale tiers, links, critical path, drag to move/resize/link, tooltips), ribbon, view sidebar, Calendar/Dashboard/Report pages (computed from rows: planned % curve, late = finish before today and not 100%), backstage Home with template cards, update card, dialogs. Compiles to `ui/main.js` (gitignored). |
-| `.github/workflows/ci.yml` | On every push: clippy `-D warnings`, cargo tests, TypeScript build. |
-| `.github/workflows/release.yml` | On a `v*` tag: Windows build, rename to `DatumPlan-X.Y.Z-setup.exe`, write `SHA256SUMS.txt`, take notes from CHANGELOG, publish the release. |
+| `crates/core/src/model.rs` | Model and file format 2: Task (dur, unit, preds, pct, constraint/cdate, deadline, manual/mstart, inactive, cal, actuals, res, bl, timeline, code, notes), Calendar, Exception, Resource, Project (status, day_min, manual_default, calendars, resources, columns). `from_json` upgrades 0.1 files. `normalize()` repairs data. |
+| `crates/core/src/cal.rs` | `WorkCal`: `add`, `sub`, `between`, `next_start`, `prev_end`, `in_or_end`, `end_of`, `day_minutes`. `at(date)` and `date_of(t)` convert between dates and instants. |
+| `crates/core/src/sched.rs` | CPM as described above. Returns `Sched` with es/ef/ls/lf/tf/ff, summary/off flags, calendar index per task, the calendars, and start/finish. |
+| `crates/core/src/load.rs` | Work and cost per task and resource, daily load, overallocation, and `workload(weekly)` buckets for the Workload view. |
+| `crates/core/src/parse.rs` | Durations with units, dates (display format first), predecessors `3SS+4h`, resources `Name[50%]`, constraint names, and the quick-add sentence parser. |
+| `crates/core/src/doc.rs` | Ops: Insert, InsertRows, QuickAdd, Paste, Delete, Set (about 20 fields), Indent, Outdent, Move, Link, LinkSet, Unlink, MarkOnTrack, Baseline, Project, CalPut, CalDelete, ResInsert, ResSet, ResDelete, Columns, Batch. Also undo/redo (200 steps), `copy()`, and `set()` (reused by the importers). |
+| `crates/core/src/view.rs` | `build(p, date_fmt, today)` → View (rows, resources, calendars, columns, totals, baseline finish and variance). `detail(uid)` → relationships and assignments. |
+| `crates/core/src/templates.rs` | 5 starter plans as `level\|name\|duration\|preds` lines. |
+| `crates/core/src/io/` | `mod.rs` dispatches by extension. `mspdi.rs`: MS Project XML in/out (calendars with exceptions, tasks, links, baselines, resources, assignments). `xer.rs`: P6 XER in/out (CALENDAR with clndr_data parser/writer, PROJECT, PROJWBS ↔ summaries, TASK, TASKPRED, RSRC, TASKRSRC). `table.rs`: CSV/XLSX read with header guessing + mapping → plan; CSV/XLSX write. `xml.rs`: a 60-line XML reader. |
+| `crates/core/src/tests.rs` | 13 tests: calendar arithmetic, CPM/float, link types and hour lags, constraints/deadline/ALAP, task calendars, summary links, inactive tasks, progress/status date, edits/undo/move/paste, resources/costs/baseline/workload, calendar ops/project settings, quick add/rows, parsing, templates + 0.1 migration, and round trips for XML, XER, CSV and XLSX. |
+| `src-tauri/src/main.rs` | App state (Doc, options, clipboard, pending import table), file dialogs, recent files, options.json, recovery.dplan in AppData (written by the `autosave` command on a UI timer; offered at start-up; cleared on save or a clean quit). |
+| `src-tauri/src/update.rs` | Updater (unchanged since 0.1.0). |
+| `ui/index.html` | Layout: title bar with search, ribbon, sidebar, timeline strip, grid, Gantt, details pane, page area, backstage, and the icon sprite (about 55 icons). |
+| `ui/styles.css` | Light theme tokens, all components, print styles. |
+| `ui-src/base.ts` | Types, the field catalogue `FIELDS`, state, core calls, dates, `dialog()` (resolves before removing, so inputs stay readable), `menu()`, toast. |
+| `ui-src/grid.ts` | Columns from `V.columns`, render/virtualise, edit with choice lists, column picker/header menu/resize, row commands, clipboard (DOM copy/cut/paste events; internal marker plus TSV for Excel), find/replace, row menu. |
+| `ui-src/gantt.ts` | Timescale (day/week/month/quarter/year), bars (baseline, manual, inactive, deadline, progress), links, today and status lines, timeline strip, zoom, drag modes `move`/`size`/`pct`/`link`. |
+| `ui-src/details.ts` | The details pane and its tabs; edits go through `Set` and `LinkSet` ops. |
+| `ui-src/pages.ts` | Calendar, Resource Sheet (inline editing), Workload heat table, Dashboard (KPIs, S-curve with baseline, phases, milestones, late), Reports (weekly/monthly, look-ahead, slipped vs baseline, print). |
+| `ui-src/dialogs.ts` | Project Information, Change Working Time, Options, Import (mapping), Export, Ctrl+K palette, Ctrl+J quick add, shortcuts. |
+| `ui-src/main.ts` | `CMDS` registry (ribbon, palette and keys share it), `RIBBON` layout, view sidebar, backstage, files, updates, keyboard, start-up (recovery prompt, autosave timer). |
+| `ui-src/tsconfig.json` | Joins the 7 files in order into `ui/main.js` (no modules, one global scope). |
 
 ### Update flow
 
@@ -90,18 +114,17 @@ sequenceDiagram
   App->>GH: SHA256SUMS.txt → verify hash
   App->>Inst: cmd: wait 2s, run /S (silent), then start the app
   App->>App: exit
-  Inst->>Inst: replace files in %LOCALAPPDATA%\Datum Plan
   Inst-->>U: new version opens
 ```
 
-### Release flow (for each version)
+### Release flow
 
 ```mermaid
 flowchart LR
-  A[Bump version<br/>src-tauri + core Cargo.toml] --> B[Add CHANGELOG section<br/>## X.Y.Z — date]
+  A[Bump version<br/>src-tauri + core Cargo.toml] --> B[CHANGELOG section<br/>## X.Y.Z — date]
   B --> C[Update docs/MEMORY.md]
-  C --> D[Commit, push, git tag vX.Y.Z]
-  D --> E[Actions: release.yml<br/>windows-latest]
+  C --> D[Commit + push]
+  D --> E[Run release.yml<br/>tag push, or workflow_dispatch<br/>when tags are blocked]
   E --> F[GitHub Release<br/>setup.exe + SHA256SUMS.txt]
   F --> G[Users click Update now]
 ```
@@ -112,103 +135,105 @@ flowchart LR
 
 | Date | Decision | Why |
 | --- | --- | --- |
-| 2026-10-24 | Name **Datum Plan**, file extension `.dplan` | The user chose it. *Datum* means a reference point. |
-| 2026-10-24 | **Rust engine** in `crates/core` instead of porting Cairn's TypeScript | The user wants everything in Rust for a small, robust app. Cairn is only a feature reference. |
-| 2026-10-24 | UI in **plain TypeScript, no framework** (no React) | Smallest bundle and fewest dependencies. The webview layer only draws. |
-| 2026-10-24 | **Custom updater** (GitHub API + SHA-256 + NSIS `/S`) instead of `tauri-plugin-updater` | Needs no signing-key secrets, so it worked from 0.1.0. Can move to the signed Tauri updater later. |
-| 2026-10-24 | Per-user NSIS install | No admin prompt, so silent updates work. |
-| 2026-10-24 | Durations in whole working days for 0.1 | Simple and correct. Hours and minutes come with real calendars in 0.2. |
-| 2026-10-24 | Links only between leaf tasks; indenting under a linked task removes its links | P6 behaviour, and simpler. Summary links are on the roadmap (0.2.2). |
-| 2026-10-24 | Windows only; no `.mpp` support | The user's choice. `.mpp` is proprietary. Exchange formats are dplan, XML, CSV, Excel and XER. |
-| 2026-10-24 | Look: MS Project layout (backstage Home, ribbon, grid + Gantt) | Matches the user's screenshots of MS Project. |
-| 2026-10-24 (0.1.1) | **Light theme** and a new light logo; Cairn-style **left view sidebar** | The user found 0.1.0 too dark and wants Cairn's sidebar navigation. |
-| 2026-10-24 (0.1.1) | No domain sample. **General templates** with mini-Gantt previews | The app is general purpose. |
-| 2026-10-24 (0.1.1) | Dashboard and reports are computed in the UI from the View rows | They need no engine change. They move to Rust when actuals and baselines arrive (0.6). |
-| 2026-10-24 (0.1.1) | Dragging a bar sets SNET (MSP behaviour); dragging the end sets Finish → duration; dragging vertically links | Matches MS Project. |
+| 2026-10-24 | Name **Datum Plan**, file extension `.dplan` | The user chose it. |
+| 2026-10-24 | **Rust engine** in `crates/core`; Cairn is only a reference | The user wants everything in Rust for a small, robust app. |
+| 2026-10-24 | UI in plain TypeScript with no framework, split into 7 script files joined by tsc | Small bundle; modules without a bundler. |
+| 2026-10-24 | Custom updater (GitHub API + SHA-256 + NSIS `/S`); per-user install | Needs no signing secrets; silent updates. |
+| 2026-10-24 | Windows only; no `.mpp` (closed format) | The user's choice. Exchange formats are dplan, XML, XER, XLSX and CSV. |
+| 0.1.1 | Light theme, new logo, Cairn-style sidebar, general templates | The user's feedback on 0.1.0. |
+| 0.2.0 | **Minute-precision engine with real calendars** (replacing whole days) | Needed for hours, shifts, holidays and P6/MSP exchange. Old files migrate (day × 480). |
+| 0.2.0 | Several roadmap steps shipped as one release (0.1.2–0.1.4, calendars, constraints, logic, exchange, resources, baselines/progress) | The user asked for all of it in 0.2. |
+| 0.2.0 | Links on summaries apply to every leaf under them; links to one's own summary are dropped | Simple and close to MSP. P6 has no summary links anyway. |
+| 0.2.0 | Status date semantics: progress up to the end of that day; remaining work starts the next day | MSP-like status date. XER `last_recalc_date` maps to status = data date − 1. |
+| 0.2.0 | Work-resource units: `50%`, `0.5` or `50`; material: quantity; cost: amount | Matches MSP habits. |
+| 0.2.0 | Predecessor IDs typed with new rows (quick add, paste) mean the IDs shown before the insert | What the user sees on screen. |
+| 0.2.0 | XML reader written by hand instead of quick-xml | The quick-xml API changes a lot between versions; MSPDI only needs elements and text. |
+| 0.2.0 | Recovery copy in AppData, not autosave over the user's file | Safe: never overwrites a file without asking. |
 
 ---
 
 ## 3. Roadmap
 
-✅ done · 🔜 next · ⬜ planned. One small release at a time; every release goes through the in-app updater.
+✅ done · 🔜 next · ⬜ planned. Small releases; every one goes through the in-app updater.
 
 | Version | Theme | Contents | Status |
 | --- | --- | --- | --- |
-| **0.1.0** | Shell + updater + core | Installer, Home/backstage, update check and one-click install, ribbon, grid editing, summaries, FS/SS/FF/SF links, CPM + float, Gantt, undo/redo, `.dplan`, recent files | ✅ |
-| **0.1.1** | Look, views, reports | Light theme and new logo, view sidebar, 5 templates with previews, drag to move/resize/link bars, tooltips, editable Finish, Task List, Calendar, Dashboard (S-curve, phases, milestones, late), weekly/monthly progress report with print/PDF | ✅ |
-| 0.1.2 | Grid power | Column picker (any field, "Add New Column"), hide/reorder columns, move rows (Alt+Shift+↑/↓), cut/copy/paste rows and cells, fill down, Find/Replace (Ctrl+F/H), WBS code column, wrap text | 🔜 |
-| 0.1.3 | Gantt power | Timeline strip above the Gantt, right-click menus, drag progress, link dialog (double-click a link to edit type/lag), bottom detail pane with P6-style tabs (General, Relationships, Notes), timescale dialog, zoom presets | ⬜ |
-| 0.1.4 | Comfort | Options dialog (date format, units, default mode), autosave + crash recovery, Ctrl+K command search, quick-add line (`Pour slab 5d after 4`), remember layout, optional dark theme | ⬜ |
-| 0.2.0 | Calendars | Hour/minute precision, working hours and shifts, holidays and exceptions, multiple calendars, task calendars | ⬜ |
-| 0.2.1 | Constraints and modes | SNLT, FNET, FNLT, MSO, MFO, ALAP, deadlines, manual scheduling, inactive tasks | ⬜ |
-| 0.2.2 | Logic | Links on summaries, elapsed/% lags, task types, effort-driven, recurring tasks, split tasks, schedule from finish | ⬜ |
-| 0.3.0 | Excel / CSV | Import with column mapping, export | ⬜ |
-| 0.3.1 | MS Project XML | MSPDI import/export | ⬜ |
-| 0.3.2 | Primavera | XER and P6 XML import/export, MPX import | ⬜ |
-| 0.3.3 | Print | Gantt printing with page setup, legend, PDF, PNG/SVG export | ⬜ |
-| 0.4.0 | Resources | Resource sheet (work/material/cost), roles, max units, rates, assignments, Resources view | ⬜ |
-| 0.4.1 | Workload | Team planner, Workload and Capacity views, task/resource usage (timephased), histograms | ⬜ |
-| 0.4.2 | Leveling | Leveling (priority, within float, splitting), overallocation indicators | ⬜ |
-| 0.5.0 | Costs | Rates over time, fixed costs, expenses, cost accounts, budget, cash-flow report | ⬜ |
-| 0.6.0 | Tracking | Baselines (11, compare any), status/data date, actual start/finish, remaining duration, % complete types, update project, tracking Gantt, progress line | ⬜ |
-| 0.6.1 | Earned value | PV/EV/AC, SPI/CPI, EAC/ETC/VAC/TCPI, S-curves against baseline | ⬜ |
-| 0.6.2 | Reporting 2 | Reports with actuals vs baseline, period snapshots (store period performance), 3-week look-ahead, comments/photos per period, report pack to PDF/Excel, custom report builder | ⬜ |
-| 0.7.0 | P6 enterprise | EPS tree, multi-project SQLite database, WBS codes, activity codes, UDFs, activity types (LOE, WBS summary, resource-dependent), steps | ⬜ |
-| 0.7.1 | Layouts | Filters, groups, sort, saved layouts/views, highlight filters, Global Change | ⬜ |
-| 0.8.0 | Analysis | Schedule log, Check Schedule (DCMA 14-point), longest path, multiple float paths, driving-path trace, schedule health score | ⬜ |
-| 0.8.1 | Network | Network diagram (PERT boxes) and flow view | ⬜ |
-| 0.8.2 | Risk | Risks and issues register, thresholds, what-if scenarios (compare two schedules) | ⬜ |
-| 0.9.0 | Portfolio | Portfolio dashboard across projects, master/subprojects, shared resource pool | ⬜ |
-| 0.9.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports | ⬜ |
+| **0.1.0** | Shell + updater + core | Installer, Home, updater, ribbon, grid, summaries, links, CPM, Gantt, undo, `.dplan` | ✅ |
+| **0.1.1** | Look, views, reports | Light theme, logo, sidebar, templates, drag bars, Calendar, Dashboard, weekly/monthly report | ✅ |
+| **0.2.0** | The big one | Grid power (any column, clipboard, fill, move, find/replace, menus), Gantt power (timeline, progress drag, details pane, link editing), Ctrl+K, Ctrl+J, Options, recovery, minute calendars + exceptions + task calendars, all constraints + deadlines, manual/inactive tasks, summary links, status date + actuals + Mark on Track, baselines + variance, resources + costs + workload, import/export XML/XER/XLSX/CSV | ✅ |
+| 0.2.1 | Feedback + print | Fixes from the user's testing, Gantt printing with page setup and legend, PDF/PNG export of the Gantt, timescale and bar-style dialogs, column sort | 🔜 |
+| 0.2.2 | Leveling and team | Resource leveling (priority, within float, splitting), Team Planner, resource calendars, task types (fixed units/work/duration), effort-driven, recurring and split tasks | ⬜ |
+| 0.3.0 | Costs | Rates over time, fixed costs, expenses, cost accounts, budget, cash-flow report | ⬜ |
+| 0.3.1 | Earned value | 11 baselines + interim plans, PV/EV/AC, SPI/CPI, EAC/ETC/VAC/TCPI, progress line, period snapshots (store period performance) | ⬜ |
+| 0.3.2 | Reporting 2 | Report builder, report pack to PDF/Excel, 3-week look-ahead report, comments and photos per period | ⬜ |
+| 0.4.0 | P6 enterprise | EPS tree, multi-project SQLite database, activity codes, UDFs, activity types (LOE, WBS summary), steps, % complete types, roles | ⬜ |
+| 0.4.1 | Layouts | Filters, groups, sorting, saved layouts and views, highlight filters, Global Change, custom fields with formulas | ⬜ |
+| 0.5.0 | Analysis | Schedule log, Check Schedule (DCMA 14-point), longest path, multiple float paths, driving-path trace, health score | ⬜ |
+| 0.5.1 | Network | Network diagram / activity network | ⬜ |
+| 0.5.2 | Risk | Risks and issues register, thresholds, what-if comparison of two schedules | ⬜ |
+| 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
+| 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
 
 ### Features that go beyond MSP and P6
-Weekly/monthly progress reports (started in 0.1.1), dashboard with S-curve (0.1.1), 3-week look-ahead, period snapshots with comments and photos, schedule health score, one-click PDF report pack, what-if comparison, quick-add sentences.
+- Weekly/monthly progress reports ✅
+- Dashboard with S-curve and baseline curve ✅
+- Command search ✅ and quick-add sentences ✅
+- Recovery copies ✅
+- Later: period snapshots with comments and photos, schedule health score, one-click report pack, what-if comparison
 
-### Gap analysis: what MSP, P6 and Cairn have, and when Datum Plan gets it
+### Gap analysis (MSP, P6 and Cairn vs Datum Plan)
 | Area | MS Project | Primavera P6 | Cairn 0.8 | Datum Plan |
 | --- | --- | --- | --- | --- |
-| Grid editing, outline, links, CPM | ✓ | ✓ | ✓ | ✓ 0.1 |
-| Interactive Gantt (drag) | ✓ | ✓ | ✓ | ✓ 0.1.1 (progress drag 0.1.3) |
-| Column picker, custom fields, formulas | ✓ | UDFs | ✓ | 0.1.2 / 0.7.0 |
-| Timeline view | ✓ | — | ✓ | 0.1.3 |
-| Calendars (hours, holidays, many) | ✓ | ✓ | ✓ | 0.2.0 |
-| Full constraints, manual tasks | ✓ | ✓ | ✓ | 0.2.1 |
+| Grid, outline, links, CPM | ✓ | ✓ | ✓ | ✓ 0.1 |
+| Interactive Gantt, timeline | ✓ | partial | ✓ | ✓ 0.2 |
+| Column picker | ✓ | ✓ | ✓ | ✓ 0.2 (custom fields and formulas in 0.4.1) |
+| Calendars (hours, exceptions, many) | ✓ | ✓ | ✓ | ✓ 0.2 (resource calendars in 0.2.2) |
+| Constraints, deadlines, manual, inactive | ✓ | ✓ | ✓ | ✓ 0.2 |
 | Task types, effort-driven, recurring, split | ✓ | duration types | ✓ | 0.2.2 |
-| File exchange (XLSX, CSV, XML, XER) | ✓ | ✓ | ✓ | 0.3.x |
-| Resources, usage, leveling | ✓ | ✓ | ✓ | 0.4.x |
-| Costs, expenses, cash flow | ✓ | ✓ | ✓ | 0.5.0 |
-| Baselines, actuals, earned value | ✓ | ✓ | ✓ | 0.6.x |
-| EPS, activity codes, multi-project | master projects | ✓ | — | 0.7.0 |
-| Filters, groups, layouts, global change | ✓ | ✓ | ✓ | 0.7.1 |
-| Schedule check, longest path, float paths | — | ✓ | partial | 0.8.0 |
-| Network diagram | ✓ | ✓ | ✓ | 0.8.1 |
-| Dashboard and periodic progress reports | basic | basic | 16 reports | ✓ 0.1.1, more in 0.6.2 |
+| File exchange (XLSX, CSV, XML, XER) | ✓ | ✓ | ✓ | ✓ 0.2 |
+| Resources, costs, workload | ✓ | ✓ | ✓ | ✓ 0.2 (leveling in 0.2.2, rates over time in 0.3.0) |
+| Baseline, actuals, status date | ✓ | ✓ | ✓ | ✓ 0.2 (11 baselines and earned value in 0.3.1) |
+| EPS, activity codes, multi-project | master projects | ✓ | — | 0.4.0 |
+| Filters, groups, layouts, global change | ✓ | ✓ | ✓ | 0.4.1 |
+| Schedule check, longest path, float paths | — | ✓ | partial | 0.5.0 |
+| Network diagram | ✓ | ✓ | ✓ | 0.5.1 |
+| Dashboards and periodic reports | basic | basic | 16 reports | ✓ 0.1.1/0.2, more in 0.3.2 |
 
 ---
 
 ## 4. Session log
 
 ### 2026-10-24: Session 1 (brainstorm + 0.1.0)
-- Read Cairn (TS/React web planner) and CentriForge (Python/PyInstaller suite with a launcher updater) for reference.
-- Wrote `docs/BRAINSTORM.md` (the feature map of MSP + P6) and a draft logo (`docs/brand/datum-plan-icon.svg`).
-- The user approved the name, Windows only, no `.mpp`, everything in Rust/Tauri 2, and small step-by-step releases. They sent MS Project screenshots (Home backstage, ribbons, Gantt with timeline, column list, Task Information).
-- Built 0.1.0: the Rust core with 8 tests, the Tauri shell, the custom updater, the TypeScript UI, CI and release workflows, CHANGELOG, README and this file.
-- Checked by running the real app under Xvfb: Home, sample plan, grid typing, Task Information, indent + undo, View tab, Save dialog → `.dplan`, Recent list, update check against GitHub.
-- Released v0.1.0 through release.yml (workflow_dispatch, because the session proxy blocks pushing tags). CI and Release both green. Installer: `DatumPlan-0.1.0-setup.exe`, 1.7 MB.
+- Read Cairn and CentriForge. Wrote the brainstorm and a draft logo.
+- The user approved the name, Windows only, no `.mpp`, Rust/Tauri 2, and small releases. They sent MS Project screenshots.
+- Built and released 0.1.0: Rust core, Tauri shell, custom updater, TypeScript UI, CI and release workflows.
 
 ### 2026-10-24: Session 2 (0.1.1)
-- The user confirmed that 0.1.0 installed and works, and asked for a lighter look, a better logo, no compressor sample, a Gantt they can touch, a Cairn-style sidebar, weekly/monthly reporting, and a detailed version plan.
-- Built 0.1.1 (see CHANGELOG). Checked it under Xvfb: template cards, Gantt drag-move, Dashboard, Reports, Calendar.
-- Rewrote the roadmap into small steps from 0.1.2 to 1.0 and added the gap analysis against MSP, P6 and Cairn.
-- Released 0.1.1. This is the first real test of the in-app updater from 0.1.0.
+- Feedback: too dark, logo too heavy, no domain sample, Gantt not interactive, wanted a Cairn sidebar and periodic reporting.
+- Released 0.1.1: light theme, new logo, sidebar, templates, drag bars, Calendar, Dashboard, Reports. Rewrote the roadmap.
+
+### 2026-10-24: Session 3 (0.2.0)
+- The user asked for 0.1.2, 0.1.3, 0.1.4 and the "0.2 onwards" items (calendars, constraints, exchange, resources) all in 0.2. They shared a "P6 planning basics" chart (EPS/WBS/activities/calendars/relationships/F9/critical path/resource loading/baseline/update progress).
+- Rewrote the engine on minutes with real calendars. Added constraints, deadlines, ALAP, manual and inactive tasks, summary links, status date and actuals, resources and costs, workload, and baselines.
+- Added IO: MSPDI, XER, XLSX/CSV, all with round-trip tests.
+- Split the UI into 7 files. Added the column picker, clipboard, fill, move, find/replace, context menus, timeline strip, progress drag, details pane, Resource Sheet, Workload, Change Working Time, Options, recovery, Ctrl+K and Ctrl+J.
+- Bugs fixed during testing:
+  - dialogs lost their inputs on OK (also present in 0.1.x)
+  - camelCase fields were missing in the view JSON
+  - the details pane overlapped the Gantt canvas (fixed with a ResizeObserver)
+  - pressing Enter in Ctrl+K also clicked the dialog it opened
+  - quick-add IDs were shifted by the new row
+  - CSV header guessing put two columns on the same field
+  - alphanumeric predecessor IDs were dropped
+- Checked by running the real app under Xvfb: Gantt, right-click menu, timeline, details (General/Relationships/Resources), Resource Sheet, Workload, palette, Change Working Time (Saturday working moved the finish from 08-Feb to 21-Jan), CSV import with mapping, baseline bars, Dashboard. 13 core tests and clippy `-D warnings` pass.
+- Released 0.2.0.
 
 ---
 
 ## 5. Known limits and next steps
-- Windows SmartScreen warns on the first install because the installer is unsigned. Updates after that are silent.
-- Scrolling 10k+ rows is untested (the grid is virtualised and links loop over all rows); profile this in 0.9.1.
-- The end-to-end updater can only be tested once 0.1.1 is released: install 0.1.0, then click Update now.
-- Updater end to end: 0.1.0 → 0.1.1 is the first live test. The user should confirm the update installs and restarts.
-- Reports use planned dates and % complete. Actual dates and baselines arrive in 0.6.
-- Next session: start **0.1.2** (column picker, move rows, copy/paste, find).
+- Windows SmartScreen warns on the first install (unsigned). Updates after that are silent. **Confirm with the user that 0.1.x → 0.2.0 updated in-app.**
+- XER export is checked against our own importer only. MSPDI export is checked against our own reader; it needs a real MS Project test.
+- Large plans: the grid is virtualised, but `view::build` and links run on every edit. Profile 10k+ tasks in 0.6.1.
+- Printing prints the current view only. Page setup comes in 0.2.1.
+- Next session: collect the user's feedback on 0.2.0 and start **0.2.1**.

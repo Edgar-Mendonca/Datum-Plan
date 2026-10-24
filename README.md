@@ -20,14 +20,16 @@
 
 ## What it does today
 
-- An MS Project-style ribbon, task sheet and Gantt chart, in a light theme.
-- A view sidebar: Gantt, Task List, Calendar, Dashboard and Reports.
-- Drag Gantt bars to move them, drag the end to resize, drag down to link.
-- Summary tasks, milestones, and FS/SS/FF/SF links with lags. A Rust critical path engine calculates total and free float.
-- A dashboard with an S-curve, and weekly or monthly progress reports you can print or save as PDF.
-- Five templates (engineering, EPC, software, building, research), undo and redo, `.dplan` files.
-- One-click updates from GitHub Releases, with SHA-256 checksum verification.
+- **MS Project look, P6 power:** ribbon, task sheet and Gantt chart, a timeline strip, and a Primavera-style details pane (General, Relationships, Resources, Notes).
+- **Scheduling to the minute:** calendars with working hours and holidays, task calendars, all constraints and deadlines, manual and inactive tasks, FS/SS/FF/SF links with lags in hours or days, and critical path with total and free float.
+- **Progress:** status date, actual dates, remaining duration, Mark on Track, baselines with variance and baseline bars.
+- **Resources:** a resource sheet (work, material and cost), assignments, costs, and workload with overallocation.
+- **Views:** Gantt, Task List, Calendar, Resources, Workload, Dashboard (S-curve) and weekly/monthly Reports.
+- **Exchange:** import and export MS Project XML, Primavera P6 XER, Excel and CSV.
+- **Speed:** any column you need, cut/copy/paste (also from Excel), fill down, find/replace, Ctrl+K command search, Ctrl+J quick add, and recovery of unsaved work.
+- **Updates:** one-click updates from GitHub Releases, with SHA-256 checksum verification.
 
+<img src="docs/images/details.png" alt="Details pane with relationships" width="100%">
 <img src="docs/images/dashboard.png" alt="Dashboard" width="100%">
 
 See the [changelog](CHANGELOG.md) for details and the [roadmap](docs/MEMORY.md#roadmap) for what comes next.

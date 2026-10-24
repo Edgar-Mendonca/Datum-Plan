@@ -15,11 +15,11 @@ pub struct Table {
 
 /// Fields a column can map to: key, label, header words that suggest it.
 pub const FIELDS: [(&str, &str, &[&str]); 15] = [
-    ("id", "ID (for predecessors)", &["id", "unique id", "#"]),
+    ("id", "ID (for predecessors)", &["id", "unique id", "#", "activity", "ref"]),
     ("level", "Outline level", &["outline level", "level", "indent"]),
     ("wbs", "WBS / outline number", &["wbs", "outline number"]),
     ("code", "Activity ID", &["activity id", "task code", "code"]),
-    ("name", "Task name", &["name", "task", "activity", "description", "title"]),
+    ("name", "Task name", &["name", "task", "activity name", "description", "title"]),
     ("dur", "Duration", &["duration", "dur", "days"]),
     ("start", "Start", &["start", "begin"]),
     ("finish", "Finish", &["finish", "end", "due"]),
@@ -32,12 +32,22 @@ pub const FIELDS: [(&str, &str, &[&str]); 15] = [
     ("notes", "Notes", &["note", "comment", "remark"]),
 ];
 
-fn guess(h: &str) -> String {
+/// The likely field of a header and how sure we are (longer matches win).
+fn guess(h: &str) -> (String, usize) {
     let h = h.trim().to_lowercase();
-    // Exact matches first, then the longest word that appears in the header.
-    FIELDS.iter().find(|(k, l, _)| h == *k || h == l.to_lowercase()).or_else(|| {
-        FIELDS.iter().filter_map(|f| f.2.iter().filter(|w| h.contains(*w)).map(|w| w.len()).max().map(|n| (f, n))).max_by_key(|x| x.1).map(|x| x.0)
-    }).map(|f| f.0.to_string()).unwrap_or_default()
+    if let Some(f) = FIELDS.iter().find(|(k, l, _)| h == *k || h == l.to_lowercase()) {
+        return (f.0.to_string(), 100);
+    }
+    FIELDS.iter().filter_map(|f| f.2.iter().filter(|w| h.contains(*w)).map(|w| w.len()).max().map(|n| (f.0.to_string(), n))).max_by_key(|x| x.1).unwrap_or_default()
+}
+
+/// One field per column: when two columns look alike, the better match keeps the field.
+fn guesses(headers: &[String]) -> Vec<String> {
+    let g: Vec<(String, usize)> = headers.iter().map(|h| guess(h)).collect();
+    g.iter().enumerate().map(|(i, (f, n))| {
+        let better = g.iter().enumerate().any(|(j, (f2, n2))| j != i && f2 == f && (n2 > n || (n2 == n && j < i)));
+        if f.is_empty() || better { String::new() } else { f.clone() }
+    }).collect()
 }
 
 fn csv_rows(text: &str) -> Vec<Vec<String>> {
@@ -93,7 +103,7 @@ pub fn read(path: &Path) -> Result<Table, String> {
         return Err("The file has no rows.".into());
     }
     let headers: Vec<String> = rows.remove(0).into_iter().map(|h| h.trim().to_string()).collect();
-    let guess = headers.iter().map(|h| guess(h)).collect();
+    let guess = guesses(&headers);
     Ok(Table { headers, rows, guess })
 }
 
@@ -136,10 +146,11 @@ pub fn to_project(t: &Table, map: &[String], name: &str, today: NaiveDate, fmt: 
         if v.is_empty() || p.is_summary(i) {
             continue;
         }
+        // IDs can be codes like A10, so match the longest ID the token starts with: "A10SS+2d".
         let mapped: Vec<String> = v.split([',', ';']).filter_map(|tok| {
-            let tok = tok.trim();
-            let cut = tok.find(|c: char| !c.is_ascii_digit()).unwrap_or(tok.len());
-            ids.iter().position(|x| *x == tok[..cut]).map(|k| format!("{}{}", k + 1, &tok[cut..]))
+            let up = tok.trim().to_uppercase();
+            let (k, id) = ids.iter().enumerate().filter(|(_, x)| !x.is_empty() && up.starts_with(&x.to_uppercase())).max_by_key(|(_, x)| x.len())?;
+            Some(format!("{}{}", k + 1, &up[id.len()..]))
         }).collect();
         if doc::set(&mut p, i, "preds", &mapped.join(","), fmt).is_err() {
             bad += 1;
