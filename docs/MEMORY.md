@@ -161,16 +161,7 @@ flowchart LR
 | **0.1.0** | Shell + updater + core | Installer, Home, updater, ribbon, grid, summaries, links, CPM, Gantt, undo, `.dplan` | ✅ |
 | **0.1.1** | Look, views, reports | Light theme, logo, sidebar, templates, drag bars, Calendar, Dashboard, weekly/monthly report | ✅ |
 | **0.2.0** | The big one | Grid power (any column, clipboard, fill, move, find/replace, menus), Gantt power (timeline, progress drag, details pane, link editing), Ctrl+K, Ctrl+J, Options, recovery, minute calendars + exceptions + task calendars, all constraints + deadlines, manual/inactive tasks, summary links, status date + actuals + Mark on Track, baselines + variance, resources + costs + workload, import/export XML/XER/XLSX/CSV | ✅ |
-| 0.2.1 | Feedback + print | Fixes from the user's testing, Gantt printing with page setup and legend, PDF/PNG export of the Gantt, timescale and bar-style dialogs, column sort | 🔜 |
-| 0.2.2 | Leveling and team | Resource leveling (priority, within float, splitting), Team Planner, resource calendars, task types (fixed units/work/duration), effort-driven, recurring and split tasks | ⬜ |
-| 0.3.0 | Costs | Rates over time, fixed costs, expenses, cost accounts, budget, cash-flow report | ⬜ |
-| 0.3.1 | Earned value | 11 baselines + interim plans, PV/EV/AC, SPI/CPI, EAC/ETC/VAC/TCPI, progress line, period snapshots (store period performance) | ⬜ |
-| 0.3.2 | Reporting 2 | Report builder, report pack to PDF/Excel, 3-week look-ahead report, comments and photos per period | ⬜ |
-| 0.4.0 | P6 enterprise | EPS tree, multi-project SQLite database, activity codes, UDFs, activity types (LOE, WBS summary), steps, % complete types, roles | ⬜ |
-| 0.4.1 | Layouts | Filters, groups, sorting, saved layouts and views, highlight filters, Global Change, custom fields with formulas | ⬜ |
-| 0.5.0 | Analysis | Schedule log, Check Schedule (DCMA 14-point), longest path, multiple float paths, driving-path trace, health score | ⬜ |
-| 0.5.1 | Network | Network diagram / activity network | ⬜ |
-| 0.5.2 | Risk | Risks and issues register, thresholds, what-if comparison of two schedules | ⬜ |
+| **0.3.0** | MSP look + P6 power (one big release, shipped as betas) | Everything planned for 0.2.1 → 0.5.2, network diagram included. Full scope and beta milestones in **[PLAN-0.3.md](PLAN-0.3.md)**: MSP ribbon with dropdowns and Format tabs, about 450 fields + custom fields/formulas/lookups/indicators, Field Settings, Information dialogs, tables, filters, groups and views, formatting, task types, leveling, P6 activity types, longest path, usage views, Team Planner, Network Diagram, 11 baselines, Update Project, earned value, costs, report gallery and designer, page setup/PDF, DCMA check, compare, risks, EPS workspace, new formats (P6 XML, MPX, ICS, HTML, JSON) | 🔜 plan under review |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
@@ -229,6 +220,16 @@ flowchart LR
 - Checked by running the real app under Xvfb: Gantt, right-click menu, timeline, details (General/Relationships/Resources), Resource Sheet, Workload, palette, Change Working Time (Saturday working moved the finish from 08-Feb to 21-Jan), CSV import with mapping, baseline bars, Dashboard. 13 core tests and clippy `-D warnings` pass.
 - Released 0.2.0.
 
+### 2026-10-24: Session 4 (0.3 brainstorm)
+- Feedback on 0.2.0:
+  - the UI does not feel like MSP/P6
+  - too few fields, and no custom fields, formulas or Field Settings
+  - weak information dialogs and reporting
+  - ribbon buttons such as "Gantt Chart" should be dropdowns
+  - wants MSP's timeline and more save formats
+- Shared MSP screenshots: the column header menu, the Custom Fields dialog, the Task ribbon and the timeline.
+- Agreed that 0.2.1 → 0.5.2 become a single 0.3 release. Wrote [PLAN-0.3.md](PLAN-0.3.md) (audit, principles, feature catalogue A–O, architecture changes, beta milestones, open decisions). Waiting for the user's review and decisions before building.
+
 ---
 
 ## 5. Known limits and next steps
@@ -236,4 +237,4 @@ flowchart LR
 - XER export is checked against our own importer only. MSPDI export is checked against our own reader; it needs a real MS Project test.
 - Large plans: the grid is virtualised, but `view::build` and links run on every edit. Profile 10k+ tasks in 0.6.1.
 - Printing prints the current view only. Page setup comes in 0.2.1.
-- Next session: collect the user's feedback on 0.2.0 and start **0.2.1**.
+- Next session: get the user's answers to the decisions in PLAN-0.3.md section 6 (UI technology, multi-project storage, beta channel, priorities, screenshots), then start beta.1.
