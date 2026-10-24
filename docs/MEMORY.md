@@ -373,9 +373,37 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 ### 2026-10-24: Session 6, end (family)
 - User is starting Datum Plot (GraphPad Prism + OriginPro) in a new repo and chat, with the same style and workflow. Wrote `docs/FAMILY.md` (stack, colours with accents per app, type, logo rules, layout, components, icons, charts, printing, updates and releases, docs, workflow, new-app checklist) and a draft `docs/brand/datum-plot-icon.svg` (teal).
 
+### 2026-10-24: Session 6, end (README)
+- README rewritten as an independent product (no comparisons with other tools), with new screenshots (Gantt, Tracking, Network, Dashboard) taken from 0.3.8; old images removed. "Pending and next" written below, including 4 bugs found while taking the screenshots.
+
 ---
 
 ## 5. Known limits and next steps
+
+### Pending and next (written at the end of 0.3.8)
+
+**Bugs found while taking the 0.3.8 README screenshots (fix first, 0.3.9):**
+1. Print, "Fit timescale to 1 page wide": when the table takes most of the page (the templates now have Man-hours and Cost columns), a second near-empty page appears. Cause: the shrink in `print.tsx` `layout()` aims at 35 % of the *old* width for the chart, but the chart minimum is 30 % of the *new* width. Use `W = TW / (fit − 0.35)` when `TW > (fit − 0.35) × W`.
+2. The Network Diagram's completed-task cross is too heavy and runs over the text: lighten it (opacity) or use a corner tick.
+3. The Dashboard shows "Actual progress 0 %" when no status date is set even though tasks are done: fall back to today (or the latest actual date) and say so.
+4. On Linux the date picker stays open after a pick: check on Windows and close it after choosing.
+
+**Not yet checked on a real Windows PC or against real files:**
+- Print to PDF in WebView2 for every view (flowing report pages, page numbers from `@page` margin boxes).
+- XER, PMXML and MPX against files from other tools; custom fields and codes are not yet written to XER/XML.
+- The clipboard with real Excel; the Aptos font.
+
+**Features still to build (roadmap):**
+- 0.4 Risk and resources: Monte Carlo schedule risk (P50/P80, tornado, criticality); roles and skills with histograms by trade; a shared resource pool across plans; levelling preview; manpower curves planned vs actual.
+- Progress history: the actual S-curve from snapshots (not a straight line); earned schedule; rules of credit and installed quantities; a 3-week look-ahead with a constraint log.
+- Schedule quality: a health score with trend; baseline compare with ghost bars; a logic change log; a milestone trend chart.
+- Beyond other tools: what-if scenarios (branch, compare, merge); delay analysis (as-planned vs as-built, time impact, windows); line of balance and takt for repetitive work; an optional assistant (review the schedule, draft a plan, write the report narrative).
+- Portfolio: master plans and subprojects, cross-project links, a portfolio dashboard.
+- Hardening: 100k-task speed (row windows), code signing, signed updates, crash reports.
+- Working together: shared-folder check-out per WBS, comments, audit trail, field updates from a phone.
+- Finishing: a text-styles editor (by task type), saved custom views, a user guide for 1.0.
+
+**Known limits:**
 - Windows SmartScreen warns on the first install (unsigned). Updates after that are silent.
 - XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).
