@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "datum-core"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "calamine",
  "chrono",
@@ -595,7 +595,7 @@ dependencies = [
 
 [[package]]
 name = "datum-plan"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "chrono",
  "datum-core",

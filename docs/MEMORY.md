@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.7** (released 2026-10-24). Earlier: 0.1.0 … 0.3.6 |
+| **Current version** | **0.3.8** (released 2026-10-24). Earlier: 0.1.0 … 0.3.7 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -143,6 +143,19 @@ flowchart LR
   F --> G[Users click Update now]
 ```
 
+### How we work (the workflow, since session 1)
+1. **The user reviews the last release** in the app and sends screenshots with bugs and wishes.
+2. **Diagnose first.** Reproduce the problem in the test harness or the real app before changing code. Small fixes go straight to a release.
+3. **Bigger asks get a plan file** (`docs/PLAN-x.y.z.md`): feedback, diagnosis, proposal by area, size, and questions. The plan is logged in this file and pushed. Build only after the user answers.
+4. **Build in small steps**, engine first (`crates/core`, with a unit test), then the UI. Keep code compact and in the surrounding style.
+5. **Check in the real app** under Xvfb (`scratchpad/app.sh` restarts Xvfb and the app, opens the Engineering template and skips Setup), with screenshots of each change. Fix what looks wrong.
+6. **Add a UI test** for every reported bug and new feature (`tests_ui/run.cjs`, Playwright against `ui/dist` with the `dump` fixture). Make sure it fails on the old code where possible.
+7. **Run the checks:** clippy `-D warnings`, `cargo test --workspace`, `npm run check:ui`, and the UI tests after `npm run build:ui` + `cargo run -p datum-core --example dump > tests_ui/fixture.json`.
+8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
+9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
+
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker).
+
 ---
 
 ## 2. Decisions
@@ -219,7 +232,8 @@ flowchart LR
 | 0.3.5 | Ribbon, Setup, columns, print ([PLAN-0.3.5.md](PLAN-0.3.5.md)) | Task/Schedule/Progress tabs, ribbon fits without scrolling, Setup page in the sidebar, nested menus, hide/unhide/delete columns + Columns dialog, print every column (strip layout) | ✅ |
 | 0.3.6 | Print every view, Network, timeline zoom ([PLAN-0.3.6.md](PLAN-0.3.6.md)) | Font family + fill icon, everyday commands on the Task tab, Check-again feedback + GitHub/Releases/Issues links, Getting Started + Glossary, timeline zoom box, Network Diagram (legend, box styles, zoom, pan, mini-map, path), page layout for every view, xlsx formatting, series fill + Paste Special in both grids, Sheets freeze panes | ✅ |
 | 0.3.7 | Tracking, templates, network, one grid | Real Tracking Gantt (baseline bars, Tracking table, banner); templates with people/8h/assignments/man-hours/costs; whiteboard network with summaries and WBS bands; shared grid engine (`selection.ts` + `cells.ts` + `fmt.ts`); icon set | ✅ |
-| 0.3.8 | Next | To be agreed with the user | ⬜ |
+| 0.3.8 | Fixes | Links in printed Gantt charts; date picker on date cells and fields | ✅ |
+| 0.3.9 | Next | To be agreed with the user | ⬜ |
 | 0.4.0 | Risk & resources | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -350,6 +364,10 @@ flowchart LR
 ### 2026-10-24: Session 6, continued (0.3.7)
 - User: Gantt and Tracking looked identical; wanted Cairn's whiteboard network look and cards; man-hours with 8-hour shifts and resources in the templates; finish the 0.3.7 carry-overs.
 - Built: Tracking Gantt (view switches table, baseline grey bars, solid done part, % labels, banner + Set Baseline), templates with people/assignments/costs and Man-hours title, `network::layout_with` (summaries, WBS bands) + whiteboard cards, icon redraw, `selection.ts` shared by both grids (Sheets: multi-range, row/column selection, aggregates). 25 engine tests; UI tests for Tracking, WBS network, whiteboard.
+
+### 2026-10-24: Session 6, continued (0.3.8)
+- User: printed Gantt had no link lines; wanted a date picker for dates; asked to record the workflow.
+- Built: link paths in `print.tsx` `Strip` (same elbow rules as the canvas), `DateBtn` (ui.tsx, uses `showPicker()` on a hidden `<input type=date>`) on the active date cell in the grid (`.gdate`) and on date fields in the details pane (`.dfield`). UI tests for both. Added "How we work" to this file.
 
 ---
 

@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.3.7 — 2026-10-24
+## 0.3.8 — 2026-10-24
+
+**Fixes**
+- Printed Gantt charts now show the links between tasks (Finish-to-Start and the other types), as on screen. Critical links are drawn in red.
+- Date picker: every date can now be picked from a calendar.
+  - In the task sheet, the selected date cell (Start, Finish, Deadline, Constraint Date, baseline dates…) shows a calendar button.
+  - In the details pane, every date field has one.
+  - Typing a date still works.
+
+ 2026-10-24
 
 A real Tracking Gantt, templates with a team and man-hours, a whiteboard-style Network Diagram, one grid engine and a consistent icon set.
 

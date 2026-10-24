@@ -24,7 +24,7 @@ export const transpose = (m: string[][]) => Array.from({ length: Math.max(...m.m
 export const clip = { text: "", styles: [] as string[][] };
 
 const NUM = /^(-?[\d,]*\.?\d+)(\s*\S*)$/, TAIL = /^(.*?)(\d+)$/;
-const asDate = (s: string) => { if (!/\d/.test(s) || !/[-/ ]/.test(s) || /^\d+$/.test(s)) return null; const d = new Date(s.replace(/-(\d\d)$/, " 20$1").replace(/-/g, " ")); return isNaN(+d) ? null : dateDay(d); };
+export const asDate = (s: string) => { if (!/\d/.test(s) || !/[-/ ]/.test(s) || /^\d+$/.test(s)) return null; const d = new Date(s.replace(/-(\d\d)$/, " 20$1").replace(/-/g, " ")); return isNaN(+d) ? null : dateDay(d); };
 /**
  * The k-th value (k = 1, 2, …) after the source cells `src`, as Excel's fill handle does:
  * numbers continue their step (a single number counts up by 1), "Phase 1" → "Phase 2",

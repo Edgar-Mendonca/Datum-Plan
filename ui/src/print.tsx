@@ -148,6 +148,16 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
           <Show when={L.pd >= 5}><For each={Array.from({ length: Math.ceil(t1 - t0) + 2 }, (_, i) => Math.floor(t0) + i).filter(d => off(d))}>{d => <rect x={C(d)} y={SCALE_H} width={L.pd} height={p.bodyH - SCALE_H} fill="#F2F4F6" />}</For></Show>
           <For each={unit(L.pd)}>{(u, ti) => { const ticks: number[] = []; for (let d = floorU(t0, u); d < t1; d = nextU(d, u)) ticks.push(d); return <For each={ticks}>{d => { const a = C(d), b = C(nextU(d, u)), y = ti() * 17, t = label(d, u, ti() === 0, L.pd); return <g><line x1={a} x2={a} y1={y} y2={y + 17} stroke="#C9CFD8" stroke-width=".6" />{b - a > t.length * 5.6 && <text x={u === "day" ? (a + b) / 2 : Math.max(a, C(t0)) + 3} y={y + 12} font-size="9.5" fill="#33404F" text-anchor={u === "day" ? "middle" : "start"}>{t}</text>}</g>; }}</For>; }}</For>
           <line x1={0} x2={L.CW} y1={17} y2={17} stroke="#C9CFD8" stroke-width=".6" />
+          {/* links between tasks on this page (predecessor end → successor start), as on screen */}
+          <For each={p.rows}>{(r, i) => <For each={r.bar.links}>{([pu, k]) => {
+            const j = p.rows.findIndex(x => x.uid === pu); if (j < 0) return null;
+            const pr = p.rows[j], ends = (x: Row) => (x.ms ? [C(x.bar.s) - 6, C(x.bar.s) + 6] : [C(x.bar.s), C(x.bar.f)]), [p1, p2] = ends(pr), [s1, s2] = ends(r);
+            const fx = k[0] === "F" ? p2 : p1, tx = k[1] === "S" ? s1 : s2, out_ = k[0] === "F" ? 1 : -1, inn = k[1] === "S" ? 1 : -1, ax = fx + out_ * 5;
+            const y1 = p.ys[j] + p.hs[j] / 2, y2 = p.ys[i()] + p.hs[i()] / 2, ym = y2 + (y2 > y1 ? -p.hs[i()] / 2 : p.hs[i()] / 2), bx = tx - inn * 5;
+            const pts = (inn === 1 ? tx >= ax : tx <= ax) ? `M${fx} ${y1}H${ax}V${y2}H${tx}` : `M${fx} ${y1}H${ax}V${ym}H${bx}V${y2}H${tx}`;
+            const col = r.crit && pr.crit ? "#C73B3B" : "#7A8BA6";
+            return <g><path d={pts} fill="none" stroke={col} stroke-width=".8" /><path d={`M${tx} ${y2}l${-inn * 4} -2.6v5.2z`} fill={col} /></g>;
+          }}</For>}</For>
           <For each={p.rows}>{(r, i) => <Bar r={r} y={p.ys[i()]} h={p.hs[i()]} />}</For>
           {out()!.summary.status_day && <line x1={C(out()!.summary.status_day!)} x2={C(out()!.summary.status_day!)} y1={SCALE_H} y2={p.bodyH} stroke="#2E9D57" stroke-dasharray="4 3" stroke-width=".8" />}
         </svg>

@@ -1,6 +1,8 @@
 // Small building blocks: icons, menus, dialogs, tabs and form rows.
 import { For, Show, JSX, createSignal, onMount, onCleanup } from "solid-js";
 import { menu, setMenu, Item, closeDialog, msg, setMsg } from "./store";
+import { asDate } from "./cells";
+import { iso } from "./api";
 
 export const Icon = (p: { n: string; size?: number }) => (
   <svg style={p.size ? { width: `${p.size}px`, height: `${p.size}px` } : undefined}><use href={`#i-${p.n}`} /></svg>
@@ -35,6 +37,18 @@ export const Menu = () => {
   return (
     <Show when={menu()}>{m => <>{list(m().items, m().x, m().y, 0)}<For each={subs()}>{(s, i) => list(s.items, s.x, s.y, i() + 1, s.px)}</For></>}</Show>
   );
+};
+
+/** A calendar button next to a date: opens the system date picker; `set` gets YYYY-MM-DD. */
+export const DateBtn = (p: { value: string; set: (iso: string) => void; title?: string }) => {
+  let inp!: HTMLInputElement;
+  const open = (e: MouseEvent) => {
+    e.stopPropagation(); e.preventDefault();
+    const d = asDate(p.value); inp.value = d === null ? "" : iso(d);
+    try { inp.showPicker(); } catch { inp.focus(); inp.click(); }
+  };
+  return <span class="dbtn"><button type="button" title={p.title ?? "Pick a date"} onMouseDown={e => e.stopPropagation()} onClick={open}><Icon n="cal" /></button>
+    <input ref={inp} type="date" tabindex="-1" onChange={e => e.currentTarget.value && p.set(e.currentTarget.value)} /></span>;
 };
 
 export const Toast = () => (

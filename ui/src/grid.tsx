@@ -9,7 +9,7 @@ import * as D from "./dialogs";
 import * as F from "./fmt";
 import { parseTsv, transpose, series, clip } from "./cells";
 import { Range, norm, createSel, aggregate } from "./selection";
-import { Icon } from "./ui";
+import { Icon, DateBtn } from "./ui";
 
 export const RH = 20;
 const IDW = 44;
@@ -427,6 +427,10 @@ export const Grid = (p: { width?: number }) => {
               <Show when={fillTo() !== null}><div class="fillzone" style={{ left: `${lefts()[h().c0]}px`, top: `${h().r0 * RH}px`, width: `${lefts()[h().c1] + widths()[h().c1] - lefts()[h().c0]}px`, height: `${(fillTo()! - h().r0 + 1) * RH}px` }} /></Show>
               <i class="fill" title="Drag to fill down" style={{ left: `${h().left}px`, top: `${h().top - 40}px` }} onMouseDown={fillDrag} />
             </>}</Show>
+            <Show when={!edit() && (() => { const c = grid().cols[cur().col], r = rows()[cur().row]; return c && r && r.uid > 0 && c.edit && ["Date", "Fin"].includes(c.kind) ? { c, r } : null; })()}>{x => (
+              <div class="gdate" style={{ left: `${(cur().col <= frozen() ? lefts()[cur().col] + box.scrollLeft : lefts()[cur().col]) + widths()[cur().col] - 20}px`, top: `${cur().row * RH + 1}px` }}>
+                <DateBtn value={x().r.cells[cur().col] ?? ""} title="Pick a date (or type it)" set={v => act({ Cells: { cells: [[x().r.uid, x().c.key, v]] } })} />
+              </div>)}</Show>
             <Show when={edit()}>{e => {
               const c = grid().cols[e().col];
               const opts = c && choices(c.key);

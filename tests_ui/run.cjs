@@ -170,6 +170,14 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Network has the whiteboard canvas", (await p.$eval(".netwrap", e => getComputedStyle(e).backgroundImage)).includes("radial-gradient"));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
+  // 0.3.8: printed Gantt draws the links; date fields have a date picker.
+  await p.keyboard.press("Control+p"); await p.waitForTimeout(500);
+  const linkPaths = await p.$$eval(".pprev svg path[fill='none']", ps => ps.filter(x => /^M[\d.]+ [\d.]+H/.test(x.getAttribute("d") ?? "")).length);
+  check("printed Gantt shows the links between tasks", linkPaths > 5, String(linkPaths));
+  await p.click(".bs aside .back"); await p.waitForTimeout(200);
+  const dc = await cellBox(2, 3); await p.mouse.click(dc.x, dc.y); await p.waitForTimeout(150);
+  check("a date cell offers a date picker", !!(await p.$(".gdate .dbtn input[type=date]")));
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

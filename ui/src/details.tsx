@@ -1,9 +1,9 @@
 // The details pane under the Gantt chart: Primavera-style tabs for the selected task.
 import { For, Show, createResource, JSX, Switch, Match } from "solid-js";
 import { TaskInfo, Rel } from "./api";
-import { call, curUid, tick, detailsTab, setDetailsTab, set, act, P, out } from "./store";
+import { call, curUid, tick, detailsTab, setDetailsTab, set, act, P, out, fields } from "./store";
 import { selectUid } from "./cmds";
-import { Tabs } from "./ui";
+import { Tabs, DateBtn } from "./ui";
 
 export const TABS: [string, string][] = [
   ["general", "General"], ["status", "Status"], ["res", "Resources"], ["preds", "Predecessors"], ["succs", "Successors"], ["codes", "Codes"],
@@ -19,7 +19,9 @@ export const F = (p: { info: TaskInfo; k: string; label?: string; opts?: string[
   return <>
     <label>{p.label ?? f()?.[1] ?? p.k}</label>
     {p.opts ? <select value={text()} onChange={e => set(p.info.task.uid, p.k, e.currentTarget.value)}><For each={p.opts}>{o => <option>{o}</option>}</For></select>
-      : <input value={text()} class={p.wide ? "wide" : ""} onChange={e => set(p.info.task.uid, p.k, e.currentTarget.value)} />}
+      : ["Date", "Fin"].includes(fields().task.find(x => x.key === p.k)?.kind ?? "")
+        ? <span class="dfield"><input value={text()} onChange={e => set(p.info.task.uid, p.k, e.currentTarget.value)} /><DateBtn value={text()} set={v => set(p.info.task.uid, p.k, v)} /></span>
+        : <input value={text()} class={p.wide ? "wide" : ""} onChange={e => set(p.info.task.uid, p.k, e.currentTarget.value)} />}
   </>;
 };
 export const RO = (p: { info: TaskInfo; k: string; label?: string }) => {

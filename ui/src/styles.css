@@ -652,3 +652,13 @@ button.help { width: 15px; height: 15px; border-radius: 50%; border: 1px solid v
 .nband rect.alt { fill: rgba(46,157,87,.035); stroke: rgba(46,157,87,.2); }
 .nband text { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; fill: var(--muted); }
 .fbar .agg { order: 5; }
+/* 0.3.7.1: date picker buttons */
+.dbtn { position: relative; display: inline-flex; flex: none; }
+.dbtn button { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--line3); background: var(--bg2); color: var(--blue); padding: 0; }
+.dbtn button svg { width: 15px; height: 15px; }
+.dbtn button:hover { background: var(--pale); }
+.dbtn input { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+.dfield { display: flex; gap: 4px; align-items: center; }
+.dfield > input { flex: 1; min-width: 0; }
+.gdate { position: absolute; z-index: 4; }
+.gdate .dbtn button { width: 18px; height: 18px; border: 0; background: transparent; }
