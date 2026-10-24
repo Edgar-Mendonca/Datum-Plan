@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Datum Plan</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header id="top">
+  <div class="bar">
+    <div class="qat">
+      <img src="logo.svg" alt="" class="logo">
+      <button data-a="save" title="Save (Ctrl+S)"><svg><use href="#i-save"/></svg></button>
+      <button data-a="undo" title="Undo (Ctrl+Z)"><svg><use href="#i-undo"/></svg></button>
+      <button data-a="redo" title="Redo (Ctrl+Y)"><svg><use href="#i-redo"/></svg></button>
+    </div>
+    <div id="title">Datum Plan</div>
+    <button id="updBadge" hidden data-a="home">Update available</button>
+  </div>
+  <nav id="tabs">
+    <button data-tab="file" class="file">File</button>
+    <button data-tab="task" class="on">Task</button>
+    <button data-tab="project">Project</button>
+    <button data-tab="view">View</button>
+    <button data-tab="help">Help</button>
+  </nav>
+</header>
+<section id="ribbon"></section>
+<main id="work">
+  <div class="vlabel">GANTT CHART</div>
+  <div id="grid">
+    <div id="ghead"></div>
+    <div id="gbody"><div id="gspace"></div><div id="grows"></div></div>
+  </div>
+  <div id="split"></div>
+  <div id="chart">
+    <canvas id="scale"></canvas>
+    <div id="cwrap"><div id="cbody"><div id="cspace"></div></div><canvas id="bars"></canvas></div>
+  </div>
+</main>
+<footer id="status">
+  <span id="stMsg">Ready</span><span id="stInfo"></span><span class="grow"></span>
+  <button data-a="zout" title="Zoom out">−</button><input id="zoom" type="range" min="0" max="100"><button data-a="zin" title="Zoom in">+</button>
+</footer>
+<div id="bs" hidden>
+  <aside>
+    <button data-b="back" class="back">&larr;</button>
+    <button data-b="home" class="on"><svg><use href="#i-home"/></svg>Home</button>
+    <button data-b="new"><svg><use href="#i-new"/></svg>New</button>
+    <button data-b="open"><svg><use href="#i-open"/></svg>Open</button>
+    <button data-b="save"><svg><use href="#i-save"/></svg>Save</button>
+    <button data-b="saveas"><svg><use href="#i-save"/></svg>Save As</button>
+    <span class="grow"></span>
+    <button data-b="about"><svg><use href="#i-upd"/></svg>About &amp; Updates</button>
+  </aside>
+  <section id="bsMain"></section>
+</div>
+<div id="toast" hidden></div>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M4 3h13l3 3v15H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 3v6h8V3M7 14h10v7H7z" fill="currentColor"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7H4V2M4 7a9 9 0 1 1 3 10" fill="none" stroke="currentColor" stroke-width="2.2"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 7h5V2M20 7a9 9 0 1 0-3 10" fill="none" stroke="currentColor" stroke-width="2.2"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-new" viewBox="0 0 24 24"><path d="M6 2h8l5 5v15H6zM14 2v5h5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-open" viewBox="0 0 24 24"><path d="M3 5h6l2 2h9v3H7l-4 10zM7 10h15l-4 10H3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-upd" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 20h16" fill="none" stroke="currentColor" stroke-width="2.2"/></symbol>
+  <symbol id="i-gantt" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2" fill="#fff" stroke="#1F4E9A" stroke-width="1.5"/><rect x="5" y="7" width="8" height="3" fill="#4F86D9"/><rect x="10" y="12" width="9" height="3" fill="#1F4E9A"/><path d="M17 17l2 2-2 2-2-2z" fill="#F2B233"/></symbol>
+  <symbol id="i-task" viewBox="0 0 24 24"><rect x="3" y="9" width="14" height="6" rx="1" fill="#4F86D9"/><path d="M19 4v8m-4-4h8" stroke="#2E9D57" stroke-width="2.4"/></symbol>
+  <symbol id="i-ms" viewBox="0 0 24 24"><path d="M10 6l7 7-7 7-7-7z" fill="#0B2A5B"/><path d="M19 3v7m-3.5-3.5h7" stroke="#2E9D57" stroke-width="2.4"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="#fff" stroke="#1F4E9A" stroke-width="1.6"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#1F4E9A" stroke-width="1.6"/></symbol>
+  <symbol id="i-indent" viewBox="0 0 24 24"><path d="M3 4h18M10 10h11M10 15h11M3 20h18M3 9l4 3.5L3 16z" stroke="#1F4E9A" stroke-width="2" fill="#2E9D57"/></symbol>
+  <symbol id="i-outdent" viewBox="0 0 24 24"><path d="M3 4h18M10 10h11M10 15h11M3 20h18M7 9l-4 3.5L7 16z" stroke="#1F4E9A" stroke-width="2" fill="#2E9D57"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 14l6-6M7 11l-2 2a3.5 3.5 0 0 0 5 5l2-2M17 13l2-2a3.5 3.5 0 0 0-5-5l-2 2" fill="none" stroke="#1F4E9A" stroke-width="2.2"/></symbol>
+  <symbol id="i-unlink" viewBox="0 0 24 24"><path d="M7 11l-2 2a3.5 3.5 0 0 0 5 5l2-2M17 13l2-2a3.5 3.5 0 0 0-5-5l-2 2" fill="none" stroke="#1F4E9A" stroke-width="2.2"/><path d="M4 4l16 16" stroke="#D64545" stroke-width="2.2"/></symbol>
+  <symbol id="i-del" viewBox="0 0 24 24"><path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14" fill="none" stroke="#D64545" stroke-width="2"/></symbol>
+  <symbol id="i-scroll" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="5" fill="#4F86D9"/><path d="M2 11.5h6m-3-3 3 3-3 3" fill="none" stroke="#0B2A5B" stroke-width="2"/></symbol>
+  <symbol id="i-pct" viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="1" fill="#C9DBF5"/><rect x="2" y="8" width="11" height="8" rx="1" fill="#1F4E9A"/></symbol>
+  <symbol id="i-proj" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2" fill="#fff" stroke="#1F4E9A" stroke-width="1.6"/><path d="M3 9h18M8 2v4m8-4v4" stroke="#1F4E9A" stroke-width="1.6"/><path d="M7 13h4v4H7z" fill="#F2B233"/></symbol>
+  <symbol id="i-zin" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5" fill="none" stroke="#1F4E9A" stroke-width="2"/><path d="M15 15l6 6M7 10h6M10 7v6" stroke="#1F4E9A" stroke-width="2"/></symbol>
+  <symbol id="i-zout" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5" fill="none" stroke="#1F4E9A" stroke-width="2"/><path d="M15 15l6 6M7 10h6" stroke="#1F4E9A" stroke-width="2"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" fill="none" stroke="#1F4E9A" stroke-width="2"/><rect x="7" y="10" width="10" height="4" fill="#4F86D9"/></symbol>
+  <symbol id="i-crit" viewBox="0 0 24 24"><rect x="2" y="5" width="9" height="4" fill="#D64545"/><rect x="13" y="15" width="9" height="4" fill="#D64545"/><path d="M11 7h2v10" fill="none" stroke="#D64545" stroke-width="1.6"/></symbol>
+  <symbol id="i-keys" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2" fill="none" stroke="#1F4E9A" stroke-width="1.8"/><path d="M6 10h1m3 0h1m3 0h1m3 0h1M7 15h10" stroke="#1F4E9A" stroke-width="1.8"/></symbol>
+</svg>
+<script src="main.js"></script>
+</body>
+</html>

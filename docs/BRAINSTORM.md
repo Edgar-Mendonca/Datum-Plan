@@ -1,5 +1,7 @@
 # Datum Plan: brainstorm and plan
 
+> **Update:** decisions made after this brainstorm (a Rust engine instead of porting Cairn, a custom updater, the release plan) are in [MEMORY.md](MEMORY.md). This file stays as the original feature map.
+
 <img src="brand/datum-plan-icon.svg" width="96" align="right" alt="Draft Datum Plan icon">
 
 **Goal:** a desktop project scheduler with the features of Microsoft Project and Primavera P6 combined. You install it once from a GitHub Release `.exe`, and every later version installs itself from an **Update** button on the Home screen.

@@ -1,0 +1,10 @@
+[package]
+name = "datum-core"
+version = "0.1.0"
+edition = "2021"
+description = "Datum Plan scheduling engine: model, calendars, CPM, parsing, edit operations."
+
+[dependencies]
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
