@@ -180,3 +180,225 @@ pub fn compare(old: &Calc, new: &Calc) -> Vec<Diff> {
     }
     out
 }
+
+// ---------- reporting periods, S-curves and period reports ----------
+
+/// Period ends (inclusive days, as days since 1970-01-01) covering the project, weekly or monthly,
+/// following the plan's cut-off settings.
+pub fn period_ends(c: &Calc, kind: &str) -> Vec<i64> {
+    use chrono::Datelike;
+    let (p, s) = (c.p, &c.s);
+    let first = s.start.div_euclid(DAY);
+    let last = s.finish.div_euclid(DAY).max(c.status_at().div_euclid(DAY)) + if kind == "month" { 31 } else { 7 };
+    let mut out = vec![];
+    if kind == "month" {
+        let d0 = date_of(first * DAY);
+        let (mut y, mut m) = (d0.year(), d0.month());
+        loop {
+            let len = chrono::NaiveDate::from_ymd_opt(if m == 12 { y + 1 } else { y }, if m == 12 { 1 } else { m + 1 }, 1).unwrap().pred_opt().unwrap().day();
+            let day = if p.periods.month_end == 0 { len } else { (p.periods.month_end as u32).min(len) };
+            let d = crate::cal::at(chrono::NaiveDate::from_ymd_opt(y, m, day).unwrap()) / DAY;
+            if d >= first {
+                out.push(d);
+            }
+            if d > last || out.len() > 600 {
+                break;
+            }
+            (y, m) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+        }
+    } else {
+        // First day on the chosen weekday at or after the start (day 0 = Thursday 1970-01-01).
+        let mut d = first + (p.periods.week_end as i64 - (first + 3).rem_euclid(7)).rem_euclid(7);
+        while d <= last && out.len() < 3000 {
+            out.push(d);
+            d += 7;
+        }
+    }
+    out
+}
+
+/// Weight of each leaf task for progress: duration, cost, work or (physical) duration.
+fn weights(c: &Calc, how: &str) -> Vec<f64> {
+    let (p, s) = (c.p, &c.s);
+    let w: Vec<f64> = (0..p.tasks.len()).map(|i| {
+        if s.summary[i] || s.off[i] {
+            return 0.0;
+        }
+        match how {
+            "cost" => p.tasks[i].bls.get(&0).map_or(c.l.cost[i], |b| b.cost),
+            "work" => c.l.work[i],
+            _ => p.tasks[i].dur.max(1) as f64,
+        }
+    }).collect();
+    // A plan without costs or work falls back to duration weights.
+    if how != "duration" && w.iter().sum::<f64>() <= 0.0 { weights(c, "duration") } else { w }
+}
+
+/// Share (0–1) of a task's work done by instant `t` if it runs evenly from `a` to `b`.
+fn share(cal: &crate::cal::WorkCal, a: i64, b: i64, t: i64) -> f64 {
+    if t <= a { 0.0 } else if t >= b { 1.0 } else { cal.between(a, t) as f64 / cal.between(a, b).max(1) as f64 }
+}
+
+/// Progress of task `i` (0–1) at instant `t`: planned (baseline, or current dates without one),
+/// actual (linear from the actual start to today's %, up to the status date) and forecast.
+fn progress_at(c: &Calc, i: usize, t: i64) -> (f64, f64, f64) {
+    let (p, s) = (c.p, &c.s);
+    let task = &p.tasks[i];
+    let cal = &s.cals[s.ci[i]];
+    let (bs, bf) = task.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
+    let planned = share(cal, bs, bf, t);
+    let dd = c.status_at();
+    let done = if c.p.periods.weight == "physical" && task.pct_type == crate::model::PctType::Physical { task.phys } else { c.pct[i] } as f64 / 100.0;
+    let a0 = task.act_start.map_or(s.es[i], crate::cal::at);
+    let a1 = task.act_finish.map_or(dd, |d| crate::cal::at(d) + DAY).max(a0 + 1);
+    let actual = if done == 0.0 { 0.0 } else { done * share(cal, a0, a1, t.min(dd)) };
+    let forecast = if t <= dd { actual } else { done + (1.0 - done) * share(cal, dd.max(s.es[i]), s.ef[i].max(dd.max(s.es[i]) + 1), t) };
+    (planned, actual, forecast)
+}
+
+#[derive(Serialize)]
+pub struct SCurve {
+    /// Bucket end days (days since 1970-01-01), and the cumulative % at each.
+    pub days: Vec<i64>,
+    pub planned: Vec<f64>,
+    pub actual: Vec<Option<f64>>,
+    pub forecast: Vec<f64>,
+    /// The total weight (hours, money or days) that 100% stands for.
+    pub total: f64,
+    pub status_day: i64,
+    pub name: String,
+}
+
+/// Cumulative progress S-curve for the project or one summary (`scope` uid), weighted by
+/// `how` (duration, cost, work, physical), sampled at period ends ("week", "month") or days.
+pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
+    let p = c.p;
+    let w = weights(c, how);
+    let tasks: Vec<usize> = match scope.and_then(|u| p.idx(u)) {
+        Some(k) => p.subtree(k).filter(|&i| w[i] > 0.0).collect(),
+        None => (0..p.tasks.len()).filter(|&i| w[i] > 0.0).collect(),
+    };
+    let total: f64 = tasks.iter().map(|&i| w[i]).sum::<f64>().max(1e-9);
+    let mut days = if unit == "day" { (c.s.start.div_euclid(DAY)..=c.s.finish.div_euclid(DAY)).collect() } else { period_ends(c, unit) };
+    let lo = tasks.iter().map(|&i| p.tasks[i].bls.get(&0).map_or(c.s.es[i], |b| b.start.min(c.s.es[i]))).min().unwrap_or(c.s.start).div_euclid(DAY);
+    days.retain(|&d| d >= lo - 7);
+    days.insert(0, lo - 1);
+    let dd = c.status_at();
+    let mut out = SCurve { days: vec![], planned: vec![], actual: vec![], forecast: vec![], total, status_day: dd / DAY - 1, name: scope.and_then(|u| p.idx(u)).map_or(p.name.clone(), |k| p.tasks[k].name.clone()) };
+    for d in days {
+        let t = (d + 1) * DAY;
+        let (mut a, mut b, mut f) = (0.0, 0.0, 0.0);
+        for &i in &tasks {
+            let (x, y, z) = progress_at(c, i, t);
+            a += w[i] * x;
+            b += w[i] * y;
+            f += w[i] * z;
+        }
+        out.days.push(d);
+        out.planned.push(a / total * 100.0);
+        out.actual.push((t <= dd + DAY).then_some(b / total * 100.0));
+        out.forecast.push(f / total * 100.0);
+    }
+    out
+}
+
+#[derive(Serialize, Default)]
+pub struct PRow { pub uid: u32, pub code: String, pub name: String, pub start: String, pub finish: String, pub pct: u8, pub note: String }
+
+#[derive(Serialize, Default)]
+pub struct WbsRow { pub uid: u32, pub name: String, pub planned_prev: f64, pub planned: f64, pub actual_prev: f64, pub actual: f64 }
+
+#[derive(Serialize, Default)]
+pub struct PeriodReport {
+    pub kind: String,
+    /// This period and the previous one: first and last day (days since 1970-01-01).
+    pub from: i64,
+    pub to: i64,
+    pub prev_from: i64,
+    /// Cumulative % (weighted) at the end of the previous period and of this one.
+    pub planned_prev: f64,
+    pub planned: f64,
+    pub actual_prev: f64,
+    pub actual: f64,
+    pub finish: String,
+    pub baseline_finish: String,
+    pub finish_var: String,
+    pub spi: Option<f64>,
+    pub cpi: Option<f64>,
+    pub cost: String,
+    pub critical: usize,
+    pub late: usize,
+    pub completed: Vec<PRow>,
+    pub started: Vec<PRow>,
+    pub in_progress: Vec<PRow>,
+    pub slipped: Vec<PRow>,
+    pub upcoming: Vec<PRow>,
+    pub milestones: Vec<PRow>,
+    pub wbs: Vec<WbsRow>,
+    /// Hours per period: planned (current schedule) by period end.
+    pub hours: Vec<(i64, f64)>,
+}
+
+/// The progress report for the period ending on day `end` (or the latest period at the status date).
+pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
+    let (p, s) = (c.p, &c.s);
+    let ends = period_ends(c, kind);
+    let dd = c.status_at() / DAY - 1;
+    let to = end.unwrap_or_else(|| ends.iter().copied().filter(|&e| e >= dd).min().unwrap_or(dd));
+    let k = ends.iter().position(|&e| e == to);
+    let prev = k.and_then(|k| k.checked_sub(1)).map_or(to - if kind == "month" { 30 } else { 7 }, |k| ends[k]);
+    let before = k.and_then(|k| k.checked_sub(2)).map_or(prev - (to - prev), |k| ends[k]);
+    let w = weights(c, &p.periods.weight);
+    let total: f64 = w.iter().sum::<f64>().max(1e-9);
+    let at = |d: i64, which: usize| (0..p.tasks.len()).filter(|&i| w[i] > 0.0).map(|i| { let v = progress_at(c, i, (d + 1) * DAY); w[i] * [v.0, v.1, v.2][which] }).sum::<f64>() / total * 100.0;
+    let row = |i: usize, note: &str| PRow {
+        uid: p.tasks[i].uid, code: p.tasks[i].code.clone(), name: p.tasks[i].name.clone(), start: c.text(i, "start"), finish: c.text(i, "finish"), pct: c.pct[i], note: note.into(),
+    };
+    let leaves: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
+    let within = |d: Option<chrono::NaiveDate>, a: i64, b: i64| d.is_some_and(|d| { let x = crate::cal::at(d) / DAY; x > a && x <= b });
+    let day = |t: i64| t.div_euclid(DAY);
+    let next = to + (to - prev);
+    let mut r = PeriodReport {
+        kind: kind.into(), from: prev + 1, to, prev_from: before + 1,
+        planned_prev: at(prev, 0), planned: at(to, 0), actual_prev: at(prev, 1), actual: at(to.min(dd), 1),
+        ..Default::default()
+    };
+    let sum = c.summary();
+    r.finish = sum.finish.clone();
+    r.baseline_finish = sum.bl_finish.clone();
+    r.finish_var = sum.var_finish.clone();
+    (r.spi, r.cpi, r.cost, r.critical, r.late) = (sum.spi, sum.cpi, sum.cost.clone(), sum.critical, sum.late);
+    for &i in &leaves {
+        let t = &p.tasks[i];
+        if within(t.act_finish, prev, to) {
+            r.completed.push(row(i, ""));
+        } else if within(t.act_start, prev, to) {
+            r.started.push(row(i, ""));
+        } else if c.pct[i] > 0 && c.pct[i] < 100 {
+            r.in_progress.push(row(i, ""));
+        }
+        let bf = t.bls.get(&0).map(|b| day(b.finish - 1));
+        if c.pct[i] < 100 && bf.is_some_and(|f| f <= to) {
+            r.slipped.push(row(i, &format!("Baseline finish {}", c.text(i, "b0finish"))));
+        }
+        if c.pct[i] < 100 && day(s.es[i]) > to.min(dd) && day(s.es[i]) <= next {
+            r.upcoming.push(row(i, ""));
+        }
+        if t.dur == 0 {
+            r.milestones.push(row(i, &c.text(i, "vfinish")));
+        }
+    }
+    for i in (0..p.tasks.len()).filter(|&i| s.summary[i] && p.tasks[i].level == 0) {
+        let sub: Vec<usize> = p.subtree(i).filter(|&j| w[j] > 0.0).collect();
+        let tw: f64 = sub.iter().map(|&j| w[j]).sum::<f64>().max(1e-9);
+        let pa = |d: i64, which: usize| sub.iter().map(|&j| { let v = progress_at(c, j, (d + 1) * DAY); w[j] * [v.0, v.1][which] }).sum::<f64>() / tw * 100.0;
+        r.wbs.push(WbsRow { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), planned_prev: pa(prev, 0), planned: pa(to, 0), actual_prev: pa(prev, 1), actual: pa(to.min(dd), 1) });
+    }
+    let mut last = i64::MIN;
+    for &e in &ends {
+        let h: f64 = c.l.task_daily.iter().filter(|((_, d), _)| *d > last && *d <= e).map(|(_, (m, _))| m / 60.0).sum();
+        r.hours.push((e, h));
+        last = e;
+    }
+    r
+}

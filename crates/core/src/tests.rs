@@ -462,3 +462,40 @@ fn fields_earned_value_queries_and_checks() {
     assert!(html.contains("$3,000.00") && html.contains("T3"));
     assert!(crate::io::formats::pmxml(&c).contains("<Relationship>"));
 }
+
+#[test]
+fn excel_formula_columns_sheets_and_periods() {
+    let mut doc = Doc::new(plan(&[(5, ""), (5, "1"), (0, "2")]));
+    let u: Vec<u32> = doc.p.tasks.iter().map(|t| t.uid).collect();
+    op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
+    op(&mut doc, Op::Cells { cells: vec![(u[0], "pct".into(), "100".into()), (u[1], "pct".into(), "40".into()), (u[1], "dur".into(), "oops".into())] }).unwrap();
+    let def = |key: &str, alias: &str, f: &str| Op::FieldDef { def: CustomDef { key: key.into(), alias: alias.into(), formula: f.into(), ..CustomDef::default() } };
+    op(&mut doc, def("number1", "Days left", "=[Duration]*(100-[% Complete])/100")).unwrap();
+    op(&mut doc, def("text1", "Health", r#"=IF([Days left]>2,"Watch","OK")"#)).unwrap();
+    op(&mut doc, def("date1", "Due", "=WORKDAY([Finish],2)")).unwrap();
+    assert!(op(&mut doc, def("number2", "", "=[No such field]+1")).is_err());
+    op(&mut doc, Op::Title { key: "dur".into(), title: "Days".into() }).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 1));
+    assert_eq!((c.text(0, "c:number1"), c.text(1, "c:number1")), ("0".to_string(), "3".to_string()));
+    assert_eq!((c.text(0, "c:text1"), c.text(1, "c:text1")), ("OK".to_string(), "Watch".to_string()));
+    assert_eq!(c.text(0, "c:date1"), "10-Nov-26"); // Fri 6 Nov + 2 working days
+    assert_eq!(c.name("dur"), "Days");
+    // A spreadsheet tab reading the Plan sheet.
+    let sheet = SheetData { name: "Calc".into(), ..Default::default() };
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet) }).unwrap();
+    op(&mut doc, Op::SheetCells { k: 0, cells: vec![("A1".into(), "=SUM(Plan!F2:F4)".into()), ("b1".into(), "=A1*2".into()), ("C1".into(), "hello".into())], fmt: None }).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 1));
+    let v = crate::sheet::sheet_view(&c, 0).unwrap();
+    assert_eq!(v.cells.iter().map(|x| x.2.as_str()).collect::<Vec<_>>(), ["10", "20", "hello"]);
+    // Weekly periods end on Fridays; the S-curve reaches 100% planned.
+    op(&mut doc, Op::ProjectSet { field: "status".into(), value: serde_json::json!("2026-11-10") }).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 1));
+    let ends = crate::report::period_ends(&c, "week");
+    assert_eq!(date_of(ends[0] * DAY), d(2026, 11, 6));
+    let sc = crate::report::scurve(&c, "week", "duration", None);
+    assert!((sc.planned.last().unwrap() - 100.0).abs() < 1e-6);
+    let r = crate::report::period_report(&c, "week", None);
+    assert_eq!(r.to, ends[1]);
+    assert!(r.actual > 50.0 && r.actual < 80.0, "{}", r.actual);
+    assert_eq!(r.milestones.len(), 1);
+}

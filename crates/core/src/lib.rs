@@ -13,6 +13,7 @@ pub mod parse;
 pub mod query;
 pub mod report;
 pub mod sched;
+pub mod sheet;
 pub mod templates;
 
 pub use model::*;

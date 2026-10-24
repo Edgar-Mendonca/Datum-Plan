@@ -121,6 +121,8 @@ pub struct Calc<'a> {
     pub succs: Vec<Vec<String>>,
     defs: HashMap<String, (CustomDef, Option<Ex>)>,
     names: HashMap<String, String>,
+    /// Results of Excel-style formula columns, per field key and task.
+    xl: HashMap<String, Vec<F>>,
 }
 
 pub fn money(v: f64, c: &Currency) -> String {
@@ -192,8 +194,15 @@ impl<'a> Calc<'a> {
         for c in &p.codes {
             names.insert(c.name.to_lowercase(), format!("code:{}", c.name));
         }
-        let mut c = Calc { p, s, l, ev: Ev::default(), error, fmt: fmt.into(), today, pct, wbs, id_of, succs, defs, names };
+        for (k, t) in &p.titles {
+            names.insert(t.to_lowercase(), k.clone());
+        }
+        let mut c = Calc { p, s, l, ev: Ev::default(), error, fmt: fmt.into(), today, pct, wbs, id_of, succs, defs, names, xl: HashMap::new() };
         c.ev = c.earned_value();
+        let excel: Vec<(String, String)> = p.fields.iter().filter(|d| crate::sheet::is_excel(&d.formula) && !d.key.starts_with('r')).map(|d| (d.key.clone(), d.formula.clone())).collect();
+        if !excel.is_empty() {
+            c.xl = crate::sheet::task_formulas(&c, &excel);
+        }
         c
     }
 
@@ -247,6 +256,9 @@ impl<'a> Calc<'a> {
 
     /// The display name (custom field alias where set).
     pub fn name(&self, key: &str) -> String {
+        if let Some(t) = self.p.titles.get(key) {
+            return t.clone();
+        }
         if let Some((d, _)) = key.strip_prefix("c:").and_then(|k| self.defs.get(k)) {
             if !d.alias.is_empty() {
                 return d.alias.clone();
@@ -396,6 +408,9 @@ impl<'a> Calc<'a> {
                 _ => vals.len() as f64,
             };
             return if matches!(kind, Kind::Date | Kind::Fin) { F::Date(x as i64 * 1440) } else { F::Num(x) };
+        }
+        if let Some(v) = self.xl.get(key) {
+            return v.get(i).cloned().unwrap_or(F::Null);
         }
         if let Some((_, Some(ex))) = def {
             // Summary rows use the formula too unless a rollup is chosen (handled above).

@@ -53,6 +53,17 @@ pub enum Op {
     ResSet { uid: u32, field: String, value: String },
     ResDelete { uids: Vec<u32> },
     Columns { cols: Vec<(String, u16)> },
+    /// Many cell edits as one step (paste, fill, clear a range). Cells that cannot take the value
+    /// are skipped; it fails only when none could be set.
+    Cells { cells: Vec<(u32, String, String)> },
+    /// Renames a column (empty title restores the field's name).
+    Title { key: String, title: String },
+    /// Adds (k = None), replaces or (sheet = None) removes a spreadsheet tab.
+    Sheet { k: Option<usize>, sheet: Option<SheetData> },
+    /// Sets cell inputs on a spreadsheet tab (empty input clears the cell).
+    SheetCells { k: usize, cells: Vec<(String, String)>, fmt: Option<String> },
+    /// Saves the notes of a reporting period (replacing the same kind and end date).
+    Note { note: PeriodNote },
     Batch(Vec<Op>),
 }
 
@@ -609,7 +620,10 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             *p = serde_json::from_value(v).map_err(|e| format!("That value does not fit {field}: {e}"))?;
         }
         Op::FieldDef { def } => {
-            if !def.formula.trim().is_empty() {
+            if crate::sheet::is_excel(&def.formula) {
+                let c = crate::fields::Calc::new(p, fmt, p.start);
+                crate::sheet::check(&def.formula, |n| c.key_of(n).is_some())?;
+            } else if !def.formula.trim().is_empty() {
                 crate::formula::parse(&def.formula).map_err(|e| format!("Formula: {e}"))?;
             }
             p.fields.retain(|d| d.key != def.key);
@@ -763,6 +777,45 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         Op::ResDelete { uids } => p.resources.retain(|r| !uids.contains(&r.uid)),
         Op::Columns { cols } => p.columns = cols,
         Op::Batch(ops) => ops.into_iter().try_for_each(|o| exec(p, o, fmt))?,
+        Op::Cells { cells } => {
+            let (mut done, mut first) = (0, None);
+            for (uid, field, value) in cells {
+                let Some(i) = p.idx(uid) else { continue };
+                match set(p, i, &field, &value, fmt) {
+                    Ok(()) => done += 1,
+                    Err(e) => { first.get_or_insert(e); }
+                }
+            }
+            if done == 0 {
+                if let Some(e) = first {
+                    return Err(e);
+                }
+            }
+        }
+        Op::Title { key, title } => {
+            if title.trim().is_empty() { p.titles.remove(&key); } else { p.titles.insert(key, title.trim().into()); }
+        }
+        Op::Sheet { k, sheet } => match (k, sheet) {
+            (None, Some(s)) => p.sheets.push(s),
+            (Some(k), Some(s)) if k < p.sheets.len() => p.sheets[k] = s,
+            (Some(k), None) if k < p.sheets.len() => { p.sheets.remove(k); }
+            _ => return Err("That sheet does not exist.".into()),
+        },
+        Op::SheetCells { k, cells, fmt } => {
+            let s = p.sheets.get_mut(k).ok_or("That sheet does not exist.")?;
+            for (a1, v) in cells {
+                let a1 = a1.to_uppercase();
+                if let Some(f) = &fmt {
+                    if f.is_empty() { s.fmt.remove(&a1); } else { s.fmt.insert(a1.clone(), f.clone()); }
+                    continue;
+                }
+                if v.is_empty() { s.cells.remove(&a1); } else { s.cells.insert(a1, v); }
+            }
+        }
+        Op::Note { note } => {
+            p.notes.retain(|n| !(n.kind == note.kind && n.end == note.end));
+            p.notes.push(note);
+        }
     }
     Ok(())
 }

@@ -389,6 +389,30 @@ pub struct Risk {
 #[serde(default)]
 pub struct SnapRow { pub uid: u32, pub start: i64, pub finish: i64, pub pct: u8, pub cost: f64 }
 
+/// A spreadsheet tab in the plan: typed cell inputs by A1 address, number formats, column widths.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pub fmt: BTreeMap<String, String>, pub widths: BTreeMap<u32, u16> }
+
+/// Reporting periods: the weekday a week ends on (0 = Monday … 6 = Sunday), the day of the month
+/// the month closes (0 = last day), and how progress is weighted on S-curves.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PeriodOpts { pub week_end: u8, pub month_end: u8, pub weight: String }
+
+impl Default for PeriodOpts {
+    fn default() -> Self { Self { week_end: 4, month_end: 0, weight: "duration".into() } }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Photo { pub data: String, pub caption: String }
+
+/// The narrative of a progress report for one period.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PeriodNote { pub kind: String, pub end: Option<NaiveDate>, pub summary: String, pub progress: String, pub issues: String, pub actions: String, pub look_ahead: String, pub photos: Vec<Photo> }
+
 /// A frozen copy of the plan at a reporting date (P6 "store period performance").
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -434,6 +458,11 @@ pub struct Project {
     pub codes: Vec<CodeDef>,
     pub risks: Vec<Risk>,
     pub snapshots: Vec<Snapshot>,
+    /// Column titles chosen by the user (field key → title).
+    pub titles: BTreeMap<String, String>,
+    pub sheets: Vec<SheetData>,
+    pub periods: PeriodOpts,
+    pub notes: Vec<PeriodNote>,
     /// Settings owned by the window: saved views, tables, filters, groups, bar and text styles,
     /// page setup, reports, timeline. The engine stores them but does not read them.
     pub ui: Value,
@@ -468,7 +497,7 @@ impl Project {
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
             id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
-            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], ui: Value::Null,
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], titles: BTreeMap::new(), sheets: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null,
         }
     }
 

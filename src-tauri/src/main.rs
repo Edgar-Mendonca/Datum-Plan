@@ -25,11 +25,13 @@ struct Options {
     workspace: String,
     /// Ask for project details when a plan is created.
     setup_panel: bool,
+    /// auto, light or dark.
+    theme: String,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), setup_panel: true }
+        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), setup_panel: true, theme: "auto".into() }
     }
 }
 
@@ -473,6 +475,26 @@ async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String
     Ok((folder, cards))
 }
 
+#[tauri::command]
+fn sheet_view(st: State<St>, k: usize) -> Option<datum_core::sheet::SheetOut> {
+    datum_core::sheet::sheet_view(&calc(&st.0.lock().unwrap()), k)
+}
+
+#[tauri::command]
+fn scurve(st: State<St>, unit: String, how: String, scope: Option<u32>) -> report::SCurve {
+    report::scurve(&calc(&st.0.lock().unwrap()), &unit, &how, scope)
+}
+
+#[tauri::command]
+fn periods(st: State<St>, kind: String) -> Vec<i64> {
+    report::period_ends(&calc(&st.0.lock().unwrap()), &kind)
+}
+
+#[tauri::command]
+fn period_report(st: State<St>, kind: String, end: Option<i64>) -> report::PeriodReport {
+    report::period_report(&calc(&st.0.lock().unwrap()), &kind, end)
+}
+
 /// The full plan of a snapshot, for trend charts (rows are left out of `state`).
 #[tauri::command]
 fn snapshot_rows(st: State<St>, k: usize) -> Option<datum_core::Snapshot> {
@@ -626,7 +648,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, network, compare, workspace, snapshot_rows,
+            query, resources, field_list, task_info, usage, curve, checks, network, compare, workspace, snapshot_rows, sheet_view, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, quit, check_update, install_update
         ])
         .run(tauri::generate_context!())
