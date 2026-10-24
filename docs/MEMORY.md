@@ -205,7 +205,8 @@ flowchart LR
 | 0.3.2 | Builder & power | Report builder and templates, Update Progress workflow, xlsx export with formulas, recurring tasks, relationship diagram, global change, EPS tree, conditional formatting, Playwright UI tests in CI | ✅ |
 | 0.3.3 | Hotfix | Grid row selection stuck after the first click | ✅ |
 | 0.3.4 | Print & format | Print page with Page Setup (ranges, paper, scaling, margins, header/footer codes, logos, legend, columns), vector pages; Font/Alignment formatting for task sheet and Sheets; Options page rebuilt | ✅ |
-| 0.3.5 | One grid | One shared grid for Sheets and the task sheet, series fill, Paste Special, freeze panes, xlsx export of formatting | 🔜 |
+| 0.3.5 | Ribbon, Setup, columns, print ([PLAN-0.3.5.md](PLAN-0.3.5.md)) | Home and Progress tabs, ribbon without sideways scroll, Setup in the sidebar, delete/hide/unhide columns + Columns dialog, print every column | 🔜 (waiting for answers) |
+| 0.3.6 | Print everything, one grid | Page layout for every view, xlsx formatting, shared grid, series fill, Paste Special | ⬜ |
 | 0.4.0 | Risk & resources | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -314,6 +315,10 @@ flowchart LR
 - Built `print.tsx`, `fmt.ts`, `Style`/`SheetStyle` ops, new Options fields (openLast, startView, manualDefault, weekEnd, monthEnd, paper, landscape). Engine test 21. UI tests: Options alignment, Ctrl+B, print preview and print pages with `@page` size.
 - Checked in the real app: formatting in task sheet and Sheets, Print page preview (fit to 1 page wide), Options.
 - Not done from the planned 0.3.4 (one grid): moved to 0.3.5.
+
+### 2026-10-24: Session 6, continued (0.3.5 feedback)
+- User feedback on 0.3.4 (5 screenshots): Project Setup panel too big, move to the sidebar as first icon; ribbon scrolls sideways and the Task tab is crowded (captions cut, poor icons), split into more tabs (need not copy MSP); no Delete Column and no way to unhide; print shows only Name, Duration and a cut-off Start, wants all columns like MSP and the 0.3.4 limits done.
+- Diagnosis and proposal in [PLAN-0.3.5.md](PLAN-0.3.5.md); questions sent; build after the answers.
 
 ---
 
