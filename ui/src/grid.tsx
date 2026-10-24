@@ -1,7 +1,7 @@
 // The task sheet, built like Excel: one scroller with a sticky header (so columns always line
 // up), frozen ID and name columns, range selection, fill handle, clipboard ranges, a formula bar,
 // AutoFilter buttons and inline header rename.
-import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, untrack, batch, JSX } from "solid-js";
+import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, untrack, batch, on, JSX } from "solid-js";
 import { Col, Row } from "./api";
 import { grid, cols, setCols, saveCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
 import { C } from "./cmds";
@@ -84,13 +84,13 @@ export const Grid = (p: { width?: number }) => {
     setAgg(vals.length ? `Sum ${+vals.reduce((a, b) => a + b, 0).toFixed(2)} · Average ${+(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)} · Count ${vals.length}` : "");
   });
   // Selection from elsewhere (Gantt, network, find) moves the active cell.
-  createEffect(() => {
-    const s = sel();
+  // Runs only when the selection changes (not on a cell click, which would race the sync above and jump back).
+  createEffect(on(sel, s => untrack(() => {
     if (s.length === 1 && rows()[cur().row]?.uid !== s[0]) {
       const k = rows().findIndex(r => r.uid === s[0]);
-      if (k >= 0 && !untrack(ranges).some(g => k >= Math.min(g.r0, g.r1) && k <= Math.max(g.r0, g.r1))) { setCur({ row: k, col: cur().col }); setRanges([{ r0: k, c0: cur().col, r1: k, c1: cur().col }]); }
+      if (k >= 0 && !ranges().some(g => k >= Math.min(g.r0, g.r1) && k <= Math.max(g.r0, g.r1))) { setCur({ row: k, col: cur().col }); setRanges([{ r0: k, c0: cur().col, r1: k, c1: cur().col }]); }
     }
-  });
+  }), { defer: true }));
 
   const ro = new ResizeObserver(() => setViewH(box.clientHeight));
   const sync = (e: Event) => { const v = (e as CustomEvent<number>).detail; if (Math.abs(box.scrollTop - v) > 1) box.scrollTop = v; };

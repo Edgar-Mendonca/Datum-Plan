@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3 — 2026-10-24
+
+**Fix (critical):** in 0.3.2, after the first click the task sheet kept the same row selected. Clicking another cell only changed the column, so you could not select, edit or work on other tasks. Clicking now selects the cell you click. An automated test clicks cell after cell and edits one, so this can't come back unnoticed.
+
 ## 0.3.2 — 2026-10-24
 
 Progress updating, a report builder and power tools, plus the fixes from your 0.3.1 screenshots.
