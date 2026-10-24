@@ -43,7 +43,7 @@ export interface Out { project: Project; summary: Summary; path: string | null; 
 export interface Bar { s: number; f: number; ls: number; lf: number; bs: number | null; bf: number | null; dl: number | null; pct: number; segs: [number, number][]; links: [number, LinkType][] }
 export interface Row {
   uid: number; id: number; lvl: number; kind: "task" | "summary" | "group" | "project"; ms: boolean; crit: boolean; late: boolean; manual: boolean; off: boolean; lp: boolean;
-  kids: boolean; open: boolean; hl: boolean; name: string; res: string; cells: string[]; icons?: [number, string][]; bar: Bar;
+  kids: boolean; open: boolean; hl: boolean; name: string; res: string; cells: string[]; icons?: [number, string][]; style?: Record<string, string>; bar: Bar;
 }
 export interface Col { key: string; name: string; kind: Kind; edit: boolean }
 export interface Grid { cols: Col[]; rows: Row[]; shown: number; total: number }
@@ -66,7 +66,8 @@ export interface Curve { buckets: number[]; planned: number[]; forecast: number[
 export interface Check { key: string; name: string; about: string; count: number; total: number; value: number; limit: string; pass: boolean; uids: number[] }
 export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean }[]; cols: number; rows: number }
 export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }
-export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; setupPanel: boolean; theme: string }
+export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; setupPanel: boolean; theme: string;
+  openLast: boolean; startView: string; manualDefault: boolean; weekEnd: number; monthEnd: number; paper: string; landscape: boolean }
 
 /** Days since 1970-01-01 (local) to a Date at local midnight + fraction. */
 export const dayDate = (d: number) => { const x = new Date(1970, 0, 1); x.setDate(x.getDate() + Math.floor(d)); x.setMinutes(Math.round((d - Math.floor(d)) * 1440)); return x; };
@@ -83,7 +84,7 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number> }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string> }
 export interface Photo { data: string; caption: string }
 export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
 export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean][] }

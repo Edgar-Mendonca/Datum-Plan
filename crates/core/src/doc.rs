@@ -65,6 +65,10 @@ pub enum Op {
     Sheet { k: Option<usize>, sheet: Option<SheetData> },
     /// Sets cell inputs on a spreadsheet tab (empty input clears the cell).
     SheetCells { k: usize, cells: Vec<(String, String)>, fmt: Option<String> },
+    /// Sets the text formatting of task cells (column key, or "*" for the row); empty clears it.
+    Style { cells: Vec<(u32, String, String)> },
+    /// Sets the text formatting of spreadsheet cells.
+    SheetStyle { k: usize, cells: Vec<(String, String)> },
     /// Saves the notes of a reporting period (replacing the same kind and end date).
     Note { note: PeriodNote },
     Batch(Vec<Op>),
@@ -837,6 +841,18 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 }
                 if v.is_empty() { s.cells.remove(&a1); } else { s.cells.insert(a1, v); }
             }
+        }
+        Op::Style { cells } => for (uid, key, v) in cells {
+            let i = p.idx(uid).ok_or("That task no longer exists.")?;
+            let st = &mut p.tasks[i].style;
+            if !st.is_object() { *st = serde_json::json!({}); }
+            let m = st.as_object_mut().unwrap();
+            if v.is_empty() { m.remove(&key); } else { m.insert(key, v.into()); }
+            if m.is_empty() { *st = serde_json::Value::Null; }
+        },
+        Op::SheetStyle { k, cells } => {
+            let s = p.sheets.get_mut(k).ok_or("That sheet does not exist.")?;
+            for (a1, v) in cells { if v.is_empty() { s.style.remove(&a1.to_uppercase()); } else { s.style.insert(a1.to_uppercase(), v); } }
         }
         Op::Note { note } => {
             p.notes.retain(|n| !(n.kind == note.kind && n.end == note.end));

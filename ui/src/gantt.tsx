@@ -12,19 +12,19 @@ export const [showSlack, setShowSlack] = createSignal(false);
 export const [showLate, setShowLate] = createSignal(false);
 export const [showLabels, setShowLabels] = createSignal(true);
 
-type Unit = "day" | "week" | "month" | "quarter" | "year";
+export type Unit = "day" | "week" | "month" | "quarter" | "year";
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const ymd = (d: number) => { const x = new Date(Date.UTC(1970, 0, 1) + Math.floor(d) * 864e5); return [x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()]; };
+export const ymd = (d: number) => { const x = new Date(Date.UTC(1970, 0, 1) + Math.floor(d) * 864e5); return [x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()]; };
 const dow = (d: number) => (((Math.floor(d) + 3) % 7) + 7) % 7; // 0 = Monday
-const floorU = (d: number, u: Unit) => {
+export const floorU = (d: number, u: Unit) => {
   const [y, m] = ymd(d);
   return u === "day" ? Math.floor(d) : u === "week" ? Math.floor(d) - dow(d) : u === "month" ? Date.UTC(y, m, 1) / 864e5 : u === "quarter" ? Date.UTC(y, m - (m % 3), 1) / 864e5 : Date.UTC(y, 0, 1) / 864e5;
 };
-const nextU = (d: number, u: Unit) => {
+export const nextU = (d: number, u: Unit) => {
   const [y, m] = ymd(d);
   return u === "day" ? d + 1 : u === "week" ? d + 7 : u === "month" ? Date.UTC(y, m + 1, 1) / 864e5 : u === "quarter" ? Date.UTC(y, m + 3, 1) / 864e5 : Date.UTC(y + 1, 0, 1) / 864e5;
 };
-const label = (d: number, u: Unit, top: boolean, pd: number) => {
+export const label = (d: number, u: Unit, top: boolean, pd: number) => {
   const [y, m, day] = ymd(d);
   if (u === "day") return pd >= 26 ? `${"MTWTFSS"[dow(d)]} ${day}` : "MTWTFSS"[dow(d)];
   if (u === "week") return top ? `${day} ${MON[m]} '${String(y).slice(2)}` : `${day} ${MON[m]}`;
@@ -67,7 +67,7 @@ const pal = () => {
   if (!dark || g.name !== STYLES[0].name) Object.assign(K, { fill: g.fill, blue: g.edge, cfill: g.cfill, crit: g.crit, ...(dark ? {} : { ink: g.sum }) });
   K.grid = g.grid ? (dark ? "#1E2A38" : "#E8EBEF") : "";
 };
-const off = (d: number) => { const s = out()?.summary; if (!s) return dow(d) >= 5; return !s.week[dow(d)] || s.off_days.includes(Math.floor(d)); };
+export const off = (d: number) => { const s = out()?.summary; if (!s) return dow(d) >= 5; return !s.week[dow(d)] || s.off_days.includes(Math.floor(d)); };
 
 export const Gantt = () => {
   let body!: HTMLDivElement, scaleCv!: HTMLCanvasElement, barsCv!: HTMLCanvasElement;

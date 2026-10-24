@@ -6,6 +6,7 @@ use crate::formula::F;
 use crate::model::*;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -81,6 +82,9 @@ pub struct GRow {
     /// Indicator icons per column, where a custom field shows icons.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub icons: Vec<(usize, String)>,
+    /// Text formatting by column key ("*" = row).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub style: BTreeMap<String, String>,
     pub bar: Bar,
 }
 
@@ -166,7 +170,7 @@ impl Calc<'_> {
             uid: t.uid, id: i + 1, lvl: t.level, kind: if s.summary[i] { "summary" } else { "task" },
             ms: !s.summary[i] && (t.dur == 0 || matches!(t.act_type, ActType::StartMs | ActType::FinishMs)),
             crit: s.critical(p, i), late: self.val(i, "late").truth(), manual: t.manual, off: s.off[i], lp: s.lp[i],
-            kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, name: t.name.clone(), res: self.text(i, "res"), cells, icons, bar: self.bar(i, q.baseline),
+            kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, name: t.name.clone(), res: self.text(i, "res"), cells, icons, style: t.style.as_object().map(|m| m.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()).unwrap_or_default(), bar: self.bar(i, q.baseline),
         }
     }
 

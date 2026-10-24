@@ -168,7 +168,7 @@ pub struct Task {
     /// Responsible person or team (OBS).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub responsible: String,
-    /// Display formatting chosen in the UI (font, colours, bar style overrides).
+    /// Text formatting: an object of column key ("*" = the whole row) → `b;i;u;s;c:#hex;f:#hex;z:12;a:c`.
     #[serde(skip_serializing_if = "Value::is_null")]
     pub style: Value,
     #[serde(skip_serializing_if = "is_false")]
@@ -392,7 +392,7 @@ pub struct SnapRow { pub uid: u32, pub start: i64, pub finish: i64, pub pct: u8,
 /// A spreadsheet tab in the plan: typed cell inputs by A1 address, number formats, column widths.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pub fmt: BTreeMap<String, String>, pub widths: BTreeMap<u32, u16> }
+pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pub fmt: BTreeMap<String, String>, pub widths: BTreeMap<u32, u16>, #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] pub style: BTreeMap<String, String> }
 
 /// Reporting periods: the weekday a week ends on (0 = Monday … 6 = Sunday), the day of the month
 /// the month closes (0 = last day), and how progress is weighted on S-curves.

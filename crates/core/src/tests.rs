@@ -534,3 +534,19 @@ fn recurring_tasks_and_excel_export_with_formulas() {
     assert!(wb.sheet_names().contains(&"Plan".to_string()) && wb.sheet_names().contains(&"Calc".to_string()));
     let _ = std::fs::remove_file(&tmp);
 }
+
+#[test]
+fn text_formatting_on_tasks_and_sheets() {
+    let mut doc = Doc::new(plan(&[(2, ""), (3, "1")]));
+    let u = doc.p.tasks[0].uid;
+    op(&mut doc, Op::Style { cells: vec![(u, "name".into(), "b;c:#C0392B".into()), (u, "*".into(), "f:#FFF2CC".into())] }).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2));
+    let g = c.grid(&crate::query::Query { cols: vec!["name".into()], ..Default::default() });
+    assert_eq!(g.rows[0].style.get("name").map(String::as_str), Some("b;c:#C0392B"));
+    assert_eq!(g.rows[0].style.get("*").map(String::as_str), Some("f:#FFF2CC"));
+    op(&mut doc, Op::Style { cells: vec![(u, "name".into(), String::new()), (u, "*".into(), String::new())] }).unwrap();
+    assert!(doc.p.tasks[0].style.is_null(), "clearing the last style leaves nothing in the file");
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Q".into(), ..Default::default() }) }).unwrap();
+    op(&mut doc, Op::SheetStyle { k: 0, cells: vec![("b2".into(), "i;a:r".into())] }).unwrap();
+    assert_eq!(doc.p.sheets[0].style.get("B2").map(String::as_str), Some("i;a:r"));
+}

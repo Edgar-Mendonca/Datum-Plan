@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.3** (released 2026-10-24). Earlier: 0.1.0, 0.1.1, 0.2.0, 0.3.0, 0.3.1, 0.3.2 |
+| **Current version** | **0.3.4** (released 2026-10-24). Earlier: 0.1.0, 0.1.1, 0.2.0, 0.3.0, 0.3.1, 0.3.2, 0.3.3 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -104,6 +104,8 @@ flowchart LR
 | `ui/src/grid.tsx` | Excel-like task sheet: one scroller with sticky header and frozen ID/name, ranges (`ranges` signal), fill handle, TSV clipboard via copy/paste events, `Cells` op for range edits, AutoFilter menus, header rename (`Title` op), `FormulaBar`. |
 | `ui/src/charts.tsx` | Chart.js wrapper in a Prism style (Okabe-Ito colours, crosshair, status marker, PNG save). |
 | `ui/src/sheets.tsx` | Sheet tabs (A1 grid, formula bar, formats, clipboard). |
+| `ui/src/print.tsx` | File › Print: `PageSetup` (saved in `project.ui.page`), `layout()` paginates rows × time slices (across then down), `Sheet` draws one page as SVG (table + Gantt + legend) with header/footer codes and logos; `printNow` renders `#printroot` and sets `@page` size, then `window.print()`. `PAPERS`. |
+| `ui/src/fmt.ts` | Text formatting: style strings `b;i;u;s;c:#hex;f:#hex;z:12;a:c`, `css()`, the focused grid registers a `Target` (get/set selected cells), toggle/setProp/clear, Format Painter. |
 | `ui/src/tools.tsx` | Update Progress page, Relationship Diagram (SVG), Report Builder (sections, `TEMPLATES`, saved in `ui.reports`). |
 | `tests_ui/run.cjs` | Playwright UI tests against the built UI with a mocked shell and `dump` fixture (alignment, ranges, menus, ribbon, sidebar, every view). Runs in CI. |
 | `gantt.tsx`, `details.tsx`, `views.tsx`, `reports.tsx`, `dialogs.tsx`, `ribbon.tsx`, `backstage.tsx`, `setup.tsx`, `main.tsx` | As in the diagram. `styles.css` holds the light theme and print styles. |
@@ -182,6 +184,8 @@ flowchart LR
 | 0.3.2 | Recurring tasks are a summary with SNET-constrained occurrences | Same as MS Project; occurrences stay ordinary tasks. |
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
+| 0.3.4 | Printing lays out pages in the UI (SVG) and uses the WebView print dialog (Save as PDF), not a Rust PDF writer | Vector output, exact page sizes via `@page`, no new dependency; works the same on every view we lay out. |
+| 0.3.4 | Cell formatting reuses the task's existing `style` JSON field (column key → style string); sheets get `SheetData.style` | No file-format change; old files load unchanged. |
 | 0.3.3 | Every user-reported bug gets a UI test that fails on the broken build before the fix ships | Two clicks in a row were never tested; the 0.3.2 suite missed it. |
 | 0.3.1 | No Python; a separate future app "Datum Plot" (Prism/Origin-like) may use Python | The user's answer. |
 
@@ -200,6 +204,8 @@ flowchart LR
 | 0.3.1 | Foundation ([PLAN-0.3.1.md](PLAN-0.3.1.md)) | Excel-like grid, GridCraft formula columns, sheet tabs, reporting periods, period progress reports with notes/photos, Prism-style S-curves and dashboard, CentriForge styling, light/dark/auto | ✅ |
 | 0.3.2 | Builder & power | Report builder and templates, Update Progress workflow, xlsx export with formulas, recurring tasks, relationship diagram, global change, EPS tree, conditional formatting, Playwright UI tests in CI | ✅ |
 | 0.3.3 | Hotfix | Grid row selection stuck after the first click | ✅ |
+| 0.3.4 | Print & format | Print page with Page Setup (ranges, paper, scaling, margins, header/footer codes, logos, legend, columns), vector pages; Font/Alignment formatting for task sheet and Sheets; Options page rebuilt | ✅ |
+| 0.3.5 | One grid | One shared grid for Sheets and the task sheet, series fill, Paste Special, freeze panes, xlsx export of formatting | 🔜 |
 | 0.4.0 | Risk & resources | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -303,13 +309,19 @@ flowchart LR
 - User: could not click or select cells (row stuck on the first selection). Cause: in `grid.tsx` the effect that follows Gantt/find selection tracked `cur`, ran before the effect syncing `sel` from ranges, saw the old `sel` and reset the row. Fixed with `on(sel)` + `untrack`. New UI test "clicking cells selects each one" + "double-click edits a cell" (fails on 0.3.2, passes now). Checked in the real app, including Gantt bar clicks.
 - User asked why not use the Sheets (GridCraft) grid for the schedule too. Answer: GridCraft is a calculation engine, not a UI grid; the Sheets view and the task sheet are both our own DOM grids. Plan: one shared grid component for both (0.4.x), keeping the scheduler's task rows. See decision log.
 
+### 2026-10-24: Session 6, continued (0.3.4)
+- User asked to merge 0.3.4 and 0.3.5 and fix: printing (incomplete pages, no page control, no date range, no headers/footers/logos/page numbers), the jumbled Options page (stray `<span />` after each `<h4>` shifted the label/control grid), and missing Excel text formatting.
+- Built `print.tsx`, `fmt.ts`, `Style`/`SheetStyle` ops, new Options fields (openLast, startView, manualDefault, weekEnd, monthEnd, paper, landscape). Engine test 21. UI tests: Options alignment, Ctrl+B, print preview and print pages with `@page` size.
+- Checked in the real app: formatting in task sheet and Sheets, Print page preview (fit to 1 page wide), Options.
+- Not done from the planned 0.3.4 (one grid): moved to 0.3.5.
+
 ---
 
 ## 5. Known limits and next steps
 - Windows SmartScreen warns on the first install (unsigned). Updates after that are silent.
 - XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).
-- Not built yet: Page Setup dialog, text style editor, real PDF output (print to PDF works), the reference's C2 scenario tests.
+- Not built yet: the shared grid (0.3.5), xlsx export of cell formatting, page layout for views other than Gantt/Tracking (they print as on screen), the reference's C2 scenario tests.
 - Templates have no resources or costs, so cost reports are empty until resources are added.
 - Actual progress history is modelled linearly from actual start to the current % (snapshots are stored but not yet used as history points).
 - Fill handle and paste were checked by code review and in the harness, not with a real clipboard in the app.

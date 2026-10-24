@@ -84,6 +84,29 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("File sidebar is blue", bg === "rgb(11, 92, 173)", bg);
   await p.click(".bs aside .back");
 
+  // 5b. Options: each label sits left of its control (0.3.3 had them swapped).
+  await p.click(".tabs .file"); await p.waitForTimeout(150);
+  await p.click(".bs aside button:has-text('Options')"); await p.waitForTimeout(200);
+  const bad = await p.$$eval(".opt", os => os.filter(o => o.children[0].getBoundingClientRect().right > o.children[1].getBoundingClientRect().left + 1).length);
+  check("Options labels sit left of their controls", bad === 0 && (await p.$$(".opt")).length > 8, String(bad));
+  await p.click(".bs aside .back"); await p.waitForTimeout(200);
+
+  // 5c. Text formatting: Ctrl+B on a cell sends a Style edit; the Font group is on the Task tab.
+  const fc = await cellBox(3, 1); await p.mouse.click(fc.x, fc.y); await p.keyboard.press("Control+b"); await p.waitForTimeout(150);
+  check("Ctrl+B formats the selected cells", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop())).includes('"Style"'));
+  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  check("Font group on the Task tab", (await p.$$(".fontg .fb")).length >= 8);
+
+  // 5d. Print: Ctrl+P opens the print page with a preview; printing lays out the same pages with the paper size.
+  await p.keyboard.press("Control+p"); await p.waitForTimeout(400);
+  const nprev = (await p.$$(".pprev .ppage")).length;
+  check("Print page shows a page preview", nprev >= 1 && (await p.textContent(".pprev .phead")).includes(fix.state.project.name), String(nprev));
+  await p.evaluate(() => { window.print = () => { window.__printed = [document.querySelectorAll("#printroot .ppage").length, [...document.querySelectorAll("style")].map(s => s.textContent).find(t => t.includes("@page")) || ""]; }; });
+  await p.click(".pbtns .btn"); await p.waitForTimeout(400);
+  const pr = await p.evaluate(() => window.__printed);
+  check("Print renders every page with its paper size", pr && pr[0] === nprev && /size: 297mm 210mm/.test(pr[1]), JSON.stringify(pr));
+  await p.click(".bs aside .back"); await p.waitForTimeout(200);
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

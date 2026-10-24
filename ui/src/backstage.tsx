@@ -1,10 +1,11 @@
 // File (backstage): home with templates and recent plans, export, print, options, updates.
-import { For, Show, createSignal, createResource, onMount } from "solid-js";
+import { For, Show, createSignal, createResource, onMount, JSX } from "solid-js";
+import { PAPERS, PrintPage } from "./print";
 import { Currency, Options, Out } from "./api";
 import { backstage, setBackstage, call, loadOut, out, setOut, opts, setOpts, toast, setSetupOpen, act, setThemeRaw, applyTheme } from "./store";
 import { C } from "./cmds";
 import * as D from "./dialogs";
-import { Icon, Row, Text, Pick, Check } from "./ui";
+import { Icon, Text, Pick, Check } from "./ui";
 import { listen, invoke } from "./api";
 
 type Tpl = { id: string; name: string; desc: string; color: string; tasks: number; days: number; bars: [number, number, number][] };
@@ -90,7 +91,7 @@ const Export = () => (
         <button class="tile" onClick={() => C.exportAs(k)}><div class="pic"><svg class="ic"><use href="#i-export" /></svg><small>.{k}</small></div><b>{n}</b><span>{d}</span></button>}</For>
     </div>
     <h2>Pictures and PDF</h2>
-    <div class="tiles"><button class="tile" onClick={() => { setBackstage(null); C.print(); }}><div class="pic"><svg class="ic"><use href="#i-print" /></svg></div><b>Print or save as PDF</b><span>Choose “Save as PDF” as the printer to make a PDF of the current view.</span></button>
+    <div class="tiles"><button class="tile" onClick={() => setBackstage("print")}><div class="pic"><svg class="ic"><use href="#i-print" /></svg></div><b>Print or save as PDF</b><span>Choose “Save as PDF” as the printer to make a PDF of the current view.</span></button>
       <button class="tile" onClick={() => { setBackstage(null); copyPicture(); }}><div class="pic"><svg class="ic"><use href="#i-copy" /></svg></div><b>Save picture (PNG)</b><span>A picture of the Gantt chart as shown.</span></button></div>
   </div>
 );
@@ -103,31 +104,50 @@ const copyPicture = async () => {
   if (path) toast(`Saved ${path}`, true);
 };
 
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d, k) => [String(k), d] as [string, string]);
+const VIEWS: [string, string][] = [["gantt", "Gantt Chart"], ["tracking", "Tracking Gantt"], ["dashboard", "Dashboard"], ["sheets", "Sheets"], ["network", "Network Diagram"], ["calendar", "Calendar"]];
+/** One option: name and a one-line explanation on the left, the control on the right. */
+const Opt = (p: { l: string; hint?: string; children: JSX.Element }) => <div class="opt"><div><b>{p.l}</b>{p.hint && <small>{p.hint}</small>}</div><div class="ctl">{p.children}</div></div>;
+const Sec = (p: { t: string; about: string; children: JSX.Element }) => <section class="osec"><h3>{p.t}</h3><p class="muted">{p.about}</p>{p.children}</section>;
+
 const OptionsPage = () => {
   const [o, setO] = createSignal<Options>({ ...opts() });
   const save = async () => { const r = await call<Out>("set_options", { opts: o() }); if (r) { setOpts(o()); setOut(r); toast("Options saved.", true); } };
   const put = <K extends keyof Options>(k: K, v: Options[K]) => setO({ ...o(), [k]: v });
+  const folder = async () => { const r = await call<[string, unknown[]]>("workspace", { choose: true }); if (r?.[0]) put("workspace", r[0]); };
   return (
-    <div><h1>Options</h1>
-      <div class="form wideform">
-        <h4>General</h4><span />
-        <Row label="Date format"><Pick value={o().dateFmt} set={v => put("dateFmt", v)} options={[["%d-%b-%y", "24-Oct-26"], ["%d/%m/%Y", "24/10/2026"], ["%m/%d/%Y", "10/24/2026"], ["%Y-%m-%d", "2026-10-24"], ["%d %b %Y", "24 Oct 2026"], ["%a %d-%b-%y", "Sat 24-Oct-26"]]} /></Row>
-        <Row label="Theme"><Pick value={o().theme || "auto"} set={v => { put("theme", v); setThemeRaw(v); applyTheme(); }} options={[["auto", "Auto (follow Windows)"], ["light", "Light"], ["dark", "Dark"]]} /></Row>
-        <Row label="Recovery save every"><span><input type="number" min="0" style={{ width: "60px" }} value={o().autosave} onChange={e => put("autosave", +e.currentTarget.value)} /> minutes (0 = off)</span></Row>
-        <Row label=""><Check label="Show the Project Setup panel for new plans" value={o().setupPanel} set={v => put("setupPanel", v)} /></Row>
-        <h4>Currency for new plans</h4><span />
-        <Row label="Currency"><span><CurrencyPick value={o().currency} set={c => put("currency", c)} /></span></Row>
-        <Show when={out()}><Row label="This plan"><span><CurrencyPick value={out()!.project.currency} set={c => act({ ProjectSet: { field: "currency", value: c } })} /></span></Row></Show>
-        <h4>Report branding</h4><span />
-        <Row label="Company"><Text value={o().company} set={v => put("company", v)} /></Row>
-        <Row label="Logo"><span>{o().logo && <img src={o().logo} class="logoprev" />}<button class="btn sm" onClick={async () => { const l = await call<string | null>("pick_logo"); if (l) put("logo", l); }}>Choose picture…</button>{o().logo && <button class="btn sm" onClick={() => put("logo", "")}>Remove</button>}
-          <Show when={out()}><button class="btn sm" onClick={() => act({ Batch: [{ ProjectSet: { field: "logo", value: o().logo } }, { ProjectSet: { field: "company", value: o().company } }] })}>Use for this plan</button></Show></span></Row>
-        <h4>Updates</h4><span />
-        <Row label=""><Check label="Get beta versions (early access, may have bugs)" value={o().beta} set={v => put("beta", v)} /></Row>
-        <Row label="Workspace folder"><span class="muted">{o().workspace || "Choose in Report › Portfolio"}</span></Row>
-      </div>
-      <p><button class="btn pri" onClick={save}>Save options</button></p>
-      <p class="muted">Datum Plan keeps everything on this computer. The only connection it makes is the update check to GitHub.</p>
+    <div class="options"><h1>Options</h1>
+      <p class="muted">Settings for Datum Plan on this computer. Defaults for new plans apply when a plan is created; change an open plan in Project › Project Setup.</p>
+      <Sec t="General" about="How dates and the window look.">
+        <Opt l="Date format" hint="Used in the task sheet, reports and printouts."><Pick value={o().dateFmt} set={v => put("dateFmt", v)} options={[["%d-%b-%y", "24-Oct-26"], ["%d/%m/%Y", "24/10/2026"], ["%m/%d/%Y", "10/24/2026"], ["%Y-%m-%d", "2026-10-24"], ["%d %b %Y", "24 Oct 2026"], ["%a %d-%b-%y", "Sat 24-Oct-26"]]} /></Opt>
+        <Opt l="Theme" hint="Auto follows the Windows light or dark setting."><Pick value={o().theme || "auto"} set={v => { put("theme", v); setThemeRaw(v); applyTheme(); }} options={[["auto", "Auto (follow Windows)"], ["light", "Light"], ["dark", "Dark"]]} /></Opt>
+      </Sec>
+      <Sec t="Start-up and saving" about="What happens when Datum Plan starts, and how your work is protected.">
+        <Opt l="When Datum Plan starts" hint="Open the File page, or reopen the plan you used last."><Pick value={o().openLast ? "last" : "home"} set={v => put("openLast", v === "last")} options={[["home", "Show the File page"], ["last", "Reopen the last plan"]]} /></Opt>
+        <Opt l="Open plans in" hint="The view shown when a plan is opened or created."><Pick value={o().startView || "gantt"} set={v => put("startView", v)} options={VIEWS} /></Opt>
+        <Opt l="Recovery copy every" hint="A copy is kept while you work, so a crash or power cut loses little. 0 turns it off."><span class="inline"><input type="number" min="0" style={{ width: "70px" }} value={o().autosave} onChange={e => put("autosave", +e.currentTarget.value)} /> minutes</span></Opt>
+      </Sec>
+      <Sec t="New plans" about="Defaults given to every new plan. Each plan keeps its own settings afterwards.">
+        <Opt l="Project Setup panel" hint="Ask for the project name, client, dates and calendar when a plan is created."><Check label="Show for new plans" value={o().setupPanel} set={v => put("setupPanel", v)} /></Opt>
+        <Opt l="New tasks are" hint="Auto scheduled tasks move with their links; manual ones stay where you put them."><Pick value={o().manualDefault ? "1" : "0"} set={v => put("manualDefault", v === "1")} options={[["0", "Auto Scheduled"], ["1", "Manually Scheduled"]]} /></Opt>
+        <Opt l="Reporting week ends on" hint="Cut-off day for weekly progress reports and S-curves."><Pick value={String(o().weekEnd ?? 4)} set={v => put("weekEnd", +v)} options={DAYS} /></Opt>
+        <Opt l="Reporting month closes on" hint="Cut-off day for monthly reports."><Pick value={String(o().monthEnd ?? 0)} set={v => put("monthEnd", +v)} options={[["0", "Last day of the month"], ...Array.from({ length: 28 }, (_, k) => [String(k + 1), `Day ${k + 1}`] as [string, string])]} /></Opt>
+        <Opt l="Currency" hint="Symbol and decimals for costs in new plans."><span class="inline"><CurrencyPick value={o().currency} set={c => put("currency", c)} /></span></Opt>
+        <Show when={out()}><Opt l="Currency of this plan" hint="Changes the open plan right away."><span class="inline"><CurrencyPick value={out()!.project.currency} set={c => act({ ProjectSet: { field: "currency", value: c } })} /></span></Opt></Show>
+      </Sec>
+      <Sec t="Printing and branding" about="Your company name and logo go in report headers and printed page headers (File › Print › Page Setup).">
+        <Opt l="Paper" hint="Default paper for new printouts."><span class="inline"><Pick value={o().paper || "A4"} set={v => put("paper", v)} options={PAPERS.map(p => p[0])} /><Pick value={o().landscape === false ? "0" : "1"} set={v => put("landscape", v === "1")} options={[["1", "Landscape"], ["0", "Portrait"]]} /></span></Opt>
+        <Opt l="Company" hint="Shown on reports and printouts."><Text value={o().company} set={v => put("company", v)} /></Opt>
+        <Opt l="Company logo" hint="PNG or JPG. Clients' logos are set per plan in Page Setup."><span class="inline">{o().logo && <img src={o().logo} class="logoprev" />}<button class="btn sm" onClick={async () => { const l = await call<string | null>("pick_logo"); if (l) put("logo", l); }}>Choose picture…</button>{o().logo && <button class="btn sm" onClick={() => put("logo", "")}>Remove</button>}
+          <Show when={out()}><button class="btn sm" onClick={() => act({ Batch: [{ ProjectSet: { field: "logo", value: o().logo } }, { ProjectSet: { field: "company", value: o().company } }] })}>Use for this plan</button></Show></span></Opt>
+      </Sec>
+      <Sec t="Portfolio" about="The folder (with subfolders) whose plans appear in Report › Portfolio.">
+        <Opt l="Workspace folder" hint={o().workspace || "Not chosen yet."}><button class="btn sm" onClick={folder}><Icon n="folder" /> Choose folder…</button></Opt>
+      </Sec>
+      <Sec t="Updates" about="Datum Plan checks GitHub for new versions when it starts. Updates install from File › Updates.">
+        <Opt l="Beta versions" hint="Get new features early. They may have bugs."><Check label="Get beta versions" value={o().beta} set={v => put("beta", v)} /></Opt>
+      </Sec>
+      <p class="osave"><button class="btn pri" onClick={save}>Save options</button><span class="muted">Datum Plan keeps everything on this computer. Its only connection is the update check to GitHub.</span></p>
     </div>
   );
 };
@@ -139,7 +159,7 @@ export const Backstage = () => (
       <For each={[["home", "home", "Home"], ["new", "new", "New"], ["open", "open", "Open"], ["import", "import", "Import"], ["save", "save", "Save"], ["saveas", "save", "Save As"], ["export", "export", "Export"], ["print", "print", "Print"]]}>{([k, i, l]) =>
         <button classList={{ on: backstage() === k }} onClick={() => {
           if (k === "open") C.open(); else if (k === "import") C.importFile(); else if (k === "save") C.save(); else if (k === "saveas") C.save(true);
-          else if (k === "print") { setBackstage(null); C.print(); } else setBackstage(k === "new" ? "home" : k);
+          else setBackstage(k === "new" ? "home" : k);
         }}><Icon n={i} size={22} />{l}</button>}</For>
       <span class="grow" />
       <button classList={{ on: backstage() === "options" }} onClick={() => setBackstage("options")}><Icon n="opts" size={22} />Options</button>
@@ -149,6 +169,7 @@ export const Backstage = () => (
       <Show when={backstage() === "home"}><Home /></Show>
       <Show when={backstage() === "export"}><Export /></Show>
       <Show when={backstage() === "options"}><OptionsPage /></Show>
+      <Show when={backstage() === "print"}><PrintPage /></Show>
       <Show when={backstage() === "about"}><div class="about"><h1>Updates</h1><UpdateCard /><p><button class="btn" onClick={() => D.shortcuts()}>Keyboard shortcuts</button></p></div></Show>
     </section>
   </div>

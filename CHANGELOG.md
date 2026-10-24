@@ -1,6 +1,32 @@
 # Changelog
 
-## 0.3.3 — 2026-10-24
+## 0.3.4 — 2026-10-24
+
+Printing and PDF done properly, Excel-style text formatting, and a clearer Options page.
+
+**Print and PDF (File › Print, Ctrl+P, or Report › Page Setup)**
+- A new Print page like MS Project's: settings on the left, a live preview of every page on the right.
+- Print the entire project or specific dates (from and to), and all pages or only some (e.g. 1-3, 5).
+- Paper A4, A3, A2, A1, Letter, Legal or Tabloid, landscape or portrait.
+- Scaling: adjust to a percentage, or fit the timescale to a number of pages wide.
+- Margins in millimetres.
+- Header and footer with left, centre and right parts. Codes for page number, total pages, date, project, company, client, manager, status date, project start and finish. The company logo and a client logo can go on either side.
+- Legend on every page, the last page or none, with your own text.
+- Columns: all of them or the first few, repeated on every page or only on the first. Gridlines, ID column and timescale units are adjustable.
+- Pages are drawn as vector graphics, so the Gantt chart and text stay sharp in PDFs. Choose "Save as PDF" in the print window.
+- The page setup is saved with the plan.
+
+**Text formatting (Task tab › Font and Alignment)**
+- Bold, italic, underline, strikethrough, font size, font colour, fill colour, and left, centre or right alignment for selected cells. Select whole rows to format the row.
+- Ctrl+B, Ctrl+I and Ctrl+U, Clear Formatting, and Format Painter (Clipboard group).
+- Works the same in the task sheet and in Sheets tabs. The formatting is saved with the plan and printed.
+
+**Options**
+- Fixed the Options page, where the labels and boxes had swapped places.
+- Grouped into sections, each with an explanation.
+- New options: reopen the last plan at start; the view plans open in; manual or auto scheduling for new tasks; the week-end and month-close day for reports; default paper and orientation; choose the workspace folder directly.
+
+ 2026-10-24
 
 **Fix (critical):** in 0.3.2, after the first click the task sheet kept the same row selected. Clicking another cell only changed the column, so you could not select, edit or work on other tasks. Clicking now selects the cell you click. An automated test clicks cell after cell and edits one, so this can't come back unnoticed.
 

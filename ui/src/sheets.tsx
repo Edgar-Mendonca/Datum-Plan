@@ -3,6 +3,7 @@
 import { For, Show, createSignal, createResource, createMemo, onMount, onCleanup } from "solid-js";
 import { SheetOut } from "./api";
 import { act, call, P, tick, openMenu, toast } from "./store";
+import * as F from "./fmt";
 
 const RH = 22, CW = 96, HW = 46;
 const colName = (c: number) => { let s = ""; c += 1; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = Math.floor((c - 1) / 26); } return s; };
@@ -23,8 +24,12 @@ export const Sheets = () => {
   const lefts = createMemo(() => { let x = HW; return Array.from({ length: ncols() }, (_, c) => { const l = x; x += width(c); return l; }); });
   let box!: HTMLDivElement;
   const ro = new ResizeObserver(() => setH(box.clientHeight));
-  onMount(() => box && ro.observe(box));
-  onCleanup(() => ro.disconnect());
+  const fmtTarget: F.Target = {
+    get: () => { const [r0, c0, r1, c1] = range(), st = P().sheets[k()]?.style ?? {}, out: [string, string][] = []; for (let r = r0; r <= Math.min(r1, r0 + 999); r++) for (let c = c0; c <= c1; c++) out.push([a1(r, c), st[a1(r, c)] ?? ""]); return out; },
+    set: list => act({ SheetStyle: { k: k(), cells: list } }),
+  };
+  onMount(() => { if (box) ro.observe(box); F.setTarget(fmtTarget); });
+  onCleanup(() => { ro.disconnect(); if (F.target() === fmtTarget) F.setTarget(null); });
   const range = () => { const [a, b] = cur(), [c, d] = end(); return [Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)]; };
   const inR = (r: number, c: number) => { const [r0, c0, r1, c1] = range(); return r >= r0 && r <= r1 && c >= c0 && c <= c1; };
   const put = async (list: [string, string][]) => { await act({ SheetCells: { k: k(), cells: list, fmt: null } }); };
@@ -51,6 +56,7 @@ export const Sheets = () => {
       case "Enter": case "F2": e.preventDefault(); return setEdit(cells().get(a1(...cur()))?.[1] ?? "");
       case "Delete": case "Backspace": e.preventDefault(); return clear();
     }
+    if ((e.ctrlKey || e.metaKey) && ["b", "i", "u"].includes(e.key.toLowerCase())) { e.preventDefault(); return F.toggle(e.key.toLowerCase() as "b"); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") { e.preventDefault(); setCur([0, 0]); setEnd([nrows() - 1, ncols() - 1]); return; }
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) { e.preventDefault(); setEdit(e.key); }
   };
@@ -78,7 +84,7 @@ export const Sheets = () => {
     if (edit() !== null) commit([0, 0]);
     go(r, c, e.shiftKey);
     const mv = (m: MouseEvent) => { const y2 = m.clientY - b.top + box.scrollTop - RH, x2 = m.clientX - b.left + box.scrollLeft; const c2 = lefts().findIndex((l, j) => x2 >= l && x2 < l + width(j)); setEnd([Math.max(0, Math.floor(y2 / RH)), c2 < 0 ? end()[1] : c2]); };
-    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); };
+    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); F.painted(); };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
   const setFmt = (f: string) => { const [r0, c0, r1, c1] = range(); const out: [string, string][] = []; for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) out.push([a1(r, c), ""]); act({ SheetCells: { k: k(), cells: out, fmt: f } }); };
@@ -99,7 +105,7 @@ export const Sheets = () => {
       <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan for quantities, estimates or progress measurement.</p><button class="btn pri" style={{ width: "fit-content" }} onClick={addSheet}>Add a sheet</button></div>}>
         <div class="fbar"><span class="fname">{a1(...cur())}</span><span class="fx" style={{ "text-align": "center", "line-height": "27px" }}>fx</span>
           <input value={edit() ?? curCell()?.[1] ?? ""} onInput={e => setEdit(e.currentTarget.value)} onKeyDown={e => { if (e.key === "Enter") commit([1, 0]); if (e.key === "Escape") setEdit(null); }} /></div>
-        <div class="gscroll sheetgrid" ref={el => { box = el; ro.observe(el); }} tabindex="0" onKeyDown={key} onMouseDown={down} onCopy={onCopy} onPaste={onPaste} onScroll={() => setTop(box.scrollTop)}
+        <div class="gscroll sheetgrid" ref={el => { box = el; ro.observe(el); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={onCopy} onPaste={onPaste} onScroll={() => setTop(box.scrollTop)}
           onDblClick={() => setEdit(curCell()?.[1] ?? "")}>
           <div class="gsheet" style={{ width: `${lefts()[ncols() - 1] + width(ncols() - 1) + 40}px`, height: `${(nrows() + 1) * RH}px` }}>
             <div class="ghead" style={{ height: `${RH}px` }}>
@@ -112,7 +118,7 @@ export const Sheets = () => {
                   <div class="c idc" style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 1, "text-align": "center" }}>{r + 1}</div>
                   <For each={Array.from({ length: ncols() }, (_, c) => c)}>{c => {
                     const x = () => cells().get(a1(r, c));
-                    return <div class="c" classList={{ r: !!x()?.[3], in: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!x()?.[2].startsWith("#") }} style={{ width: `${width(c)}px`, "line-height": `${RH - 1}px` }}>{x()?.[2] ?? ""}</div>;
+                    return <div class="c" classList={{ r: !!x()?.[3], in: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!x()?.[2].startsWith("#") }} style={{ width: `${width(c)}px`, "line-height": `${RH - 1}px`, ...F.css(P().sheets[k()]?.style?.[a1(r, c)]) }}>{x()?.[2] ?? ""}</div>;
                   }}</For>
                 </div>
               )}</For>

@@ -6,6 +6,7 @@ import { Col, Row } from "./api";
 import { grid, cols, setCols, saveCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
 import { C } from "./cmds";
 import * as D from "./dialogs";
+import * as F from "./fmt";
 import { Icon } from "./ui";
 
 export const RH = 20;
@@ -94,8 +95,17 @@ export const Grid = (p: { width?: number }) => {
 
   const ro = new ResizeObserver(() => setViewH(box.clientHeight));
   const sync = (e: Event) => { const v = (e as CustomEvent<number>).detail; if (Math.abs(box.scrollTop - v) > 1) box.scrollTop = v; };
-  onMount(() => { ro.observe(box); document.addEventListener("grid-scroll", sync); });
-  onCleanup(() => { ro.disconnect(); document.removeEventListener("grid-scroll", sync); });
+  // Font and Alignment commands act on the selected cells (whole rows style the row).
+  const fmtTarget: F.Target = {
+    get: () => {
+      const out: [string, string][] = [], whole = wholeRows();
+      for (const g of ranges()) { const n = norm(g); for (let r = n.r0; r <= n.r1 && out.length < 20000; r++) { const x = rows()[r]; if (!x || x.uid <= 0) continue; for (let c = whole ? -1 : n.c0; c <= (whole ? -1 : n.c1); c++) { const key = c < 0 ? "*" : grid().cols[c]?.key; if (key) out.push([`${x.uid}|${key}`, x.style?.[key] ?? ""]); } } }
+      return out;
+    },
+    set: list => act({ Style: { cells: list.map(([id, v]) => { const [u, key] = id.split("|"); return [+u, key, v]; }) } }),
+  };
+  onMount(() => { ro.observe(box); document.addEventListener("grid-scroll", sync); F.setTarget(fmtTarget); });
+  onCleanup(() => { ro.disconnect(); document.removeEventListener("grid-scroll", sync); if (F.target() === fmtTarget) F.setTarget(null); });
 
   const reveal = (row: number, col: number) => {
     const top = row * RH, h = box.clientHeight - 40 - 16;
@@ -136,7 +146,7 @@ export const Grid = (p: { width?: number }) => {
     } else pick(r, c, e.shiftKey, e.ctrlKey);
     box.focus();
     const mv = (m: MouseEvent) => { const [r2, c2] = cellAt(m); const last = ranges()[ranges().length - 1]; if (last) setRanges([...ranges().slice(0, -1), { ...last, r1: Math.max(0, r2), c1: c < 0 ? last.c1 : Math.max(0, c2) }]); };
-    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); };
+    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); F.painted(); };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
   const fillDrag = (e: MouseEvent) => {
@@ -284,6 +294,7 @@ export const Grid = (p: { width?: number }) => {
       case "Escape": return setRanges([{ r0: row, c0: col, r1: row, c1: col }]);
     }
     const k = e.key.toLowerCase();
+    if (ctrl && !e.shiftKey && (k === "b" || k === "i" || k === "u")) { e.preventDefault(); return F.toggle(k); }
     if (ctrl && k === "a") { e.preventDefault(); setRanges([{ r0: 0, c0: 0, r1: rows().length - 1, c1: ncols() - 1 }]); return; }
     if (ctrl && k === "d" && last) { e.preventDefault(); const n = norm(last); return n.r1 > n.r0 ? fill({ ...n, r1: n.r0 }, n.r1) : undefined; }
     if (ctrl && (k === "-" || k === "delete")) { e.preventDefault(); return C.del(); }
@@ -376,7 +387,7 @@ export const Grid = (p: { width?: number }) => {
 
   return (
     <div class="grid" style={{ width: p.width ? `${p.width}px` : undefined }}>
-      <div class="gscroll" ref={box} tabindex="0" onKeyDown={key} onMouseDown={down} onContextMenu={rowMenu}
+      <div class="gscroll" ref={box} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onContextMenu={rowMenu}
         onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste}
         onDblClick={e => { const [r, c] = cellAt(e); if (c < 0) C.info(); else startEdit(r, c); }}
         onScroll={() => { setScrollTop(box.scrollTop); document.dispatchEvent(new CustomEvent("chart-scroll", { detail: box.scrollTop })); }}>
@@ -407,7 +418,7 @@ export const Grid = (p: { width?: number }) => {
                 <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }} title={r.late ? "Late" : ""}>{r.uid > 0 ? r.id : ""}{r.late && <i class="ind late">!</i>}{r.manual && <i class="ind">✎</i>}</div>
                 <For each={grid().cols}>{(c, j) => (
                   <div class="c" classList={{ r: right(c), nm: c.key === "name", ro: !c.edit, in: inRange(k, j()), at: cur().row === k && cur().col === j(), fz: j() === frozen(), fx: !!formulaOf(c.key) }}
-                    style={{ width: `${widths()[j()]}px`, ...sticky(j()), ...(D.cfRules().length ? D.cfStyle(c.key, r.cells[j()] ?? "") : {}) }}>
+                    style={{ width: `${widths()[j()]}px`, ...sticky(j()), ...(r.style ? { ...F.css(r.style["*"]), ...F.css(r.style[c.key]) } : {}), ...(D.cfRules().length ? D.cfStyle(c.key, r.cells[j()] ?? "") : {}) }}>
                     {cell(r, c, j())}
                   </div>
                 )}</For>

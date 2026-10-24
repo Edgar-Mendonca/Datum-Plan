@@ -7,6 +7,28 @@ import { Icon } from "./ui";
 import { STYLES, gstyle } from "./gantt";
 import { showCrit, setShowCrit, showBase, setShowBase, showSlack, setShowSlack, showLate, setShowLate, showLabels, setShowLabels } from "./gantt";
 import { fieldMenu } from "./grid";
+import * as F from "./fmt";
+
+const COLORS: [string, string][] = [["Red", "#C0392B"], ["Orange", "#E67E22"], ["Amber", "#B7950B"], ["Green", "#1E8449"], ["Blue", "#0B5CAD"], ["Dark Blue", "#0C1A2B"], ["Purple", "#7D3C98"], ["Grey", "#7F8C8D"]];
+const FILLS: [string, string][] = [["Yellow", "#FFF2CC"], ["Green", "#E2F0D9"], ["Blue", "#DDEBF7"], ["Red", "#FADBD8"], ["Orange", "#FCE4D6"], ["Purple", "#E8DAEF"], ["Grey", "#EDEDED"]];
+const pickColor = (k: "c" | "f") => { const i = document.createElement("input"); i.type = "color"; i.value = F.current()[k] || (k === "c" ? "#000000" : "#ffffff"); i.onchange = () => F.setProp(k, i.value); i.click(); };
+const colorMenu = (k: "c" | "f"): Item[] => [{ label: k === "c" ? "Automatic" : "No Fill", run: () => F.setProp(k, undefined) }, ...(k === "c" ? COLORS : FILLS).map(([l, v]) => ({ label: l, run: () => F.setProp(k, v), on: F.current()[k] === v })), "-", { label: "More Colors…", run: () => pickColor(k) }];
+/** Excel-style Font and Alignment controls; they act on the selected cells of the task sheet or a sheet tab. */
+const Font = () => {
+  const s = () => F.current(), [last, setLast] = createSignal<[string, string]>(["#C0392B", "#FFF2CC"]);
+  const T = (p: { k: "b" | "i" | "u" | "s"; l: string; t: string; st: JSX.CSSProperties }) => <button class="rb fb" classList={{ on: !!s()[p.k] }} title={p.t} onClick={() => F.toggle(p.k)}><span style={p.st}>{p.l}</span></button>;
+  const A = (p: { a: string; i: string; t: string }) => <button class="rb fb" classList={{ on: (s().a || "") === p.a }} title={p.t} onClick={() => F.setProp("a", p.a || undefined)}><Icon n={p.i} /></button>;
+  return <>
+    <G l="Font"><div class="fontg">
+      <div><select class="fsize" title="Font size" value={String(s().z || 12)} onChange={e => F.setProp("z", +e.currentTarget.value === 12 ? undefined : +e.currentTarget.value)}><For each={[8, 9, 10, 11, 12, 13, 14]}>{z => <option value={z}>{z}</option>}</For></select>
+        <button class="rb fb" title="Increase font size" onClick={() => F.setProp("z", Math.min(14, (s().z || 12) + 1))}><span>A<sup>+</sup></span></button><button class="rb fb" title="Decrease font size" onClick={() => F.setProp("z", Math.max(8, (s().z || 12) - 1))}><span>A<sup>−</sup></span></button></div>
+      <div><T k="b" l="B" t="Bold (Ctrl+B)" st={{ "font-weight": 700 }} /><T k="i" l="I" t="Italic (Ctrl+I)" st={{ "font-style": "italic" }} /><T k="u" l="U" t="Underline (Ctrl+U)" st={{ "text-decoration": "underline" }} /><T k="s" l="S" t="Strikethrough" st={{ "text-decoration": "line-through" }} />
+        <span class="fcol"><button class="rb fb" title="Font color" onClick={() => F.setProp("c", last()[0])}><span class="ca">A<i style={{ background: last()[0] }} /></span></button><button class="rb split" onClick={e => openMenu(e, colorMenu("c").map(x => x === "-" || !x.run ? x : { ...x, run: () => { x.run!(); const v = F.current().c; if (v) setLast([v, last()[1]]); } }))}>▾</button></span>
+        <span class="fcol"><button class="rb fb" title="Fill color" onClick={() => F.setProp("f", last()[1])}><span class="ca">▰<i style={{ background: last()[1] }} /></span></button><button class="rb split" onClick={e => openMenu(e, colorMenu("f").map(x => x === "-" || !x.run ? x : { ...x, run: () => { x.run!(); const v = F.current().f; if (v) setLast([last()[0], v]); } }))}>▾</button></span></div>
+    </div></G>
+    <G l="Alignment"><div class="fontg"><div><A a="" i="al" t="Align left" /><A a="c" i="ac" t="Center" /><A a="r" i="ar" t="Align right" /></div><div><button class="rb fb" title="Clear Formatting" onClick={F.clearFmt}><Icon n="clear" /></button></div></div></G>
+  </>;
+};
 
 const B = (p: { i: string; l: string; run?: (e: MouseEvent) => void; big?: boolean; on?: boolean; off?: boolean; dd?: (e: MouseEvent) => void; title?: string }) => p.big && p.run && p.dd ? (
   // MS Project split button: the picture runs the command, the label opens the menu.
@@ -99,7 +121,8 @@ export const Ribbon = () => (
   <section class="ribbon">
     <Show when={tab() === "task"}>
       <G l="View"><B big i="gantt" l="Gantt Chart" run={() => C.view("gantt")} dd={e => openMenu(e, viewMenu())} /></G>
-      <G l="Clipboard"><B big i="paste" l="Paste" run={C.paste} /><S><B i="cut" l="Cut" run={C.cut} /><B i="copy" l="Copy" run={C.copy} /></S></G>
+      <G l="Clipboard"><B big i="paste" l="Paste" run={C.paste} /><S><B i="cut" l="Cut" run={C.cut} /><B i="copy" l="Copy" run={C.copy} /><B i="paint" l="Format Painter" run={F.paint} on={F.painter() !== null} /></S></G>
+      <Font />
       <G l="Schedule">
         <div class="pcts"><For each={[0, 25, 50, 75, 100]}>{v => <button class="rb" title={`${v}% complete`} onClick={() => C.pct(v)}><Icon n="pct" /><span>{v}%</span></button>}</For></div>
         <S><B i="track" l="Mark on Track" run={C.onTrack} dd={e => openMenu(e, [{ label: "Mark on Track", run: C.onTrack }, { label: "Update Tasks…", run: C.info }, { label: "Update Project…", run: C.update }])} /><B i="link" l="Link" run={C.link} /><B i="unlink" l="Unlink" run={C.unlink} /></S>
@@ -123,7 +146,7 @@ export const Ribbon = () => (
       <G l="View Reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="builder" l="Report Builder" run={() => C.view("builder")} /><B big i="report" l="Reports" run={() => C.view("reports")} /></G>
       <G l="Health"><B big i="check" l="Check Schedule" run={() => C.view("checks")} /><B big i="risk" l="Risks" run={() => C.view("risks")} /></G>
       <G l="Portfolio"><B big i="folder" l="Portfolio" run={() => C.view("portfolio")} /><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
-      <G l="Export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /></G>
+      <G l="Export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="pagesetup" l="Page Setup" run={C.pageSetup} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /></G>
     </Show>
     <Show when={tab() === "project"}>
       <G l="Properties"><B big i="proj" l="Project Information" run={() => D.projectInfo()} /><S><B i="cols" l="Custom Fields" run={() => D.customFields()} /><B i="group" l="Activity Codes" run={() => D.activityCodes()} /><B i="calendar2" l="Change Working Time" run={() => D.calendars()} /></S>

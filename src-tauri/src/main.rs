@@ -27,11 +27,21 @@ struct Options {
     setup_panel: bool,
     /// auto, light or dark.
     theme: String,
+    /// Reopen the last plan at start, and the view a plan opens in.
+    open_last: bool,
+    start_view: String,
+    /// Defaults for new plans: manual scheduling, week end day (0 = Mon … 6 = Sun), month close day (0 = last).
+    manual_default: bool,
+    week_end: u8,
+    month_end: u8,
+    /// Default paper and orientation for printing.
+    paper: String,
+    landscape: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), setup_panel: true, theme: "auto".into() }
+        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), setup_panel: true, theme: "auto".into(), open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true }
     }
 }
 
@@ -95,6 +105,9 @@ fn fresh(a: &App, mut p: Project) -> Project {
         p.logo = a.opts.logo.clone();
     }
     p.setup_done = !a.opts.setup_panel;
+    p.manual_default = a.opts.manual_default;
+    p.periods.week_end = a.opts.week_end;
+    p.periods.month_end = a.opts.month_end;
     p
 }
 
@@ -610,8 +623,9 @@ fn recent(app: AppHandle) -> Vec<Recent> {
 
 /// A .dplan path passed on the command line (double-clicked in Explorer).
 #[tauri::command]
-fn startup_file() -> Option<String> {
-    std::env::args().skip(1).find(|a| a.to_lowercase().ends_with(".dplan"))
+fn startup_file(app: AppHandle, st: State<St>) -> Option<String> {
+    let last = || if st.0.lock().unwrap().opts.open_last { recent_paths(&app).into_iter().find(|p| Path::new(p).exists()) } else { None };
+    std::env::args().skip(1).find(|a| a.to_lowercase().ends_with(".dplan")).or_else(last)
 }
 
 #[tauri::command]

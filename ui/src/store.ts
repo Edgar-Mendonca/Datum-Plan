@@ -14,7 +14,7 @@ export const applyTheme = () => { document.documentElement.dataset.theme = theme
 export const [themeTick, setThemeTick] = createSignal(0);
 darkMq?.addEventListener("change", () => theme() === "auto" && applyTheme());
 export const setTheme = (t: string) => { setThemeRaw(t); applyTheme(); invoke("set_options", { opts: { ...opts(), theme: t } }).then(o => setOut(o as Out)).catch(() => {}); setOpts({ ...opts(), theme: t }); };
-export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", autosave: 5, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: true, theme: "auto" });
+export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", autosave: 5, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: true, theme: "auto", openLast: false, startView: "gantt", manualDefault: false, weekEnd: 4, monthEnd: 0, paper: "A4", landscape: true });
 
 export type View = "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "checks" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder";
 export const [view, setView] = createSignal<View>("gantt");
@@ -102,7 +102,7 @@ export const set = (uid: number, field: string, value: string) => act({ Set: { u
 export const call = async <T = any>(cmd: string, args?: object): Promise<T | undefined> => {
   try { return await invoke<T>(cmd, args); } catch (e) { toast(String(e)); return undefined; }
 };
-export const loadOut = async (cmd: string, args?: object) => { const o = await call<Out | null>(cmd, args); if (o) { setOut(o); setBackstage(null); useTable(table()); } return o; };
+export const loadOut = async (cmd: string, args?: object) => { const o = await call<Out | null>(cmd, args); if (o) { setOut(o); setBackstage(null); useTable(table()); setView((opts().startView || "gantt") as View); } return o; };
 
 // ---------- messages, menus, dialogs ----------
 export const [msg, setMsg] = createSignal<{ text: string; ok: boolean } | null>(null);
