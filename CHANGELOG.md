@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.2 — 2026-10-24
+
+Progress updating, a report builder and power tools, plus the fixes from your 0.3.1 screenshots.
+
+**Fixes**
+- The big Gantt Chart and Task buttons are now MS Project split buttons: click the top half to run, the arrow below for the menu.
+- Icons on every right-click menu item (column headings and tasks).
+- The Format tab sits under its own "Gantt Chart Tools" label, no longer squeezed together.
+- The Gantt Chart Style gallery is back on the Format tab (10 styles), with Bar Styles and Gridlines.
+- The File page sidebar is blue again (it had turned black).
+- The Sheets view no longer fails on plans without sheets.
+
+**New**
+- Update Progress (Report › Update Progress or the sidebar): every task due in the period with planned vs actual; enter actual start and finish, % complete, remaining and a note; "Set all to planned %"; Close Period stores a snapshot.
+- Report Builder: build your own report from sections (key figures, S-curve, period bars, tables with chosen columns and filters, notes, behind-schedule list). Templates: Weekly management, Monthly client, Schedule health, Cost report. Print to PDF or save as HTML.
+- Relationship Diagram (View tab): the selected task with its predecessors and successors; driving links in bold; click a box to follow the chain.
+- Recurring tasks (Task › Recurring Task): every n days, weeks or months, for a number of occurrences.
+- Global Change (Task tab or a heading's menu): set one field to a value for every selected task or every task in the view, as one undo step.
+- Conditional formatting per column: colour cells by rules (font colour, fill and bold), e.g. negative float in red.
+- Portfolio shows plans in subfolders as an EPS tree.
+- Excel export keeps formulas: formula columns stay live Excel formulas, dates and durations are typed, sheet tabs and a Plan sheet are included.
+- Automated UI tests run on every build.
+
 ## 0.3.1 — 2026-10-24
 
 A rebuilt foundation: a real spreadsheet grid, Excel formulas, period reporting and a cleaner look.

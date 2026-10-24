@@ -502,3 +502,35 @@ fn excel_formula_columns_sheets_and_periods() {
     assert!(r.actual > 50.0 && r.actual < 80.0, "{}", r.actual);
     assert_eq!(r.milestones.len(), 1);
 }
+
+#[test]
+fn recurring_tasks_and_excel_export_with_formulas() {
+    let mut doc = Doc::new(plan(&[(2, "")]));
+    op(&mut doc, Op::Recurring { at: 1, name: "Site meeting".into(), dur: "2h".into(), every: "week".into(), interval: 1, count: 4, start: "2026-11-04".into() }).unwrap();
+    let p = &doc.p;
+    assert_eq!(p.tasks.len(), 6);
+    assert_eq!((p.tasks[1].name.as_str(), p.tasks[5].name.as_str(), p.tasks[5].level), ("Site meeting", "Site meeting 4", 1));
+    let s = schedule(p).unwrap();
+    assert_eq!(date_of(s.es[5]), d(2026, 11, 25));
+    let codes: std::collections::HashSet<&str> = p.tasks.iter().map(|t| t.code.as_str()).collect();
+    assert_eq!(codes.len(), 6, "Activity IDs stay unique");
+    let def = CustomDef { key: "number1".into(), alias: "Double".into(), formula: "=[Duration]*2".into(), ..CustomDef::default() };
+    op(&mut doc, Op::FieldDef { def }).unwrap();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Calc".into(), ..Default::default() }) }).unwrap();
+    op(&mut doc, Op::SheetCells { k: 0, cells: vec![("A1".into(), "=SUM(Plan!F2:F7)".into())], fmt: None }).unwrap();
+    let f = std::env::temp_dir().join(format!("dp-fx-{}.xlsx", std::process::id()));
+    crate::io::export(&doc.p, &f, "%d-%b-%y", d(2026, 11, 1), &["name".into(), "dur".into(), "c:number1".into()]).unwrap();
+    let bytes = std::fs::read(&f).unwrap();
+    let _ = std::fs::remove_file(&f);
+    let mut formulas = Vec::new();
+    // The sheet XML is deflated inside the zip; check through calamine that the formula is there.
+    use calamine::{open_workbook_auto, Reader};
+    let tmp = std::env::temp_dir().join(format!("dp-fx2-{}.xlsx", std::process::id()));
+    std::fs::write(&tmp, &bytes).unwrap();
+    let mut wb = open_workbook_auto(&tmp).unwrap();
+    let fx = wb.worksheet_formula("Tasks").unwrap();
+    formulas.extend(fx.used_cells().map(|(_, _, f)| f.clone()));
+    assert!(formulas.iter().any(|f| f.contains("B2*2")), "{formulas:?}");
+    assert!(wb.sheet_names().contains(&"Plan".to_string()) && wb.sheet_names().contains(&"Calc".to_string()));
+    let _ = std::fs::remove_file(&tmp);
+}

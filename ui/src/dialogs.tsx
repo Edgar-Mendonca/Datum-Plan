@@ -514,3 +514,94 @@ export const periodSettings = () => openDialog(() => {
     </Dialog>
   );
 });
+
+// ---------- bar styles (colours of each bar type) ----------
+export const barStyles = () => openDialog(() => {
+  const cur = { name: "Custom", fill: "#A9CAF6", edge: "#2F6FCF", cfill: "#F2B0B0", crit: "#C73B3B", sum: "#0C1A2B", grid: false, ...(P().ui?.gantt ?? {}) };
+  const [st, setSt] = createStore({ ...cur });
+  const rows: ["fill" | "edge" | "cfill" | "crit" | "sum", string][] = [["fill", "Task bar"], ["edge", "Task outline and progress"], ["cfill", "Critical task bar"], ["crit", "Critical outline and progress"], ["sum", "Summary and milestone"]];
+  return (
+    <Dialog title="Bar Styles" ok={() => act({ Ui: { key: "gantt", value: { ...st, name: "Custom" } } })}>
+      <div class="form"><For each={rows}>{([k, l]) => <Row label={l}><input type="color" value={st[k] as string} onInput={e => setSt(k, e.currentTarget.value)} /></Row>}</For>
+        <Row label=""><Check label="Horizontal gridlines in the chart" value={!!st.grid} set={v => setSt("grid", v)} /></Row></div>
+      <p class="muted">Pick a ready-made look in Format › Gantt Chart Style, or set each colour here.</p>
+    </Dialog>
+  );
+});
+
+// ---------- recurring task ----------
+export const recurring = (at: number) => openDialog(() => {
+  const [v, setV] = createStore({ name: "Weekly meeting", dur: "1h", every: "week", interval: 1, count: 10, start: P().start });
+  return (
+    <Dialog title="Recurring Task Information" ok={() => act({ Recurring: { at, name: v.name, dur: v.dur, every: v.every, interval: +v.interval, count: +v.count, start: v.start } })}>
+      <div class="form">
+        <Row label="Task name"><Text value={v.name} set={x => setV("name", x)} /></Row>
+        <Row label="Duration"><Text value={v.dur} set={x => setV("dur", x)} /></Row>
+        <Row label="Recur every"><span class="inline"><input type="number" min="1" style={{ width: "60px" }} value={v.interval} onChange={e => setV("interval", +e.currentTarget.value)} /> <Pick value={v.every} set={x => setV("every", x)} options={[["day", "day(s)"], ["week", "week(s)"], ["month", "month(s)"]]} /></span></Row>
+        <Row label="Start"><Text type="date" value={v.start} set={x => setV("start", x)} /></Row>
+        <Row label="Occurrences"><Text type="number" value={v.count} set={x => setV("count", +x)} /></Row>
+      </div>
+      <p class="muted">Adds a summary task with one task per occurrence, each held to its date (Start No Earlier Than).</p>
+    </Dialog>
+  );
+});
+
+// ---------- global change ----------
+export const globalChange = (selected: number[]) => openDialog(() => {
+  const editable = () => fields().task.filter(f => f.edit).map(f => [f.key, P().fields.find(d => `c:${d.key}` === f.key)?.alias || P().titles?.[f.key] || f.name] as [string, string]);
+  const [key, setKey] = createSignal("pct"), [val, setVal] = createSignal(""), [scope, setScope] = createSignal(selected.length ? "sel" : "view");
+  const targets = () => (scope() === "sel" ? selected : grid().rows.filter(r => r.kind === "task").map(r => r.uid));
+  return (
+    <Dialog title="Global Change" okText="Change" ok={async () => {
+      const t = targets();
+      if (!t.length) { toast("No tasks to change."); return false; }
+      const ok = await act({ Cells: { cells: t.map(uid => [uid, key(), val()]) } });
+      if (ok) toast(`${t.length} tasks changed.`, true);
+      return ok;
+    }}>
+      <div class="form">
+        <Row label="Field"><Pick value={key()} set={setKey} options={editable()} /></Row>
+        <Row label="New value"><Text value={val()} set={setVal} placeholder="e.g. 50, 3d, 15-Nov-26, Engineer[50%]" /></Row>
+        <Row label="Apply to"><Pick value={scope()} set={setScope} options={[["sel", `Selected tasks (${selected.length})`], ["view", `All tasks in the view (${grid().rows.filter(r => r.kind === "task").length})`]]} /></Row>
+      </div>
+      <p class="muted">Use a filter first to change only some tasks. Undo (Ctrl+Z) reverses the whole change in one step.</p>
+    </Dialog>
+  );
+});
+
+// ---------- conditional formatting ----------
+export type CfRule = { key: string; test: string; value: string; color: string; bg: string; bold: boolean };
+export const cfRules = (): CfRule[] => (P().ui?.cf ?? []) as CfRule[];
+export const condFormat = (key?: string) => openDialog(() => {
+  const [list, setList] = createStore<CfRule[]>(JSON.parse(JSON.stringify(cfRules().length || !key ? cfRules() : [{ key, test: "<", value: "0", color: "#C0392B", bg: "", bold: true }])));
+  const opts = () => fields().task.map(f => [f.key, P().fields.find(d => `c:${d.key}` === f.key)?.alias || P().titles?.[f.key] || f.name] as [string, string]);
+  return (
+    <Dialog title="Conditional Formatting" wide ok={() => act({ Ui: { key: "cf", value: JSON.parse(JSON.stringify(list)) } })}>
+      <table class="tbl"><thead><tr><th>Column</th><th>When the value</th><th>Value</th><th>Text</th><th>Fill</th><th>Bold</th><th /></tr></thead><tbody>
+        <For each={list}>{(x, i) => <tr>
+          <td><Pick value={x.key} set={v => setList(i(), "key", v)} options={opts()} /></td>
+          <td><Pick value={x.test} set={v => setList(i(), "test", v)} options={[["<", "is less than"], [">", "is greater than"], ["=", "equals"], ["!=", "does not equal"], ["contains", "contains"], ["empty", "is empty"], ["any", "is not empty"]]} /></td>
+          <td><input value={x.value} size="10" onChange={e => setList(i(), "value", e.currentTarget.value)} /></td>
+          <td><input type="color" value={x.color || "#000000"} onInput={e => setList(i(), "color", e.currentTarget.value)} /></td>
+          <td><input type="color" value={x.bg || "#ffffff"} onInput={e => setList(i(), "bg", e.currentTarget.value)} /><button class="x" title="No fill" onClick={() => setList(i(), "bg", "")}>∅</button></td>
+          <td><input type="checkbox" checked={x.bold} onChange={e => setList(i(), "bold", e.currentTarget.checked)} /></td>
+          <td><button class="x" onClick={() => setList(v => v.filter((_, j) => j !== i()))}>×</button></td></tr>}</For>
+        <tr class="add"><td colspan="7"><button class="btn sm" onClick={() => setList(v => [...v, { key: key ?? "tf", test: "<", value: "0", color: "#C0392B", bg: "", bold: true }])}>+ Rule</button></td></tr>
+      </tbody></table>
+      <p class="muted">Numbers, dates and durations compare as numbers (e.g. Total Slack is less than 0, % Complete Variance is less than -10). The first matching rule wins.</p>
+    </Dialog>
+  );
+});
+/** The style a cell gets from the conditional formatting rules. */
+export const cfStyle = (key: string, text: string): Record<string, string> | undefined => {
+  const n = parseFloat(text.replace(/[^\d.\-]/g, ""));
+  for (const r of cfRules()) {
+    if (r.key !== key) continue;
+    const v = parseFloat(r.value);
+    const hit = r.test === "empty" ? !text : r.test === "any" ? !!text : r.test === "contains" ? text.toLowerCase().includes(r.value.toLowerCase())
+      : !isNaN(n) && !isNaN(v) ? (r.test === "<" ? n < v : r.test === ">" ? n > v : r.test === "=" ? n === v : n !== v)
+      : r.test === "=" ? text.toLowerCase() === r.value.toLowerCase() : r.test === "!=" ? text.toLowerCase() !== r.value.toLowerCase() : false;
+    if (hit) return { color: r.color, ...(r.bg ? { background: `${r.bg} !important` } : {}), ...(r.bold ? { "font-weight": "700" } : {}) };
+  }
+  return undefined;
+};

@@ -440,7 +440,7 @@ async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, Vec<rep
 }
 
 #[derive(Serialize)]
-struct PlanCard { path: String, name: String, start: String, finish: String, pct: f64, cost: String, spi: Option<f64>, cpi: Option<f64>, late: usize, tasks: usize, manager: String, error: Option<String> }
+struct PlanCard { path: String, folder: String, name: String, start: String, finish: String, pct: f64, cost: String, spi: Option<f64>, cpi: Option<f64>, late: usize, tasks: usize, manager: String, error: Option<String> }
 
 /// Every plan in the workspace folder with its headline figures (portfolio view).
 #[tauri::command]
@@ -456,20 +456,28 @@ async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String
         }
     }
     let fmt = st.0.lock().unwrap().opts.date_fmt.clone();
-    let mut files: Vec<PathBuf> = std::fs::read_dir(&folder).map_err(|e| format!("Could not read {folder}: {e}"))?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "dplan") && !p.to_string_lossy().ends_with(".backup.dplan"))
-        .collect();
+    // Subfolders are the EPS: each level of folders is a level of the portfolio tree.
+    fn walk(dir: &Path, depth: u8, out: &mut Vec<PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for p in rd.filter_map(|e| e.ok().map(|e| e.path())) {
+            if p.is_dir() && depth < 4 { walk(&p, depth + 1, out) }
+            else if p.extension().is_some_and(|x| x == "dplan") && !p.to_string_lossy().ends_with(".backup.dplan") { out.push(p) }
+        }
+    }
+    std::fs::read_dir(&folder).map_err(|e| format!("Could not read {folder}: {e}"))?;
+    let mut files = vec![];
+    walk(Path::new(&folder), 0, &mut files);
     files.sort();
+    let rel = |f: &Path| f.parent().and_then(|d| d.strip_prefix(&folder).ok()).map(|d| d.display().to_string().replace(['\\', '/'], " › ")).unwrap_or_default();
     let cards = files.iter().take(200).map(|f| {
         let path = f.display().to_string();
         match Doc::open(f) {
             Ok(d) => {
                 let c = Calc::new(&d.p, &fmt, today());
                 let s = c.summary();
-                PlanCard { path, name: d.p.name.clone(), start: s.start, finish: s.finish, pct: s.pct, cost: s.cost, spi: s.spi, cpi: s.cpi, late: s.late, tasks: s.tasks, manager: d.p.manager.clone(), error: s.error }
+                PlanCard { path, folder: rel(f), name: d.p.name.clone(), start: s.start, finish: s.finish, pct: s.pct, cost: s.cost, spi: s.spi, cpi: s.cpi, late: s.late, tasks: s.tasks, manager: d.p.manager.clone(), error: s.error }
             }
-            Err(e) => PlanCard { path, name: f.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), start: String::new(), finish: String::new(), pct: 0.0, cost: String::new(), spi: None, cpi: None, late: 0, tasks: 0, manager: String::new(), error: Some(e) },
+            Err(e) => PlanCard { path, folder: rel(f), name: f.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), start: String::new(), finish: String::new(), pct: 0.0, cost: String::new(), spi: None, cpi: None, late: 0, tasks: 0, manager: String::new(), error: Some(e) },
         }
     }).collect();
     Ok((folder, cards))

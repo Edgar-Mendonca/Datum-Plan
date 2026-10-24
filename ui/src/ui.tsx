@@ -22,7 +22,7 @@ export const Menu = () => {
           <button disabled={it.off} classList={{ on: it.on }}
             onMouseEnter={e => { if (!isSub) { const r = e.currentTarget.getBoundingClientRect(); setSub(it.sub ? { x: r.right, y: r.top - 4, items: it.sub } : null); } }}
             onClick={() => { if (it.sub) return; close(); it.run?.(); }}>
-            <i class="tick">{it.on ? "✓" : ""}</i><span>{it.label}</span>{it.keys && <kbd>{it.keys}</kbd>}{it.sub && <b class="more">›</b>}
+            <i class="tick">{it.on ? "✓" : it.icon ? <Icon n={it.icon} /> : ""}</i><span>{it.label}</span>{it.keys && <kbd>{it.keys}</kbd>}{it.sub && <b class="more">›</b>}
           </button>
         )}</For>
       </div>

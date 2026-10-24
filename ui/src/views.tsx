@@ -288,20 +288,42 @@ export const Checks = () => {
 };
 
 // ---------- Portfolio (workspace folder) ----------
+/** Plans grouped by folder (the EPS), with a rollup row per folder. */
+const eps = (cards: any[]) => {
+  const out: any[] = [];
+  const folders = [...new Set(cards.map(c => c.folder))].sort();
+  const all = new Set<string>();
+  folders.forEach(f => { const parts = f ? f.split(" › ") : []; parts.forEach((_: string, k: number) => all.add(parts.slice(0, k + 1).join(" › "))); });
+  const heads = [...all].sort();
+  const under = (h: string) => cards.filter(c => c.folder === h || c.folder.startsWith(h + " › "));
+  for (const c of cards.filter(c => !c.folder)) out.push({ ...c, depth: 0 });
+  for (const h of heads) {
+    const u = under(h);
+    const depth = h.split(" › ").length - 1;
+    out.push({ head: h, depth, n: u.length, pct: u.reduce((a, c) => a + c.pct, 0) / Math.max(1, u.length), late: u.reduce((a, c) => a + c.late, 0), cost: "" });
+    for (const c of cards.filter(c => c.folder === h)) out.push({ ...c, depth: depth + 1 });
+  }
+  return out;
+};
 export const Portfolio = () => {
+  const [shut, setShut] = createSignal<string[]>([]);
   const [again, setAgain] = createSignal(0);
   const [data] = createResource(() => again(), k => call<[string, any[]]>("workspace", { choose: k < 0 }));
   return (
     <Page title="Portfolio" tools={<><span class="muted">{data()?.[0] || "No workspace folder"}</span><button class="btn" onClick={() => setAgain(-Math.abs(again()) - 1)}><Icon n="folder" /> Choose folder…</button><button class="btn" onClick={() => setAgain(Math.abs(again()) + 1)}>Refresh</button></>}>
       <div class="panel"><table class="tbl">
         <thead><tr><th>Plan</th><th>Manager</th><th>Start</th><th>Finish</th><th class="r">Tasks</th><th>Complete</th><th class="r">Cost</th><th class="r">SPI</th><th class="r">CPI</th><th class="r">Late</th></tr></thead>
-        <tbody><For each={data()?.[1] ?? []}>{c => <tr class="link" onClick={() => loadOut("open", { path: c.path })}>
-          <td><b>{c.name}</b>{c.error && <div class="late">{c.error}</div>}</td><td>{c.manager}</td><td>{c.start}</td><td>{c.finish}</td><td class="r">{c.tasks}</td>
+        <tbody><For each={eps(data()?.[1] ?? [])}>{c => c.head !== undefined ? (
+          <tr class="eps" onClick={() => setShut(shut().includes(c.head) ? shut().filter(x => x !== c.head) : [...shut(), c.head])}>
+            <td colspan="5" style={{ "padding-left": `${6 + c.depth * 16}px` }}><b>{shut().includes(c.head) ? "▷" : "◢"} {c.head.split(" › ").pop() || "Workspace"}</b> <span class="muted">{c.n} plans</span></td>
+            <td><div class="meter"><i style={{ width: `${c.pct}%` }} /></div></td><td class="r">{c.cost}</td><td /><td /><td class="r" classList={{ late: c.late > 0 }}>{c.late}</td></tr>
+        ) : <Show when={!shut().some(h => c.folder === h || c.folder.startsWith(h + " › "))}><tr class="link" onClick={() => loadOut("open", { path: c.path })}>
+          <td style={{ "padding-left": `${22 + c.depth * 16}px` }}><b>{c.name}</b>{c.error && <div class="late">{c.error}</div>}</td><td>{c.manager}</td><td>{c.start}</td><td>{c.finish}</td><td class="r">{c.tasks}</td>
           <td><div class="meter"><i style={{ width: `${c.pct}%` }} /></div></td><td class="r">{c.cost}</td>
           <td class="r" classList={{ late: c.spi !== null && c.spi < 0.95 }}>{c.spi?.toFixed(2) ?? "—"}</td><td class="r" classList={{ late: c.cpi !== null && c.cpi < 0.95 }}>{c.cpi?.toFixed(2) ?? "—"}</td>
           <td class="r" classList={{ late: c.late > 0 }}>{c.late}</td>
-        </tr>}</For></tbody>
-      </table><Show when={!data()?.[1].length}><p class="empty">Choose a folder that holds your .dplan files to see every plan side by side.</p></Show></div>
+        </tr></Show>}</For></tbody>
+      </table><Show when={!data()?.[1].length}><p class="empty">Choose a folder that holds your .dplan files to see every plan side by side. Subfolders become the EPS (enterprise project structure) levels.</p></Show></div>
     </Page>
   );
 };

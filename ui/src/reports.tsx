@@ -8,14 +8,14 @@ import { C, selectUid } from "./cmds";
 import { Seg } from "./ui";
 import { ChartBox, COL, line, bar } from "./charts";
 
-const q = (cols: string[], rules: Rule[] = [], extra: object = {}) => ({
+export const q = (cols: string[], rules: Rule[] = [], extra: object = {}) => ({
   cols, filter: { name: "", rules, summaries: false, highlight: false }, group: [], sort: [], flat: false, collapsed: [], level: 0, hide_summaries: false, project_summary: false, baseline: 0, ...extra,
 });
-const r = (field: string, test: string, value = "", value2 = "", or = false): Rule => ({ field, test, value, value2, or });
-const useRows = (key: () => any, query: () => object) => createResource(() => [tick(), JSON.stringify(key())], () => call<Grid>("query", { q: query() }));
-const cum = (v: number[]) => { let s = 0; return v.map(x => (s += x)); };
-const pct = (v: number) => `${v.toFixed(1)}%`;
-const label = (d: number, unit: string) => (unit === "month" ? fmtDay(d, "month") : fmtDay(d));
+export const r = (field: string, test: string, value = "", value2 = "", or = false): Rule => ({ field, test, value, value2, or });
+export const useRows = (key: () => any, query: () => object) => createResource(() => [tick(), JSON.stringify(key())], () => call<Grid>("query", { q: query() }));
+export const cum = (v: number[]) => { let s = 0; return v.map(x => (s += x)); };
+export const pct = (v: number) => `${v.toFixed(1)}%`;
+export const label = (d: number, unit: string) => (unit === "month" ? fmtDay(d, "month") : fmtDay(d));
 const WEIGHTS: [string, string][] = [["duration", "Duration"], ["cost", "Cost"], ["work", "Hours"], ["physical", "Physical %"]];
 
 /** Report page header with logo and company, as printed. */
@@ -32,24 +32,24 @@ export const Kpi = (p: { v: JSX.Element; l: string; d?: number; unit?: string; b
     <Show when={p.d !== undefined && !isNaN(p.d!)}><div class="d" classList={{ up: p.d! > 0.005, down: p.d! < -0.005 }}>{p.d! > 0 ? "▲" : p.d! < 0 ? "▼" : "■"} {Math.abs(p.d!).toFixed(1)}{p.unit ?? ""} vs last period</div></Show>
   </div>
 );
-const Table = (p: { g?: Grid; empty: string }) => (
+export const Table = (p: { g?: Grid; empty: string }) => (
   <Show when={p.g?.rows.length} fallback={<p class="empty">{p.empty}</p>}>
     <table class="tbl"><thead><tr><For each={p.g!.cols}>{c => <th classList={{ r: ["Cost", "Num", "Pct", "Work", "Dur"].includes(c.kind) }}>{c.name}</th>}</For></tr></thead>
       <tbody><For each={p.g!.rows.slice(0, 300)}>{row => <tr classList={{ sumr: row.kind !== "task", link: row.uid > 0 }} onClick={() => row.uid > 0 && selectUid(row.uid)}><For each={row.cells}>{(c, k) => <td classList={{ r: ["Cost", "Num", "Pct", "Work", "Dur"].includes(p.g!.cols[k()].kind), late: row.late && k() === 0 }}>{c}</td>}</For></tr>}</For></tbody></table>
   </Show>
 );
-const Rows = (p: { rows: PRow[]; empty: string; note?: string }) => (
+export const Rows = (p: { rows: PRow[]; empty: string; note?: string }) => (
   <Show when={p.rows.length} fallback={<p class="empty">{p.empty}</p>}>
     <table class="tbl"><thead><tr><th>Activity ID</th><th>Task</th><th>Start</th><th>Finish</th><th class="r">Complete</th><Show when={p.note}><th>{p.note}</th></Show></tr></thead>
       <tbody><For each={p.rows.slice(0, 300)}>{x => <tr><td>{x.code}</td><td>{x.name}</td><td>{x.start}</td><td>{x.finish}</td><td class="r">{x.pct}%</td><Show when={p.note}><td>{x.note}</td></Show></tr>}</For></tbody></table>
   </Show>
 );
-const Tools = (p: { title: string; children?: JSX.Element }) => (
+export const Tools = (p: { title: string; children?: JSX.Element }) => (
   <div class="ptools noprint">{p.children}<span class="grow" /><button class="btn" onClick={() => C.print()}>Print / PDF</button><button class="btn" onClick={() => saveHtml(p.title)}>Save as HTML</button></div>
 );
 
 /** S-curve chart from engine data: planned, actual and forecast cumulative %. */
-const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short"; money?: boolean }) => {
+export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short"; money?: boolean }) => {
   const k = createMemo(() => p.c.days.findIndex(d => d >= p.c.status_day));
   const conv = (v: (number | null)[]) => (p.money ? v.map(x => (x === null ? null : (x / 100) * p.c.total)) : v);
   return <ChartBox title={p.title ?? `S-curve: ${p.c.name}`} type="line" size={p.size} labels={p.c.days.map(d => label(d, p.unit))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
@@ -57,7 +57,7 @@ const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall"
     datasets={[line("Planned (baseline)", conv(p.c.planned), COL.grey, [6, 4]), line("Actual", conv(p.c.actual), COL.blue, undefined, true), line("Forecast", conv(p.c.forecast.map((v, i) => (i >= k() && k() >= 0 ? v : null))), COL.red, [2, 3])]} />;
 };
 /** Progress per period (not cumulative): planned vs actual bars. */
-const PeriodBars = (p: { c: SCurve; unit: string; last?: number }) => {
+export const PeriodBars = (p: { c: SCurve; unit: string; last?: number }) => {
   const n = () => p.c.days.length;
   const from = () => Math.max(1, n() - (p.last ?? 24));
   const delta = (v: (number | null)[]) => v.slice(from()).map((x, i) => (x === null || v[from() + i - 1] === null ? null : x - (v[from() + i - 1] as number)));

@@ -45,6 +45,8 @@ export const C = {
   importFile: () => D.importFile(),
   info: () => { const r = curRow(); if (r?.uid) D.taskInfo(r.uid); else D.projectInfo(); },
   notes: () => { const r = curRow(); if (r?.uid) D.taskInfo(r.uid, "notes"); },
+  recurring: () => D.recurring(insertAt()),
+  globalChange: () => D.globalChange(uids()),
   scrollTo: () => { const r = curRow(); if (r) document.dispatchEvent(new CustomEvent("gantt-scroll", { detail: r.bar.s })); },
   view: (v: View) => { setBackstage(null); setView(v); },
   zoomIn: () => setZoom(Math.min(400, zoom() * 1.5)),
@@ -89,7 +91,9 @@ export const ALL_CMDS: [string, () => void, string?][] = [
   ["Store period performance (snapshot)", () => D.snapshot()], ["Options", C.options], ["Check for updates", () => C.file("about")], ["Keyboard shortcuts", () => D.shortcuts()],
   ["Export to Excel", () => C.exportAs("xlsx")], ["Export to MS Project XML", () => C.exportAs("xml")], ["Export to Primavera XER", () => C.exportAs("xer")],
   ["Export to PMXML", () => C.exportAs("pmxml")], ["Export to CSV", () => C.exportAs("csv")], ["Export to HTML", () => C.exportAs("html")], ["Export to iCalendar", () => C.exportAs("ics")],
-  ["Export to MPX", () => C.exportAs("mpx")], ["Export to JSON", () => C.exportAs("json")],
+  ["Export to MPX", () => C.exportAs("mpx")], ["Recurring task", () => C.recurring()], ["Global change", () => C.globalChange()],
+  ["Update progress", () => C.view("update")], ["Report builder", () => C.view("builder")], ["Relationship diagram", () => C.view("relations")],
+  ["Conditional formatting", () => D.condFormat()], ["Bar styles", () => D.barStyles()], ["Reporting periods", () => D.periodSettings()], ["Formula column", () => D.formulaColumn()], ["Export to JSON", () => C.exportAs("json")],
 ];
 export const ready = () => !!out();
 export const openDlg = openDialog;

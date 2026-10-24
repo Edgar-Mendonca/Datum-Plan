@@ -48,7 +48,7 @@ export const fieldMenu = (run: (key: string) => void): Item[] => {
     g.push({ label: alias ? `${alias} (${f.name})` : f.name, run: () => run(f.key) });
     groups.set(f.group, g);
   }
-  const items: Item[] = [{ label: "New Formula Column…", run: () => D.formulaColumn() }, "-", ...[...groups].map(([label, sub]) => ({ label, sub }))];
+  const items: Item[] = [{ label: "New Formula Column…", icon: "fx", run: () => D.formulaColumn() }, "-", ...[...groups].map(([label, sub]) => ({ label, sub }))];
   if (P().codes.length) items.push({ label: "Activity codes", sub: P().codes.map(c => ({ label: c.name, run: () => run(`code:${c.name}`) })) });
   items.push("-", { label: "All fields…", run: () => D.insertColumn(run) });
   return items;
@@ -296,15 +296,15 @@ export const Grid = (p: { width?: number }) => {
     if (!inRange(r, Math.max(0, c))) pick(r, Math.max(0, c));
     const k = cur().row;
     openMenu(e, [
-      { label: "Cut", run: () => document.execCommand("cut"), keys: "Ctrl+X" }, { label: "Copy", run: () => document.execCommand("copy"), keys: "Ctrl+C" }, { label: "Paste", run: () => toast("Press Ctrl+V to paste."), keys: "Ctrl+V" },
-      { label: "Clear Contents", run: clear, keys: "Delete" }, "-",
-      { label: "Rename Task", run: () => { const nc = grid().cols.findIndex(x => x.key === "name"); if (nc >= 0) startEdit(k, nc); }, keys: "F2" },
-      { label: "Insert Task", run: () => C.newTask(), keys: "Insert" }, { label: "Insert Milestone", run: () => C.newTask(true) }, { label: "Delete Task", run: C.del, keys: "Ctrl+−" }, "-",
-      { label: "Indent", run: C.indent, keys: "Alt+Shift+→" }, { label: "Outdent", run: C.outdent, keys: "Alt+Shift+←" }, { label: "Link Tasks", run: C.link, keys: "Ctrl+F2" }, { label: "Unlink Tasks", run: C.unlink }, "-",
-      { label: "Task Information…", run: C.info, keys: "Shift+F2" }, { label: "Notes…", run: C.notes }, { label: "Inspect…", run: () => D.inspect(rows()[k]?.uid) }, "-",
-      { label: "Mark on Track", run: C.onTrack }, { label: "Progress", sub: [0, 25, 50, 75, 100].map(v => ({ label: `${v}% Complete`, run: () => C.pct(v) })) },
-      { label: "Split Task…", run: C.split }, { label: "Inactivate / Activate", run: C.inactive }, { label: "Manually Schedule", run: () => C.mode(true) }, { label: "Auto Schedule", run: () => C.mode(false) },
-      { label: "Add to Timeline", run: C.timeline }, { label: "Scroll to Task", run: C.scrollTo },
+      { label: "Cut", icon: "cut", run: () => document.execCommand("cut"), keys: "Ctrl+X" }, { label: "Copy", icon: "copy", run: () => document.execCommand("copy"), keys: "Ctrl+C" }, { label: "Paste", icon: "paste", run: () => toast("Press Ctrl+V to paste."), keys: "Ctrl+V" },
+      { label: "Clear Contents", icon: "clear", run: clear, keys: "Delete" }, "-",
+      { label: "Rename Task", icon: "rename", run: () => { const nc = grid().cols.findIndex(x => x.key === "name"); if (nc >= 0) startEdit(k, nc); }, keys: "F2" },
+      { label: "Insert Task", icon: "task", run: () => C.newTask(), keys: "Insert" }, { label: "Insert Milestone", icon: "ms", run: () => C.newTask(true) }, { label: "Delete Task", icon: "del", run: C.del, keys: "Ctrl+−" }, "-",
+      { label: "Indent", icon: "indent", run: C.indent, keys: "Alt+Shift+→" }, { label: "Outdent", icon: "outdent", run: C.outdent, keys: "Alt+Shift+←" }, { label: "Link Tasks", icon: "link", run: C.link, keys: "Ctrl+F2" }, { label: "Unlink Tasks", icon: "unlink", run: C.unlink }, "-",
+      { label: "Task Information…", icon: "info", run: C.info, keys: "Shift+F2" }, { label: "Notes…", icon: "detail", run: C.notes }, { label: "Inspect…", icon: "find", run: () => D.inspect(rows()[k]?.uid) }, "-",
+      { label: "Mark on Track", icon: "track", run: C.onTrack }, { label: "Progress", icon: "pct", sub: [0, 25, 50, 75, 100].map(v => ({ label: `${v}% Complete`, run: () => C.pct(v) })) },
+      { label: "Split Task…", icon: "split", run: C.split }, { label: "Inactivate / Activate", icon: "inact", run: C.inactive }, { label: "Manually Schedule", icon: "manual", run: () => C.mode(true) }, { label: "Auto Schedule", icon: "auto", run: () => C.mode(false) },
+      { label: "Global Change…", icon: "change", run: () => D.globalChange(sel()) }, { label: "Add to Timeline", icon: "tl", run: C.timeline }, { label: "Scroll to Task", icon: "scroll", run: C.scrollTo },
     ]);
   };
 
@@ -313,13 +313,13 @@ export const Grid = (p: { width?: number }) => {
     const ins = (key: string) => { const v = [...cols()]; v.splice(k, 0, [key, 90]); saveCols(v); };
     const f = formulaOf(c.key);
     openMenu(e, [
-      { label: "Rename Column", run: () => setRename(k) }, { label: "Insert Column", sub: fieldMenu(ins) }, { label: "New Formula Column…", run: () => D.formulaColumn(undefined, k + 1) },
-      ...(c.key.startsWith("c:") ? [{ label: f ? "Edit Formula…" : "Add Formula…", run: () => D.formulaColumn(c.key.slice(2), k) }] : []),
-      { label: "Hide Column", run: () => saveCols(cols().filter((_, j) => j !== k)), off: cols().length < 2 },
-      { label: "Field Settings…", run: () => D.fieldSettings(k) }, { label: "Custom Fields…", run: () => D.customFields(c?.key.startsWith("c:") ? c.key.slice(2) : undefined) }, "-",
-      { label: "Sort A to Z", run: () => setSort([[c.key, false]]), on: sort()[0]?.[0] === c.key && !sort()[0][1] }, { label: "Sort Z to A", run: () => setSort([[c.key, true]]), on: sort()[0]?.[0] === c.key && sort()[0][1] },
-      { label: "No Sort", run: () => setSort([]) }, { label: "Group by This Field", run: () => setGroup([c.key]) }, { label: "Filter…", run: () => autoFilter(e, k) }, "-",
-      { label: "Best Fit", run: () => bestFit(k) }, { label: `Table: ${table()}`, sub: [{ label: "Tables…", run: () => D.tablesDialog() }] },
+      { label: "Rename Column", icon: "rename", run: () => setRename(k) }, { label: "Insert Column", icon: "cols", sub: fieldMenu(ins) }, { label: "New Formula Column…", icon: "fx", run: () => D.formulaColumn(undefined, k + 1) },
+      ...(c.key.startsWith("c:") ? [{ label: f ? "Edit Formula…" : "Add Formula…", icon: "fx", run: () => D.formulaColumn(c.key.slice(2), k) }] : []),
+      { label: "Hide Column", icon: "hide", run: () => saveCols(cols().filter((_, j) => j !== k)), off: cols().length < 2 },
+      { label: "Field Settings…", icon: "table", run: () => D.fieldSettings(k) }, { label: "Custom Fields…", icon: "cols", run: () => D.customFields(c?.key.startsWith("c:") ? c.key.slice(2) : undefined) }, "-",
+      { label: "Sort A to Z", icon: "az", run: () => setSort([[c.key, false]]), on: sort()[0]?.[0] === c.key && !sort()[0][1] }, { label: "Sort Z to A", icon: "za", run: () => setSort([[c.key, true]]), on: sort()[0]?.[0] === c.key && sort()[0][1] },
+      { label: "No Sort", icon: "sort", run: () => setSort([]) }, { label: "Group by This Field", icon: "group", run: () => setGroup([c.key]) }, { label: "Filter…", icon: "filter", run: () => autoFilter(e, k) }, "-",
+      { label: "Conditional Formatting…", icon: "style", run: () => D.condFormat(c.key) }, { label: "Best Fit", icon: "fit", run: () => bestFit(k) }, { label: `Table: ${table()}`, icon: "table", sub: [{ label: "Tables…", run: () => D.tablesDialog() }] },
     ]);
   };
   const bestFit = (k: number) => { const c = grid().cols[k], v = [...cols()]; v[k] = [v[k][0], Math.min(420, Math.max(48, Math.max(c.name.length, ...rows().slice(0, 800).map(r => (r.cells[k]?.length ?? 0) + (k === frozen() ? r.lvl * 2.3 + 2 : 0))) * 6.6 + 22))]; saveCols(v); };
@@ -330,10 +330,10 @@ export const Grid = (p: { width?: number }) => {
     const on = filter().rules.filter(r => r.field === c.key && r.test === "equals").map(r => r.value);
     const apply = (keep: string[]) => setFilter(keep.length === vals.length || !keep.length ? ALL : { name: `${c.name} filter`, rules: keep.map(v => ({ field: c.key, test: "equals", value: v, value2: "", or: true })), summaries: true, highlight: false });
     openMenu(e, [
-      { label: "Sort A to Z", run: () => setSort([[c.key, false]]) }, { label: "Sort Z to A", run: () => setSort([[c.key, true]]) }, "-",
+      { label: "Sort A to Z", icon: "az", run: () => setSort([[c.key, false]]) }, { label: "Sort Z to A", icon: "za", run: () => setSort([[c.key, true]]) }, "-",
       { label: "(Select All)", run: () => apply([]), on: !on.length },
       ...vals.map(v => ({ label: v || "(Blanks)", on: on.includes(v), run: () => apply(on.includes(v) ? on.filter(x => x !== v) : [...on, v]) })),
-      "-", { label: "Custom Filter…", run: () => D.filterEditor(c.key) }, { label: "Clear Filter", run: () => setFilter(ALL), off: !filter().rules.length },
+      "-", { label: "Custom Filter…", icon: "filter", run: () => D.filterEditor(c.key) }, { label: "Clear Filter", icon: "clear", run: () => setFilter(ALL), off: !filter().rules.length },
     ]);
   };
   const resize = (e: MouseEvent, k: number) => {
@@ -407,7 +407,7 @@ export const Grid = (p: { width?: number }) => {
                 <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }} title={r.late ? "Late" : ""}>{r.uid > 0 ? r.id : ""}{r.late && <i class="ind late">!</i>}{r.manual && <i class="ind">✎</i>}</div>
                 <For each={grid().cols}>{(c, j) => (
                   <div class="c" classList={{ r: right(c), nm: c.key === "name", ro: !c.edit, in: inRange(k, j()), at: cur().row === k && cur().col === j(), fz: j() === frozen(), fx: !!formulaOf(c.key) }}
-                    style={{ width: `${widths()[j()]}px`, ...sticky(j()) }}>
+                    style={{ width: `${widths()[j()]}px`, ...sticky(j()), ...(D.cfRules().length ? D.cfStyle(c.key, r.cells[j()] ?? "") : {}) }}>
                     {cell(r, c, j())}
                   </div>
                 )}</For>

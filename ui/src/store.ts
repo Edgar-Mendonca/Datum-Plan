@@ -16,7 +16,7 @@ darkMq?.addEventListener("change", () => theme() === "auto" && applyTheme());
 export const setTheme = (t: string) => { setThemeRaw(t); applyTheme(); invoke("set_options", { opts: { ...opts(), theme: t } }).then(o => setOut(o as Out)).catch(() => {}); setOpts({ ...opts(), theme: t }); };
 export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", autosave: 5, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: true, theme: "auto" });
 
-export type View = "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "checks" | "timeline" | "progress" | "scurve" | "sheets";
+export type View = "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "checks" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder";
 export const [view, setView] = createSignal<View>("gantt");
 export const [backstage, setBackstage] = createSignal<string | null>("home");
 export const [tab, setTab] = createSignal("task");
@@ -108,7 +108,7 @@ export const loadOut = async (cmd: string, args?: object) => { const o = await c
 export const [msg, setMsg] = createSignal<{ text: string; ok: boolean } | null>(null);
 let timer = 0;
 export const toast = (text: string, ok = false) => { setMsg({ text, ok }); clearTimeout(timer); timer = window.setTimeout(() => setMsg(null), ok ? 3000 : 7000); };
-export type Item = { label: string; run?: () => void; keys?: string; off?: boolean; on?: boolean; sub?: Item[] } | "-";
+export type Item = { label: string; run?: () => void; keys?: string; off?: boolean; on?: boolean; sub?: Item[]; icon?: string } | "-";
 export const [menu, setMenu] = createSignal<{ x: number; y: number; items: Item[] } | null>(null);
 export const openMenu = (e: MouseEvent | { x: number; y: number }, items: Item[]) => {
   if ("preventDefault" in e) e.preventDefault();

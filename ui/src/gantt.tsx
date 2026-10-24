@@ -41,13 +41,31 @@ const fit = (cv: HTMLCanvasElement, w: number, h: number) => {
   ctx.clearRect(0, 0, w, h);
   return ctx;
 };
-/** Canvas colours from the theme. */
+/** Gantt Chart Style gallery: task fill and edge, critical fill and edge, summary/milestone. */
+export const STYLES: { name: string; fill: string; edge: string; cfill: string; crit: string; sum: string }[] = [
+  { name: "Datum blue", fill: "#A9CAF6", edge: "#2F6FCF", cfill: "#F2B0B0", crit: "#C73B3B", sum: "#0C1A2B" },
+  { name: "Ocean", fill: "#9FD3E8", edge: "#0072B2", cfill: "#F5C2A0", crit: "#D55E00", sum: "#123A54" },
+  { name: "Forest", fill: "#B5DFC6", edge: "#1F7A4D", cfill: "#F2B0B0", crit: "#C0392B", sum: "#123B27" },
+  { name: "Amber", fill: "#F9DDA0", edge: "#B7791F", cfill: "#F2B0B0", crit: "#C0392B", sum: "#4A3410" },
+  { name: "Violet", fill: "#D7C6F0", edge: "#6C4AB6", cfill: "#F2B0B0", crit: "#C0392B", sum: "#2E1F55" },
+  { name: "Graphite", fill: "#D3D7DB", edge: "#5B6878", cfill: "#F3B9B4", crit: "#C0392B", sum: "#1F2933" },
+  { name: "Teal", fill: "#A6E3DC", edge: "#0E8C7F", cfill: "#F7C1C8", crit: "#C2185B", sum: "#0B3B36" },
+  { name: "Solid blue", fill: "#2F6FCF", edge: "#1A4E9C", cfill: "#D64545", crit: "#9B2C2C", sum: "#0C1A2B" },
+  { name: "Solid green", fill: "#2E9D57", edge: "#1E6B3C", cfill: "#D64545", crit: "#9B2C2C", sum: "#123B27" },
+  { name: "Monochrome", fill: "#FFFFFF", edge: "#1A1A1A", cfill: "#E0E0E0", crit: "#1A1A1A", sum: "#1A1A1A" },
+];
+export const gstyle = () => ({ ...STYLES[0], grid: false, ...(out()?.project.ui?.gantt ?? {}) });
+
+/** Canvas colours from the theme and the chosen Gantt Chart Style. */
 let K: Record<string, string> = {};
 const pal = () => {
   const v = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const dark = document.documentElement.dataset.theme === "dark";
   K = { ink: dark ? "#9CC2F7" : "#0C1A2B", line: v("--line"), text: v("--text2"), bg: v("--bg2"), panel: v("--panel"), off: dark ? "#141E2A" : "#F2F4F2", pale: v("--pale"), muted: v("--muted"),
     base: dark ? "#5B6878" : "#AEB7C4", link: dark ? "#6B7F99" : "#7A8BA6", fill: dark ? "#24476E" : "#A9CAF6", blue: v("--blue"), cfill: dark ? "#5A2522" : "#F2B0B0", crit: v("--crit") };
+  const g = gstyle();
+  if (!dark || g.name !== STYLES[0].name) Object.assign(K, { fill: g.fill, blue: g.edge, cfill: g.cfill, crit: g.crit, ...(dark ? {} : { ink: g.sum }) });
+  K.grid = g.grid ? (dark ? "#1E2A38" : "#E8EBEF") : "";
 };
 const off = (d: number) => { const s = out()?.summary; if (!s) return dow(d) >= 5; return !s.week[dow(d)] || s.off_days.includes(Math.floor(d)); };
 
@@ -88,6 +106,7 @@ export const Gantt = () => {
     const ctx = fit(barsCv, w, h);
     if (pd >= 6) { ctx.fillStyle = K.off; for (let d = d0() + Math.floor(body.scrollLeft / pd); X(d) < w; d++) if (off(d)) ctx.fillRect(X(d), 0, pd, h); }
     const a = Math.floor(top / RH), b = Math.min(rows.length, a + Math.ceil(h / RH) + 1);
+    if (K.grid) { ctx.fillStyle = K.grid; for (let i = a; i <= b; i++) ctx.fillRect(0, (i + 1) * RH - top - 1, w, 1); }
     const ss = new Set(sel());
     for (let i = a; i < b; i++) {
       const r = rows[i];
@@ -243,7 +262,7 @@ export const Gantt = () => {
     ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up);
     document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
   });
-  createEffect(() => { themeTick(); grid(); sel(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); draw(); });
+  createEffect(() => { themeTick(); out(); grid(); sel(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); draw(); });
 
   return (
     <div class="chart">
@@ -252,7 +271,7 @@ export const Gantt = () => {
         <div class="cbody" ref={body} onMouseDown={down} onScroll={() => { draw(); document.dispatchEvent(new CustomEvent("grid-scroll", { detail: body.scrollTop })); document.dispatchEvent(new CustomEvent("tl-redraw")); }}
           onWheel={e => { if (e.ctrlKey) { e.preventDefault(); setZ(zoom() * (e.deltaY < 0 ? 1.2 : 1 / 1.2), d0() + (body.scrollLeft + e.offsetX) / zoom()); } }}
           onDblClick={() => C.info()} onContextMenu={e => { const h = hit(e); if (h.r && !sel().includes(h.r.uid)) { setSel([h.r.uid]); setCur({ row: h.i, col: cur().col }); } openMenu(e, [
-            { label: "Task Information…", run: C.info }, { label: "Scroll to Task", run: C.scrollTo }, { label: "Split Task…", run: C.split }, { label: "Mark on Track", run: C.onTrack }, "-",
+            { label: "Task Information…", icon: "info", run: C.info }, { label: "Scroll to Task", icon: "scroll", run: C.scrollTo }, { label: "Split Task…", icon: "split", run: C.split }, { label: "Mark on Track", icon: "track", run: C.onTrack }, "-",
             { label: "Show Critical Path", run: () => setShowCrit(!showCrit()), on: showCrit() }, { label: "Show Baseline", run: () => setShowBase(!showBase()), on: showBase() },
             { label: "Show Slack", run: () => setShowSlack(!showSlack()), on: showSlack() }, { label: "Show Late Bars", run: () => setShowLate(!showLate()), on: showLate() },
             { label: "Show Bar Labels", run: () => setShowLabels(!showLabels()), on: showLabels() }, "-", { label: "Zoom In", run: C.zoomIn }, { label: "Zoom Out", run: C.zoomOut }, { label: "Entire Project", run: fitAll },

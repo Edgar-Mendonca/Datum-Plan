@@ -19,6 +19,7 @@ import { Details } from "./details";
 import { Network, CalendarView, UsageView, ResourceSheet, ResourceGraph, TeamPlanner, Risks, Checks, Portfolio } from "./views";
 import { Dashboard, Reports, SCurves, Progress } from "./reports";
 import { Sheets } from "./sheets";
+import { UpdateProgress, Relationships, ReportBuilder } from "./tools";
 import { Backstage, update, checkUpdate } from "./backstage";
 import { Setup } from "./setup";
 import { Menu, Toast, Icon, Dialog } from "./ui";
@@ -28,7 +29,7 @@ const SIDE: ([View, string, string] | "-")[] = [
   ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
   ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["team", "team", "Team"], "-",
   ["sheets", "table", "Sheets"], "-",
-  ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["portfolio", "folder", "Portfolio"],
+  ["update", "update", "Update"], ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["builder", "builder", "Builder"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["portfolio", "folder", "Portfolio"],
 ];
 
 const GanttView = () => {
@@ -127,6 +128,9 @@ const App = () => {
               <Match when={view() === "progress"}><Progress /></Match>
               <Match when={view() === "scurve"}><SCurves /></Match>
               <Match when={view() === "sheets"}><Sheets /></Match>
+              <Match when={view() === "update"}><UpdateProgress /></Match>
+              <Match when={view() === "relations"}><Relationships /></Match>
+              <Match when={view() === "builder"}><ReportBuilder /></Match>
               <Match when={view() === "reports"}><Reports /></Match>
               <Match when={view() === "risks"}><Risks /></Match>
               <Match when={view() === "checks"}><Checks /></Match>

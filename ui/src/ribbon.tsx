@@ -4,10 +4,17 @@ import { out, tab, setTab, setBackstage, view, openMenu, Item, fields, filter, s
 import { C, ALL_CMDS } from "./cmds";
 import * as D from "./dialogs";
 import { Icon } from "./ui";
+import { STYLES, gstyle } from "./gantt";
 import { showCrit, setShowCrit, showBase, setShowBase, showSlack, setShowSlack, showLate, setShowLate, showLabels, setShowLabels } from "./gantt";
 import { fieldMenu } from "./grid";
 
-const B = (p: { i: string; l: string; run?: (e: MouseEvent) => void; big?: boolean; on?: boolean; off?: boolean; dd?: (e: MouseEvent) => void; title?: string }) => (
+const B = (p: { i: string; l: string; run?: (e: MouseEvent) => void; big?: boolean; on?: boolean; off?: boolean; dd?: (e: MouseEvent) => void; title?: string }) => p.big && p.run && p.dd ? (
+  // MS Project split button: the picture runs the command, the label opens the menu.
+  <div class="rbw big splitbig" classList={{ on: p.on }}>
+    <button class="rb top" title={p.title ?? p.l} onClick={e => p.run!(e)}><Icon n={p.i} /></button>
+    <button class="rb bot" title={`${p.l} options`} onClick={e => p.dd!(e)}><span>{p.l}</span><b class="car">▾</b></button>
+  </div>
+) : (
   <div class="rbw" classList={{ big: p.big }}>
     <button class="rb" classList={{ big: p.big, on: p.on }} disabled={p.off} title={p.title ?? p.l} onClick={e => (p.run ?? p.dd)?.(e)}><Icon n={p.i} />{p.big ? <span>{p.l}{p.dd && !p.run ? " ▾" : ""}</span> : <span>{p.l}</span>}{!p.big && p.dd && !p.run && <b class="car">▾</b>}</button>
     {p.run && p.dd && <button class="rb split" onClick={e => p.dd!(e)}>▾</button>}
@@ -82,7 +89,8 @@ export const TitleBar = (p: { update: string | null }) => (
     <nav class="tabs">
       <button class="file" onClick={() => setBackstage("home")}>File</button>
       <For each={[["task", "Task"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["help", "Help"]]}>{([k, l]) =>
-        <button classList={{ on: tab() === k, ctx: k === "format" }} onClick={() => setTab(k)}>{k === "format" ? <><small>Gantt Chart Tools</small> {l}</> : l}</button>}</For>
+        k === "format" ? <div class="ctxgrp"><small>Gantt Chart Tools</small><button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button></div>
+          : <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For>
     </nav>
   </header>
 );
@@ -99,10 +107,10 @@ export const Ribbon = () => (
         <S><B i="up" l="Move Up" run={() => C.move(true)} /><B i="down" l="Move Down" run={() => C.move(false)} /><B i="inact" l="Inactivate" run={C.inactive} /></S>
       </G>
       <G l="Tasks"><B big i="manual" l="Manually Schedule" run={() => C.mode(true)} /><B big i="auto" l="Auto Schedule" run={() => C.mode(false)} /></G>
-      <G l="Insert"><B big i="task" l="Task" run={() => C.newTask()} dd={e => openMenu(e, [{ label: "Task", run: () => C.newTask() }, { label: "Blank Row", run: () => C.newTask() }, { label: "Summary Task", run: C.summary }, { label: "Milestone", run: () => C.newTask(true) }])} />
+      <G l="Insert"><B big i="task" l="Task" run={() => C.newTask()} dd={e => openMenu(e, [{ label: "Task", run: () => C.newTask() }, { label: "Blank Row", run: () => C.newTask() }, { label: "Summary Task", run: C.summary }, { label: "Milestone", run: () => C.newTask(true) }, { label: "Recurring Task…", icon: "repeat", run: C.recurring }])} />
         <S><B i="proj" l="Summary" run={C.summary} /><B i="ms" l="Milestone" run={() => C.newTask(true)} /><B i="del" l="Delete" run={C.del} /></S></G>
       <G l="Properties"><B big i="info" l="Information" run={C.info} /><S><B i="detail" l="Notes" run={C.notes} /><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Add to Timeline" run={C.timeline} /></S></G>
-      <G l="Editing"><S><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="find" l="Find" run={palette} /><B i="fill" l="Inspect" run={() => D.inspect(C.ids()[0])} /></S></G>
+      <G l="Editing"><S><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="find" l="Find" run={palette} /><B i="fill" l="Inspect" run={() => D.inspect(C.ids()[0])} /></S><S><B i="change" l="Global Change" run={C.globalChange} /><B i="repeat" l="Recurring Task" run={C.recurring} /></S></G>
     </Show>
     <Show when={tab() === "resource"}>
       <G l="View"><B big i="res" l="Resource Sheet" run={() => C.view("ressheet")} dd={e => openMenu(e, viewMenu())} /><B big i="team" l="Team Planner" run={() => C.view("team")} /></G>
@@ -111,7 +119,8 @@ export const Ribbon = () => (
       <G l="Level"><B big i="level" l="Level All" run={() => C.level()} /><S><B i="level" l="Level Selection" run={() => C.level(false)} /><B i="del" l="Clear Leveling" run={C.clearLevel} /><B i="opts" l="Leveling Options" run={() => D.scheduleOptions()} /></S></G>
     </Show>
     <Show when={tab() === "report"}>
-      <G l="View Reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="report" l="Reports" run={() => C.view("reports")} /></G>
+      <G l="Status"><B big i="update" l="Update Progress" run={() => C.view("update")} /></G>
+      <G l="View Reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="builder" l="Report Builder" run={() => C.view("builder")} /><B big i="report" l="Reports" run={() => C.view("reports")} /></G>
       <G l="Health"><B big i="check" l="Check Schedule" run={() => C.view("checks")} /><B big i="risk" l="Risks" run={() => C.view("risks")} /></G>
       <G l="Portfolio"><B big i="folder" l="Portfolio" run={() => C.view("portfolio")} /><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
       <G l="Export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /></G>
@@ -124,7 +133,7 @@ export const Ribbon = () => (
       <G l="Proofing"><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
     </Show>
     <Show when={tab() === "view"}>
-      <G l="Task Views"><B big i="gantt" l="Gantt Chart" run={() => C.view("gantt")} dd={e => openMenu(e, viewMenu())} /><S><B i="base" l="Tracking Gantt" run={() => C.view("tracking")} /><B i="net" l="Network Diagram" run={() => C.view("network")} /><B i="cal" l="Calendar" run={() => C.view("calendar")} /></S><S><B i="table" l="Task Usage" run={() => C.view("taskusage")} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
+      <G l="Task Views"><B big i="gantt" l="Gantt Chart" run={() => C.view("gantt")} dd={e => openMenu(e, viewMenu())} /><S><B i="base" l="Tracking Gantt" run={() => C.view("tracking")} /><B i="net" l="Network Diagram" run={() => C.view("network")} /><B i="cal" l="Calendar" run={() => C.view("calendar")} /></S><S><B i="link" l="Relationship Diagram" run={() => C.view("relations")} /><B i="table" l="Sheets" run={() => C.view("sheets")} /></S><S><B i="table" l="Task Usage" run={() => C.view("taskusage")} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
       <G l="Resource Views"><S><B i="res" l="Resource Sheet" run={() => C.view("ressheet")} /><B i="load" l="Resource Usage" run={() => C.view("resusage")} /><B i="team" l="Team Planner" run={() => C.view("team")} /></S></G>
       <G l="Data">
         <S><B i="sort" l={`Sort${sort().length ? ": on" : ""}`} dd={e => openMenu(e, sortMenu())} /><B i="list" l="Outline" dd={e => openMenu(e, outlineMenu())} /><B i="table" l={`Tables: ${table()}`} dd={e => openMenu(e, tableMenu())} /></S>
@@ -134,9 +143,11 @@ export const Ribbon = () => (
       <G l="Split View"><S><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
     </Show>
     <Show when={tab() === "format"}>
+      <G l="Format"><B big i="style" l="Bar Styles" run={() => D.barStyles()} /><B big i="grid" l="Conditional Formatting" run={() => D.condFormat()} /><S><label class="chk"><input type="checkbox" checked={gstyle().grid} onChange={e => act({ Ui: { key: "gantt", value: { ...gstyle(), grid: e.currentTarget.checked } } })} />Gridlines</label><B i="detail" l="Details Pane" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
       <G l="Columns"><B big i="cols" l="Formula Column" run={() => D.formulaColumn()} /><B big i="cols" l="Insert Column" dd={e => openMenu(e, fieldMenu(k => saveCols([...cols(), [k, 90]])))} /><S><B i="table" l="Column Settings" run={() => D.fieldSettings(0)} /><B i="cols" l="Custom Fields" run={() => D.customFields()} /></S></G>
       <G l="Bar Styles"><S><label class="chk"><input type="checkbox" checked={showCrit()} onChange={e => setShowCrit(e.currentTarget.checked)} />Critical Tasks</label><label class="chk"><input type="checkbox" checked={showSlack()} onChange={e => setShowSlack(e.currentTarget.checked)} />Slack</label><label class="chk"><input type="checkbox" checked={showLate()} onChange={e => setShowLate(e.currentTarget.checked)} />Late Tasks</label></S>
         <B big i="base" l="Baseline" dd={e => openMenu(e, baselineMenu())} on={showBase()} /></G>
+      <G l="Gantt Chart Style"><div class="swatches"><For each={STYLES}>{st => <button class="swatch" classList={{ on: gstyle().name === st.name }} title={st.name} onClick={() => act({ Ui: { key: "gantt", value: { ...st, grid: gstyle().grid } } })}><i style={{ background: st.sum }} /><i style={{ background: st.fill, border: `1px solid ${st.edge}` }} /><i style={{ background: st.cfill, border: `1px solid ${st.crit}` }} /></button>}</For></div></G>
       <G l="Show/Hide"><S><label class="chk"><input type="checkbox" checked={projSum()} onChange={e => setProjSum(e.currentTarget.checked)} />Project Summary Task</label><label class="chk"><input type="checkbox" checked={!hideSum()} onChange={e => setHideSum(!e.currentTarget.checked)} />Summary Tasks</label><label class="chk"><input type="checkbox" checked={showLabels()} onChange={e => setShowLabels(e.currentTarget.checked)} />Bar Labels</label></S></G>
     </Show>
     <Show when={tab() === "help"}>

@@ -23,7 +23,7 @@ export const Sheets = () => {
   const lefts = createMemo(() => { let x = HW; return Array.from({ length: ncols() }, (_, c) => { const l = x; x += width(c); return l; }); });
   let box!: HTMLDivElement;
   const ro = new ResizeObserver(() => setH(box.clientHeight));
-  onMount(() => ro.observe(box));
+  onMount(() => box && ro.observe(box));
   onCleanup(() => ro.disconnect());
   const range = () => { const [a, b] = cur(), [c, d] = end(); return [Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)]; };
   const inR = (r: number, c: number) => { const [r0, c0, r1, c1] = range(); return r >= r0 && r <= r1 && c >= c0 && c <= c1; };
@@ -99,7 +99,7 @@ export const Sheets = () => {
       <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan for quantities, estimates or progress measurement.</p><button class="btn pri" style={{ width: "fit-content" }} onClick={addSheet}>Add a sheet</button></div>}>
         <div class="fbar"><span class="fname">{a1(...cur())}</span><span class="fx" style={{ "text-align": "center", "line-height": "27px" }}>fx</span>
           <input value={edit() ?? curCell()?.[1] ?? ""} onInput={e => setEdit(e.currentTarget.value)} onKeyDown={e => { if (e.key === "Enter") commit([1, 0]); if (e.key === "Escape") setEdit(null); }} /></div>
-        <div class="gscroll sheetgrid" ref={box} tabindex="0" onKeyDown={key} onMouseDown={down} onCopy={onCopy} onPaste={onPaste} onScroll={() => setTop(box.scrollTop)}
+        <div class="gscroll sheetgrid" ref={el => { box = el; ro.observe(el); }} tabindex="0" onKeyDown={key} onMouseDown={down} onCopy={onCopy} onPaste={onPaste} onScroll={() => setTop(box.scrollTop)}
           onDblClick={() => setEdit(curCell()?.[1] ?? "")}>
           <div class="gsheet" style={{ width: `${lefts()[ncols() - 1] + width(ncols() - 1) + 40}px`, height: `${(nrows() + 1) * RH}px` }}>
             <div class="ghead" style={{ height: `${RH}px` }}>

@@ -6,7 +6,8 @@
     "check:ui": "tsc -p ui --noEmit",
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "test:ui": "cargo run -q -p datum-core --example dump > tests_ui/fixture.json && npm run build:ui && node tests_ui/run.cjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

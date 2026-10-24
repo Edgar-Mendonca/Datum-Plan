@@ -56,6 +56,9 @@ pub enum Op {
     /// Many cell edits as one step (paste, fill, clear a range). Cells that cannot take the value
     /// are skipped; it fails only when none could be set.
     Cells { cells: Vec<(u32, String, String)> },
+    /// Inserts a recurring task: a summary with one occurrence every `interval` days, weeks or
+    /// months from `start`, each held to its date by a Start No Earlier Than constraint.
+    Recurring { at: usize, name: String, dur: String, every: String, interval: u32, count: u32, start: String },
     /// Renames a column (empty title restores the field's name).
     Title { key: String, title: String },
     /// Adds (k = None), replaces or (sheet = None) removes a spreadsheet tab.
@@ -790,6 +793,29 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 if let Some(e) = first {
                     return Err(e);
                 }
+            }
+        }
+        Op::Recurring { at, name, dur, every, interval, count, start } => {
+            if count == 0 || count > 500 {
+                return Err("Choose between 1 and 500 occurrences.".into());
+            }
+            let at = at.min(p.tasks.len());
+            let lv = level_at(p, at);
+            let (d, unit) = parse::dur(&dur, p.day_min)?;
+            let first = parse::date_in(&start, fmt).or_else(|_| parse::date(&start))?;
+            let t = p.new_task(name.trim(), lv, d);
+            p.tasks.insert(at, t);
+            for k in 0..count {
+                let n = interval.max(1) * k;
+                let day = match every.as_str() {
+                    "month" => first.checked_add_months(chrono::Months::new(n)).ok_or("Date out of range.")?,
+                    "week" => first + chrono::Days::new(7 * n as u64),
+                    _ => first + chrono::Days::new(n as u64),
+                };
+                let mut t = p.new_task(&format!("{} {}", name.trim(), k + 1), lv + 1, d);
+                t.unit = unit;
+                (t.constraint, t.cdate) = (Constraint::SNET, Some(day));
+                p.tasks.insert(at + 1 + k as usize, t);
             }
         }
         Op::Title { key, title } => {

@@ -1,5 +1,5 @@
 //! Task lists in spreadsheets: CSV and Excel in, with a column mapping step; CSV and Excel out.
-use crate::{doc, fields::{Calc, Kind}, model::Project};
+use crate::{doc, fields::{Calc, Kind}, formula::F, model::Project};
 use calamine::{open_workbook_auto, Data, Reader};
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -186,33 +186,77 @@ pub fn write_csv(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
     std::fs::write(path, out).map_err(|e| format!("Could not save {}: {e}", path.display()))
 }
 
+/// Excel workbook: the table with real numbers and dates, formula columns as live Excel formulas,
+/// the plan's sheet tabs, and a Plan sheet those tabs can read.
 pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
-    use rust_xlsxwriter::{Format, Workbook};
-    let mut wb = Workbook::new();
-    let ws = wb.add_worksheet();
+    use rust_xlsxwriter::{Format, Workbook, Worksheet};
     let e = |x: rust_xlsxwriter::XlsxError| x.to_string();
-    ws.set_name("Tasks").map_err(e)?;
+    let mut wb = Workbook::new();
     let head_fmt = Format::new().set_bold().set_background_color(0xE6F0FC);
-    let (head, rows) = cells(c, cols);
-    let keys: Vec<String> = cols.iter().filter_map(|k| c.key_of(k)).collect();
-    for (k, h) in head.iter().enumerate() {
-        ws.write_string_with_format(0, k as u16, h, &head_fmt).map_err(e)?;
-        ws.set_column_width(k as u16, if keys[k] == "name" { 44.0 } else if keys[k] == "res" { 28.0 } else { 13.0 }).map_err(e)?;
-    }
-    for (r, (i, vals)) in rows.iter().enumerate() {
-        let mut f = Format::new();
-        if c.s.summary[*i] {
-            f = f.set_bold();
+    let date_fmt = Format::new().set_num_format("dd-mmm-yy");
+    let days_fmt = Format::new().set_num_format("0.0# \"d\"");
+    let money_fmt = Format::new().set_num_format(format!("\"{}\"#,##0.{}", c.p.currency.symbol, "0".repeat(c.p.currency.decimals as usize)).replace(".\"", "\""));
+    // One typed cell: dates as Excel dates, durations in days, money as numbers.
+    let put = |ws: &mut Worksheet, r: u32, k: u16, i: usize, key: &str, bold: bool| -> Result<(), String> {
+        let kind = c.kind(key);
+        let v = c.val(i, key);
+        let fx = |f: &Format| if bold { f.clone().set_bold() } else { f.clone() };
+        match (&v, kind) {
+            (F::Null, _) => Ok(()),
+            (F::Date(m), _) => ws.write_number_with_format(r, k, *m as f64 / 1440.0 + 25569.0 - if kind == Kind::Fin && m.rem_euclid(1440) == 0 { 1.0 } else { 0.0 }, &fx(&date_fmt)).map(|_| ()).map_err(e),
+            (F::Num(n), Kind::Dur) => ws.write_number_with_format(r, k, n / c.p.day_min as f64, &fx(&days_fmt)).map(|_| ()).map_err(e),
+            (F::Num(n), Kind::Cost) => ws.write_number_with_format(r, k, *n, &fx(&money_fmt)).map(|_| ()).map_err(e),
+            (F::Num(n), _) => ws.write_number_with_format(r, k, *n, &fx(&Format::new())).map(|_| ()).map_err(e),
+            (F::Bool(b), _) => ws.write_boolean(r, k, *b).map(|_| ()).map_err(e),
+            _ => ws.write_string_with_format(r, k, c.text(i, key), &fx(&Format::new())).map(|_| ()).map_err(e),
         }
-        for (k, val) in vals.iter().enumerate() {
-            let fmt = if keys[k] == "name" { f.clone().set_indent(c.p.tasks[*i].level) } else { f.clone() };
-            let numeric = matches!(c.kind(&keys[k]), Kind::Int | Kind::Num) || matches!(keys[k].as_str(), "id" | "level" | "uid");
-            match (numeric, val.parse::<f64>()) {
-                (true, Ok(n)) => ws.write_number_with_format(r as u32 + 1, k as u16, n, &fmt).map(|_| ()),
-                _ => ws.write_string_with_format(r as u32 + 1, k as u16, val, &fmt).map(|_| ()),
-            }.map_err(e)?;
+    };
+    let keys: Vec<String> = cols.iter().filter_map(|k| c.key_of(k)).collect();
+    let ws = wb.add_worksheet();
+    ws.set_name("Tasks").map_err(e)?;
+    for (k, key) in keys.iter().enumerate() {
+        ws.write_string_with_format(0, k as u16, c.name(key), &head_fmt).map_err(e)?;
+        ws.set_column_width(k as u16, if key == "name" { 44.0 } else if key == "res" { 28.0 } else { 13.0 }).map_err(e)?;
+    }
+    for i in 0..c.p.tasks.len() {
+        let r = i as u32 + 1;
+        for (k, key) in keys.iter().enumerate() {
+            let formula = key.strip_prefix("c:").and_then(|f| c.p.fields.iter().find(|d| d.key == f)).map(|d| d.formula.clone()).filter(|f| crate::sheet::is_excel(f));
+            let live = formula.and_then(|f| crate::sheet::translate(&f, |n| c.key_of(n).and_then(|kk| keys.iter().position(|x| *x == kk)).map(|j| format!("{}{}", crate::sheet::col_name(j as u32), r + 1))).ok());
+            match live {
+                Some(f) => { ws.write_formula(r, k as u16, format!("={f}").as_str()).map_err(e)?; }
+                None if key == "name" => { ws.write_string_with_format(r, k as u16, c.text(i, key), &{ let f = Format::new().set_indent(c.p.tasks[i].level); if c.s.summary[i] { f.set_bold() } else { f } }).map_err(e)?; }
+                None => put(ws, r, k as u16, i, key, c.s.summary[i])?,
+            }
         }
     }
     ws.set_freeze_panes(1, 0).map_err(e)?;
+    for s in &c.p.sheets {
+        let ws = wb.add_worksheet();
+        ws.set_name(s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).take(31).collect::<String>()).map_err(e)?;
+        for (a1, input) in &s.cells {
+            let Some((r, k)) = a1_index(a1) else { continue };
+            if input.starts_with('=') { ws.write_formula(r, k, input.as_str()).map_err(e)?; }
+            else if let Ok(n) = input.replace(',', "").parse::<f64>() { ws.write_number(r, k, n).map_err(e)?; }
+            else { ws.write_string(r, k, input).map_err(e)?; }
+        }
+    }
+    if !c.p.sheets.is_empty() {
+        let ws = wb.add_worksheet();
+        ws.set_name("Plan").map_err(e)?;
+        for (k, key) in crate::sheet::PLAN_COLS.iter().enumerate() {
+            ws.write_string_with_format(0, k as u16, c.name(key), &head_fmt).map_err(e)?;
+            for i in 0..c.p.tasks.len() {
+                put(ws, i as u32 + 1, k as u16, i, key, false)?;
+            }
+        }
+    }
     wb.save(path).map_err(|x| format!("Could not save {}: {x}", path.display()))
+}
+
+/// "B12" → (row 11, column 1), 0-based.
+fn a1_index(a1: &str) -> Option<(u32, u16)> {
+    let split = a1.find(|ch: char| ch.is_ascii_digit())?;
+    let col = a1[..split].bytes().try_fold(0u32, |acc, b| b.is_ascii_uppercase().then(|| acc * 26 + (b - b'A' + 1) as u32))?;
+    Some((a1[split..].parse::<u32>().ok()?.checked_sub(1)?, col.checked_sub(1)? as u16))
 }
