@@ -258,7 +258,15 @@
 
 ---
 
-## 6. Decisions needed from you
+## 6. Decisions (answered 2026-10-24)
+
+- **UI technology: SolidJS + Vite** (Astro was considered and rejected: it is a site/content framework for server-rendered pages and would still need a UI library inside it).
+- **Multi-project: local files only.** Each project is a `.dplan` file, and a workspace file lists them. Nothing is hosted; everything stays on the user's computer (open source, local-first).
+- **Beta channel: yes**, opt-in through the updater.
+- **Priority: everything.** Reports, network diagram and earned value matter most. If something slips, it moves to 0.3.1 and is listed there.
+- **Feature write-up:** the user is preparing an MS Project feature write-up in Markdown. Build starts after it arrives.
+
+### Original questions
 
 1. **UI technology.** I recommend moving the screen layer from hand-written HTML strings to a small component library, **SolidJS** (about 7 KB), with a bundler. The engine and all logic stay in Rust. This is what lets dialogs, ribbons and the report designer reach MS Project quality without the code becoming fragile. The alternative is to stay as we are: possible, but slower and buggier at this size.
 2. **Multi-project storage:** a workspace file plus `.dplan` files (recommended: portable, works with OneDrive and email), or a single database file like P6's.

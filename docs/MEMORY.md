@@ -149,6 +149,9 @@ flowchart LR
 | 0.2.0 | Predecessor IDs typed with new rows (quick add, paste) mean the IDs shown before the insert | What the user sees on screen. |
 | 0.2.0 | XML reader written by hand instead of quick-xml | The quick-xml API changes a lot between versions; MSPDI only needs elements and text. |
 | 0.2.0 | Recovery copy in AppData, not autosave over the user's file | Safe: never overwrites a file without asking. |
+| 0.3 plan | **SolidJS + Vite** for the UI (not Astro) | Small reactive components for MSP-level dialogs, ribbon and report designer. Astro targets content sites. |
+| 0.3 plan | **Local-first:** `.dplan` files plus a workspace file; no server, no cloud, no telemetry (the only network call is the update check) | Open source, everything stays on the user's computer. |
+| 0.3 plan | Betas through an opt-in updater channel; slipped items go to 0.3.1 | The user wants to check the big release step by step. |
 
 ---
 
@@ -237,4 +240,4 @@ flowchart LR
 - XER export is checked against our own importer only. MSPDI export is checked against our own reader; it needs a real MS Project test.
 - Large plans: the grid is virtualised, but `view::build` and links run on every edit. Profile 10k+ tasks in 0.6.1.
 - Printing prints the current view only. Page setup comes in 0.2.1.
-- Next session: get the user's answers to the decisions in PLAN-0.3.md section 6 (UI technology, multi-project storage, beta channel, priorities, screenshots), then start beta.1.
+- Decisions are answered (see PLAN-0.3.md section 6). Next session: read the user's MS Project feature write-up (.md) and the answers to the follow-up questions, then start beta.1.
