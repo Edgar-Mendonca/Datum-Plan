@@ -1,47 +1,73 @@
-//! Text in and out of grid cells: durations, dates and predecessor lists.
-use crate::model::{Link, LinkType};
+//! Text in and out of cells: durations, dates, predecessors, resources and quick-add sentences.
+use crate::model::{Assign, Constraint, Link, LinkType, Project, ResKind, Unit, CONSTRAINTS};
 use chrono::NaiveDate;
 use std::collections::HashMap;
 
-/// "5", "5d", "2 wks", "1.5w", "1 mo" → working days.
-pub fn dur(s: &str) -> Result<i32, String> {
+/// Working minutes per unit, given the minutes in a working day.
+pub fn unit_min(u: Unit, day: i64) -> i64 {
+    match u { Unit::M => 1, Unit::H => 60, Unit::D => day, Unit::W => 5 * day, Unit::Mo => 20 * day }
+}
+
+/// "5", "5d", "4h", "2 wks", "1.5w", "1 mo" → working minutes and the unit typed.
+pub fn dur(s: &str, day: i64) -> Result<(i64, Unit), String> {
     let s = s.trim().to_lowercase();
     let cut = s.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(s.len());
     let (num, unit) = s.split_at(cut);
-    let v: f64 = num.parse().map_err(|_| format!("\"{s}\" is not a duration. Try 5d, 2w or 1mo."))?;
-    let m = match unit.trim().trim_end_matches('?') {
-        "" | "d" | "day" | "days" | "dy" | "dys" => 1.0,
-        "w" | "wk" | "wks" | "week" | "weeks" => 5.0,
-        "mo" | "mon" | "mons" | "month" | "months" => 20.0,
-        u => return Err(format!("Unknown duration unit \"{u}\". Use d, w or mo.")),
+    let v: f64 = num.parse().map_err(|_| format!("\"{s}\" is not a duration. Try 5d, 4h, 2w or 1mo."))?;
+    let u = match unit.trim().trim_end_matches('?') {
+        "m" | "min" | "mins" | "minute" | "minutes" => Unit::M,
+        "h" | "hr" | "hrs" | "hour" | "hours" => Unit::H,
+        "" | "d" | "day" | "days" | "dy" | "dys" => Unit::D,
+        "w" | "wk" | "wks" | "week" | "weeks" => Unit::W,
+        "mo" | "mon" | "mons" | "month" | "months" => Unit::Mo,
+        u => return Err(format!("Unknown duration unit \"{u}\". Use h, d, w or mo.")),
     };
-    let d = (v * m).round();
-    if !(0.0..=100_000.0).contains(&d) {
+    let m = (v * unit_min(u, day) as f64).round();
+    if !(0.0..=1e9).contains(&m) {
         return Err("Duration is out of range.".into());
     }
-    Ok(d as i32)
+    Ok((m as i64, u))
 }
 
-pub fn fmt_dur(d: i64) -> String {
-    if d == 1 { "1 day".into() } else { format!("{d} days") }
+fn num(v: f64) -> String {
+    let s = format!("{:.2}", v);
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-const DATE_FORMATS: [&str; 7] = ["%Y-%m-%d", "%d-%b-%y", "%d-%b-%Y", "%d/%m/%Y", "%d/%m/%y", "%d %b %Y", "%d %b %y"];
+pub fn fmt_dur(min: i64, u: Unit, day: i64) -> String {
+    let v = min as f64 / unit_min(u, day) as f64;
+    let one = (v - 1.0).abs() < 1e-9;
+    let name = match u { Unit::M => "min", Unit::H => if one { "hr" } else { "hrs" }, Unit::D => if one { "day" } else { "days" }, Unit::W => if one { "wk" } else { "wks" }, Unit::Mo => if one { "mon" } else { "mons" } };
+    format!("{} {name}", num(v))
+}
 
-pub fn date(s: &str) -> Result<NaiveDate, String> {
+/// Short form for lags: "+2d", "-4h".
+pub fn fmt_lag(min: i64, day: i64) -> String {
+    if min == 0 {
+        return String::new();
+    }
+    let (v, u) = if min % day == 0 { (min / day, "d") } else if min % 60 == 0 { (min / 60, "h") } else { (min, "m") };
+    format!("{}{v}{u}", if min > 0 { "+" } else { "" })
+}
+
+const DATE_FORMATS: [&str; 9] = ["%Y-%m-%d", "%d-%b-%y", "%d-%b-%Y", "%d/%m/%Y", "%d/%m/%y", "%d %b %Y", "%d %b %y", "%a %d-%b-%y", "%Y-%m-%dT%H:%M:%S"];
+
+/// Parses a date in any common form; `fmt` (the display format) is tried first.
+pub fn date_in(s: &str, fmt: &str) -> Result<NaiveDate, String> {
     let s = s.trim();
-    DATE_FORMATS
-        .iter()
-        .find_map(|f| NaiveDate::parse_from_str(s, f).ok())
+    let s = s.get(..19).filter(|_| s.contains('T')).unwrap_or(s);
+    std::iter::once(fmt)
+        .chain(DATE_FORMATS)
+        .find_map(|f| NaiveDate::parse_from_str(s, f).ok().or_else(|| chrono::NaiveDateTime::parse_from_str(s, f).ok().map(|d| d.date())))
         .ok_or_else(|| format!("\"{s}\" is not a date. Try 24-Oct-26 or 2026-10-24."))
 }
 
-pub fn fmt_date(d: NaiveDate) -> String {
-    d.format("%d-%b-%y").to_string()
+pub fn date(s: &str) -> Result<NaiveDate, String> {
+    date_in(s, "%d-%b-%y")
 }
 
-/// "3, 5SS+2d, 7FF-1" with row IDs (1-based) → links. `ids[i]` is the uid of row i+1.
-pub fn preds(s: &str, ids: &[u32]) -> Result<Vec<Link>, String> {
+/// "3, 5SS+2d, 7FF-4h" with row IDs (1-based) → links. `ids[i]` is the uid of row i+1.
+pub fn preds(s: &str, ids: &[u32], day: i64) -> Result<Vec<Link>, String> {
     let mut out = vec![];
     for tok in s.split([',', ';']).map(str::trim).filter(|t| !t.is_empty()) {
         let t = tok.to_uppercase().replace(' ', "");
@@ -50,7 +76,6 @@ pub fn preds(s: &str, ids: &[u32]) -> Result<Vec<Link>, String> {
         let uid = *ids.get(id.wrapping_sub(1)).ok_or_else(|| format!("There is no task {id}."))?;
         let mut rest = &t[cut..];
         let kind = match rest.get(..2) {
-            Some("FS") => LinkType::FS,
             Some("SS") => LinkType::SS,
             Some("FF") => LinkType::FF,
             Some("SF") => LinkType::SF,
@@ -61,28 +86,126 @@ pub fn preds(s: &str, ids: &[u32]) -> Result<Vec<Link>, String> {
         }
         let lag = match rest.chars().next() {
             None => 0,
-            Some('+') => dur(&rest[1..])?,
-            Some('-') => -dur(&rest[1..])?,
-            _ => return Err(format!("Write the lag in \"{tok}\" as +2d or -1d.")),
+            Some('+') => dur(&rest[1..], day)?.0,
+            Some('-') => -dur(&rest[1..], day)?.0,
+            _ => return Err(format!("Write the lag in \"{tok}\" as +2d or -4h.")),
         };
         out.push(Link { pred: uid, kind, lag });
     }
     Ok(out)
 }
 
-pub fn fmt_preds(links: &[Link], id_of: &HashMap<u32, usize>) -> String {
-    links
-        .iter()
-        .filter_map(|l| {
-            let id = id_of.get(&l.pred)?;
-            let k = if l.kind == LinkType::FS && l.lag == 0 { String::new() } else { format!("{:?}", l.kind) };
-            let lag = match l.lag {
-                0 => String::new(),
-                v if v > 0 => format!("+{v}d"),
-                v => format!("{v}d"),
-            };
-            Some(format!("{id}{k}{lag}"))
+pub fn fmt_link(id: usize, l: &Link, day: i64) -> String {
+    let k = if l.kind == LinkType::FS && l.lag == 0 { String::new() } else { format!("{:?}", l.kind) };
+    format!("{id}{k}{}", fmt_lag(l.lag, day))
+}
+
+pub fn fmt_preds(links: &[Link], id_of: &HashMap<u32, usize>, day: i64) -> String {
+    links.iter().filter_map(|l| Some(fmt_link(*id_of.get(&l.pred)?, l, day))).collect::<Vec<_>>().join(", ")
+}
+
+/// "Engineer[50%], Concrete[12], Permit fee[4500]" → assignments; unknown names become work resources.
+pub fn res(s: &str, p: &mut Project) -> Result<Vec<Assign>, String> {
+    let mut out: Vec<Assign> = vec![];
+    for tok in s.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+        let (name, amt) = match tok.find('[') {
+            Some(i) => (tok[..i].trim(), Some(tok[i + 1..].trim_end_matches(']').trim())),
+            None => (tok, None),
+        };
+        let uid = p.resource(name);
+        let r = &p.resources[p.res_idx(uid).unwrap()];
+        let units = match amt {
+            None => if r.kind == ResKind::Work { 1.0 } else { 0.0 },
+            Some(a) => {
+                let pct = a.ends_with('%');
+                let v: f64 = a.trim_end_matches('%').split_whitespace().next().unwrap_or("").trim_start_matches(['$', '€', '£', '₹']).replace(',', "").parse()
+                    .map_err(|_| format!("\"{tok}\": write the amount as Name[50%] or Name[12]."))?;
+                if pct || r.kind == ResKind::Work { v / if pct || v > 10.0 { 100.0 } else { 1.0 } } else { v }
+            }
+        };
+        out.retain(|a| a.res != uid);
+        out.push(Assign { res: uid, units });
+    }
+    Ok(out)
+}
+
+pub fn fmt_res(a: &[Assign], p: &Project) -> String {
+    a.iter()
+        .filter_map(|a| {
+            let r = &p.resources[p.res_idx(a.res)?];
+            Some(match r.kind {
+                ResKind::Work if (a.units - 1.0).abs() < 1e-9 => r.name.clone(),
+                ResKind::Work => format!("{}[{}%]", r.name, num(a.units * 100.0)),
+                _ if r.label.is_empty() => format!("{}[{}]", r.name, num(a.units)),
+                _ => format!("{}[{} {}]", r.name, num(a.units), r.label),
+            })
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+pub fn constraint(s: &str) -> Result<Constraint, String> {
+    let s = s.trim();
+    CONSTRAINTS
+        .iter()
+        .find(|(c, n)| n.eq_ignore_ascii_case(s) || format!("{c:?}").eq_ignore_ascii_case(s))
+        .map(|(c, _)| *c)
+        .ok_or_else(|| format!("\"{s}\" is not a constraint type. Try As Soon As Possible or SNET."))
+}
+
+/// A one-line task: "Pour slab 5d after 4, 6 @Crew[50%] start 2-Nov-26 by 20-Nov-26".
+/// Returns (field, value) pairs for a new task.
+pub fn quick(text: &str) -> Vec<(String, String)> {
+    let mut f: Vec<(String, String)> = vec![];
+    let mut name = vec![];
+    let mut res = vec![];
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut i = 0;
+    let take = |i: &mut usize, stop: &[&str]| {
+        let mut v = vec![];
+        while *i < words.len() && !stop.contains(&words[*i].to_lowercase().as_str()) && !words[*i].starts_with('@') && !is_dur(words[*i]) {
+            v.push(words[*i]);
+            *i += 1;
+        }
+        v.join(" ")
+    };
+    const KEYS: [&str; 5] = ["after", "by", "start", "on", "from"];
+    while i < words.len() {
+        let w = words[i];
+        let lw = w.to_lowercase();
+        i += 1;
+        if let Some(r) = w.strip_prefix('@') {
+            // A name runs to the next keyword, @ or duration, or to a closing "]".
+            let mut v = vec![r];
+            while !r.contains('[') && i < words.len() && !words[i].starts_with('@') && !KEYS.contains(&words[i].to_lowercase().as_str()) && !is_dur(words[i]) {
+                v.push(words[i]);
+                i += 1;
+                if words[i - 1].ends_with(']') {
+                    break;
+                }
+            }
+            res.push(v.join(" "));
+        } else if lw == "after" {
+            f.push(("preds".into(), take(&mut i, &KEYS)));
+        } else if lw == "by" {
+            f.push(("deadline".into(), take(&mut i, &KEYS)));
+        } else if lw == "start" || lw == "on" || lw == "from" {
+            f.push(("start".into(), take(&mut i, &KEYS)));
+        } else if is_dur(w) {
+            f.push(("dur".into(), w.into()));
+        } else if lw == "milestone" {
+            f.push(("dur".into(), "0".into()));
+        } else {
+            name.push(w);
+        }
+    }
+    if !res.is_empty() {
+        f.push(("res".into(), res.join(", ")));
+    }
+    f.insert(0, ("name".into(), name.join(" ")));
+    f
+}
+
+fn is_dur(w: &str) -> bool {
+    w.starts_with(|c: char| c.is_ascii_digit()) && w.contains(|c: char| c.is_alphabetic()) && dur(w, 480).is_ok()
 }

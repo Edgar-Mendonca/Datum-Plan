@@ -47,12 +47,12 @@ pub fn build(t: &Template, start: NaiveDate) -> Project {
     let mut p = Project::new(t.name, start);
     let rows: Vec<Vec<&str>> = t.rows.lines().map(|l| l.split('|').collect()).collect();
     for r in &rows {
-        let task = p.new_task(r[1], r[0].parse().unwrap_or(0), r.get(2).map_or(0, |d| parse::dur(d).unwrap_or(0)));
+        let task = p.new_task(r[1], r[0].parse().unwrap_or(0), r.get(2).map_or(0, |d| parse::dur(d, 480).map_or(0, |x| x.0)));
         p.tasks.push(task);
     }
     let ids: Vec<u32> = p.tasks.iter().map(|t| t.uid).collect();
     for (task, r) in p.tasks.iter_mut().zip(&rows) {
-        task.preds = parse::preds(r.get(3).unwrap_or(&""), &ids).expect("template links are valid");
+        task.preds = parse::preds(r.get(3).unwrap_or(&""), &ids, 480).expect("template links are valid");
     }
     p
 }

@@ -1,6 +1,7 @@
 //! Datum Plan core: everything except the window. No UI or OS code lives here.
 pub mod cal;
 pub mod doc;
+pub mod load;
 pub mod model;
 pub mod parse;
 pub mod sched;
