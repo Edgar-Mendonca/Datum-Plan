@@ -209,7 +209,7 @@ flowchart LR
 | 0.3.3 | Hotfix | Grid row selection stuck after the first click | ✅ |
 | 0.3.4 | Print & format | Print page with Page Setup (ranges, paper, scaling, margins, header/footer codes, logos, legend, columns), vector pages; Font/Alignment formatting for task sheet and Sheets; Options page rebuilt | ✅ |
 | 0.3.5 | Ribbon, Setup, columns, print ([PLAN-0.3.5.md](PLAN-0.3.5.md)) | Task/Schedule/Progress tabs, ribbon fits without scrolling, Setup page in the sidebar, nested menus, hide/unhide/delete columns + Columns dialog, print every column (strip layout) | ✅ |
-| 0.3.6 | Print everything, one grid | Page layout for every view (Network, Calendar, resource and usage views, Sheets, reports), xlsx formatting, shared grid, series fill, Paste Special | 🔜 |
+| 0.3.6 | Print every view, Network, timeline zoom ([PLAN-0.3.6.md](PLAN-0.3.6.md)) | Font family + fill icon, everyday commands on the Task tab, Check-again feedback + GitHub link, timeline zoom box, Network Diagram with legend/box styles/zoom, page layout for every view, xlsx formatting, shared grid + series fill + Paste Special, icons | 🔜 (waiting for OK) |
 | 0.4.0 | Risk & resources | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -327,6 +327,10 @@ flowchart LR
 - Answers: keep "Task" (no Home), add more tabs; Setup as a page; hide + unhide + delete columns; printing as proposed; other views' printing, the shared grid and xlsx formatting in 0.3.6.
 - Also fixed: the Insert Column categories did not open (`Menu` supported one submenu level; now any depth).
 - Built: ribbon tabs and fitting, Setup view, `DeleteField` op, hide/unhide/delete and Columns dialog, print strip layout with column chooser, text size, row height, fit columns, wrap names, notes pages. 22 engine tests; UI tests for nested menus, hide/unhide, printed columns, ribbon fit at 1280/1600 px, Setup page.
+
+### 2026-10-24: Session 6, continued (0.3.6 feedback)
+- User feedback on 0.3.5 (4 screenshots): wrong fill icon and no font family; empty space on the Task tab; "Check again" gives no feedback; wants a GitHub link; wants MS Project's timeline zoom box; the Network Diagram lacks a legend and print layout; do all of 0.3.6 (every view printable, the rest of the 0.3.4 limits).
+- Plan and questions in [PLAN-0.3.6.md](PLAN-0.3.6.md).
 
 ---
 
