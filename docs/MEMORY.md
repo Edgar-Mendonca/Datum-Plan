@@ -379,6 +379,9 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 ### 2026-10-24: Session 6, end (Datum Atlas brief)
 - User created Datum-Plot and asked for a third app: materials selection and property charts (the scope of Ansys Granta Selector, but easier and better). Wrote `docs/briefs/DATUM-ATLAS.md` (concepts, features, window, architecture, data model, release plan, quality bar, questions), a draft logo `docs/brand/datum-atlas-icon.svg` (violet), and added Atlas to FAMILY.md. Recommended: name Datum Atlas, original referenced data (never copy proprietary databases), no Python inside the app.
 
+### 2026-10-24: CHANGELOG headings restored
+- `CHANGELOG.md` had lost the `## x.y.z — date` headings of 0.3.3 to 0.3.7 (each read just ` 2026-10-24`), so `release.yml` found no notes for them and "What's new" showed no headings. Checked each section against the roadmap and session log, restored the five headings; the release.yml awk now prints a section for every release.
+
 ---
 
 ## 5. Known limits and next steps
