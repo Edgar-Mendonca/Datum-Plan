@@ -1,6 +1,6 @@
 # The Datum family: one design and one way of working
 
-The Datum apps are small, fast Windows desktop tools that make engineering and science work easier. **Datum Plan** (scheduling: MS Project + Primavera P6) is the first. **Datum Plot** (graphing and statistics: GraphPad Prism + OriginPro) is next. Every app looks, feels and ships the same way; only the accent colour and the logo glyph change.
+The Datum apps are small, fast Windows desktop tools that make engineering and science work easier. **Datum Plan** (project scheduling) is the first, **Datum Plot** (graphing and statistics) the second, and **Datum Atlas** (materials selection and property charts) the third; its brief is [briefs/DATUM-ATLAS.md](briefs/DATUM-ATLAS.md). Every app looks, feels and ships the same way; only the accent colour and the logo glyph change.
 
 This file is the single source for that. Datum Plan's code is the reference implementation: copy from it rather than reinventing anything.
 
@@ -10,6 +10,7 @@ This file is the single source for that. Datum Plan's code is the reference impl
 | --- | --- | --- | --- | --- | --- | --- |
 | Datum Plan | MS Project + Primavera P6 | Blue `#0B5CAD` (glyph `#2F6FCF`) | Calendar with bars + amber diamond | `.dplan` | `com.edgarmendonca.datumplan` | Edgar-Mendonca/Datum-Plan |
 | Datum Plot | GraphPad Prism + OriginPro | Teal `#0E8C7F` (glyph `#0E8C7F`) | Axes, points, fitted curve + amber diamond | `.dplot` | `com.edgarmendonca.datumplot` | Edgar-Mendonca/Datum-Plot |
+| Datum Atlas | Materials selection and property charts (Ashby method) | Violet `#6C4AB6` | Log–log axes, family bubbles, index line + amber diamond | `.datlas` | `com.edgarmendonca.datumatlas` | Edgar-Mendonca/Datum-Atlas |
 | Next apps | — | pick from §3 | — | `.d<name>` | `com.edgarmendonca.datum<name>` | Edgar-Mendonca/Datum-<Name> |
 
 ## 2. Stack (the same in every app)
@@ -43,7 +44,7 @@ Dark (`:root[data-theme="dark"]`): `--bg #0B1119 --bg2 #101823 --panel #0D141E -
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Plan · Blue** | #0B5CAD | #0A4F96 | #9CC2F7 | #E8F0FA | #DCE8F7 | #B9D2F0 | #4C9BEA | #0A3D73 |
 | **Plot · Teal** | #0E8C7F | #0B7468 | #8FD3C9 | #E3F5F2 | #D3EFEA | #A9DDD4 | #3FC2B2 | #0A4A44 |
-| Violet (spare) | #6C4AB6 | #5A3C9C | #C9B8EE | #F0EBFA | #E5DCF6 | #CDBDEE | #A58BEA | #3A2766 |
+| **Atlas · Violet** | #6C4AB6 | #5A3C9C | #C9B8EE | #F0EBFA | #E5DCF6 | #CDBDEE | #A58BEA | #3A2766 |
 | Amber (spare) | #A8650F | #8E550C | #F2CF8E | #FBF2E2 | #F6E7CB | #EBD09E | #F0B450 | #5A3A0C |
 | Crimson (spare) | #B83250 | #9C2944 | #F1B3C1 | #FBEBEF | #F6DCE3 | #EDBAC7 | #EF7A93 | #5E1A2A |
 
@@ -61,7 +62,7 @@ Keep `--crit` red, `--green` and `--amber` for meaning (critical/error, done/ok,
 - **Tile:** 256×256 viewBox, a rounded square (`x=8 y=8 w=240 h=240 rx=56`), a white→accent-tint diagonal gradient, and a 4 px border in a light accent tint.
 - **Glyph:** drawn in the accent with **11 px strokes**, round caps. It may use one light tint fill (the `--sky` colour). It always has **one amber `#F2B233` diamond** (the family mark).
 - Files: `ui/public/logo.svg` (in the app) and `docs/brand/datum-<app>-icon.svg` (README). Windows icons are generated from it (`npx tauri icon`).
-- References: Plan `docs/brand/datum-plan-icon.svg`; Plot draft `docs/brand/datum-plot-icon.svg` (teal axes, tint data points, fitted curve, amber diamond).
+- References: Plan `docs/brand/datum-plan-icon.svg`; Plot draft `docs/brand/datum-plot-icon.svg` (teal axes, tint data points, fitted curve, amber diamond); Atlas draft `docs/brand/datum-atlas-icon.svg` (violet log–log axes, family bubbles, dotted index line, amber diamond).
 - **Name:** "Datum <App>" in Plex Sans 600. Tagline in the README.
 - **README:** the logo, the name, a one-line tagline, shields.io badges (release, CI, downloads, license MIT, platform Windows 10/11, Rust, Tauri 2, SolidJS), then for-the-badge buttons (Download for Windows · What's new · Memory & roadmap), then a screenshot.
 

@@ -376,6 +376,9 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 ### 2026-10-24: Session 6, end (README)
 - README rewritten as an independent product (no comparisons with other tools), with new screenshots (Gantt, Tracking, Network, Dashboard) taken from 0.3.8; old images removed. "Pending and next" written below, including 4 bugs found while taking the screenshots.
 
+### 2026-10-24: Session 6, end (Datum Atlas brief)
+- User created Datum-Plot and asked for a third app: materials selection and property charts (the scope of Ansys Granta Selector, but easier and better). Wrote `docs/briefs/DATUM-ATLAS.md` (concepts, features, window, architecture, data model, release plan, quality bar, questions), a draft logo `docs/brand/datum-atlas-icon.svg` (violet), and added Atlas to FAMILY.md. Recommended: name Datum Atlas, original referenced data (never copy proprietary databases), no Python inside the app.
+
 ---
 
 ## 5. Known limits and next steps
