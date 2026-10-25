@@ -178,6 +178,23 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const dc = await cellBox(2, 3); await p.mouse.click(dc.x, dc.y); await p.waitForTimeout(150);
   check("a date cell offers a date picker", !!(await p.$(".gdate .dbtn input[type=date]")));
 
+  // 0.3.9: a "?" beside a tool opens its card; Help › What Is This Tool? lists every card.
+  await p.click(".tabs > button:text-is('Schedule')"); await p.waitForTimeout(100);
+  await p.click(".ribbon .grp .cap:text-is('Leveling') .help"); await p.waitForTimeout(150);
+  check("? beside Leveling opens its card", (await p.textContent(".dlg header")).includes("Leveling") && (await p.textContent(".dlg .helpcard")).includes("How to use it"));
+  await p.keyboard.press("Escape");
+  check("every ribbon group on the Task tab has a ?", await (async () => { await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100); return p.$$eval(".ribbon > .grp", gs => gs.every(g => g.querySelector(".cap .help"))); })());
+  await p.click(".tabs > button:text-is('Help')"); await p.waitForTimeout(100);
+  await p.click(".ribbon button[title*='Every tool explained']"); await p.waitForTimeout(150);
+  await p.getByText("Baselines", { exact: true }).click(); await p.waitForTimeout(150);
+  check("What Is This Tool? opens a card from the list", (await p.textContent(".dlg .helpcard")).includes("saved copy of the plan"));
+  await p.keyboard.press("Escape");
+  await p.click('.side button[title="Network"]'); await p.waitForTimeout(300);
+  await p.click(".page h1 .help"); await p.waitForTimeout(150);
+  check("? beside a page title opens its card", (await p.textContent(".dlg header")).includes("Network Diagram"));
+  await p.keyboard.press("Escape");
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

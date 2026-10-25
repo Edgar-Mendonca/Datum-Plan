@@ -4,9 +4,10 @@ import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money } fro
 import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut } from "./store";
 import { C, selectUid } from "./cmds";
 import { Seg, Icon, Check as Chk } from "./ui";
+import { Help } from "./help";
 
-const Page = (p: { title: string; tools?: JSX.Element; children: JSX.Element }) => (
-  <section class="page"><div class="ptools"><h1>{p.title}</h1><span class="grow" />{p.tools}</div>{p.children}</section>
+const Page = (p: { title: string; help?: string; tools?: JSX.Element; children: JSX.Element }) => (
+  <section class="page"><div class="ptools"><h1>{p.title}{p.help && <Help k={p.help} />}</h1><span class="grow" />{p.tools}</div>{p.children}</section>
 );
 
 // ---------- Network Diagram (MS Project / P6 style boxes) ----------
@@ -113,7 +114,7 @@ export const Network = () => {
   };
   createEffect(() => { scale(); net(); requestAnimationFrame(track); });
   return (
-    <Page title="Network Diagram" tools={<>
+    <Page title="Network Diagram" help="network" tools={<>
       <span class="muted">{net()?.nodes.length ?? 0} tasks</span>
       <Seg value={netBox()} set={x => setNetBox(x as "standard")} options={[["compact", "Compact"], ["standard", "Standard"], ["detailed", "Detailed"]]} />
       <Chk label="Summary tasks" value={netSums()} set={setNetSums} /><Chk label="By WBS" value={netWbs()} set={setNetWbs} />
@@ -181,7 +182,7 @@ export const UsageView = (p: { by: "task" | "resource" }) => {
   const [u] = createResource(() => [tick(), unit(), what()], () => call<Usage>("usage", { by: p.by, what: what(), unit: unit() }));
   const fmt = (v: number) => (v === 0 ? "" : what() === "cost" ? money(v, P().currency) : `${Math.round(v * 10) / 10}h`);
   return (
-    <Page title={p.by === "task" ? "Task Usage" : "Resource Usage"} tools={<>
+    <Page title={p.by === "task" ? "Task Usage" : "Resource Usage"} help={p.by === "task" ? "taskviews" : "resviews"} tools={<>
       <Seg options={[["work", "Work"], ["cost", "Cost"]]} value={what()} set={setWhat} />
       <Seg options={[["day", "Days"], ["week", "Weeks"], ["month", "Months"], ["quarter", "Quarters"]]} value={unit()} set={setUnit} />
     </>}>
@@ -210,7 +211,7 @@ export const ResourceSheet = () => {
   const raw = (r: Resource, k: string): string => k === "max" ? `${Math.round(r.max * 100)}%` : k === "kind" ? r.kind : k === "cal" ? r.cal ?? "" : String((r as any)[k] ?? "");
   const [pick, setPick] = createSignal<number[]>([]);
   return (
-    <Page title="Resource Sheet" tools={<>
+    <Page title="Resource Sheet" help="resviews" tools={<>
       <button class="btn" onClick={() => act({ ResInsert: { name: `Resource ${P().resources.length + 1}` } })}>+ Add resource</button>
       <button class="btn" disabled={!pick().length} onClick={() => act({ ResDelete: { uids: pick() } }).then(() => setPick([]))}>Delete</button>
       <button class="btn" onClick={() => C.level()}>Level all</button>
@@ -252,7 +253,7 @@ export const ResourceGraph = () => {
   const r = () => P().resources.find(x => x.uid === res());
   const cap = (b: number, k: number) => { const n = (u()?.buckets[k + 1] ?? b + (unit() === "day" ? 1 : 7)) - b; const days = unit() === "day" ? 1 : unit() === "week" ? 5 : Math.round(n * 5 / 7); return (r()?.max ?? 1) * days * P().day_min / 60; };
   return (
-    <Page title="Resource Graph" tools={<>
+    <Page title="Resource Graph" help="resviews" tools={<>
       <select value={res()} onChange={e => setRes(+e.currentTarget.value)}><For each={work()}>{x => <option value={x.uid}>{x.name}</option>}</For></select>
       <Seg options={[["day", "Days"], ["week", "Weeks"], ["month", "Months"]]} value={unit()} set={setUnit} />
     </>}>
@@ -287,7 +288,7 @@ export const TeamPlanner = () => {
   });
   const W = 1100, px = (d: number) => ((d - s().s) / span()) * W;
   return (
-    <Page title="Team Planner" tools={<span class="muted">Each lane shows a person's tasks. Overlaps mean overallocation.</span>}>
+    <Page title="Team Planner" help="resviews" tools={<span class="muted">Each lane shows a person's tasks. Overlaps mean overallocation.</span>}>
       <div class="wlwrap panel"><svg width={W + 190} height={lanes().length * 44 + 30}>
         <For each={lanes()}>{([name, list], k) => <g transform={`translate(0,${k() * 44 + 20})`}>
           <text x="6" y="22" class="lane">{name}</text><line x1="0" x2={W + 190} y1="40" y2="40" stroke="#E6EBF2" />
@@ -307,7 +308,7 @@ export const Risks = () => {
   const put = (r: any) => act({ Risk: { id: r.id, risk: r } });
   const color = (s: number) => s >= 15 ? "#F8D4D4" : s >= 8 ? "#FDF0D2" : "#DDF2E5";
   return (
-    <Page title="Risk Register" tools={<button class="btn pri" onClick={() => put(blank())}>+ Add risk</button>}>
+    <Page title="Risk Register" help="risks" tools={<button class="btn pri" onClick={() => put(blank())}>+ Add risk</button>}>
       <div class="cols">
         <div class="panel" style={{ "grid-column": "span 2" }}>
           <table class="tbl"><thead><tr><th>ID</th><th>Risk</th><th>Type</th><th>Cause</th><th>Prob. (1–5)</th><th>Impact (1–5)</th><th>Score</th><th>Owner</th><th>Response</th><th>Status</th><th>Tasks</th><th /></tr></thead>
@@ -349,7 +350,7 @@ export const Checks = () => {
   };
   const fmt = (c: Check) => (c.key === "cpli" || c.key === "bei" ? c.value.toFixed(2) : c.key === "cpt" ? (c.pass ? "Pass" : "Fail") : `${c.value.toFixed(1)}%`);
   return (
-    <Page title="Check Schedule" tools={<>
+    <Page title="Check Schedule" help="checks" tools={<>
       <label class="muted">Limit % <input type="number" style={{ width: "60px" }} value={lim().pct} onChange={e => setLim({ ...lim(), pct: +e.currentTarget.value })} /></label>
       <label class="muted">High float (d) <input type="number" style={{ width: "60px" }} value={lim().high_float} onChange={e => setLim({ ...lim(), high_float: +e.currentTarget.value })} /></label>
       <label class="muted">High duration (d) <input type="number" style={{ width: "60px" }} value={lim().high_dur} onChange={e => setLim({ ...lim(), high_dur: +e.currentTarget.value })} /></label>
@@ -392,7 +393,7 @@ export const Portfolio = () => {
   const [again, setAgain] = createSignal(0);
   const [data] = createResource(() => again(), k => call<[string, any[]]>("workspace", { choose: k < 0 }));
   return (
-    <Page title="Portfolio" tools={<><span class="muted">{data()?.[0] || "No workspace folder"}</span><button class="btn" onClick={() => setAgain(-Math.abs(again()) - 1)}><Icon n="folder" /> Choose folder…</button><button class="btn" onClick={() => setAgain(Math.abs(again()) + 1)}>Refresh</button></>}>
+    <Page title="Portfolio" help="portfolio" tools={<><span class="muted">{data()?.[0] || "No workspace folder"}</span><button class="btn" onClick={() => setAgain(-Math.abs(again()) - 1)}><Icon n="folder" /> Choose folder…</button><button class="btn" onClick={() => setAgain(Math.abs(again()) + 1)}>Refresh</button></>}>
       <div class="panel"><table class="tbl">
         <thead><tr><th>Plan</th><th>Manager</th><th>Start</th><th>Finish</th><th class="r">Tasks</th><th>Complete</th><th class="r">Cost</th><th class="r">SPI</th><th class="r">CPI</th><th class="r">Late</th></tr></thead>
         <tbody><For each={eps(data()?.[1] ?? [])}>{c => c.head !== undefined ? (

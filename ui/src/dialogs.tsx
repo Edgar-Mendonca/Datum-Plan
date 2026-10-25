@@ -17,7 +17,7 @@ export const taskInfo = (uid: number, start = "general") => openDialog(() => {
   const [tab, setTab] = createSignal(start);
   const [info] = useInfo(() => uid);
   return (
-    <Dialog title="Task Information" wide>
+    <Dialog title="Task Information" wide help="taskinfo">
       <Show when={info()}>{i => <>
         <div class="tihead"><b>{i().task.code}</b> {i().task.name}</div>
         <Tabs tabs={TABS.filter(t => t[0] !== "risks")} on={tab()} set={setTab} />
@@ -139,7 +139,7 @@ export const calendars = () => openDialog(() => {
   const load = (n: string) => { setName(n); setDraft(JSON.parse(JSON.stringify(cal()))); };
   const save = () => act({ CalPut: { old: name(), cal: draft } }).then(ok => { if (ok) setName(draft.name); return ok; });
   return (
-    <Dialog title="Change Working Time" wide ok={save}>
+    <Dialog title="Change Working Time" wide help="calendars" ok={save}>
       <div class="ptools">
         For calendar <Pick value={name()} set={load} options={P().calendars.map(c => c.name)} />
         <button class="btn sm" onClick={async () => { const n = prompt("Name of the new calendar", "New calendar"); if (n && await act({ CalPut: { old: null, cal: { ...JSON.parse(JSON.stringify(draft)), name: n } } })) load(n); }}>Create New Calendar…</button>
@@ -170,7 +170,7 @@ export const calendars = () => openDialog(() => {
 export const scheduleOptions = () => openDialog(() => {
   const [o, setO] = createStore({ ...P().opts });
   return (
-    <Dialog title="Schedule Options" ok={() => act({ ProjectSet: { field: "opts", value: { ...o, critical_float: Math.round(+o.critical_float) } } })}>
+    <Dialog title="Schedule Options" help="change" ok={() => act({ ProjectSet: { field: "opts", value: { ...o, critical_float: Math.round(+o.critical_float) } } })}>
       <div class="form">
         <Row label="Out-of-sequence progress"><Pick value={o.retained ? "r" : "p"} set={x => setO("retained", x === "r")} options={[["r", "Retained logic"], ["p", "Progress override"]]} /></Row>
         <Row label="Critical tasks"><Pick value={o.longest_path ? "lp" : "tf"} set={x => setO("longest_path", x === "lp")} options={[["tf", "Total float ≤ limit"], ["lp", "Longest path"]]} /></Row>
@@ -193,7 +193,7 @@ export const scheduleOptions = () => openDialog(() => {
 export const setBaseline = (uids: number[]) => openDialog(() => {
   const [n, setN] = createSignal(0), [all, setAll] = createSignal(true), [clear, setClear] = createSignal(false);
   return (
-    <Dialog title="Set Baseline" ok={() => act({ Baseline: { uids: all() ? [] : uids, clear: clear(), n: n() } }).then(ok => { if (ok) toast(clear() ? "Baseline cleared." : "Baseline saved.", true); return ok; })}>
+    <Dialog title="Set Baseline" help="baselines" ok={() => act({ Baseline: { uids: all() ? [] : uids, clear: clear(), n: n() } }).then(ok => { if (ok) toast(clear() ? "Baseline cleared." : "Baseline saved.", true); return ok; })}>
       <div class="form">
         <Row label="Action"><Pick value={clear() ? "c" : "s"} set={x => setClear(x === "c")} options={[["s", "Set baseline"], ["c", "Clear baseline"]]} /></Row>
         <Row label="Baseline"><Pick value={String(n())} set={x => setN(+x)} options={Array.from({ length: 11 }, (_, k) => [String(k), k ? `Baseline ${k}` : "Baseline"] as [string, string])} /></Row>
@@ -205,7 +205,7 @@ export const setBaseline = (uids: number[]) => openDialog(() => {
 export const updateProject = () => openDialog(() => {
   const [d, setD] = createSignal(P().status ?? iso(dateDay(new Date()))), [re, setRe] = createSignal(false);
   return (
-    <Dialog title="Update Project" ok={() => act({ UpdateProject: { through: d(), reschedule: re() } })}>
+    <Dialog title="Update Project" help="update" ok={() => act({ UpdateProject: { through: d(), reschedule: re() } })}>
       <div class="form">
         <Row label="Update work as complete through"><Text type="date" value={d()} set={setD} /></Row>
         <Row label=""><Check label="Reschedule uncompleted work to start after this date" value={re()} set={setRe} /></Row>
@@ -251,7 +251,7 @@ export const columnsDialog = () => openDialog(() => {
   const avail = createMemo(() => fields().task.filter(f => !list.some(c => c[0] === f.key) && (f.name + f.group).toLowerCase().includes(find().toLowerCase())));
   const move = (d: number) => { const i = pick(), j = i + d; if (j < 0 || j >= list.length) return; const v = list.map(x => [...x] as [string, number]); [v[i], v[j]] = [v[j], v[i]]; setList(v); setPick(j); };
   return (
-    <Dialog title={`Columns: ${table()} table`} wide ok={() => { if (!list.some(c => c[1] > 0)) { toast("Keep at least one column shown."); return false; } saveAll(list.map(c => [c[0], c[1]])); }}>
+    <Dialog title={`Columns: ${table()} table`} wide help="columns" ok={() => { if (!list.some(c => c[1] > 0)) { toast("Keep at least one column shown."); return false; } saveAll(list.map(c => [c[0], c[1]])); }}>
       <div class="coldlg">
         <div><b>Available fields</b><input class="find" placeholder="Search" value={find()} onInput={e => setFind(e.currentTarget.value)} />
           <div class="fieldlist"><table class="tbl"><tbody><For each={avail().slice(0, 300)}>{f => <tr class="link" onDblClick={() => setList(list.length, [f.key, 90])}><td>{nameOf(f.key)}</td><td class="muted">{f.group}</td><td><button class="btn sm" onClick={() => { setList(list.length, [f.key, 90]); setPick(list.length - 1); }}>Add ›</button></td></tr>}</For></tbody></table></div></div>
@@ -574,7 +574,7 @@ export const formulaColumn = (key?: string, insertAt?: number) => openDialog(() 
     toast(`${title()} = ${def.formula || "(no formula)"}`, true);
   };
   return (
-    <Dialog title={key ? `Formula for ${existing?.alias || key}` : "New Formula Column"} wide ok={save} okText={key ? "Save" : "Add column"}>
+    <Dialog title={key ? `Formula for ${existing?.alias || key}` : "New Formula Column"} wide help="formula" ok={save} okText={key ? "Save" : "Add column"}>
       <div class="cols2">
         <div class="form">
           <Row label="Column name"><Text value={title()} set={setTitle} placeholder="e.g. Progress variance" /></Row>
@@ -600,7 +600,7 @@ export const formulaColumn = (key?: string, insertAt?: number) => openDialog(() 
 export const periodSettings = () => openDialog(() => {
   const [o, setO] = createStore({ ...P().periods });
   return (
-    <Dialog title="Reporting Periods" ok={() => act({ ProjectSet: { field: "periods", value: { ...o } } })}>
+    <Dialog title="Reporting Periods" help="period" ok={() => act({ ProjectSet: { field: "periods", value: { ...o } } })}>
       <div class="form">
         <Row label="Week ends on"><Pick value={String(o.week_end)} set={x => setO("week_end", +x)} options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d, k) => [String(k), d] as [string, string])} /></Row>
         <Row label="Month closes on"><Pick value={String(o.month_end)} set={x => setO("month_end", +x)} options={[["0", "Last day of the month"], ...Array.from({ length: 28 }, (_, k) => [String(k + 1), `Day ${k + 1}`] as [string, string])]} /></Row>
@@ -617,7 +617,7 @@ export const barStyles = () => openDialog(() => {
   const [st, setSt] = createStore({ ...cur });
   const rows: ["fill" | "edge" | "cfill" | "crit" | "sum", string][] = [["fill", "Task bar"], ["edge", "Task outline and progress"], ["cfill", "Critical task bar"], ["crit", "Critical outline and progress"], ["sum", "Summary and milestone"]];
   return (
-    <Dialog title="Bar Styles" ok={() => act({ Ui: { key: "gantt", value: { ...st, name: "Custom" } } })}>
+    <Dialog title="Bar Styles" help="format" ok={() => act({ Ui: { key: "gantt", value: { ...st, name: "Custom" } } })}>
       <div class="form"><For each={rows}>{([k, l]) => <Row label={l}><input type="color" value={st[k] as string} onInput={e => setSt(k, e.currentTarget.value)} /></Row>}</For>
         <Row label=""><Check label="Horizontal gridlines in the chart" value={!!st.grid} set={v => setSt("grid", v)} /></Row></div>
       <p class="muted">Pick a ready-made look in Format › Gantt Chart Style, or set each colour here.</p>
@@ -672,7 +672,7 @@ export const condFormat = (key?: string) => openDialog(() => {
   const [list, setList] = createStore<CfRule[]>(JSON.parse(JSON.stringify(cfRules().length || !key ? cfRules() : [{ key, test: "<", value: "0", color: "#C0392B", bg: "", bold: true }])));
   const opts = () => fields().task.map(f => [f.key, P().fields.find(d => `c:${d.key}` === f.key)?.alias || P().titles?.[f.key] || f.name] as [string, string]);
   return (
-    <Dialog title="Conditional Formatting" wide ok={() => act({ Ui: { key: "cf", value: JSON.parse(JSON.stringify(list)) } })}>
+    <Dialog title="Conditional Formatting" wide help="format" ok={() => act({ Ui: { key: "cf", value: JSON.parse(JSON.stringify(list)) } })}>
       <table class="tbl"><thead><tr><th>Column</th><th>When the value</th><th>Value</th><th>Text</th><th>Fill</th><th>Bold</th><th /></tr></thead><tbody>
         <For each={list}>{(x, i) => <tr>
           <td><Pick value={x.key} set={v => setList(i(), "key", v)} options={opts()} /></td>

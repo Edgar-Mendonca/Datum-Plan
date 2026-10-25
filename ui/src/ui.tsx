@@ -3,6 +3,7 @@ import { For, Show, JSX, createSignal, onMount, onCleanup } from "solid-js";
 import { menu, setMenu, Item, closeDialog, msg, setMsg } from "./store";
 import { asDate } from "./cells";
 import { iso } from "./api";
+import { Help } from "./help";
 
 export const Icon = (p: { n: string; size?: number }) => (
   <svg style={p.size ? { width: `${p.size}px`, height: `${p.size}px` } : undefined}><use href={`#i-${p.n}`} /></svg>
@@ -56,18 +57,18 @@ export const Toast = () => (
 );
 
 /** A modal dialog. `ok` returns false to keep it open. */
-export const Dialog = (p: { title: string; wide?: boolean; children: JSX.Element; ok?: () => boolean | void | Promise<boolean | void>; okText?: string; extra?: JSX.Element; cancel?: string }) => {
+export const Dialog = (p: { title: string; wide?: boolean; children: JSX.Element; ok?: () => boolean | void | Promise<boolean | void>; okText?: string; extra?: JSX.Element; cancel?: string; help?: string }) => {
   const done = async () => { if (!p.ok || (await p.ok()) !== false) closeDialog(); };
   const key = (e: KeyboardEvent) => {
     if (e.key === "Escape") { e.stopPropagation(); closeDialog(); }
     if (e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); done(); }
   };
   let el!: HTMLDivElement;
-  onMount(() => ((el.querySelector("input:not([type=checkbox]),textarea") ?? el.querySelector(".btn.pri")) as HTMLElement | null)?.focus());
+  onMount(() => ((el.querySelector("input:not([type=checkbox]),textarea") ?? el.querySelector(".btn.pri") ?? el.querySelector("footer .btn")) as HTMLElement | null)?.focus());
   return (
     <div class="ov" onKeyDown={key}>
       <div class="dlg" classList={{ wide: p.wide }} ref={el}>
-        <header>{p.title}<button class="x" onClick={closeDialog}>×</button></header>
+        <header>{p.title}{p.help && <Help k={p.help} />}<button class="x" onClick={closeDialog}>×</button></header>
         <div class="bd">{p.children}</div>
         <footer>{p.extra}<span class="grow" />{p.ok && <button class="btn pri" onClick={done}>{p.okText ?? "OK"}</button>}<button class="btn" onClick={closeDialog}>{p.cancel ?? (p.ok ? "Cancel" : "Close")}</button></footer>
       </div>

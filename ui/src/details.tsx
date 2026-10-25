@@ -4,6 +4,7 @@ import { TaskInfo, Rel } from "./api";
 import { call, curUid, tick, detailsTab, setDetailsTab, set, act, P, out, fields } from "./store";
 import { selectUid } from "./cmds";
 import { Tabs, DateBtn } from "./ui";
+import { Help } from "./help";
 
 export const TABS: [string, string][] = [
   ["general", "General"], ["status", "Status"], ["res", "Resources"], ["preds", "Predecessors"], ["succs", "Successors"], ["codes", "Codes"],
@@ -169,7 +170,7 @@ export const Details = () => {
   const [info] = useInfo(curUid);
   return (
     <section class="details">
-      <div class="dhead"><Tabs tabs={TABS} on={detailsTab()} set={setDetailsTab} /><span class="grow" /><Show when={info()}>{i => <span class="muted">{i().task.code} {i().task.name}</span>}</Show></div>
+      <div class="dhead"><Tabs tabs={TABS} on={detailsTab()} set={setDetailsTab} /><Help k="details" /><span class="grow" /><Show when={info()}>{i => <span class="muted">{i().task.code} {i().task.name}</span>}</Show></div>
       <div class="dbody">
         <Show when={info()} fallback={<p class="empty">{out()?.summary.tasks ? "Select a task to see its details." : "Add a task to get started."}</p>}>{i => <TaskTab info={i()} tab={detailsTab()} />}</Show>
       </div>

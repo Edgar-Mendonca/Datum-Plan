@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.9 — 2026-10-25
+
+A small "?" beside the tools: click it to see what the tool is for and how to use it.
+
+**Help beside every tool**
+- Every ribbon group has a small **?** next to its name. A click opens a short card: what the tool does, how to use it, and a tip where one helps.
+- The views (Network Diagram, Check Schedule, Risk Register, resources, Portfolio, Update Progress, reports), the details pane, Project Setup and the main dialogs (Task Information, Change Working Time, Schedule Options, Set Baseline, Formula Column, Reporting Periods, Columns, Bar Styles, Conditional Formatting) have one too.
+- Help › **What Is This Tool?** lists every card, so you can read about a tool before you look for it.
+
+**Fixes**
+- Dialogs with only a Close button (such as these help cards) now close with Escape or Enter straight away.
+
 ## 0.3.8 — 2026-10-24
 
 **Fixes**

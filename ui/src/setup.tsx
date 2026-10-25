@@ -3,6 +3,7 @@ import { For, Show, createSignal } from "solid-js";
 import { act, call, grid, P, refresh, setSetupOpen, toast, opts } from "./store";
 import * as D from "./dialogs";
 import { CurrencyPick } from "./backstage";
+import { Help } from "./help";
 
 const STEPS = ["Project", "Calendar", "Currency", "WBS", "Resources", "Branding", "Done"];
 
@@ -36,7 +37,7 @@ export const Setup = () => {
   };
   return (
     <aside class="setup">
-      <header><b>Project Setup</b><button class="x" title="Close (reopen it from the Setup icon in the sidebar)" onClick={() => setSetupOpen(false)}>×</button></header>
+      <header><b>Project Setup</b><Help k="setup" /><button class="x" title="Close (reopen it from the Setup icon in the sidebar)" onClick={() => setSetupOpen(false)}>×</button></header>
       <ol class="steps"><For each={STEPS}>{(s, k) => <li classList={{ on: k() === step(), done: k() < step() }} onClick={() => setStep(k())}>{s}</li>}</For></ol>
       <div class="sbody">
         <Show when={step() === 0}>

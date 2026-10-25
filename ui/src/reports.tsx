@@ -7,6 +7,7 @@ import { call, out, P, tick, toast, act } from "./store";
 import { C, selectUid } from "./cmds";
 import { Seg } from "./ui";
 import { ChartBox, COL, line, bar } from "./charts";
+import { Help } from "./help";
 
 export const q = (cols: string[], rules: Rule[] = [], extra: object = {}) => ({
   cols, filter: { name: "", rules, summaries: false, highlight: false }, group: [], sort: [], flat: false, collapsed: [], level: 0, hide_summaries: false, project_summary: false, baseline: 0, ...extra,
@@ -44,8 +45,8 @@ export const Rows = (p: { rows: PRow[]; empty: string; note?: string }) => (
       <tbody><For each={p.rows.slice(0, 300)}>{x => <tr><td>{x.code}</td><td>{x.name}</td><td>{x.start}</td><td>{x.finish}</td><td class="r">{x.pct}%</td><Show when={p.note}><td>{x.note}</td></Show></tr>}</For></tbody></table>
   </Show>
 );
-export const Tools = (p: { title: string; children?: JSX.Element }) => (
-  <div class="ptools noprint">{p.children}<span class="grow" /><button class="btn" onClick={() => C.print()}>Print / PDF</button><button class="btn" onClick={() => saveHtml(p.title)}>Save as HTML</button></div>
+export const Tools = (p: { title: string; help?: string; children?: JSX.Element }) => (
+  <div class="ptools noprint">{p.help && <Help k={p.help} />}{p.children}<span class="grow" /><button class="btn" onClick={() => C.print()}>Print / PDF</button><button class="btn" onClick={() => saveHtml(p.title)}>Save as HTML</button></div>
 );
 
 /** S-curve chart from engine data: planned, actual and forecast cumulative %. */
@@ -77,7 +78,7 @@ export const Dashboard = () => {
   const [ms] = useRows(() => 3, () => q(["code", "name", "finish", "b0finish", "vfinish", "pct"], [r("milestone", "equals", "Yes")]));
   return (
     <section class="page report">
-      <Tools title="Dashboard" />
+      <Tools title="Dashboard" help="dashboard" />
       <Brand title="Project Dashboard" />
       <Show when={s().error}><div class="panel late">{s().error}</div></Show>
       <div class="kpis">
@@ -120,7 +121,7 @@ export const SCurves = () => {
   const [hours] = createResource(() => [tick(), unit()], () => call<SCurve>("scurve", { unit: unit(), how: "work", scope: null }));
   return (
     <section class="page report">
-      <Tools title="S-Curves"><Seg options={[["week", "Weekly"], ["month", "Monthly"]]} value={unit()} set={setUnit} /><Seg options={WEIGHTS} value={how()} set={setHow} /></Tools>
+      <Tools title="S-Curves" help="scurves"><Seg options={[["week", "Weekly"], ["month", "Monthly"]]} value={unit()} set={setUnit} /><Seg options={WEIGHTS} value={how()} set={setHow} /></Tools>
       <Brand title="S-Curves" sub={`Weighted by ${WEIGHTS.find(w => w[0] === how())?.[1].toLowerCase()}`} />
       <div class="charts">
         <Show when={main()}>{c => <SCurveChart c={c()} unit={unit()} title="Project progress" size="tall" />}</Show>
@@ -165,7 +166,7 @@ export const Progress = () => {
   const sec = (k: keyof PeriodNote, l: string, ph: string) => <div class="notesec"><label>{l}</label><textarea class="noprint" value={draft[k] as string} placeholder={ph} onInput={e => setDraft(k as "summary", e.currentTarget.value)} /><div class="notes-print printonly">{draft[k] as string}</div></div>;
   return (
     <section class="page report">
-      <Tools title={`${name()} progress report`}>
+      <Tools title={`${name()} progress report`} help="period">
         <Seg options={[["week", "Weekly"], ["month", "Monthly"]]} value={kind()} set={k => { setKind(k); setEnd(null); }} />
         <select value={end() ?? ""} onChange={e => setEnd(e.currentTarget.value ? +e.currentTarget.value : null)}>
           <option value="">Current period</option><For each={(ends() ?? []).slice().reverse()}>{d => <option value={d}>Period ending {fmtDay(d, "long")}</option>}</For>
@@ -239,7 +240,7 @@ export const Reports = () => {
   const [pick, setPick] = createSignal<string | null>(null);
   return (
     <Show when={pick()} fallback={
-      <section class="page"><div class="ptools"><h1>Reports</h1></div>
+      <section class="page"><div class="ptools"><h1>Reports <Help k="reports" /></h1></div>
         <div class="tiles"><For each={REPORTS}>{([k, n, d]) => <button class="tile" onClick={() => (["dashboard", "progress", "scurve"].includes(k) ? C.view(k as "dashboard") : setPick(k))}><div class="pic"><svg class="ic"><use href="#i-report" /></svg></div><b>{n}</b><span>{d}</span></button>}</For></div>
       </section>}>
       {k => <Report kind={k()} back={() => setPick(null)} />}

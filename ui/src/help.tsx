@@ -1,0 +1,113 @@
+// "?" help: a small button beside a tool; a click opens a short card saying what the tool is for
+// and how to use it. One place for every explanation, so the whole app teaches itself.
+import { For, Show } from "solid-js";
+import { openDialog } from "./store";
+import { Dialog } from "./ui";
+
+type Topic = { t: string; what: string; how?: string[]; tip?: string };
+export const HELP: Record<string, Topic> = {
+  // Task tab
+  view: { t: "Views", what: "Switches what the window shows: the Gantt chart, the Tracking Gantt, the Network Diagram, the calendar, usage, resources, sheets and reports.",
+    how: ["Click Gantt Chart for the task sheet and bars; the arrow under it lists every view.", "The sidebar on the left switches views too."] },
+  clipboard: { t: "Clipboard", what: "Cut, copy and paste cells, rows or formats, also to and from Excel.",
+    how: ["Select cells, Ctrl+C, then click where they go and Ctrl+V.", "Paste ▾ › Paste Special (Ctrl+Alt+V) pastes only values, only formats, or turned sideways (Transpose).", "Format Painter: click it, then click the cells that should look the same."] },
+  font: { t: "Font", what: "The typeface, size, colour, fill and bold/italic/underline of the selected cells.", how: ["Select cells first, then pick. Ctrl+B, Ctrl+I and Ctrl+U work too."] },
+  alignment: { t: "Alignment", what: "Left, centre or right alignment of the selected cells, and Clear Formatting to put them back as they were." },
+  insert: { t: "Insert", what: "Adds rows to the plan: a task, a summary task (a phase that rolls up its subtasks), a milestone (a moment with no duration) or a recurring task.",
+    how: ["Select a row: the new one goes above it.", "Type the name, a duration (“5d”, “2w”, “0” for a milestone) and predecessors (“3”, “4SS+2d”).", "Delete removes the selected rows."] },
+  sched: { t: "Schedule", what: "The everyday progress and structure commands for the selected tasks.",
+    how: ["0 % … 100 % marks how much of each selected task is done.", "Mark on Track sets the progress the plan expects at the status date.", "Link joins the selected tasks Finish-to-Start in order; Unlink removes their links.", "Indent makes the rows subtasks of the row above; Outdent moves them back up."] },
+  properties: { t: "Properties", what: "Everything about the selected task: Information opens all its fields in tabs, Notes its notes, Details the pane under the chart, and Add to Timeline puts it on the timeline bar." },
+  editing: { t: "Editing", what: "Find a command or a task, scroll the chart to the selected task, and fill cells down.",
+    how: ["Find (Ctrl+K) searches commands and tasks by name.", "Scroll to Task brings the selected task's bar into view.", "Fill Down (Ctrl+D) copies the top cell of the selection into the cells below it."] },
+  // Schedule tab
+  links: { t: "Links", what: "Links (dependencies) say which task must finish or start before another. The plan's dates come from them.",
+    how: ["Select tasks and click Link Tasks: each one follows the one above (Finish-to-Start).", "Type other kinds in the Predecessors column: 4SS (start together), 4FF, 4SF, with a lag such as 4FS+2d.", "Relationships shows a task with everything before and after it."] },
+  outline: { t: "Outline", what: "The structure of the plan (the WBS): phases with their tasks under them.",
+    how: ["Indent / Outdent move rows down or up a level.", "Outline Level shows the plan only down to a level.", "Move Up / Move Down move the selected rows in the list."] },
+  tasks: { t: "Manual and auto scheduling", what: "Auto-scheduled tasks move with their links and calendars; manually scheduled tasks stay on the dates you type.",
+    how: ["Select tasks and pick Manually Schedule or Auto Schedule.", "Split breaks a task in two with a pause between.", "Inactivate keeps a task in the list but takes it out of the schedule."] },
+  leveling: { t: "Leveling", what: "Moves tasks later where a person or crew has more work than hours, until nobody is overallocated.",
+    how: ["Level All levels the whole plan; Level Selection only the selected tasks.", "Clear Leveling undoes the delays leveling added.", "Leveling Options sets the order (standard, by priority, by ID)."] },
+  paths: { t: "Critical and longest path", what: "The tasks that decide the finish date: if one of them slips, the project finishes late.",
+    how: ["Critical Path shows only tasks with no float (in red).", "Longest Path shows the chain that drives the finish, counting calendars and constraints.", "Check Schedule runs the quality checks."] },
+  change: { t: "Inspect, Global Change and options", what: "Tools for the whole plan.",
+    how: ["Inspect shows every field of the selected task.", "Global Change sets a field on many tasks at once, by a rule.", "Schedule Options: what counts as critical, how lags and out-of-sequence progress are treated, the default task type."] },
+  // Progress tab
+  update: { t: "Update", what: "Record what has been done on the selected tasks.",
+    how: ["0 % … 100 % sets % complete.", "Mark on Track sets the progress the plan expected at the status date.", "Update Tasks opens the task to type actual dates; Update Project marks all work as done up to a date."] },
+  period: { t: "Reporting periods", what: "A period is a week or a month of progress. The status date is the day the progress is reported to.",
+    how: ["Update Progress lists the tasks due this period to type actual dates and % complete; Close Period stores a snapshot for trends.", "Status Date sets the reporting day.", "Reporting Periods sets the week end day, the month close day and what progress is weighted by."] },
+  baselines: { t: "Baselines", what: "A baseline is a saved copy of the plan's dates, work and cost. Later the plan is compared with it to see what slipped (variance).",
+    how: ["Set Baseline saves the plan (there are 11 baseline slots).", "Store Snapshot keeps this period's figures for trend charts.", "Show Baseline draws the baseline bars; Tracking Gantt shows them under the current bars."],
+    tip: "Set the baseline once the plan is agreed, before progress starts." },
+  progressReports: { t: "Progress reports", what: "Ready-made reports of the progress: the period report, the S-curves and the dashboard. Each prints or saves as HTML." },
+  // Resource tab
+  resviews: { t: "Resource views", what: "The people, crews and materials the plan uses, and how loaded they are.",
+    how: ["Resource Sheet lists them with rates and availability.", "Resource Usage and Resource Graph show their hours per period; red means overallocated.", "Team Planner shows each person's tasks in a lane."] },
+  assignments: { t: "Assignments", what: "Who does each task. Hours and costs come from the assignments.",
+    how: ["Select a task and click Assign Resources, or type names in the Resource Names column, e.g. “Engineer[200%]”.", "Add Resource adds a new row to the Resource Sheet."] },
+  // Report tab
+  reports: { t: "Reports", what: "Dashboards and reports made from the plan: progress, S-curves, cost, work, milestones, late tasks. Report Builder makes your own.",
+    how: ["Pick a report; it updates as the plan changes.", "Print / PDF or Save as HTML from the top of each report."] },
+  health: { t: "Health", what: "Check Schedule runs quality checks on the logic, float, durations and constraints. Risks keeps a register of threats and opportunities." },
+  portfolio: { t: "Portfolio", what: "Every plan in a folder side by side, with progress, cost, schedule and cost indices and late tasks. Subfolders group plans into levels.",
+    how: ["Choose a folder that holds your plans.", "Click a plan to open it.", "Compare Projects shows what changed between this plan and another file."] },
+  export: { t: "Print and export", what: "Print or save as PDF any view, set up the page, or save the plan in other file formats.",
+    how: ["Print / PDF (Ctrl+P) shows the pages first.", "Page Setup: paper, scaling, margins, header and footer, legend, columns.", "Export ▾ saves Excel, CSV, XML and other formats."] },
+  // Project tab
+  project: { t: "Project properties", what: "Settings for the whole plan: name, start date, status date, calendars, custom fields, activity codes and schedule options.",
+    how: ["Project Information: name, start, status date and default calendar.", "Change Working Time: working days, hours and holidays.", "Project Setup opens the step-by-step setup panel."] },
+  // View tab
+  taskviews: { t: "Task views", what: "Different pictures of the same tasks.",
+    how: ["Gantt Chart: bars on a timescale. Tracking Gantt: bars against the baseline.", "Network Diagram: boxes joined by their links. Calendar: tasks on a month.", "Sheets: free spreadsheets that can read the plan. Task Usage: hours per task per period."] },
+  data: { t: "Sort, filter, group and tables", what: "Chooses which tasks show, in what order, and which columns.",
+    how: ["Tables switches the set of columns (Entry, Tracking, Cost…). Columns… shows, hides and orders them.", "Filter shows only matching tasks; Highlight keeps every task and marks the matching ones.", "Group by puts tasks under headings, e.g. by resource or by critical."] },
+  zoom: { t: "Zoom", what: "How much time the Gantt chart shows across the screen.", how: ["Timescale ▾ picks days, weeks, months…", "Entire Project fits the whole plan."] },
+  split: { t: "Split view", what: "Panels beside the chart: the details pane under it and the timeline bar above it." },
+  // Format tab
+  format: { t: "Format", what: "How the Gantt chart and the task sheet look.",
+    how: ["Bar Styles sets the colour of each bar type.", "Conditional Formatting colours cells or rows by a rule, e.g. late tasks in red."] },
+  columns: { t: "Columns", what: "Add, remove and set up the task sheet's columns.",
+    how: ["Insert Column adds any field.", "Formula Column adds a column worked out by an Excel formula.", "Columns… shows, hides and orders the columns. Custom Fields defines your own fields."] },
+  barstyles: { t: "Bar styles", what: "What the Gantt bars show: critical tasks in red, the float after each task, late tasks, and the baseline under the bars." },
+  ganttstyle: { t: "Gantt chart style", what: "Ready-made colour sets for the bars. Click one to use it; Bar Styles changes each colour." },
+  showhide: { t: "Show and hide", what: "The project summary row (the whole plan as one row), summary tasks, and the labels beside the bars." },
+  // Panels, pages and dialogs
+  sheet: { t: "Task sheet and Gantt chart", what: "The plan as rows on the left and bars on a timescale on the right.",
+    how: ["Type in a cell to change it; drag to select, Ctrl+C / Ctrl+V with Excel, drag the small square to fill.", "Drag a bar to move it, its end to change the duration, its progress edge to set % complete, or down onto another bar to link them.", "Right-click a heading for column commands."] },
+  details: { t: "Details pane", what: "The selected task's fields in tabs: general, predecessors and successors, resources, notes, steps, codes and more.",
+    how: ["Select a task in the sheet; the pane follows the selection.", "Change a value and the plan reschedules."] },
+  setup: { t: "Project setup", what: "A few steps that set up a new plan: project details, calendar, people, phases and tasks.",
+    how: ["Fill in each step and move to the next; click a step to go back.", "Everything can be changed later in Project Information."] },
+  taskinfo: { t: "Task Information", what: "Every field of one task, in tabs: dates, links, resources, notes, steps, codes, costs and constraints." },
+  calendars: { t: "Working time", what: "When work happens: the working days and hours of each week, and exceptions such as holidays or a working Saturday.",
+    how: ["Pick a calendar or create a new one.", "Type working times like 08:00-12:00, 13:00-17:00; untick a day to make it nonworking.", "+ Exception adds a holiday or special working day."] },
+  formula: { t: "Formula columns", what: "A column worked out for every task by an Excel formula, using the plan's other columns.",
+    how: ["Refer to columns by name in square brackets: =[Cost]-[Baseline Cost].", "Insert function… lists the functions; click a field on the right to insert it.", "Dates are Excel dates; durations are in days."] },
+  network: { t: "Network Diagram", what: "Each task as a box, joined by its links, from start to finish. Red boxes are critical.",
+    how: ["Drag to pan; zoom with − and +.", "By WBS groups the boxes in bands by phase.", "Link labels: SS, FF, SF and lags; Finish-to-Start is not labelled."] },
+  updprogress: { t: "Update Progress", what: "The tasks due this period, to type what really happened.",
+    how: ["Set the status date and pick Weekly or Monthly.", "Type actual start and finish, % complete or remaining duration; the plan reschedules.", "Close Period stores a snapshot for the trend charts."] },
+  checks: { t: "Check Schedule", what: "Quality checks of the plan: missing links, leads and lags, hard constraints, high float, long durations, the critical path test and more.",
+    how: ["Set the limits at the top.", "Click a check to filter the Gantt chart to its tasks."] },
+  risks: { t: "Risk register", what: "Threats and opportunities with a probability and an impact from 1 to 5. The score is their product, coloured by how serious it is.",
+    how: ["+ Add risk, then type its cause, owner and response.", "Link risks to tasks in the details pane."] },
+  dashboard: { t: "Dashboard", what: "The plan on one page: progress, S-curve, cost and earned value, manpower, milestones and late tasks." },
+  scurves: { t: "S-curves", what: "Cumulative progress over time: planned, actual and forecast. Weighted by duration, cost, hours or physical %.",
+    how: ["Pick Weekly or Monthly and what to weigh by.", "The table under the chart gives the numbers."] },
+};
+
+/** The small "?" beside a tool. */
+export const Help = (p: { k: string }) => <button class="help" title={`What is ${HELP[p.k]?.t ?? "this"}?`} onClick={e => { e.stopPropagation(); helpCard(p.k); }}>?</button>;
+
+export const helpCard = (k: string) => openDialog(() => {
+  const h = HELP[k];
+  return (
+    <Dialog title={h?.t ?? "Help"}>
+      <div class="helpcard"><p>{h?.what}</p>
+        <Show when={h?.how}><h4>How to use it</h4><ul><For each={h!.how}>{x => <li>{x}</li>}</For></ul></Show>
+        <Show when={h?.tip}><p class="muted">{h!.tip}</p></Show></div>
+    </Dialog>
+  );
+});

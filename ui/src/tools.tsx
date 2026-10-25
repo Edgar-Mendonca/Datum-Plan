@@ -7,6 +7,7 @@ import { Seg, Icon } from "./ui";
 import * as D from "./dialogs";
 import { Brand, Kpi, Table, Rows, Tools, SCurveChart, PeriodBars, q, r, useRows, cum, pct, label } from "./reports";
 import { ChartBox, COL, line, bar } from "./charts";
+import { Help } from "./help";
 
 // ---------- Update Progress ----------
 const UPD_COLS = ["code", "name", "b0start", "b0finish", "start", "finish", "astart", "afinish", "pct", "plannedpct", "pctvar", "rem", "notes"];
@@ -29,7 +30,7 @@ export const UpdateProgress = () => {
   return (
     <section class="page report">
       <div class="ptools noprint">
-        <h1>Update Progress</h1><span class="grow" />
+        <h1>Update Progress <Help k="updprogress" /></h1><span class="grow" />
         <label class="muted">Status date <input type="date" value={P().status ?? ""} onChange={e => act({ ProjectSet: { field: "status", value: e.currentTarget.value || null } })} /></label>
         <Seg options={[["week", "Weekly"], ["month", "Monthly"]]} value={kind()} set={setKind} />
         <label class="chk"><input type="checkbox" checked={all()} onChange={e => setAll(e.currentTarget.checked)} />All tasks</label>

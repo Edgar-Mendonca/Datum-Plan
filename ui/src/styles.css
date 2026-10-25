@@ -610,7 +610,13 @@ tr.behind td { background: var(--err-bg); }
 .gloss dt { font-weight: 600; margin-top: 8px; }
 .gloss dd { margin: 2px 0 0 0; color: var(--text2); }
 .gloss h4 { margin: 14px 0 2px; }
-button.help { width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--line3); font-size: 10px; line-height: 13px; padding: 0; color: var(--blue); margin-left: 3px; }
+.help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--sel2); background: var(--pale); color: var(--blue); font: 600 10.5px var(--sans); padding: 0; margin-left: 4px; vertical-align: middle; flex: none; line-height: 1; letter-spacing: 0; text-transform: none; }
+.help:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+.ribbon .grp .cap .help { width: 13px; height: 13px; font-size: 9px; margin-left: 3px; }
+.dlg header .help { align-self: center; }
+.helpcard p { margin: 0 0 8px; line-height: 1.5; max-width: 560px; }
+.helpcard ul { margin: 0 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; max-width: 560px; }
+.helpcard h4 { margin: 10px 0 4px; }
 .netleg { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 6px 10px; border: 1px solid var(--line); background: var(--panel); margin-bottom: 8px; font-size: 11.5px; }
 .netouter { flex: 1; position: relative; display: flex; min-height: 0; }
 .minimap { position: absolute; right: 14px; bottom: 14px; border: 1px solid var(--line3); box-shadow: 0 2px 8px rgba(0,0,0,.15); cursor: pointer; }
