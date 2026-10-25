@@ -11,6 +11,7 @@ This file is the single source for that. Datum Plan's code is the reference impl
 | Datum Plan | MS Project + Primavera P6 | Blue `#0B5CAD` (glyph `#2F6FCF`) | Calendar with bars + amber diamond | `.dplan` | `com.edgarmendonca.datumplan` | Edgar-Mendonca/Datum-Plan |
 | Datum Plot | GraphPad Prism + OriginPro | Teal `#0E8C7F` (glyph `#0E8C7F`) | Axes, points, fitted curve + amber diamond | `.dplot` | `com.edgarmendonca.datumplot` | Edgar-Mendonca/Datum-Plot |
 | Datum Atlas | Materials selection and property charts (Ashby method) | Violet `#6C4AB6` | Log–log axes, family bubbles, index line + amber diamond | `.datlas` | `com.edgarmendonca.datumatlas` | Edgar-Mendonca/Datum-Atlas |
+| DATUM (hub) | — (family site and shared memory) | Navy `#0C1A2B` | "D" with three accent dots + amber diamond | — | — | Edgar-Mendonca/DATUM |
 | Next apps | — | pick from §3 | — | `.d<name>` | `com.edgarmendonca.datum<name>` | Edgar-Mendonca/Datum-<Name> |
 
 ## 2. Stack (the same in every app)
@@ -137,6 +138,9 @@ Chart.js:
 - Options and recovery files in the app's data folder (`com.edgarmendonca.datum<app>`).
 
 ## 10. Docs in every repo
+
+Every app also publishes `docs/site.json` (tagline, highlights, screenshots, roadmap); the DATUM hub site reads it at build time and the app's File › Roadmap page imports it. See `docs/briefs/DATUM-HUB.md`.
+
 
 - `CLAUDE.md`: read MEMORY first; update it at the end of every session; the user's preferences; the checks; the release steps.
 - `docs/MEMORY.md`: product table, architecture (files), decisions (version | decision | why), roadmap (✅ 🔜 ⬜), session log, known limits, and the "How we work" workflow.

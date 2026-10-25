@@ -64,11 +64,12 @@ const layout = createMemo(() => {
   if (ps.fitCols && tw0 > W * 0.55) { const f = (W * 0.55 - idw) / (tw0 - idw); colsP = colsP.map(c => ({ ...c, w: c.w * f })); fs = Math.max(6.5, fs * Math.max(f, 0.7)); }
   const lefts: number[] = []; let TW = idw; for (const c of colsP) { lefts.push(TW); TW += c.w; }
   // Fit to N pages wide: shrink the whole page when the table leaves too little room for the chart.
-  if (ps.fit > 0 && TW + W * 0.35 > ps.fit * W) { k = (ps.fit * W) / (TW + W * 0.35); W = W0 / k; H = H0 / k; }
+  // (the chart keeps at least 35 % of the new page width, so the pages come out exactly `fit` wide)
+  if (ps.fit > 0 && TW > (ps.fit - 0.35) * W) { W = TW / (ps.fit - 0.35); k = W0 / W; H = H0 / k; }
   const nameAt = colsP.findIndex(c => c.c.key === "name"), RW = ps.repeat && nameAt >= 0 && nameAt < 3 ? lefts[nameAt] + colsP[nameAt].w : 0;
   const d0 = ps.range === "dates" && ps.from ? dateDay(new Date(ps.from)) : Math.floor(s.s) - 3;
   const d1 = Math.max(d0 + 1, ps.range === "dates" && ps.to ? dateDay(new Date(ps.to)) + 1 : Math.ceil(s.f) + 7);
-  const CW = ps.fit > 0 ? Math.max(W * 0.3, ps.fit * W - (ps.fit - 1) * RW - TW) : (d1 - d0) * zoom(), pd = CW / (d1 - d0), total = TW + CW;
+  const CW = ps.fit > 0 ? Math.max(W * 0.3, ps.fit * W - (ps.fit - 1) * RW - TW - 0.5) : (d1 - d0) * zoom(), pd = CW / (d1 - d0), total = TW + CW;
   const across: [number, number][] = [];
   for (let x = 0; x < total - 1;) {
     let e = Math.min(total, x + (x ? W - RW : W));

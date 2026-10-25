@@ -1,0 +1,94 @@
+{
+  "$schema": "Datum family app summary, read by the Datum hub site (github.com/Edgar-Mendonca/Datum) and by File › Roadmap in the app.",
+  "id": "plan",
+  "name": "Datum Plan",
+  "accent": "#0B5CAD",
+  "logo": "docs/brand/datum-plan-icon.svg",
+  "tagline": "Plan, schedule, track and report your projects: one small, fast app for Windows.",
+  "for": "Project managers, planners, engineers and contractors.",
+  "highlights": [
+    "A task sheet that works like a spreadsheet, with formula columns and Sheets tabs.",
+    "Critical path to the minute: calendars, constraints, all link types, levelling.",
+    "Resources, man-hours and costs; Tracking Gantt with 11 baselines; earned value and S-curves.",
+    "Dashboard, progress reports and a report builder; print to PDF from every view.",
+    "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel export with formulas."
+  ],
+  "screenshots": [
+    "docs/images/gantt.png",
+    "docs/images/tracking.png",
+    "docs/images/network.png",
+    "docs/images/dashboard.png"
+  ],
+  "roadmap": [
+    {
+      "v": "0.3.11",
+      "title": "Fixes",
+      "when": "Next",
+      "items": [
+        "Dashboard: actual progress uses today when no status date is set, and says so.",
+        "Date picker closes after a date is picked.",
+        "Print to PDF from every view checked on Windows; page numbers on report pages."
+      ]
+    },
+    {
+      "v": "0.4",
+      "title": "Risk and resources",
+      "when": "Soon",
+      "items": [
+        "Schedule risk analysis (Monte Carlo): P50 and P80 finish dates and costs, tornado chart, criticality.",
+        "Roles and skills, with histograms by trade; manpower curves planned against actual.",
+        "One resource pool shared by several plans.",
+        "A preview before levelling, showing what moves."
+      ]
+    },
+    {
+      "v": "0.4.x",
+      "title": "Progress history",
+      "when": "Soon",
+      "items": [
+        "Actual S-curve built from the saved period snapshots.",
+        "Earned schedule, so schedule performance stays meaningful near the end.",
+        "Progress from installed quantities (rules of credit).",
+        "A 3-week look-ahead with a constraint log."
+      ]
+    },
+    {
+      "v": "0.5",
+      "title": "Schedule quality and scenarios",
+      "when": "Later",
+      "items": [
+        "A schedule health score with its trend; baseline compare with ghost bars; a log of logic changes; a milestone trend chart.",
+        "What-if scenarios: branch a plan, change it, compare side by side, keep or discard.",
+        "Delay analysis: as-planned against as-built, time impact, windows.",
+        "Line of balance and takt planning for repetitive work."
+      ]
+    },
+    {
+      "v": "0.6",
+      "title": "Portfolio and hardening",
+      "when": "Later",
+      "items": [
+        "Master plans with subprojects, links between projects, a portfolio dashboard.",
+        "Smooth with 100,000 tasks; a signed installer (no Windows warning); crash reports.",
+        "Exchange files checked against real files from other tools; custom fields and codes in exported files."
+      ]
+    },
+    {
+      "v": "0.7",
+      "title": "Working together",
+      "when": "Later",
+      "items": [
+        "Shared plans in a shared folder, with check-out per WBS so no one overwrites anyone.",
+        "Comments on tasks, an audit trail, progress updates from a phone."
+      ]
+    },
+    {
+      "v": "1.0",
+      "title": "Stable",
+      "when": "Goal",
+      "items": [
+        "Text styles by task type, saved custom views, a user guide, a frozen file format."
+      ]
+    }
+  ]
+}

@@ -231,7 +231,7 @@ tr.link:hover td { background: var(--pale); }
 .net text { font-size: 10.5px; fill: var(--text2); }
 .net .nbox.sel .shape { stroke-width: 2.8; }
 .net .nbox line { stroke: var(--line3); }
-.net .nbox path.x { stroke: var(--muted); fill: none; stroke-width: 1; }
+.net .nbox path.x { stroke: var(--muted); fill: none; stroke-width: 1; opacity: .3; }
 .net .nbox text { font-size: 10.5px; fill: var(--text2); }
 .net .nbox text.t { font-weight: 600; fill: var(--navy); font-size: 11px; }
 .net .nbox text.m { fill: var(--muted); }
@@ -668,3 +668,15 @@ tr.behind td { background: var(--err-bg); }
 .dfield > input { flex: 1; min-width: 0; }
 .gdate { position: absolute; z-index: 4; }
 .gdate .dbtn button { width: 18px; height: 18px; border: 0; background: transparent; }
+/* File › Roadmap */
+.roadmap { max-width: 900px; }
+.roadmap p .btn { margin-right: 8px; }
+.rmlist { display: grid; gap: 12px; margin-top: 14px; }
+.rmstage { border: 1px solid var(--line); background: var(--bg2); padding: 10px 16px 6px; }
+.rmstage.next { border-left: 4px solid var(--blue); }
+.rmstage header { display: flex; gap: 10px; align-items: center; }
+.rmstage .rmv { font: 600 12px var(--mono); color: var(--blue); min-width: 44px; }
+.rmstage header b { font-size: 14px; }
+.rmstage .pill { margin-left: auto; }
+.rmstage ul { margin: 6px 0 4px 54px; padding: 0; }
+.rmstage li { margin: 3px 0; }

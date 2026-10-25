@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.10 — 2026-10-25
+
+**New**
+- **Roadmap** on the File page (a Home tile and a sidebar item): everything Datum Plan will do next and when, with links to suggest a feature or report an issue.
+
+**Fixes**
+- Print: "Fit timescale to 1 page wide" no longer adds a nearly empty second page when the table is wide (e.g. with the Man-hours and Cost columns).
+- Network Diagram: the cross on completed tasks is lighter, so the text stays readable.
+- The Roadmap list is kept in `docs/site.json`, which the Datum family website will read too.
+
 ## 0.3.9 — 2026-10-25
 
 A small "?" beside the tools: click it to see what the tool is for and how to use it.

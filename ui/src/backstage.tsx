@@ -1,6 +1,7 @@
 // File (backstage): home with templates and recent plans, export, print, options, updates.
 import { For, Show, createSignal, createResource, onMount, JSX } from "solid-js";
 import { PAPERS, PrintPage } from "./print";
+import { RoadmapPage } from "./roadmap";
 import { Currency, Options, Out } from "./api";
 import { backstage, setBackstage, call, loadOut, out, setOut, opts, setOpts, toast, setSetupOpen, act, setThemeRaw, applyTheme } from "./store";
 import { C } from "./cmds";
@@ -65,7 +66,8 @@ const Home = () => {
         <div class="tiles">
           <button class="tile" onClick={() => neu(null)}><div class="pic"><svg class="ic"><use href="#i-new" /></svg></div><b>Blank Project</b><span>Start with the Project Setup panel.</span></button>
           <For each={tpls() ?? []}>{t => <button class="tile" onClick={() => neu(t.id)}><div class="pic"><Mini t={t} /><small>{t.tasks} tasks · {t.days} days</small></div><b>{t.name}</b><span>{t.desc}</span></button>}</For>
-          <button class="tile" onClick={() => C.importFile()}><div class="pic"><svg class="ic"><use href="#i-import" /></svg></div><b>Import</b><span>MS Project XML, Primavera XER, Excel, CSV or JSON.</span></button>
+          <button class="tile" onClick={() => C.importFile()}><div class="pic"><svg class="ic"><use href="#i-import" /></svg></div><b>Import</b><span>XML and XER project files, Excel, CSV or JSON.</span></button>
+          <button class="tile" onClick={() => setBackstage("roadmap")}><div class="pic"><svg class="ic"><use href="#i-list" /></svg></div><b>Roadmap</b><span>Everything Datum Plan will do, and when.</span></button>
         </div>
         <h2>Recent</h2>
         <table class="recent"><tbody>
@@ -172,7 +174,7 @@ export const Backstage = () => (
   <div class="bs">
     <aside>
       <button class="back" onClick={() => out() && setBackstage(null)} title="Back">←</button>
-      <For each={[["home", "home", "Home"], ["new", "new", "New"], ["open", "open", "Open"], ["import", "import", "Import"], ["save", "save", "Save"], ["saveas", "save", "Save As"], ["export", "export", "Export"], ["print", "print", "Print"]]}>{([k, i, l]) =>
+      <For each={[["home", "home", "Home"], ["new", "new", "New"], ["open", "open", "Open"], ["import", "import", "Import"], ["save", "save", "Save"], ["saveas", "save", "Save As"], ["export", "export", "Export"], ["print", "print", "Print"], ["roadmap", "list", "Roadmap"]]}>{([k, i, l]) =>
         <button classList={{ on: backstage() === k }} onClick={() => {
           if (k === "open") C.open(); else if (k === "import") C.importFile(); else if (k === "save") C.save(); else if (k === "saveas") C.save(true);
           else setBackstage(k === "new" ? "home" : k);
@@ -186,6 +188,7 @@ export const Backstage = () => (
       <Show when={backstage() === "export"}><Export /></Show>
       <Show when={backstage() === "options"}><OptionsPage /></Show>
       <Show when={backstage() === "print"}><PrintPage /></Show>
+      <Show when={backstage() === "roadmap"}><RoadmapPage /></Show>
       <Show when={backstage() === "about"}><div class="about"><h1>Updates</h1><UpdateCard /><p><button class="btn" onClick={() => D.shortcuts()}>Keyboard shortcuts</button></p></div></Show>
     </section>
   </div>

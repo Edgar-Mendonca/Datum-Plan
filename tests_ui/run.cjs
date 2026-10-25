@@ -194,6 +194,14 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("? beside a page title opens its card", (await p.textContent(".dlg header")).includes("Network Diagram"));
   await p.keyboard.press("Escape");
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+  // 0.3.10: Roadmap on the File page; "fit to 1 page wide" gives exactly one page across.
+  await p.click(".tabs .file"); await p.waitForTimeout(150);
+  await p.click(".tile:has-text('Roadmap')"); await p.waitForTimeout(200);
+  check("Roadmap page lists what comes next", (await p.$$(".rmstage")).length >= 5 && (await p.textContent(".roadmap")).includes("Monte Carlo"));
+  await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(600);
+  const across = await p.$$eval(".pprev .ppage", ps => ps.length);
+  check("fit to 1 page wide gives one page for this plan", across === 1, String(across));
+  await p.click(".bs aside .back"); await p.waitForTimeout(150);
 
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {

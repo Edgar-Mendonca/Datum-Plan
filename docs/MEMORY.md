@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.9** (released 2026-10-25). Earlier: 0.1.0 … 0.3.8 |
+| **Current version** | **0.3.10** (released 2026-10-25). Earlier: 0.1.0 … 0.3.9 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -106,6 +106,7 @@ flowchart LR
 | `ui/src/charts.tsx` | Chart.js wrapper in a Prism style (Okabe-Ito colours, crosshair, status marker, PNG save). |
 | `ui/src/sheets.tsx` | Sheet tabs (A1 grid, formula bar, formats, clipboard). |
 | `ui/src/print.tsx` | File › Print (every view; `pkind()` = gantt / net / cal / table / flow; `Frame` draws paper + header/footer/legend; `vdata`/`vpages`/`ViewPage` for network tiles, calendar months and tables; `FlowDoc` prints report pages in a table whose thead/tfoot repeat, with page numbers from `@page` margin boxes): `PageSetup` (saved in `project.ui.page`), `layout()` makes one strip (table columns + chart) and cuts it into page windows (across then down), `Strip` draws a window, `Sheet` draws one page as SVG (table + Gantt + legend) with header/footer codes and logos; `printNow` renders `#printroot` and sets `@page` size, then `window.print()`. `PAPERS`. |
+| `ui/src/roadmap.tsx` | File › Roadmap: the `ROADMAP` list (keep it in step with the roadmap table and "Pending and next" in this file). |
 | `ui/src/selection.ts` | The grid engine's selection, shared by the task sheet and Sheets: `createSel` (ranges, active cell, pick/drag/rows/cols/all/each), `aggregate` (Sum/Average/Count). |
 | `ui/src/cells.ts` | Shared by both grids: `parseTsv`/`toTsv`/`transpose`, `series` (Excel fill rules), `clip` (last copy: values + styles for Paste Special). |
 | `ui/src/fmt.ts` | Text formatting: style strings `b;i;u;s;c:#hex;f:#hex;z:12;a:c`, `css()`, the focused grid registers a `Target` (get/set selected cells), toggle/setProp/clear, Format Painter. |
@@ -155,7 +156,7 @@ flowchart LR
 8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
 9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
 
-Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools).
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap).
 
 ---
 
@@ -237,7 +238,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.7 | Tracking, templates, network, one grid | Real Tracking Gantt (baseline bars, Tracking table, banner); templates with people/8h/assignments/man-hours/costs; whiteboard network with summaries and WBS bands; shared grid engine (`selection.ts` + `cells.ts` + `fmt.ts`); icon set | ✅ |
 | 0.3.8 | Fixes | Links in printed Gantt charts; date picker on date cells and fields | ✅ |
 | 0.3.9 | Help | A ? beside every ribbon group, page, panel and main dialog; Help › What Is This Tool?; OK-less dialogs close with Escape | ✅ |
-| 0.3.10 | Next | The 4 bugs from the 0.3.8 screenshots (see §5), then to be agreed with the user | ⬜ |
+| 0.3.10 | Roadmap + fixes | File › Roadmap (`ui/src/roadmap.tsx` reading `docs/site.json`); print fit-to-pages fix; lighter network cross | ✅ |
+| 0.3.11 | Fixes | Dashboard progress without a status date; date picker closes; Windows PDF check | 🔜 |
 | 0.4.0 | Risk & resources | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -387,6 +389,9 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Built: `ui/src/help.tsx` copied from Atlas with 46 Plan topics; `G` (ribbon group) takes `h`, `Page`/`Tools` take `help`, `Dialog` takes `help`; ? in the details pane and Project Setup; Help › What Is This Tool?; `i-help` icon; the old ad-hoc `button.help` style replaced by the family `.help`/`.helpcard`. Found by the new UI test: a dialog with no input and no OK kept focus outside, so Escape did nothing; it now focuses its Close button. UI tests: ? beside Leveling opens its card, every Task-tab group has a ?, What Is This Tool? opens a card, ? beside a page title.
 - The 4 bugs listed in §5 are still open (moved to 0.3.10).
 
+### 2026-10-25: Session 8 (0.3.10, Roadmap)
+- User: Plot and Atlas have a Roadmap tile on Home; add the same to Plan. Another session had already released 0.3.9 (? help), so this shipped as 0.3.10. Built `roadmap.tsx` (Home tile + File sidebar item), fixed the print fit-to-pages leftover page (`W = TW / (fit − 0.35)`) and lightened the network cross. UI tests for both. The roadmap lives in `docs/site.json` (imported by `roadmap.tsx`, `resolveJsonModule` on); the DATUM hub site will read the same file. Wrote the hub brief `docs/briefs/DATUM-HUB.md` and added DATUM to FAMILY.md.
+
 ---
 
 ## 5. Known limits and next steps
@@ -394,8 +399,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 ### Pending and next (written at the end of 0.3.8)
 
 **Bugs found while taking the 0.3.8 README screenshots (fix first, 0.3.10):**
-1. Print, "Fit timescale to 1 page wide": when the table takes most of the page (the templates now have Man-hours and Cost columns), a second near-empty page appears. Cause: the shrink in `print.tsx` `layout()` aims at 35 % of the *old* width for the chart, but the chart minimum is 30 % of the *new* width. Use `W = TW / (fit − 0.35)` when `TW > (fit − 0.35) × W`.
-2. The Network Diagram's completed-task cross is too heavy and runs over the text: lighten it (opacity) or use a corner tick.
+1. ✅ (0.3.10) Print, "Fit timescale to 1 page wide": when the table takes most of the page (the templates now have Man-hours and Cost columns), a second near-empty page appears. Cause: the shrink in `print.tsx` `layout()` aims at 35 % of the *old* width for the chart, but the chart minimum is 30 % of the *new* width. Use `W = TW / (fit − 0.35)` when `TW > (fit − 0.35) × W`.
+2. ✅ (0.3.10) The Network Diagram's completed-task cross is too heavy and runs over the text: lighten it (opacity) or use a corner tick.
 3. The Dashboard shows "Actual progress 0 %" when no status date is set even though tasks are done: fall back to today (or the latest actual date) and say so.
 4. On Linux the date picker stays open after a pick: check on Windows and close it after choosing.
 
