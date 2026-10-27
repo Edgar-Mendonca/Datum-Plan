@@ -189,7 +189,7 @@ pub fn period_ends(c: &Calc, kind: &str) -> Vec<i64> {
     use chrono::Datelike;
     let (p, s) = (c.p, &c.s);
     let first = s.start.div_euclid(DAY);
-    let last = s.finish.div_euclid(DAY).max(c.status_at().div_euclid(DAY)) + if kind == "month" { 31 } else { 7 };
+    let last = s.finish.div_euclid(DAY).max(c.progress_at().div_euclid(DAY)) + if kind == "month" { 31 } else { 7 };
     let mut out = vec![];
     if kind == "month" {
         let d0 = date_of(first * DAY);
@@ -247,7 +247,7 @@ fn progress_at(c: &Calc, i: usize, t: i64) -> (f64, f64, f64) {
     let cal = &s.cals[s.ci[i]];
     let (bs, bf) = task.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
     let planned = share(cal, bs, bf, t);
-    let dd = c.status_at();
+    let dd = c.progress_at();
     let done = if c.p.periods.weight == "physical" && task.pct_type == crate::model::PctType::Physical { task.phys } else { c.pct[i] } as f64 / 100.0;
     let a0 = task.act_start.map_or(s.es[i], crate::cal::at);
     let a1 = task.act_finish.map_or(dd, |d| crate::cal::at(d) + DAY).max(a0 + 1);
@@ -285,7 +285,7 @@ pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
     let lo = tasks.iter().map(|&i| p.tasks[i].bls.get(&0).map_or(c.s.es[i], |b| b.start.min(c.s.es[i]))).min().unwrap_or(c.s.start).div_euclid(DAY);
     days.retain(|&d| d >= lo - 7);
     days.insert(0, lo - 1);
-    let dd = c.status_at();
+    let dd = c.progress_at();
     let mut out = SCurve { days: vec![], planned: vec![], actual: vec![], forecast: vec![], total, status_day: dd / DAY - 1, name: scope.and_then(|u| p.idx(u)).map_or(p.name.clone(), |k| p.tasks[k].name.clone()), weight };
     for d in days {
         let t = (d + 1) * DAY;
@@ -345,7 +345,7 @@ pub struct PeriodReport {
 pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
     let (p, s) = (c.p, &c.s);
     let ends = period_ends(c, kind);
-    let dd = c.status_at() / DAY - 1;
+    let dd = c.progress_at() / DAY - 1;
     let to = end.unwrap_or_else(|| ends.iter().copied().filter(|&e| e >= dd).min().unwrap_or(dd));
     let k = ends.iter().position(|&e| e == to);
     let prev = k.and_then(|k| k.checked_sub(1)).map_or(to - if kind == "month" { 30 } else { 7 }, |k| ends[k]);

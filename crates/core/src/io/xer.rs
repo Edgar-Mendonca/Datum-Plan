@@ -4,7 +4,7 @@ use crate::cal::{at, date_of, DAY};
 use crate::model::*;
 use crate::sched::Sched;
 use chrono::NaiveDate;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 fn dt(t: i64) -> String {
@@ -43,19 +43,20 @@ fn clndr_data(c: &Calendar) -> String {
 
 struct PNode { name: String, args: String, kids: Vec<PNode> }
 
-fn pnode(s: &[u8], i: &mut usize) -> Option<PNode> {
+/// One node of P6's calendar text; `depth` stops damaged text from nesting without end.
+fn pnode(s: &[u8], i: &mut usize, depth: u8) -> Option<PNode> {
     let ws = |i: &mut usize| while *i < s.len() && (s[*i] as char).is_whitespace() || (*i < s.len() && s[*i] == 0x7f) { *i += 1 };
     ws(i);
-    if s.get(*i) != Some(&b'(') {
+    if s.get(*i) != Some(&b'(') || depth > 32 {
         return None;
     }
     *i += 1;
     while *i < s.len() && s[*i] != b'|' { *i += 1 }
-    *i += 2; // "||"
+    *i = (*i + 2).min(s.len()); // "||"
     let st = *i;
     while *i < s.len() && s[*i] != b'(' { *i += 1 }
     let name = String::from_utf8_lossy(&s[st..*i]).trim().to_string();
-    *i += 1;
+    *i = (*i + 1).min(s.len());
     let st = *i;
     while *i < s.len() && s[*i] != b')' { *i += 1 }
     let args = String::from_utf8_lossy(&s[st..*i]).to_string();
@@ -64,7 +65,7 @@ fn pnode(s: &[u8], i: &mut usize) -> Option<PNode> {
     let mut kids = vec![];
     if s.get(*i) == Some(&b'(') {
         *i += 1;
-        while let Some(k) = pnode(s, i) {
+        while let Some(k) = pnode(s, i, depth + 1) {
             kids.push(k);
         }
         ws(i);
@@ -78,7 +79,7 @@ fn pnode(s: &[u8], i: &mut usize) -> Option<PNode> {
 fn read_cal(name: &str, data: &str, day_hours: f64) -> Calendar {
     let mut c = Calendar::standard(name);
     let s = data.as_bytes();
-    let Some(root) = pnode(s, &mut 0) else { return c };
+    let Some(root) = pnode(s, &mut 0, 0) else { return c };
     let hours = |n: &PNode| -> Hours {
         n.kids.iter().filter_map(|h| {
             let p: Vec<&str> = h.args.split('|').collect();
@@ -243,8 +244,13 @@ pub fn read(text: &str) -> Result<Project, String> {
     acts.values_mut().for_each(|v| v.sort_by_key(|a| (g(a, "early_start_date"), g(a, "task_code"))));
     let cons = |s: &str| CS.iter().find(|(_, n)| *n == s).map(|(c, _)| *c).unwrap_or_default();
     let mut uid = 1_000_000u32;
-    fn walk(id: &str, level: u8, p: &mut Project, kids: &HashMap<String, Vec<&HashMap<String, String>>>, acts: &HashMap<String, Vec<&HashMap<String, String>>>,
+    // `seen` walks each WBS node once, so a damaged file whose WBS loops back on itself still opens.
+    #[allow(clippy::too_many_arguments)]
+    fn walk<'a>(id: &'a str, level: u8, seen: &mut HashSet<&'a str>, p: &mut Project, kids: &'a HashMap<String, Vec<&'a HashMap<String, String>>>, acts: &HashMap<String, Vec<&HashMap<String, String>>>,
         mk: &mut dyn FnMut(&HashMap<String, String>, u8) -> Task, sum: &mut dyn FnMut(&HashMap<String, String>, u8) -> Task) {
+        if !seen.insert(id) {
+            return;
+        }
         for t in acts.get(id).into_iter().flatten() {
             let task = mk(t, level);
             p.tasks.push(task);
@@ -253,7 +259,7 @@ pub fn read(text: &str) -> Result<Project, String> {
             let at = p.tasks.len();
             let s = sum(w, level);
             p.tasks.push(s);
-            walk(w.get("wbs_id").map_or("", |s| s.trim()), level + 1, p, kids, acts, mk, sum);
+            walk(w.get("wbs_id").map_or("", |s| s.trim()), level.saturating_add(1), seen, p, kids, acts, mk, sum);
             if p.tasks.len() == at + 1 {
                 p.tasks.pop(); // an empty WBS node
             }
@@ -276,7 +282,7 @@ pub fn read(text: &str) -> Result<Project, String> {
         uid += 1;
         Task { uid, name: g(w, "wbs_name"), code: g(w, "wbs_short_name"), level, ..Default::default() }
     };
-    walk(root.as_deref().unwrap_or(""), 0, &mut p, &kids, &acts, &mut mk, &mut sum);
+    walk(root.as_deref().unwrap_or(""), 0, &mut HashSet::new(), &mut p, &kids, &acts, &mut mk, &mut sum);
     // Activities outside the WBS tree go at the end.
     let have: std::collections::HashSet<String> = p.tasks.iter().map(|x| x.uid.to_string()).collect();
     let rest: Vec<Task> = rows("TASK").iter().filter(mine).filter(|t| !have.contains(&g(t, "task_id"))).map(|t| mk(t, 0)).collect();

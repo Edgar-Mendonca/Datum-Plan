@@ -24,7 +24,7 @@ export const Brand = (p: { title: string; sub?: string }) => (
   <div class="brand">
     <Show when={P().logo}><img src={P().logo} alt="" /></Show>
     <div><h1>{p.title}</h1><div class="muted">{[P().name, P().company, P().client].filter(Boolean).join(" · ")}{p.sub ? ` · ${p.sub}` : ""}</div></div>
-    <span class="grow" /><div class="muted r">Status date {out()!.summary.status || "not set"}<br />Printed {fmtDay(dateDay(new Date()), "long")}</div>
+    <span class="grow" /><div class="muted r">Status date {out()!.summary.status || `not set (progress at ${out()!.summary.measured_at})`}<br />Printed {fmtDay(dateDay(new Date()), "long")}</div>
   </div>
 );
 export const Kpi = (p: { v: JSX.Element; l: string; d?: number; unit?: string; bad?: boolean; good?: boolean }) => (
@@ -82,7 +82,7 @@ export const Dashboard = () => {
       <Brand title="Project Dashboard" />
       <Show when={s().error}><div class="panel late">{s().error}</div></Show>
       <div class="kpis">
-        <Kpi v={pct(rep()?.actual ?? s().pct)} l="Actual progress" d={rep() ? rep()!.actual - rep()!.actual_prev : undefined} unit="%" />
+        <Kpi v={pct(rep()?.actual ?? s().pct)} l={s().measured_at ? `Actual progress (no status date: at ${s().measured_at})` : "Actual progress"} d={rep() ? rep()!.actual - rep()!.actual_prev : undefined} unit="%" />
         <Kpi v={pct(rep()?.planned ?? 0)} l="Planned progress" d={rep() ? rep()!.planned - rep()!.planned_prev : undefined} unit="%" />
         <Kpi v={rep() ? `${(rep()!.actual - rep()!.planned).toFixed(1)}%` : "—"} l="Variance (actual − planned)" bad={!!rep() && rep()!.actual < rep()!.planned - 0.5} good={!!rep() && rep()!.actual >= rep()!.planned} />
         <Kpi v={s().finish} l={`Forecast finish${s().var_finish ? ` (${s().var_finish} vs baseline)` : ""}`} />

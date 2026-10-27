@@ -20,3 +20,5 @@ pub use model::*;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod hardening;

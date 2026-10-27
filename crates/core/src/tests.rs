@@ -608,3 +608,19 @@ fn network_by_wbs_bands_and_summaries() {
         (sm + 1..p.tasks.len()).take_while(|&k| p.tasks[k].level > 0).for_each(|k| assert!(at(k) > b.row && at(k) < b.row + b.rows));
     }
 }
+
+#[test]
+fn progress_without_a_status_date() {
+    // A plan in the future with finished work: progress is measured at the latest progress, not today (0 %).
+    let mut p = plan(&[(5, ""), (5, "1")]);
+    p.tasks[0].pct = 100;
+    let today = d(2026, 10, 1);
+    let c = Calc::new(&p, "%d-%b-%y", today);
+    assert_eq!(c.progress_date(), d(2026, 11, 6));
+    assert_eq!(c.summary().measured_at, "06-Nov-26");
+    let r = report::period_report(&c, "week", None);
+    assert!(r.actual > 40.0, "actual progress {}", r.actual);
+    p.status = Some(d(2026, 11, 3));
+    let c = Calc::new(&p, "%d-%b-%y", today);
+    assert_eq!((c.progress_date(), c.summary().measured_at.as_str()), (d(2026, 11, 3), ""));
+}

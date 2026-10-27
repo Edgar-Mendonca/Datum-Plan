@@ -34,7 +34,7 @@ export interface Project {
   titles: Record<string, string>; sheets: SheetData[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {
-  name: string; start: string; finish: string; s: number; f: number; status: string; status_day: number | null; dur: string; pct: number; work: string; cost: string;
+  name: string; start: string; finish: string; s: number; f: number; status: string; status_day: number | null; measured_at: string; dur: string; pct: number; work: string; cost: string;
   bl_finish: string; var_finish: string; pv: string; ev: string; ac: string; spi: number | null; cpi: number | null; tasks: number; done: number; late: number;
   critical: number; milestones: number; error: string | null; week: boolean[]; off_days: number[];
 }

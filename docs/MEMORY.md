@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.10** (released 2026-10-25). Earlier: 0.1.0 … 0.3.9 |
+| **Current version** | **0.3.11** (released 2026-10-27). Earlier: 0.1.0 … 0.3.10 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -93,7 +93,10 @@ flowchart LR
 | `crates/core/src/doc.rs` | Ops (see the enum: edits, Level, Split, Interim, UpdateProject, Snapshot, ProjectSet, FieldDef, CodeDef, Risk, TaskList, ResJson, Ui, Baseline n, …), undo/redo, `.dplan`. |
 | `crates/core/src/io/` | `mspdi.rs`, `xer.rs`, `table.rs` (CSV/XLSX in with mapping; out with chosen columns), `formats.rs` (JSON, HTML, ICS, MPX, PMXML out), `xml.rs`. JSON/dplan import. |
 | `crates/core/examples/` | `bench.rs` (20k-task timing), `dump.rs` (JSON fixtures for UI tests). |
-| `crates/core/src/tests.rs` | 20 tests. |
+| `crates/core/src/tests.rs` | Engine tests (26). |
+| `crates/core/src/hardening.rs` | Hardening tests: a failed edit changes nothing, 1,000 random plans schedule with sane dates, ~3,000 damaged XML/XER/JSON files never panic, 2,000 tasks reschedule fast (debug < 400 ms; release ~3 ms). |
+| `deny.toml` | `cargo deny check`: advisories, licences (MIT-compatible list), sources (crates.io + gridcraft git). |
+| `SECURITY.md`, `CONTRIBUTING.md` | How to report a problem, what the app protects; how to build and the checks to run. |
 | `src-tauri/src/main.rs` | Commands listed in the diagram; options (date format, autosave, beta, default currency, company, logo, workspace, setup panel); backups of format < 3 files; recovery. |
 | `src-tauri/src/update.rs` | Updater; `check(beta)` reads `/releases` when beta is on; versions compare with pre-release tags. |
 | `ui/index.html` | Root and the icon sprite (about 65 icons). `ui/public/logo.svg`. |
@@ -156,7 +159,7 @@ flowchart LR
 8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
 9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
 
-Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap).
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins).
 
 ---
 
@@ -202,6 +205,10 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
 | 0.3.9 | **? help beside the tools in every Datum app**: a small ? beside each ribbon group, page, panel and main dialog opens a card (what it is for, how to use it) from one `HELP` table in `ui/src/help.tsx`; Help › What Is This Tool? lists them all. No separate teaching mode | The user's words: "at some of the tools, we can add a small question mark icon… we should do it in all of our applications." Built first in Datum Atlas 0.1.1; same code and styles in every app. |
+| 0.3.11 | rustfmt is not enforced; the code stays in its compact hand style | `cargo fmt` would add about 3,000 lines to ~7,400 and undo the compact style the user asked for. Clippy `-D warnings` stays the gate. |
+| 0.3.11 | Hardening gates in CI: `cargo deny`, Windows + macOS `cargo test`, hardening tests in `cargo test` | Match the rigour of other open-source schedulers before adding features. |
+| 0.3.11 | Without a status date, progress reports (Dashboard, period reports, S-curves) measure at max(today, latest recorded progress) (`Calc::progress_date`/`progress_at`), and the window says so (`Summary.measured_at`). Earned value and the fields still use the status date or today (`status_at`) | A plan updated ahead of time showed 0 % done. |
+| 0.3.11 | The window's state lock recovers from a poisoned mutex (`St::lock`) | One panicking command used to lock every later command out. |
 | 0.3.8 | The Datum apps share one design and workflow in [FAMILY.md](FAMILY.md); each app only changes its accent and logo glyph | The user is building a family of tools (next: Datum Plot = Prism + OriginPro) that must look and ship the same. |
 | 0.3.7 | Templates carry `people`/`assign`/`costs`; Work is titled "Man-hours" | New users see loading, cost and man-hours immediately (the user's Cairn did this). |
 | 0.3.7 | One grid *engine* (selection, clipboard, fill, formatting, keys) with two renderers (task outline vs A1 sheet) | The views differ in what a row is; sharing the behaviour removes the duplication without forcing one layout on both. |
@@ -239,8 +246,11 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.8 | Fixes | Links in printed Gantt charts; date picker on date cells and fields | ✅ |
 | 0.3.9 | Help | A ? beside every ribbon group, page, panel and main dialog; Help › What Is This Tool?; OK-less dialogs close with Escape | ✅ |
 | 0.3.10 | Roadmap + fixes | File › Roadmap (`ui/src/roadmap.tsx` reading `docs/site.json`); print fit-to-pages fix; lighter network cross | ✅ |
-| 0.3.11 | Fixes | Dashboard progress without a status date; date picker closes; Windows PDF check | 🔜 |
-| 0.4.0 | Risk, resources & hardening | Hardening plan quick wins (§5); Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
+| 0.3.11 | Fixes + hardening quick wins | Dashboard progress without a status date; date picker closes; hardening tests (found and fixed 2 XER crashes); poisoned-lock recovery; `cargo deny`; CI on Windows + macOS; SECURITY/CONTRIBUTING | ✅ |
+| 0.3.12 | Trust in the dates | Hardening plan items 6–9 (§5): 300+ engine tests, property tests, parity sample plans (MSP/P6 dates), hostile-file tests for every importer | 🔜 |
+| 0.4.0 | Risk & resources | Monte Carlo schedule risk (P50/P80, tornado, criticality), roles and skills with histograms, levelling preview | ⬜ |
+| 0.4.1 | Progress history | Actual S-curve from snapshots, earned schedule, rules of credit, 3-week look-ahead | ⬜ |
+| 0.4.2 | Command line & automation | Hardening plan items 10–12: `datum-cli`, named commands with schemas, MCP server, exact money | ⬜ |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
@@ -397,18 +407,24 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 ### 2026-10-27: Session 8, end (open-source comparison)
 - User asked for a quick comparison with ProjectCraft (github.com/UCS-Care-Group/projectcraft, Rust + egui, 0.0.1 pre-alpha, MS Project parity). Verdict: Datum Plan leads on features and polish; ProjectCraft leads on rigour (about 550 tests, date parity fixtures, CI gates, a command line). Wrote the "Hardening plan" in §5; nothing built yet.
 
+### 2026-10-27: Session 9 (0.3.11, hardening quick wins)
+- User: build 0.3.11 with the two bugs and the hardening quick wins; record everything here, in the CHANGELOG and in the DATUM hub memory.
+- Built `crates/core/src/hardening.rs` (4 tests). On first run it found real faults: a damaged XER calendar sliced past the end (`pnode`, now clamped and depth-limited) and a WBS that loops back on itself recursed for ever (stack overflow; `walk` now visits each WBS node once). A random-plan "late before early" report turned out to be 17:00 vs 08:00 next morning (same working moment); the test compares in working time.
+- Fixed the Dashboard 0 % (`Calc::progress_date`, `Summary.measured_at`, label and report header say the date used) and the date picker (input blurs after the pick; UI test). `St::lock()` recovers a poisoned mutex. `deny.toml` + `license = "MIT"` in both crates; CI jobs `deny` and `platforms` (Windows, macOS). SECURITY.md, CONTRIBUTING.md. Decided not to enforce rustfmt (compact style).
+- Roadmap renumbered: 0.3.12 Trust in the dates, 0.4.0 Risk & resources, 0.4.1 Progress history, 0.4.2 Command line & automation (also in `docs/site.json`). Stale "templates have no resources" limit removed.
+
 ## 5. Known limits and next steps
 
 ### Hardening plan (from the ProjectCraft comparison, 2026-10-27; not started)
 
-Goal: match their rigour while keeping our lead on features. Each item is small; do them as a track alongside 0.4.
+Goal: match their rigour while keeping our lead on features. Quick wins done in 0.3.11; items 6–9 are 0.3.12; 10–12 are 0.4.2.
 
 **Quick wins (hours each)**
-1. `cargo fmt --check` and `cargo deny` (licences, advisories) in CI; add `deny.toml`.
-2. CI on Linux and macOS too (Tauri builds there already); release stays Windows first.
-3. Never-crash pass: grep `unwrap()`/`expect()`/`panic!` outside tests in `crates/core` and `src-tauri`, replace with errors the window shows.
-4. A failed op changes nothing: one test that every op on bad input leaves the project equal to before.
-5. Speed gate: a test that 2,000 tasks reschedule in < 20 ms and 10,000 open in < 1 s (release build, CI).
+1. ✅ (0.3.11; rustfmt left out, see §2) `cargo fmt --check` and `cargo deny` (licences, advisories) in CI; add `deny.toml`.
+2. ✅ (0.3.11) CI on Windows and macOS too (Tauri builds there already); release stays Windows first.
+3. ✅ (0.3.11; remaining `unwrap`s are guarded invariants or fixed dates) Never-crash pass: grep `unwrap()`/`expect()`/`panic!` outside tests in `crates/core` and `src-tauri`, replace with errors the window shows.
+4. ✅ (0.3.11) A failed op changes nothing: one test that every op on bad input leaves the project equal to before.
+5. ✅ (0.3.11; 2,000 tasks only) Speed gate: a test that 2,000 tasks reschedule in < 20 ms and 10,000 open in < 1 s (release build, CI).
 
 **Trust in the dates (days each)**
 6. More engine tests: aim for 300+. One file per area (calendars, constraints, link types, lags in %, levelling, progress override, retained logic, from-finish, elapsed). 
@@ -420,7 +436,7 @@ Goal: match their rigour while keeping our lead on features. Each item is small;
 10. `datum-cli` (new `apps/cli` or `src-cli`): open, schedule, run ops, export, print the schedule as a table. Uses `crates/core` only.
 11. Every action is an op with a name and a JSON schema (`ops list`); the CLI, the ribbon and Tell Me share them. Then an MCP server so AI agents can build and update plans.
 12. Exact money: store costs in minor units (integers), not floats.
-13. Docs they have that we lack: SECURITY.md, CONTRIBUTING.md, a threat model (files hold people's names; the only network call is the updater).
+13. ✅ (0.3.11, no separate threat model yet) Docs they have that we lack: SECURITY.md, CONTRIBUTING.md, a threat model (files hold people's names; the only network call is the updater).
 
 **Keep (where we lead):** the window (ribbon, sidebar, 18 views), tracking and EVM, reports and print, formulas and Sheets, XER and P6 power features, in-app updates, the Datum family.
 
@@ -429,8 +445,8 @@ Goal: match their rigour while keeping our lead on features. Each item is small;
 **Bugs found while taking the 0.3.8 README screenshots (fix first, 0.3.10):**
 1. ✅ (0.3.10) Print, "Fit timescale to 1 page wide": when the table takes most of the page (the templates now have Man-hours and Cost columns), a second near-empty page appears. Cause: the shrink in `print.tsx` `layout()` aims at 35 % of the *old* width for the chart, but the chart minimum is 30 % of the *new* width. Use `W = TW / (fit − 0.35)` when `TW > (fit − 0.35) × W`.
 2. ✅ (0.3.10) The Network Diagram's completed-task cross is too heavy and runs over the text: lighten it (opacity) or use a corner tick.
-3. The Dashboard shows "Actual progress 0 %" when no status date is set even though tasks are done: fall back to today (or the latest actual date) and say so.
-4. On Linux the date picker stays open after a pick: check on Windows and close it after choosing.
+3. ✅ (0.3.11) The Dashboard shows "Actual progress 0 %" when no status date is set even though tasks are done: fall back to today (or the latest actual date) and say so.
+4. ✅ (0.3.11, blur after the pick; still to confirm on Windows) On Linux the date picker stays open after a pick: check on Windows and close it after choosing.
 
 **Not yet checked on a real Windows PC or against real files:**
 - Print to PDF in WebView2 for every view (flowing report pages, page numbers from `@page` margin boxes).
@@ -452,6 +468,5 @@ Goal: match their rigour while keeping our lead on features. Each item is small;
 - XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).
 - Not built yet: the reference's C2 scenario tests. The task sheet and Sheets share one engine but keep two renderers. Report pages print as flowing HTML (no per-page preview).
-- Templates have no resources or costs, so cost reports are empty until resources are added.
 - Actual progress history is modelled linearly from actual start to the current % (snapshots are stored but not yet used as history points).
 - Fill handle and paste were checked by code review and in the harness, not with a real clipboard in the app.

@@ -30,3 +30,29 @@ jobs:
           npx -y playwright@1.63.0 install --with-deps chromium
           cargo run -q -p datum-core --example dump > tests_ui/fixture.json
           NODE_PATH=$(npm root -g) node tests_ui/run.cjs
+
+  # Licences, security advisories and crate sources (deny.toml).
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  # The engine and the app build and pass their tests on Windows and macOS too.
+  platforms:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:ui
+      - run: cargo test --workspace

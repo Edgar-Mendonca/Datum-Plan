@@ -49,7 +49,7 @@ export const DateBtn = (p: { value: string; set: (iso: string) => void; title?: 
     try { inp.showPicker(); } catch { inp.focus(); inp.click(); }
   };
   return <span class="dbtn"><button type="button" title={p.title ?? "Pick a date"} onMouseDown={e => e.stopPropagation()} onClick={open}><Icon n="cal" /></button>
-    <input ref={inp} type="date" tabindex="-1" onChange={e => e.currentTarget.value && p.set(e.currentTarget.value)} /></span>;
+    <input ref={inp} type="date" tabindex="-1" onChange={e => { const v = e.currentTarget.value; e.currentTarget.blur(); if (v) p.set(v); }} /></span>;
 };
 
 export const Toast = () => (

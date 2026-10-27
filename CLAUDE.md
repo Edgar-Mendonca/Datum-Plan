@@ -17,7 +17,8 @@ User preferences:
 Checks before pushing:
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test --workspace`
-- `npm run check:ui`
+- `npm run check:ui`, then `npm run build:ui` and the UI tests (`node tests_ui/run.cjs`)
+- `cargo deny check` (licences, advisories, sources; CI runs it)
 
 Releasing:
 1. Bump the version in `src-tauri/Cargo.toml` and `crates/core/Cargo.toml`.

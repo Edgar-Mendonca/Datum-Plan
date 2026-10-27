@@ -21,17 +21,17 @@
   ],
   "roadmap": [
     {
-      "v": "0.3.11",
-      "title": "Fixes",
+      "v": "0.3.12",
+      "title": "Trust in the dates",
       "when": "Next",
       "items": [
-        "Dashboard: actual progress uses today when no status date is set, and says so.",
-        "Date picker closes after a date is picked.",
-        "Print to PDF from every view checked on Windows; page numbers on report pages."
+        "Hundreds more engine tests, one set per area: calendars, constraints, link types, levelling, progress.",
+        "Sample plans checked date by date against the results of other scheduling tools.",
+        "Every import (XML, XER, MPX, Excel) checked against damaged and unusual files, with a report of what changed."
       ]
     },
     {
-      "v": "0.4",
+      "v": "0.4.0",
       "title": "Risk and resources",
       "when": "Soon",
       "items": [
@@ -42,7 +42,7 @@
       ]
     },
     {
-      "v": "0.4.x",
+      "v": "0.4.1",
       "title": "Progress history",
       "when": "Soon",
       "items": [
@@ -50,6 +50,16 @@
         "Earned schedule, so schedule performance stays meaningful near the end.",
         "Progress from installed quantities (rules of credit).",
         "A 3-week look-ahead with a constraint log."
+      ]
+    },
+    {
+      "v": "0.4.2",
+      "title": "Command line and automation",
+      "when": "Soon",
+      "items": [
+        "datum-cli: open, schedule, change and export plans from the command line.",
+        "Every action is a named command shared by the ribbon, Tell Me and the command line.",
+        "Connect AI assistants to build and update plans; costs stored exactly in whole cents."
       ]
     },
     {

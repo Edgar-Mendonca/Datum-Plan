@@ -211,6 +211,25 @@ impl<'a> Calc<'a> {
         at(self.p.status.unwrap_or(self.today)) + DAY
     }
 
+    /// The end of the day progress reports (Dashboard, period reports, S-curves) are measured at.
+    pub fn progress_at(&self) -> i64 {
+        at(self.progress_date()) + DAY
+    }
+
+    /// The day progress is measured at: the status date, or without one the later of today and the
+    /// latest progress recorded (so a plan updated ahead of time does not show 0 % done).
+    pub fn progress_date(&self) -> NaiveDate {
+        let (p, s) = (self.p, &self.s);
+        p.status.unwrap_or_else(|| {
+            let done = (0..p.tasks.len()).filter(|&i| self.pct[i] > 0 && !s.summary[i]).map(|i| {
+                let t = &p.tasks[i];
+                t.act_finish.or(if self.pct[i] < 100 { None } else { Some(date_of((s.ef[i] - 1).max(s.es[i]))) })
+                    .unwrap_or_else(|| date_of(s.es[i] + (s.ef[i] - s.es[i]) * self.pct[i] as i64 / 100)).max(t.act_start.unwrap_or_default())
+            });
+            done.fold(self.today, NaiveDate::max)
+        })
+    }
+
     fn earned_value(&self) -> Ev {
         let (p, s) = (self.p, &self.s);
         let n = p.tasks.len();

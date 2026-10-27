@@ -177,6 +177,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".bs aside .back"); await p.waitForTimeout(200);
   const dc = await cellBox(2, 3); await p.mouse.click(dc.x, dc.y); await p.waitForTimeout(150);
   check("a date cell offers a date picker", !!(await p.$(".gdate .dbtn input[type=date]")));
+  // 0.3.11: picking a date closes the picker (the input loses focus) and sets the cell.
+  const closed = await p.$eval(".gdate .dbtn input[type=date]", i => { i.focus(); i.value = "2026-12-01"; i.dispatchEvent(new Event("change", { bubbles: true })); return document.activeElement !== i; });
+  const lastCalls = JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").slice(-1)));
+  check("picking a date closes the picker and sets the cell", closed && lastCalls.includes("2026-12-01"), `${closed} ${lastCalls.slice(0, 300)}`);
 
   // 0.3.9: a "?" beside a tool opens its card; Help › What Is This Tool? lists every card.
   await p.click(".tabs > button:text-is('Schedule')"); await p.waitForTimeout(100);

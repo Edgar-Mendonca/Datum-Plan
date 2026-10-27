@@ -53,6 +53,11 @@ struct App {
 }
 
 struct St(Mutex<App>);
+
+impl St {
+    /// The open plan. A command that panicked must not lock every later one out, so a poisoned lock is reused.
+    fn lock(&self) -> std::sync::MutexGuard<'_, App> { self.0.lock().unwrap_or_else(|e| e.into_inner()) }
+}
 type R<T> = Result<T, String>;
 
 /// What the window needs after every change: the project settings (everything except tasks),
@@ -123,12 +128,12 @@ fn dir(app: &AppHandle, data: bool) -> Option<PathBuf> {
 
 #[tauri::command]
 fn state(st: State<St>) -> Out {
-    out(&st.0.lock().unwrap())
+    out(&st.lock())
 }
 
 #[tauri::command]
 fn apply(st: State<St>, op: Op) -> R<Out> {
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     let fmt = a.opts.date_fmt.clone();
     a.doc.apply(op, &fmt)?;
     Ok(out(&a))
@@ -136,7 +141,7 @@ fn apply(st: State<St>, op: Op) -> R<Out> {
 
 #[tauri::command]
 fn history(st: State<St>, redo: bool) -> Out {
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     if redo { a.doc.redo() } else { a.doc.undo() }
     out(&a)
 }
@@ -176,7 +181,7 @@ fn new_plan(st: State<St>, template: Option<String>) -> Out {
         Some(t) => templates::build(t, next_monday()),
         None => Project::new("Project1", today()),
     };
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     let p = fresh(&a, p);
     a.doc = Doc::new(p);
     out(&a)
@@ -192,7 +197,7 @@ async fn open(app: AppHandle, st: State<'_, St>, path: Option<String>) -> R<Opti
     backup_old(&path);
     let d = Doc::open(&path)?;
     remember(&app, &path);
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     a.doc = d;
     Ok(Some(out(&a)))
 }
@@ -210,7 +215,7 @@ fn backup_old(path: &Path) {
 #[tauri::command]
 async fn save(app: AppHandle, st: State<'_, St>, as_new: bool) -> R<Option<Out>> {
     let (known, name) = {
-        let a = st.0.lock().unwrap();
+        let a = st.lock();
         (a.doc.path.clone().filter(|_| !as_new), a.doc.p.name.clone())
     };
     let path = match known {
@@ -220,7 +225,7 @@ async fn save(app: AppHandle, st: State<'_, St>, as_new: bool) -> R<Option<Out>>
             None => return Ok(None),
         },
     };
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     a.doc.save(&path)?;
     remember(&app, &path);
     clear_recovery(&app);
@@ -241,7 +246,7 @@ async fn import(app: AppHandle, st: State<'_, St>) -> R<Option<Imported>> {
     let Some(path) = pick(&app, "Project files", &["xml", "xer", "xlsx", "xls", "csv", "json", "mpp"]) else { return Ok(None) };
     let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let fields = io::table::FIELDS.iter().map(|f| (f.0, f.1)).collect();
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     match io::import(&path)? {
         io::Imported::Plan(p) => {
             let p = fresh(&a, *p);
@@ -262,7 +267,7 @@ struct TableResult { plan: Out, skipped: usize }
 
 #[tauri::command]
 fn import_table(st: State<St>, map: Vec<String>) -> R<TableResult> {
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     let (t, name) = a.table.take().ok_or("Choose a file to import first.")?;
     let (p, skipped) = io::table::to_project(&t, &map, &name, today(), &a.opts.date_fmt).inspect_err(|_| a.table = Some((io::table::Table { headers: t.headers.clone(), rows: t.rows.clone(), guess: t.guess.clone() }, name.clone())))?;
     let p = fresh(&a, p);
@@ -285,9 +290,9 @@ async fn export(app: AppHandle, st: State<'_, St>, kind: String, cols: Vec<Strin
         "ics" => ("iCalendar", "ics"),
         k => return Err(format!("Unknown export type {k}.")),
     };
-    let name = st.0.lock().unwrap().doc.p.name.clone();
+    let name = st.lock().doc.p.name.clone();
     let Some(path) = app.dialog().file().add_filter(label, &[ext]).set_file_name(format!("{name}.{ext}")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
-    let a = st.0.lock().unwrap();
+    let a = st.lock();
     io::export(&a.doc.p, &path, &a.opts.date_fmt, today(), &cols)?;
     Ok(Some(path.display().to_string()))
 }
@@ -342,14 +347,14 @@ async fn pick_logo(app: AppHandle) -> R<Option<String>> {
 
 #[tauri::command]
 fn copy(st: State<St>, uids: Vec<u32>) -> usize {
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     a.clip = doc::copy(&a.doc.p, &uids);
     a.clip.len()
 }
 
 #[tauri::command]
 fn paste(st: State<St>, at: usize) -> R<Out> {
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     let (tasks, fmt) = (a.clip.clone(), a.opts.date_fmt.clone());
     a.doc.apply(Op::Paste { at, tasks }, &fmt)?;
     Ok(out(&a))
@@ -358,12 +363,12 @@ fn paste(st: State<St>, at: usize) -> R<Out> {
 /// The rows a view shows: filtered, grouped, sorted, with cells and bars.
 #[tauri::command]
 fn query(st: State<St>, q: Query) -> query::Grid {
-    calc(&st.0.lock().unwrap()).grid(&q)
+    calc(&st.lock()).grid(&q)
 }
 
 #[tauri::command]
 fn resources(st: State<St>, cols: Vec<String>) -> Vec<(u32, bool, Vec<String>)> {
-    calc(&st.0.lock().unwrap()).res_grid(&cols)
+    calc(&st.lock()).res_grid(&cols)
 }
 
 #[derive(Serialize)]
@@ -386,7 +391,7 @@ struct AssignRow { res: u32, name: String, kind: String, units: String, work: St
 /// Everything about one task, for Task Information, Inspect and the details tabs.
 #[tauri::command]
 fn task_info(st: State<St>, uid: u32) -> Option<TaskInfo> {
-    let a = st.0.lock().unwrap();
+    let a = st.lock();
     let c = calc(&a);
     let p = c.p;
     let i = p.idx(uid)?;
@@ -415,23 +420,23 @@ fn task_info(st: State<St>, uid: u32) -> Option<TaskInfo> {
 
 #[tauri::command]
 fn usage(st: State<St>, by: String, what: String, unit: String) -> report::Usage {
-    report::usage(&calc(&st.0.lock().unwrap()), &by, &what, &unit)
+    report::usage(&calc(&st.lock()), &by, &what, &unit)
 }
 
 #[tauri::command]
 fn curve(st: State<St>, unit: String) -> report::Curve {
-    report::curve(&calc(&st.0.lock().unwrap()), &unit)
+    report::curve(&calc(&st.lock()), &unit)
 }
 
 #[tauri::command]
 fn checks(st: State<St>, limits: check::Limits) -> Vec<check::Check> {
-    check::run(&calc(&st.0.lock().unwrap()), &limits)
+    check::run(&calc(&st.lock()), &limits)
 }
 
 /// Network Diagram of the tasks the query shows (summaries left out).
 #[tauri::command]
 fn network(st: State<St>, q: Query, summaries: Option<bool>, wbs: Option<bool>) -> network::Net {
-    let a = st.0.lock().unwrap();
+    let a = st.lock();
     let c = calc(&a);
     let g = c.grid(&q);
     let pick = |k: &str| g.rows.iter().filter(|r| r.kind == k).filter_map(|r| c.p.idx(r.uid)).collect::<Vec<usize>>();
@@ -447,7 +452,7 @@ async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, Vec<rep
         io::Imported::Plan(p) => *p,
         io::Imported::Table(_) => return Err("Compare needs a plan file (.dplan, .xml or .xer).".into()),
     };
-    let a = st.0.lock().unwrap();
+    let a = st.lock();
     let fmt = a.opts.date_fmt.clone();
     let diffs = report::compare(&Calc::new(&old, &fmt, today()), &calc(&a));
     Ok(Some((path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), diffs)))
@@ -459,17 +464,17 @@ struct PlanCard { path: String, folder: String, name: String, start: String, fin
 /// Every plan in the workspace folder with its headline figures (portfolio view).
 #[tauri::command]
 async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String, Vec<PlanCard>)> {
-    let mut folder = st.0.lock().unwrap().opts.workspace.clone();
+    let mut folder = st.lock().opts.workspace.clone();
     if choose || folder.is_empty() {
         let Some(d) = app.dialog().file().blocking_pick_folder().and_then(|f| f.into_path().ok()) else { return Ok((folder, vec![])) };
         folder = d.display().to_string();
-        let mut a = st.0.lock().unwrap();
+        let mut a = st.lock();
         a.opts.workspace = folder.clone();
         if let Some(f) = options_file(&app) {
             let _ = std::fs::write(f, serde_json::to_string(&a.opts).unwrap_or_default());
         }
     }
-    let fmt = st.0.lock().unwrap().opts.date_fmt.clone();
+    let fmt = st.lock().opts.date_fmt.clone();
     // Subfolders are the EPS: each level of folders is a level of the portfolio tree.
     fn walk(dir: &Path, depth: u8, out: &mut Vec<PathBuf>) {
         let Ok(rd) = std::fs::read_dir(dir) else { return };
@@ -499,28 +504,28 @@ async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String
 
 #[tauri::command]
 fn sheet_view(st: State<St>, k: usize) -> Option<datum_core::sheet::SheetOut> {
-    datum_core::sheet::sheet_view(&calc(&st.0.lock().unwrap()), k)
+    datum_core::sheet::sheet_view(&calc(&st.lock()), k)
 }
 
 #[tauri::command]
 fn scurve(st: State<St>, unit: String, how: String, scope: Option<u32>) -> report::SCurve {
-    report::scurve(&calc(&st.0.lock().unwrap()), &unit, &how, scope)
+    report::scurve(&calc(&st.lock()), &unit, &how, scope)
 }
 
 #[tauri::command]
 fn periods(st: State<St>, kind: String) -> Vec<i64> {
-    report::period_ends(&calc(&st.0.lock().unwrap()), &kind)
+    report::period_ends(&calc(&st.lock()), &kind)
 }
 
 #[tauri::command]
 fn period_report(st: State<St>, kind: String, end: Option<i64>) -> report::PeriodReport {
-    report::period_report(&calc(&st.0.lock().unwrap()), &kind, end)
+    report::period_report(&calc(&st.lock()), &kind, end)
 }
 
 /// The full plan of a snapshot, for trend charts (rows are left out of `state`).
 #[tauri::command]
 fn snapshot_rows(st: State<St>, k: usize) -> Option<datum_core::Snapshot> {
-    st.0.lock().unwrap().doc.p.snapshots.get(k).cloned()
+    st.lock().doc.p.snapshots.get(k).cloned()
 }
 
 fn options_file(app: &AppHandle) -> Option<PathBuf> {
@@ -529,7 +534,7 @@ fn options_file(app: &AppHandle) -> Option<PathBuf> {
 
 #[tauri::command]
 fn options(st: State<St>) -> Options {
-    st.0.lock().unwrap().opts.clone()
+    st.lock().opts.clone()
 }
 
 #[tauri::command]
@@ -537,7 +542,7 @@ fn set_options(app: AppHandle, st: State<St>, opts: Options) -> Out {
     if let Some(f) = options_file(&app) {
         let _ = std::fs::write(f, serde_json::to_string(&opts).unwrap_or_default());
     }
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     a.opts = opts;
     out(&a)
 }
@@ -559,7 +564,7 @@ fn clear_recovery(app: &AppHandle) {
 
 #[tauri::command]
 fn autosave(app: AppHandle, st: State<St>) {
-    let a = st.0.lock().unwrap();
+    let a = st.lock();
     if let (true, Some((plan, meta))) = (a.doc.dirty, recovery_files(&app)) {
         let info = Recovery { name: a.doc.p.name.clone(), path: a.doc.path.as_ref().map(|p| p.display().to_string()), saved: chrono::Local::now().format("%d-%b-%y %H:%M").to_string() };
         let _ = std::fs::write(plan, a.doc.json());
@@ -586,7 +591,7 @@ fn recover(app: AppHandle, st: State<St>, keep: bool) -> R<Option<Out>> {
     let mut d = Doc::open(&plan)?;
     d.path = info.and_then(|i| i.path).map(PathBuf::from);
     d.dirty = true;
-    let mut a = st.0.lock().unwrap();
+    let mut a = st.lock();
     a.doc = d;
     Ok(Some(out(&a)))
 }
@@ -605,7 +610,7 @@ fn remember(app: &AppHandle, path: &Path) {
     v.insert(0, p);
     v.truncate(15);
     if let Some(f) = options_file(app).map(|f| f.with_file_name("recent.json")) {
-        let _ = std::fs::write(f, serde_json::to_string(&v).unwrap());
+        let _ = std::fs::write(f, serde_json::to_string(&v).unwrap_or_default());
     }
 }
 
@@ -625,7 +630,7 @@ fn recent(app: AppHandle) -> Vec<Recent> {
 /// A .dplan path passed on the command line (double-clicked in Explorer).
 #[tauri::command]
 fn startup_file(app: AppHandle, st: State<St>) -> Option<String> {
-    let last = || if st.0.lock().unwrap().opts.open_last { recent_paths(&app).into_iter().find(|p| Path::new(p).exists()) } else { None };
+    let last = || if st.lock().opts.open_last { recent_paths(&app).into_iter().find(|p| Path::new(p).exists()) } else { None };
     std::env::args().skip(1).find(|a| a.to_lowercase().ends_with(".dplan")).or_else(last)
 }
 
@@ -655,7 +660,7 @@ fn quit(app: AppHandle) {
 
 #[tauri::command]
 async fn check_update(st: State<'_, St>) -> R<update::Info> {
-    let beta = st.0.lock().unwrap().opts.beta;
+    let beta = st.lock().opts.beta;
     tauri::async_runtime::spawn_blocking(move || update::check(beta)).await.map_err(|e| e.to_string())?
 }
 
@@ -674,7 +679,7 @@ fn main() {
         })
         .on_window_event(|w, e| {
             if let WindowEvent::CloseRequested { api, .. } = e {
-                if w.state::<St>().0.lock().unwrap().doc.dirty {
+                if w.state::<St>().lock().doc.dirty {
                     api.prevent_close();
                     let _ = w.emit("close-requested", ());
                 } else {

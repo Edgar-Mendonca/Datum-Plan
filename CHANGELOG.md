@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.11 — 2026-10-27
+
+Sturdier: new automatic checks found and fixed two ways a damaged file could stop the app, and two small bugs are gone.
+
+**Fixes**
+- Dashboard: without a status date, actual progress is measured at today or at the latest progress you recorded, whichever is later, so a plan updated ahead of time no longer shows 0 %. The Dashboard says which date it used.
+- Date picker: it closes as soon as you pick a date.
+- Opening a damaged P6 file (XER) no longer stops the app: a WBS that loops back on itself, or a cut-off calendar, is read as far as it makes sense.
+- If anything inside the app ever fails, the rest of the app keeps working (before, one failure could lock every later command).
+
+**Under the hood**
+- New automatic checks on every change: a failed edit must leave the plan exactly as it was; 1,000 random plans must schedule without errors and with sensible dates; thousands of damaged XML, XER and plan files must never crash the app; 2,000 tasks must reschedule quickly (about 3 ms in the app).
+- Checks on Windows and macOS as well as Linux, and a licence and security check of every library the app uses.
+- SECURITY.md and CONTRIBUTING.md.
+
 ## 0.3.10 — 2026-10-25
 
 **New**

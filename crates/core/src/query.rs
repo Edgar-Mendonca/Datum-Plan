@@ -361,6 +361,8 @@ pub struct Summary {
     pub f: f64,
     pub status: String,
     pub status_day: Option<f64>,
+    /// Without a status date: the day progress is measured at (today or the latest progress).
+    pub measured_at: String,
     pub dur: String,
     pub pct: f64,
     pub work: String,
@@ -406,6 +408,7 @@ impl Calc<'_> {
             name: p.name.clone(), start: df(s.start), finish: df((s.finish - 1).max(s.start)), s: day(s.start), f: day(s.finish),
             status: p.status.map(|d| d.format(&self.fmt).to_string()).unwrap_or_default(),
             status_day: p.status.map(|d| day(at(d) + DAY)),
+            measured_at: if p.status.is_some() { String::new() } else { self.progress_date().format(&self.fmt).to_string() },
             dur: crate::parse::fmt_dur(s.cals[pc].between(s.start, s.finish), Unit::D, p.day_min),
             pct: if dur > 0.0 { leaves.iter().map(|&i| p.tasks[i].pct as f64 * p.tasks[i].dur as f64).sum::<f64>() / dur } else { 0.0 },
             work: format!("{} hrs", (tot(&self.l.work) / 60.0).round()), cost: fields::money(tot(&self.l.cost), cur),
