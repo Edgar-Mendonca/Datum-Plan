@@ -240,7 +240,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.9 | Help | A ? beside every ribbon group, page, panel and main dialog; Help › What Is This Tool?; OK-less dialogs close with Escape | ✅ |
 | 0.3.10 | Roadmap + fixes | File › Roadmap (`ui/src/roadmap.tsx` reading `docs/site.json`); print fit-to-pages fix; lighter network cross | ✅ |
 | 0.3.11 | Fixes | Dashboard progress without a status date; date picker closes; Windows PDF check | 🔜 |
-| 0.4.0 | Risk & resources | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
+| 0.4.0 | Risk, resources & hardening | Hardening plan quick wins (§5); Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool, Page Setup, real PDF output | 🔜 |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
@@ -394,7 +394,35 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 
 ---
 
+### 2026-10-27: Session 8, end (open-source comparison)
+- User asked for a quick comparison with ProjectCraft (github.com/UCS-Care-Group/projectcraft, Rust + egui, 0.0.1 pre-alpha, MS Project parity). Verdict: Datum Plan leads on features and polish; ProjectCraft leads on rigour (about 550 tests, date parity fixtures, CI gates, a command line). Wrote the "Hardening plan" in §5; nothing built yet.
+
 ## 5. Known limits and next steps
+
+### Hardening plan (from the ProjectCraft comparison, 2026-10-27; not started)
+
+Goal: match their rigour while keeping our lead on features. Each item is small; do them as a track alongside 0.4.
+
+**Quick wins (hours each)**
+1. `cargo fmt --check` and `cargo deny` (licences, advisories) in CI; add `deny.toml`.
+2. CI on Linux and macOS too (Tauri builds there already); release stays Windows first.
+3. Never-crash pass: grep `unwrap()`/`expect()`/`panic!` outside tests in `crates/core` and `src-tauri`, replace with errors the window shows.
+4. A failed op changes nothing: one test that every op on bad input leaves the project equal to before.
+5. Speed gate: a test that 2,000 tasks reschedule in < 20 ms and 10,000 open in < 1 s (release build, CI).
+
+**Trust in the dates (days each)**
+6. More engine tests: aim for 300+. One file per area (calendars, constraints, link types, lags in %, levelling, progress override, retained logic, from-finish, elapsed). 
+7. Property tests (`proptest`): random plans never panic, early start ≤ late start, float ≥ 0 off the critical path, schedule is the same twice.
+8. Parity fixtures: sample MSP XML and XER files with the dates MS Project / P6 give them; a test checks we give the same dates. Show "Checked against N sample plans" in the README.
+9. Hostile-file tests for XML, XER, MPX, xlsx import: damaged, huge, odd values; the import report lists what was changed or dropped.
+
+**Reach (a week each)**
+10. `datum-cli` (new `apps/cli` or `src-cli`): open, schedule, run ops, export, print the schedule as a table. Uses `crates/core` only.
+11. Every action is an op with a name and a JSON schema (`ops list`); the CLI, the ribbon and Tell Me share them. Then an MCP server so AI agents can build and update plans.
+12. Exact money: store costs in minor units (integers), not floats.
+13. Docs they have that we lack: SECURITY.md, CONTRIBUTING.md, a threat model (files hold people's names; the only network call is the updater).
+
+**Keep (where we lead):** the window (ribbon, sidebar, 18 views), tracking and EVM, reports and print, formulas and Sheets, XER and P6 power features, in-app updates, the Datum family.
 
 ### Pending and next (written at the end of 0.3.8)
 
