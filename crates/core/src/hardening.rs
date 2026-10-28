@@ -135,3 +135,144 @@ fn rescheduling_stays_fast() {
     eprintln!("2,000 tasks schedule in {ms:.2} ms");
 }
 
+
+/// Adds random constraints, task calendars, splits and progress to a random plan.
+fn decorate(r: &mut Rng, p: &mut Project) {
+    let ten = vec![(420, 720), (750, 1050)];
+    p.calendars.push(Calendar { name: "Four tens".into(), week: [ten.clone(), ten.clone(), ten.clone(), ten, vec![], vec![], vec![]], exceptions: vec![] });
+    p.calendars[0].exceptions.push(Exception { name: "Holiday".into(), from: start() + chrono::Days::new(9), to: start() + chrono::Days::new(10), hours: vec![] });
+    let day = |r: &mut Rng| start() + chrono::Days::new(r.below(40));
+    for i in 0..p.tasks.len() {
+        let t = &mut p.tasks[i];
+        match r.below(12) {
+            0 => (t.constraint, t.cdate) = (Constraint::SNET, Some(day(r))),
+            1 => (t.constraint, t.cdate) = (Constraint::FNLT, Some(day(r))),
+            2 => (t.constraint, t.cdate) = (Constraint::MSO, Some(day(r))),
+            3 => t.constraint = Constraint::ALAP,
+            4 => t.deadline = Some(day(r)),
+            5 => t.cal = Some("Four tens".into()),
+            6 => t.splits = vec![(t.dur / 2, 480)],
+            7 => t.elapsed = true,
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn links_hold_and_the_forward_pass_is_tight() {
+    let mut r = Rng(0xD1B5_4A32_D192_ED03);
+    for round in 0..400 {
+        let n = 2 + r.below(30) as usize;
+        let mut p = random_plan(&mut r, n, false);
+        let free = round % 2 == 0; // half the plans have constraints, calendars, splits and elapsed tasks
+        if !free { decorate(&mut r, &mut p) }
+        let Ok(s) = schedule(&p) else { panic!("round {round}: a plan without loops failed") };
+        let start = s.cals[0].next_start(crate::cal::at(p.start));
+        for i in 0..n {
+            let (t, c) = (&p.tasks[i], &s.cals[s.ci[i]]);
+            let plain = t.constraint == Constraint::ASAP && t.cdate.is_none();
+            let mut tight = s.es[i] == start || !plain;
+            for e in s.edges.iter().filter(|e| e.s == i) {
+                let lc = &s.cals[s.ci[e.s]];
+                let (from, to) = match e.kind {
+                    LinkType::FS => (lc.add(s.ef[e.p], e.lag), s.es[i]),
+                    LinkType::SS => (lc.add(s.es[e.p], e.lag), s.es[i]),
+                    LinkType::FF => (lc.add(s.ef[e.p], e.lag), s.ef[i]),
+                    LinkType::SF => (lc.add(s.es[e.p], e.lag), s.ef[i]),
+                };
+                let gap = c.between(from, to);
+                if plain && gap < 0 {
+                    let q = &p.tasks[e.p];
+                    panic!("round {round}: task {} ({:?} cal {:?} el {} sp {:?} dur {}) starts before its {:?}{:+} link from {} ({:?} cal {:?} el {} sp {:?}) allows ({gap} min): from {} to {} pred es {} ef {}", i + 1, t.constraint, t.cal, t.elapsed, t.splits, t.dur, e.kind, e.lag, e.p + 1, q.constraint, q.cal, q.elapsed, q.splits, from, to, s.es[e.p], s.ef[e.p]);
+                }
+                tight |= gap == 0 || (to == s.es[i] && to <= start);
+            }
+            if free { assert!(tight, "round {round}: task {} could start earlier", i + 1) }
+        }
+    }
+}
+
+#[test]
+fn row_order_does_not_change_the_dates() {
+    let mut r = Rng(0x5851_F42D_4C95_7F2D);
+    for round in 0..200 {
+        let n = 2 + r.below(30) as usize;
+        let mut p = random_plan(&mut r, n, false);
+        decorate(&mut r, &mut p);
+        let by_uid = |p: &Project| -> Vec<(u32, i64, i64, i64)> {
+            let s = schedule(p).unwrap_or_else(|e| panic!("round {round}: {e}"));
+            let mut v: Vec<_> = p.tasks.iter().enumerate().map(|(i, t)| (t.uid, s.es[i], s.ef[i], s.tf[i])).collect();
+            v.sort();
+            v
+        };
+        let a = by_uid(&p);
+        p.tasks.reverse();
+        assert_eq!(a, by_uid(&p), "round {round}: the dates depend on the row order");
+    }
+}
+
+#[test]
+fn random_edits_never_break_the_plan() {
+    let mut r = Rng(0xA076_1D64_78BD_642F);
+    let words = ["5d", "0", "2w", "-3", "abc", "1,2", "3SS+2d", "99", "1FS-200d", "Yes", "No", "100", "50", "", "15-Nov-26", "31-Feb-26",
+        "Start No Earlier Than", "Must Finish On", "As Late As Possible", "Alice", "Alice[50%], Bob", "Four tens", "1e9", "∞", "\u{0}", "Fixed Work"];
+    let fields = ["name", "dur", "preds", "pct", "ctype", "cdate", "deadline", "res", "cal", "astart", "afinish", "active", "mode", "type", "work", "leveldelay", "start", "finish", "notes", "fixedcost"];
+    for round in 0..30 {
+        let mut d = Doc::new(sample());
+        for step in 0..60 {
+            let uids: Vec<u32> = d.p.tasks.iter().map(|t| t.uid).collect();
+            let uid = |r: &mut Rng| if uids.is_empty() || r.below(20) == 0 { 99_999 } else { uids[r.below(uids.len() as u64) as usize] };
+            let some = |r: &mut Rng| (0..1 + r.below(3)).map(|_| uid(r)).collect::<Vec<u32>>();
+            let o = match r.below(12) {
+                0 => Op::Insert { at: r.below(uids.len() as u64 + 3) as usize, name: "New".into(), ms: r.below(2) == 0 },
+                1 => Op::Delete { uids: some(&mut r) },
+                2 => Op::Indent { uids: some(&mut r) },
+                3 => Op::Outdent { uids: some(&mut r) },
+                4 => Op::Move { uids: some(&mut r), up: r.below(2) == 0 },
+                5 => Op::LinkSet { pred: uid(&mut r), succ: uid(&mut r), kind: Some([LinkType::FS, LinkType::SS, LinkType::FF, LinkType::SF][r.below(4) as usize]), lag: words[r.below(words.len() as u64) as usize].into() },
+                6 => Op::Level { uids: vec![], clear: r.below(2) == 0 },
+                7 => Op::Split { uid: uid(&mut r), after: r.below(3000) as i64, gap: r.below(2000) as i64 - 200 },
+                _ => Op::Set { uid: uid(&mut r), field: fields[r.below(fields.len() as u64) as usize].into(), value: words[r.below(words.len() as u64) as usize].into() },
+            };
+            let before = d.json();
+            let name = format!("{o:?}");
+            let res = panic::catch_unwind(panic::AssertUnwindSafe(|| d.apply(o, "%d-%b-%y")));
+            let Ok(res) = res else { panic!("round {round} step {step}: {name} panicked") };
+            if res.is_err() { assert_eq!(d.json(), before, "round {round} step {step}: a failed {name} changed the plan") }
+            assert!(schedule(&d.p).is_ok(), "round {round} step {step}: {name} left a plan that does not schedule");
+            if r.below(8) == 0 { d.undo() }
+            if r.below(16) == 0 { d.redo() }
+            let _ = crate::fields::Calc::new(&d.p, "%d-%b-%y", start());
+        }
+    }
+}
+
+#[test]
+fn damaged_spreadsheets_never_panic() {
+    use crate::io::table;
+    let dir = std::env::temp_dir().join(format!("datum-hardening-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let p = sample();
+    let c = crate::fields::Calc::new(&p, "%d-%b-%y", start());
+    let cols: Vec<String> = ["name", "dur", "start", "finish", "preds", "res", "pct"].map(String::from).to_vec();
+    let (csv, xlsx) = (dir.join("good.csv"), dir.join("good.xlsx"));
+    table::write_csv(&c, &cols, &csv).unwrap_or_else(|e| panic!("{e}"));
+    table::write_xlsx(&c, &cols, &xlsx).unwrap_or_else(|e| panic!("{e}"));
+    let mut r = Rng(0xBF58_476D_1CE4_E5B9);
+    for (k, good) in [csv, xlsx].iter().enumerate() {
+        let b = std::fs::read(good).unwrap_or_default();
+        for case in 0..300 {
+            let mut v = if case < 30 { b[..b.len() * case / 30].to_vec() } else { b.clone() };
+            for _ in 0..if case < 30 { 0 } else { 1 + r.below(6) } {
+                let i = r.below(v.len().max(1) as u64) as usize;
+                if let Some(x) = v.get_mut(i) { *x = [b',', b'"', b'\n', b'\r', b'0', b'-', 0, 0xFF, b'='][r.below(9) as usize] }
+            }
+            let f = dir.join(format!("bad{k}_{case}.{}", if k == 0 { "csv" } else { "xlsx" }));
+            let _ = std::fs::write(&f, &v);
+            let res = panic::catch_unwind(|| table::read(&f).map(|t| table::to_project(&t, &cols, "T", start(), "%d-%b-%y").map(|(p, _)| { let _ = schedule(&p); })));
+            assert!(res.is_ok(), "{} case {case} panicked", f.display());
+            let _ = std::fs::remove_file(&f);
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

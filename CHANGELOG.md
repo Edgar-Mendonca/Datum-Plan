@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.12 — 2026-10-28
+
+Trust in the dates: the scheduling engine is now checked against worked examples, plan files that carry their own dates, and thousands of random plans. The checks found two scheduling mistakes, now fixed.
+
+**Fixes**
+- **As Late As Possible** tasks with successors now move only as far as their free float allows, so they never delay the tasks that follow them. Before, they used all their total float and could push past a successor's link.
+- **Float before work already under way** is right again. A task's late dates were measured against the whole duration of a successor that had already started, rather than its remaining work, so with retained logic the predecessor could show negative float it did not have.
+- Finished tasks no longer limit the float of the tasks before them, and with progress override neither does work already under way.
+
+**Under the hood**
+- 47 hand-worked scheduling cases (over 90 task dates checked to the minute): every link type with leads and lags in days, hours and percent, every constraint, deadlines, holidays, part days, task calendars, elapsed durations, splits, summaries, progress with retained logic and override, scheduling from the finish, levelling, critical tasks and man-hours.
+- Plan files that carry their own dates (Project XML and XER, in `crates/core/tests/parity`) are opened, rescheduled and compared task by task. Exports from other scheduling tools can be dropped into the same folder.
+- Random-plan checks now include constraints, calendars, splits and elapsed tasks: every link must hold, no task may start later than its links need, and the dates must not depend on the row order. Random sequences of edits must never break a plan, and damaged CSV and Excel files must never crash the app.
+
 ## 0.3.11 — 2026-10-27
 
 Sturdier: new automatic checks found and fixed two ways a damaged file could stop the app, and two small bugs are gone.

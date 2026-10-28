@@ -3,7 +3,7 @@ pub mod formats;
 pub mod mspdi;
 pub mod table;
 pub mod xer;
-mod xml;
+pub(crate) mod xml;
 
 use crate::{fields::Calc, load, model::Project, sched};
 use chrono::NaiveDate;

@@ -32,6 +32,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 - **Everything included.** Network logic, resource levelling, earned value, S-curves, dashboards, printing and Excel-style formulas are all built in.
 - **Easy to learn.** A ribbon, a sheet that works like a spreadsheet, plain-language help, a glossary of planning terms, and templates with real teams and man-hours.
 - **Private.** Plans are `.dplan` files on your own computer. The only network call is the update check.
+- **Dates you can trust.** Every release is checked against hand-worked scheduling cases, plan files that carry their own dates, and thousands of random plans and damaged files.
 - **Always improving.** Small releases, installed with one click from inside the app.
 
 ## Features
@@ -109,7 +110,7 @@ You need Rust (stable) and Node.js 20+. On Linux, also install `libwebkit2gtk-4.
 npm ci
 npm run build:ui                      # build the window (Vite + SolidJS)
 cargo run -p datum-plan               # run the app
-cargo test --workspace                # engine tests
+cargo test --workspace                # engine tests (cases, parity files, random plans)
 npm run check:ui                      # type-check the window
 node tests_ui/run.cjs                 # UI tests (Playwright)
 npm run build                         # Windows installer (on Windows)

@@ -22,3 +22,7 @@ pub use model::*;
 mod tests;
 #[cfg(test)]
 mod hardening;
+#[cfg(test)]
+mod cases;
+#[cfg(test)]
+mod parity;

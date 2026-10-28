@@ -202,6 +202,10 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         let mut free = c.between(ef[i], back_from);
         for &e in &out[i] {
             let Edge { s, kind, lag, .. } = edges[e];
+            // Finished work, and (with progress override) work already under way, no longer waits for this task.
+            if fixed[s] || (!o.retained && p.tasks[s].act_start.is_some()) {
+                continue;
+            }
             let lc = &cals[lag_cal(&edges[e])];
             v = v.min(match kind {
                 LinkType::FS => lc.sub(ls[s], lag),
@@ -235,12 +239,36 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             (ls[i], lf[i]) = (es[i], ef[i]);
             continue;
         }
+        // A started task's late start is that of its remaining work, which is what its predecessors must meet.
+        let rest = if t.act_start.is_some() { sp * (100 - t.pct.min(100) as i64) / 100 } else { sp };
         lf[i] = if sp > 0 { c.prev_end(v) } else { v };
-        ls[i] = c.sub(lf[i], sp);
+        ls[i] = c.sub(lf[i], rest);
         ff[i] = free.max(0);
         let backward = o.from_finish && o.finish_date.is_some() && !t.manual && t.act_start.is_none();
-        if (t.constraint == C::ALAP && t.act_start.is_none()) || backward {
+        if backward {
             (es[i], ef[i]) = (ls[i], lf[i]);
+            ff[i] = 0;
+        } else if t.constraint == C::ALAP && t.act_start.is_none() && ff[i] > 0 {
+            // As late as possible without delaying any successor: the largest shift (at most its free
+            // float) that every link still allows, by the same rule as the forward pass.
+            let fits = |sh: i64| {
+                let e0 = c.next_start(c.add(es[i], sh));
+                let f0 = c.add(e0, sp);
+                f0 <= back_from && out[i].iter().all(|&e| {
+                    let Edge { s, kind, lag, .. } = edges[e];
+                    let x = cals[lag_cal(&edges[e])].add(if matches!(kind, LinkType::FS | LinkType::FF) { f0 } else { e0 }, lag);
+                    if matches!(kind, LinkType::FS | LinkType::SS) { cals[ci[s]].next_start(x) <= es[s] } else { x <= ef[s] }
+                })
+            };
+            let (mut lo, mut hi) = (0, ff[i]);
+            while lo < hi {
+                let mid = (lo + hi + 1) / 2;
+                if fits(mid) { lo = mid } else { hi = mid - 1 }
+            }
+            if lo > 0 {
+                es[i] = c.next_start(c.add(es[i], lo));
+                ef[i] = c.add(es[i], sp);
+            }
             ff[i] = 0;
         }
     }

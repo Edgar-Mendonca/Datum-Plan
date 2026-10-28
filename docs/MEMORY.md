@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.11** (released 2026-10-27). Earlier: 0.1.0 … 0.3.10 |
+| **Current version** | **0.3.12** (released 2026-10-28). Earlier: 0.1.0 … 0.3.11 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -94,6 +94,8 @@ flowchart LR
 | `crates/core/src/io/` | `mspdi.rs`, `xer.rs`, `table.rs` (CSV/XLSX in with mapping; out with chosen columns), `formats.rs` (JSON, HTML, ICS, MPX, PMXML out), `xml.rs`. JSON/dplan import. |
 | `crates/core/examples/` | `bench.rs` (20k-task timing), `dump.rs` (JSON fixtures for UI tests). |
 | `crates/core/src/tests.rs` | Engine tests (26). |
+| `crates/core/src/cases.rs` | Hand-worked scheduling cases (47 cases, 90+ task dates): rows as "duration \| preds \| field=value" set through `doc::set`, results as "early start, early finish, float". |
+| `crates/core/src/parity.rs`, `crates/core/tests/parity/` | Parity files: XML/XER plans with their own dates (`network.xml`, `network.xer`, hand-made); the test reschedules and compares every task to the minute. Drop real exports from other tools in the folder. |
 | `crates/core/src/hardening.rs` | Hardening tests: a failed edit changes nothing, 1,000 random plans schedule with sane dates, ~3,000 damaged XML/XER/JSON files never panic, 2,000 tasks reschedule fast (debug < 400 ms; release ~3 ms). |
 | `deny.toml` | `cargo deny check`: advisories, licences (MIT-compatible list), sources (crates.io + gridcraft git). |
 | `SECURITY.md`, `CONTRIBUTING.md` | How to report a problem, what the app protects; how to build and the checks to run. |
@@ -159,7 +161,7 @@ flowchart LR
 8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
 9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
 
-Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins).
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates).
 
 ---
 
@@ -205,6 +207,9 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
 | 0.3.9 | **? help beside the tools in every Datum app**: a small ? beside each ribbon group, page, panel and main dialog opens a card (what it is for, how to use it) from one `HELP` table in `ui/src/help.tsx`; Help › What Is This Tool? lists them all. No separate teaching mode | The user's words: "at some of the tools, we can add a small question mark icon… we should do it in all of our applications." Built first in Datum Atlas 0.1.1; same code and styles in every app. |
+| 0.3.12 | ALAP uses free float only: the largest shift (≤ free float) that every successor link still allows, found by bisection with the forward pass's own rule | Standard rule; using total float pushed ALAP tasks past their successors (found by the random-plan link check). |
+| 0.3.12 | A started task's late start is that of its remaining work; finished successors (and, with progress override, started ones) do not limit a predecessor's late dates | Standard progress rules; the old backward pass gave false negative float under retained logic (found by a hand-worked case). |
+| 0.3.12 | Parity files are hand-made until real exports are added; the README says "checked against hand-worked cases and plan files", never names another product | Honest claim; FAMILY §13. |
 | 0.3.11 | `docs/site.json` carries `about` (two paragraphs) and `steps` (three) for the family site's app page; keep them true to the app and update them with every release; never name commercial products | The user, for the hub's `/apps/plan` page (FAMILY §10, §13). |
 | 0.3.11 | rustfmt is not enforced; the code stays in its compact hand style | `cargo fmt` would add about 3,000 lines to ~7,400 and undo the compact style the user asked for. Clippy `-D warnings` stays the gate. |
 | 0.3.11 | Hardening gates in CI: `cargo deny`, Windows + macOS `cargo test`, hardening tests in `cargo test` | Match the rigour of other open-source schedulers before adding features. |
@@ -248,8 +253,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.9 | Help | A ? beside every ribbon group, page, panel and main dialog; Help › What Is This Tool?; OK-less dialogs close with Escape | ✅ |
 | 0.3.10 | Roadmap + fixes | File › Roadmap (`ui/src/roadmap.tsx` reading `docs/site.json`); print fit-to-pages fix; lighter network cross | ✅ |
 | 0.3.11 | Fixes + hardening quick wins | Dashboard progress without a status date; date picker closes; hardening tests (found and fixed 2 XER crashes); poisoned-lock recovery; `cargo deny`; CI on Windows + macOS; SECURITY/CONTRIBUTING | ✅ |
-| 0.3.12 | Trust in the dates | Hardening plan items 6–9 (§5): 300+ engine tests, property tests, parity sample plans (MSP/P6 dates), hostile-file tests for every importer | 🔜 |
-| 0.4.0 | Risk & resources | Monte Carlo schedule risk (P50/P80, tornado, criticality), roles and skills with histograms, levelling preview | ⬜ |
+| 0.3.12 | Trust in the dates | Hand-worked cases (`cases.rs`), parity files (`parity.rs`), random plans with constraints/calendars (links hold, tight forward pass, row order), random edit sequences, damaged CSV/xlsx; fixed ALAP (free float) and late dates of started work | ✅ |
+| 0.4.0 | Risk & resources | Monte Carlo schedule risk (P50/P80, tornado, criticality), roles and skills with histograms, levelling preview, import report | 🔜 |
 | 0.4.1 | Progress history | Actual S-curve from snapshots, earned schedule, rules of credit, 3-week look-ahead | ⬜ |
 | 0.4.2 | Command line & automation | Hardening plan items 10–12: `datum-cli`, named commands with schemas, MCP server, exact money | ⬜ |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
@@ -417,11 +422,16 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 ### 2026-10-28: Session 10 (site.json about and steps)
 - User (from the hub): add `about` and `steps` to `docs/site.json` and link the family page from the README. Checked each sentence against the code: MPX is export-only, so "open from XML, XER, MPX" became "open from XML and XER or from Excel and CSV; export to Excel with formulas, XML, XER and MPX". README links https://edgar-mendonca.github.io/Datum/apps/plan.
 
+### 2026-10-28: Session 11 (0.3.12, trust in the dates)
+- User: build 0.3.12. Wrote `cases.rs` (hand-worked cases, dates worked out before running), `parity.rs` + `tests/parity` (hand-made XML and XER with their own dates; a deliberate wrong date is reported), and four new hardening tests (links hold + tight forward pass on decorated random plans, row-order independence, random edit sequences, damaged CSV/xlsx).
+- Found and fixed: (1) a started successor's late start used its whole duration, so its predecessor showed negative float under retained logic; finished successors also limited predecessors; (2) ALAP tasks took their total float and could break a successor link (and a mixed-calendar negative lag case), now the largest shift within free float that every link allows. My own arithmetic was wrong in five expected values (checked each against the rules before changing the test).
+- Ran the random tests 10× longer in release: clean. README gained "Dates you can trust"; site.json roadmap: 0.4.0 is next (with the import report).
+
 ## 5. Known limits and next steps
 
 ### Hardening plan (from the ProjectCraft comparison, 2026-10-27; not started)
 
-Goal: match their rigour while keeping our lead on features. Quick wins done in 0.3.11; items 6–9 are 0.3.12; 10–12 are 0.4.2.
+Goal: match their rigour while keeping our lead on features. Quick wins done in 0.3.11; items 6–9 in 0.3.12; 10–12 are 0.4.2.
 
 **Quick wins (hours each)**
 1. ✅ (0.3.11; rustfmt left out, see §2) `cargo fmt --check` and `cargo deny` (licences, advisories) in CI; add `deny.toml`.
@@ -431,10 +441,10 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 5. ✅ (0.3.11; 2,000 tasks only) Speed gate: a test that 2,000 tasks reschedule in < 20 ms and 10,000 open in < 1 s (release build, CI).
 
 **Trust in the dates (days each)**
-6. More engine tests: aim for 300+. One file per area (calendars, constraints, link types, lags in %, levelling, progress override, retained logic, from-finish, elapsed). 
-7. Property tests (`proptest`): random plans never panic, early start ≤ late start, float ≥ 0 off the critical path, schedule is the same twice.
-8. Parity fixtures: sample MSP XML and XER files with the dates MS Project / P6 give them; a test checks we give the same dates. Show "Checked against N sample plans" in the README.
-9. Hostile-file tests for XML, XER, MPX, xlsx import: damaged, huge, odd values; the import report lists what was changed or dropped.
+6. ✅ (0.3.12: 47 tests, 47 hand-worked cases; keep adding a case per rule touched) More engine tests: aim for 300+. One file per area (calendars, constraints, link types, lags in %, levelling, progress override, retained logic, from-finish, elapsed). 
+7. ✅ (0.3.12, own generator instead of `proptest`) Property tests (`proptest`): random plans never panic, early start ≤ late start, float ≥ 0 off the critical path, schedule is the same twice.
+8. ✅ (0.3.12, hand-made files; real exports still wanted) Parity fixtures: sample MSP XML and XER files with the dates MS Project / P6 give them; a test checks we give the same dates. Show "Checked against N sample plans" in the README.
+9. ✅ (0.3.12; the import report moves to 0.4.0) Hostile-file tests for XML, XER, MPX, xlsx import: damaged, huge, odd values; the import report lists what was changed or dropped.
 
 **Reach (a week each)**
 10. `datum-cli` (new `apps/cli` or `src-cli`): open, schedule, run ops, export, print the schedule as a table. Uses `crates/core` only.

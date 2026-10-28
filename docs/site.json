@@ -39,24 +39,15 @@
   ],
   "roadmap": [
     {
-      "v": "0.3.12",
-      "title": "Trust in the dates",
-      "when": "Next",
-      "items": [
-        "Hundreds more engine tests, one set per area: calendars, constraints, link types, levelling, progress.",
-        "Sample plans checked date by date against the results of other scheduling tools.",
-        "Every import (XML, XER, MPX, Excel) checked against damaged and unusual files, with a report of what changed."
-      ]
-    },
-    {
       "v": "0.4.0",
       "title": "Risk and resources",
-      "when": "Soon",
+      "when": "Next",
       "items": [
         "Schedule risk analysis (Monte Carlo): P50 and P80 finish dates and costs, tornado chart, criticality.",
         "Roles and skills, with histograms by trade; manpower curves planned against actual.",
         "One resource pool shared by several plans.",
-        "A preview before levelling, showing what moves."
+        "A preview before levelling, showing what moves.",
+        "An import report that lists anything changed or left out when a file is opened."
       ]
     },
     {

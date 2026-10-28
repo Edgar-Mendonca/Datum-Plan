@@ -1,0 +1,31 @@
+ERMHDR	19.12	2026-11-01	Project	admin	Parity	dbxDatabaseNoName	Project Management	USD
+%T	PROJECT
+%F	proj_id	proj_short_name	plan_start_date	clndr_id
+%R	1	Parity network	2026-11-02 00:00	
+%T	PROJWBS
+%F	wbs_id	proj_id	parent_wbs_id	wbs_short_name	wbs_name	seq_num	proj_node_flag
+%R	10	1		PN	Parity network	0	Y
+%T	TASK
+%F	task_id	proj_id	wbs_id	task_code	task_name	task_type	target_drtn_hr_cnt	early_start_date	early_end_date	cstr_type
+%R	1	1	10	A10	A Design	TT_Task	40	2026-11-02 08:00	2026-11-06 17:00	
+%R	2	1	10	A20	B Order	TT_Task	24	2026-11-09 08:00	2026-11-11 17:00	
+%R	3	1	10	A30	C Build	TT_Task	32	2026-11-09 08:00	2026-11-12 17:00	
+%R	4	1	10	A40	D Fit	TT_Task	16	2026-11-13 08:00	2026-11-16 17:00	
+%R	5	1	10	A50	E Test rig	TT_Task	48	2026-11-09 08:00	2026-11-16 17:00	
+%R	6	1	10	A60	F Test	TT_Task	8	2026-11-17 08:00	2026-11-17 17:00	
+%R	7	1	10	A70	G Report	TT_Task	16	2026-11-20 08:00	2026-11-23 17:00	
+%R	8	1	10	A80	H Handover	TT_FinMile	0	2026-11-23 17:00	2026-11-23 17:00	
+%R	9	1	10	A90	I Survey	TT_Task	24	2026-11-04 08:00	2026-11-06 17:00	
+%T	TASKPRED
+%F	task_pred_id	task_id	pred_task_id	proj_id	pred_proj_id	pred_type	lag_hr_cnt
+%R	1	2	1	1	1	PR_FS	0
+%R	2	3	1	1	1	PR_FS	0
+%R	3	4	2	1	1	PR_FS	0
+%R	4	4	3	1	1	PR_FS	0
+%R	5	5	1	1	1	PR_FS	0
+%R	6	6	4	1	1	PR_FS	0
+%R	7	6	5	1	1	PR_FS	0
+%R	8	7	6	1	1	PR_FS	16
+%R	9	8	7	1	1	PR_FS	0
+%R	10	9	1	1	1	PR_SS	16
+%E
