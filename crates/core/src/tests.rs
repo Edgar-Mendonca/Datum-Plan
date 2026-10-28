@@ -670,7 +670,7 @@ fn levelling_preview_changes_nothing() {
 fn import_report_lists_changes_and_compares_dates() {
     let dir = std::env::temp_dir().join(format!("datum-import-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
-    let src = |f: &str| std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/parity").join(f)).unwrap_or_default();
+    let src = |f: &str| std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/parity").join(f)).unwrap_or_default().replace("\r\n", "\n");
     let notes = |name: &str, text: &str| {
         let f = dir.join(name);
         let _ = std::fs::write(&f, text);

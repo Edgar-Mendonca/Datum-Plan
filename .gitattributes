@@ -1,0 +1,2 @@
+crates/core/tests/parity/*.xml text eol=lf
+crates/core/tests/parity/*.xer text eol=lf
