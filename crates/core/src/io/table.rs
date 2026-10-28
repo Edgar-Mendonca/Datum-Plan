@@ -174,7 +174,13 @@ fn cells(c: &Calc, cols: &[String]) -> (Vec<String>, Vec<(usize, Vec<String>)>) 
 }
 
 pub fn write_csv(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
-    let q = |s: &str| if s.contains([',', '"', '\n']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() };
+    // Text that a spreadsheet would run as a formula (starting with = + - @, unless it is a plain
+    // number) gets a leading apostrophe, which spreadsheets hide, so opening the CSV runs nothing.
+    let safe = |s: &str| {
+        let risky = s.starts_with(['=', '+', '-', '@', '\t', '\r']) && s.replace(',', "").trim().parse::<f64>().is_err();
+        if risky { format!("'{s}") } else { s.to_string() }
+    };
+    let q = |s: &str| { let s = safe(s); if s.contains([',', '"', '\n', '\r']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s } };
     let (head, rows) = cells(c, cols);
     let mut out = String::from("\u{feff}");
     out.push_str(&head.iter().map(|h| q(h)).collect::<Vec<_>>().join(","));
@@ -183,7 +189,7 @@ pub fn write_csv(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
         out.push_str(&r.iter().map(|c| q(c)).collect::<Vec<_>>().join(","));
         out.push('\n');
     }
-    std::fs::write(path, out).map_err(|e| format!("Could not save {}: {e}", path.display()))
+    crate::doc::write_atomic(path, out.as_bytes())
 }
 
 /// Excel workbook: the table with real numbers and dates, formula columns as live Excel formulas,

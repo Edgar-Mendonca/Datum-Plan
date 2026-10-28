@@ -107,6 +107,14 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
             l.over[k] = true;
         }
     }
+    // Money in whole minor units (cents): each task's cost is rounded once, so every total is
+    // the exact sum of the amounts shown.
+    let unit = 10f64.powi(p.currency.decimals.min(4) as i32);
+    let minor = |v: f64| (v * unit).round() / unit;
+    for i in (0..n).filter(|&i| !s.summary[i]) {
+        (l.cost[i], l.acost[i]) = (minor(l.cost[i]), minor(l.acost[i]));
+    }
+    l.res_cost.iter_mut().for_each(|v| *v = minor(*v));
     for i in (0..n).filter(|&i| s.summary[i]) {
         for j in p.subtree(i).skip(1).filter(|&j| !s.summary[j]) {
             l.work[i] += l.work[j];
@@ -114,6 +122,7 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
             l.awork[i] += l.awork[j];
             l.acost[i] += l.acost[j];
         }
+        (l.cost[i], l.acost[i]) = (minor(l.cost[i]), minor(l.acost[i]));
     }
     l
 }

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.2 — 2026-10-29
+
+Stronger and safer, with a command line for scripts and AI assistants, and every report view printable.
+
+**Robustness and security**
+- **An internal error no longer closes the app.** The action that failed is stopped with a message, the plan stays as it was, and the details go to `crash.log` in the app's data folder (nothing is sent anywhere).
+- **Saving can no longer corrupt a plan.** Plans, autosave copies, exports and settings are written to a temporary file first and then replace the old file in one step, so a crash or a full disk never leaves a half-written file.
+- **Damaged or hand-made plan files can no longer crash or freeze the app.** Values far out of range (a duration of a million years, huge lags or delays, a zero-length working day, impossible numbers) are clamped when the plan opens, and the calendar arithmetic has a safe horizon (years 1800 to 2600). Files over 300 MB are refused.
+- **Long plans stay quick.** Working time over long spans is counted a week at a time, and daily S-curves of plans longer than ten years use weeks.
+- **Updates are stricter.** An update installs only if the release has a checksum file and the download matches it exactly; it downloads into its own new folder, with a size limit, and only installer files with the expected name are accepted.
+- **CSV exports cannot run formulas** when opened in a spreadsheet: text starting with `=`, `+`, `-` or `@` gets a leading apostrophe. Calendar (.ics) exports escape line breaks fully.
+- A tighter security policy for the window (no frames, objects, form posts or remote scripts), and links open only to this project's pages.
+- New checks on every change: every engine function run on deliberately hostile plans and edits, hostile spreadsheet formulas, a security audit of the window's libraries (`npm audit`) next to the existing licence and advisory check.
+
+**Command line and AI assistants**
+- **`datum-cli`** (on the Releases page): show a plan's facts or its schedule (also as CSV), change it with named operations, export it to any format, run the schedule risk analysis or the look-ahead, and start plans from templates.
+- **Named operations:** every change to a plan is one of the operations the window sends; `datum-cli ops` lists them with an example each.
+- **`datum-cli mcp`**: a Model Context Protocol server, so an AI assistant can open or start a plan, read the schedule, change it with the same operations, run the risk analysis and save it. A failed change leaves the plan as it was; nothing is saved unless asked.
+
+**Money**
+- **Costs are exact to the cent:** each task's cost and actual cost are kept in whole cents, so totals are the exact sum of what you see. Typed fixed costs are kept to the cent.
+
+**Print and polish**
+- **Schedule Risk, Look-ahead and Manpower print as themselves.** Before, printing one of them printed the Dashboard. On paper, Schedule Risk's charts take the full width.
+- **The last Schedule Risk run is kept with the plan**, so it is still there after reopening (with the date it was run).
+
+**Fixes**
+- Photos in progress reports could not be added: the window's security policy blocked the picture while it was being resized. They work again.
+- An empty plan's work showed as "-0 hrs".
+
 ## 0.4.1 — 2026-10-28
 
 Progress history: the actual S-curve follows what really happened at each period close, and new tools for the weeks ahead.

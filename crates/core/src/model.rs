@@ -225,6 +225,11 @@ pub struct Calendar {
     pub exceptions: Vec<Exception>,
 }
 
+/// The longest span (duration, lag, delay) a plan may hold: about 80 years of 8-hour days.
+pub const MAX_SPAN: i64 = 10_000_000;
+/// Minutes in a day.
+const DAY_MAX: i64 = 1440;
+
 pub const STD_HOURS: [(u16, u16); 2] = [(480, 720), (780, 1020)];
 
 impl Calendar {
@@ -632,17 +637,30 @@ impl Project {
         if !self.calendars.iter().any(|c| c.name == self.calendar) {
             self.calendar = self.calendars[0].name.clone();
         }
-        if self.day_min <= 0 {
+        if !(1..=DAY_MAX).contains(&self.day_min) {
             self.day_min = 480;
         }
+        // Damaged or hand-made files: keep every span within MAX_SPAN working minutes and every
+        // number finite, so the scheduler never meets values it cannot represent.
+        let span = |v: i64| v.clamp(-MAX_SPAN, MAX_SPAN);
+        let fin = |v: f64| if v.is_finite() { v } else { 0.0 };
         let mut prev: i32 = -1;
         for t in &mut self.tasks {
             t.level = (t.level as i32).min(prev + 1).max(0) as u8;
             prev = t.level as i32;
-            t.dur = t.dur.max(0);
+            t.dur = span(t.dur).max(0);
             t.pct = t.pct.min(100);
+            t.phys = t.phys.min(100);
+            t.level_delay = span(t.level_delay).max(0);
+            (t.dmin, t.dmax) = (span(t.dmin).max(0), span(t.dmax).max(0));
+            t.splits.retain(|&(a, g)| a > 0 && g > 0);
+            t.splits.iter_mut().for_each(|x| *x = (span(x.0), span(x.1)));
+            t.splits.truncate(100);
+            t.preds.iter_mut().for_each(|l| l.lag = if l.pct { l.lag.clamp(-10_000, 10_000) } else { span(l.lag) });
+            (t.qty, t.qty_done, t.fixed_cost) = (fin(t.qty).max(0.0), fin(t.qty_done).max(0.0), fin(t.fixed_cost));
+            t.res.iter_mut().for_each(|a| a.units = fin(a.units).clamp(0.0, 1000.0));
         }
-        self.next_uid = self.next_uid.max(self.tasks.iter().map(|t| t.uid + 1).max().unwrap_or(1));
+        self.next_uid = self.next_uid.max(self.tasks.iter().map(|t| t.uid.saturating_add(1)).max().unwrap_or(1));
         let uids: std::collections::HashSet<u32> = self.tasks.iter().map(|t| t.uid).collect();
         let res: std::collections::HashSet<u32> = self.resources.iter().map(|r| r.uid).collect();
         let cals: Vec<String> = self.calendars.iter().map(|c| c.name.clone()).collect();

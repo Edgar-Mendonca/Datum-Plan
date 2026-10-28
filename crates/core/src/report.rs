@@ -349,7 +349,9 @@ pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
         None => (0..p.tasks.len()).filter(|&i| w[i] > 0.0).collect(),
     };
     let total: f64 = tasks.iter().map(|&i| w[i]).sum::<f64>().max(1e-9);
-    let mut days = if unit == "day" { (c.s.start.div_euclid(DAY)..=c.s.finish.div_euclid(DAY)).collect() } else { period_ends(c, unit) };
+    // Daily points only for plans up to about ten years; longer ones use weeks.
+    let long = c.s.finish.div_euclid(DAY) - c.s.start.div_euclid(DAY) > 3660;
+    let mut days = if unit == "day" && !long { (c.s.start.div_euclid(DAY)..=c.s.finish.div_euclid(DAY)).collect() } else { period_ends(c, if unit == "day" { "week" } else { unit }) };
     let lo = tasks.iter().map(|&i| p.tasks[i].bls.get(&0).map_or(c.s.es[i], |b| b.start.min(c.s.es[i]))).min().unwrap_or(c.s.start).div_euclid(DAY);
     days.retain(|&d| d >= lo - 7);
     days.insert(0, lo - 1);

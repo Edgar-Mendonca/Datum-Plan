@@ -215,7 +215,7 @@ const Sheet = (p: { pg: Page; pages: number }) => {
 /** gantt: table + chart strip · net: diagram tiles · cal: a month per page · table: rows down, columns across · flow: the page as on screen. */
 export type PKind = "gantt" | "net" | "cal" | "table" | "flow";
 export const pkind = (): PKind => { const v = view(); return ["gantt", "tracking", "timeline"].includes(v) ? "gantt" : v === "network" ? "net" : v === "calendar" ? "cal" : ["ressheet", "taskusage", "resusage", "team", "sheets"].includes(v) ? "table" : "flow"; };
-const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet" };
+const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet", simrisk: "Schedule Risk", lookahead: "Look-ahead", manpower: "Manpower", dashboard: "Dashboard", scurve: "S-Curves", progress: "Progress Report" };
 /** Paper and margins for the views other than the Gantt chart. */
 const geom = createMemo(() => {
   const p = PAPERS.find(x => x[0] === ps.paper) ?? PAPERS[0], [pw, ph] = ps.landscape ? [p[2], p[1]] : [p[1], p[2]];
@@ -345,6 +345,7 @@ const FLOWS: Record<string, () => Promise<{ default: () => JSX.Element }>> = {
   reports: () => import("./reports").then(m => ({ default: m.Reports })), builder: () => import("./tools").then(m => ({ default: m.ReportBuilder })), update: () => import("./tools").then(m => ({ default: m.UpdateProgress })),
   relations: () => import("./tools").then(m => ({ default: m.Relationships })), checks: () => import("./views").then(m => ({ default: m.Checks })), risks: () => import("./views").then(m => ({ default: m.Risks })),
   portfolio: () => import("./views").then(m => ({ default: m.Portfolio })), resgraph: () => import("./views").then(m => ({ default: m.ResourceGraph })), setup: () => import("./setup").then(m => ({ default: m.Setup })),
+  simrisk: () => import("./risk").then(m => ({ default: m.ScheduleRisk })), lookahead: () => import("./progress").then(m => ({ default: m.Lookahead })), manpower: () => import("./progress").then(m => ({ default: m.Manpower })),
 };
 const Flow = () => { const C2 = lazy(FLOWS[view()] ?? FLOWS.dashboard); return <C2 />; };
 const FlowDoc = (p: { preview?: boolean }) => {

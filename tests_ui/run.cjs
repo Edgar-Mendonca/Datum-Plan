@@ -201,7 +201,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 0.3.10: Roadmap on the File page; "fit to 1 page wide" gives exactly one page across.
   await p.click(".tabs .file"); await p.waitForTimeout(150);
   await p.click(".tile:has-text('Roadmap')"); await p.waitForTimeout(200);
-  check("Roadmap page lists what comes next", (await p.$$(".rmstage")).length >= 5 && (await p.textContent(".roadmap")).includes("datum-cli"));
+  check("Roadmap page lists what comes next", (await p.$$(".rmstage")).length >= 4 && (await p.textContent(".roadmap")).includes("What-if"));
   await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(600);
   const across = await p.$$eval(".pprev .ppage", ps => ps.length);
   check("fit to 1 page wide gives one page for this plan", across === 1, String(across));
@@ -254,6 +254,20 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => c === "earned_schedule" ? { es: 8, at: 10, pd: 40, spi_t: 0.8, sv_t: -2, ieac: 50, planned_finish: 30010000, forecast_finish: 30024400 } : inv(c, a); });
   await p.click('.side button[title="S-Curves"]'); await p.waitForTimeout(400);
   check("S-Curves show earned schedule: SPI(t) and the finish at this pace", (await p.textContent(".page .kpis")).includes("SPI(t)") && (await p.textContent(".page .kpis")).includes("0.80"));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+
+  // 0.4.2: Schedule Risk, Look-ahead and Manpower print as themselves (not the Dashboard); the risk run is kept with the plan.
+  await p.click('.side button[title="Sched. Risk"]'); await p.waitForTimeout(200);
+  await p.click(".page .ptools .btn.pri"); await p.waitForTimeout(500);
+  check("a risk run is kept with the plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop())).includes('"key":"risk"'));
+  for (const [side, name, text] of [["Sched. Risk", "Schedule Risk", "P80"], ["Look-ahead", "Look-ahead", "Constraint log"], ["Manpower", "Manpower", "people per"]]) {
+    await p.click(`.side button[title="${side}"]`); await p.waitForTimeout(300);
+    await p.click(".tabs .file"); await p.waitForTimeout(150);
+    await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(900);
+    const what = await p.textContent(".pwhat"), prev = await p.textContent(".pflowprev").catch(() => "");
+    check(`Print shows ${name}, not the Dashboard`, what.includes(name) && prev.includes(text) && !prev.includes("Project Dashboard"), `${what} | ${prev.slice(0, 80)}`);
+    await p.click(".bs aside .back"); await p.waitForTimeout(150);
+  }
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 6. Every view opens without script errors.

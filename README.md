@@ -107,6 +107,21 @@ See the [changelog](CHANGELOG.md) for every release and the [roadmap](docs/MEMOR
 
 Datum Plan is part of [Datum](https://edgar-mendonca.github.io/Datum/); see its page: https://edgar-mendonca.github.io/Datum/apps/plan. [docs/FAMILY.md](docs/FAMILY.md) describes the shared design.
 
+## Command line and AI assistants
+
+`datum-cli` (on the [Releases](https://github.com/Edgar-Mendonca/Datum-Plan/releases/latest) page) works with plans without the window:
+
+```bash
+datum-cli info plan.dplan                     # dates, tasks, cost, critical tasks
+datum-cli schedule plan.xer --csv             # every task with its dates and float
+datum-cli ops                                 # the named operations, with examples
+datum-cli apply plan.dplan --op '{"Set":{"uid":2,"field":"dur","value":"4d"}}' --save new.dplan
+datum-cli export plan.dplan plan.xlsx         # any export format
+datum-cli risk plan.dplan --runs 2000         # P50, P80, P90 finish
+```
+
+`datum-cli mcp` is a Model Context Protocol server: an AI assistant can open or start a plan, read the schedule, change it with the same named operations the window uses, run the risk analysis and save it. Nothing is written unless it is asked to save.
+
 ## Build from source
 
 You need Rust (stable) and Node.js 20+. On Linux, also install `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev`.
@@ -115,6 +130,7 @@ You need Rust (stable) and Node.js 20+. On Linux, also install `libwebkit2gtk-4.
 npm ci
 npm run build:ui                      # build the window (Vite + SolidJS)
 cargo run -p datum-plan               # run the app
+cargo run -p datum-cli -- help        # the command line
 cargo test --workspace                # engine tests (cases, parity files, random plans)
 npm run check:ui                      # type-check the window
 node tests_ui/run.cjs                 # UI tests (Playwright)

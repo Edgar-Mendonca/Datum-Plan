@@ -411,7 +411,7 @@ impl Calc<'_> {
             measured_at: if p.status.is_some() { String::new() } else { self.progress_date().format(&self.fmt).to_string() },
             dur: crate::parse::fmt_dur(s.cals[pc].between(s.start, s.finish), Unit::D, p.day_min),
             pct: if dur > 0.0 { leaves.iter().map(|&i| p.tasks[i].pct as f64 * p.tasks[i].dur as f64).sum::<f64>() / dur } else { 0.0 },
-            work: format!("{} hrs", (tot(&self.l.work) / 60.0).round()), cost: fields::money(tot(&self.l.cost), cur),
+            work: format!("{} hrs", (tot(&self.l.work) / 60.0).round() + 0.0), cost: fields::money(tot(&self.l.cost), cur),
             bl_finish: bl_end.map(|b| df(b - 1)).unwrap_or_default(),
             var_finish: bl_end.map(|b| crate::parse::fmt_dur(between(b, s.finish), Unit::D, p.day_min)).unwrap_or_default(),
             pv: fields::money(pv, cur), ev: fields::money(ev, cur), ac: fields::money(ac, cur),

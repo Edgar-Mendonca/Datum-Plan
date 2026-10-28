@@ -135,7 +135,7 @@ impl Doc {
     }
 
     pub fn open(path: &Path) -> Result<Self, String> {
-        let text = std::fs::read_to_string(path).map_err(|e| format!("Could not open {}: {e}", path.display()))?;
+        let text = read_limited(path)?;
         let p = Project::from_json(&text).map_err(|e| format!("This is not a Datum Plan file ({e})."))?;
         let mut d = Self::new(p);
         d.path = Some(path.into());
@@ -143,7 +143,7 @@ impl Doc {
     }
 
     pub fn save(&mut self, path: &Path) -> Result<(), String> {
-        std::fs::write(path, self.json()).map_err(|e| format!("Could not save {}: {e}", path.display()))?;
+        write_atomic(path, self.json().as_bytes())?;
         self.path = Some(path.into());
         self.dirty = false;
         Ok(())
@@ -155,6 +155,34 @@ impl Doc {
 }
 
 /// Tasks (with their subtasks) to put on the clipboard; levels start at 0.
+/// The largest file Datum Plan opens or imports (a 100,000-task plan is about 60 MB).
+pub const MAX_FILE: u64 = 300 * 1024 * 1024;
+
+/// Reads a text file of at most `MAX_FILE` bytes (invalid UTF-8 is replaced, not fatal).
+pub fn read_limited(path: &Path) -> Result<String, String> {
+    let len = std::fs::metadata(path).map_err(|e| format!("Could not open {}: {e}", path.display()))?.len();
+    if len > MAX_FILE {
+        return Err(format!("{} is {} MB; Datum Plan opens files up to {} MB.", path.display(), len / 1_048_576, MAX_FILE / 1_048_576));
+    }
+    std::fs::read(path).map(|b| String::from_utf8_lossy(&b).into_owned()).map_err(|e| format!("Could not open {}: {e}", path.display()))
+}
+
+/// Writes a file so that a crash or a full disk never leaves it half-written: the new content
+/// goes to a temporary file next to it, which then replaces the old one in one step.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let fail = |e: std::io::Error| format!("Could not save {}: {e}", path.display());
+    let tmp = path.with_extension(format!("{}.saving", path.extension().and_then(|e| e.to_str()).unwrap_or("tmp")));
+    let mut f = std::fs::File::create(&tmp).map_err(fail)?;
+    if let Err(e) = f.write_all(bytes).and_then(|_| f.sync_all()) {
+        drop(f);
+        let _ = std::fs::remove_file(&tmp);
+        return Err(fail(e));
+    }
+    drop(f);
+    std::fs::rename(&tmp, path).map_err(|e| { let _ = std::fs::remove_file(&tmp); fail(e) })
+}
+
 pub fn copy(p: &Project, uids: &[u32]) -> Vec<Task> {
     let mut keep = vec![false; p.tasks.len()];
     for i in idxs(p, uids) {
@@ -297,7 +325,7 @@ pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str
         "pcttype" => p.tasks[i].pct_type = match v.to_lowercase().as_str() { "units" => PctType::Units, "physical" => PctType::Physical, _ => PctType::Duration },
         "phys" => p.tasks[i].phys = v.trim_end_matches('%').trim().parse::<u8>().map_err(|_| "Enter a number from 0 to 100.")?.min(100),
         "priority" => p.tasks[i].priority = if v.is_empty() { None } else { Some(v.parse::<u16>().map_err(|_| "Priority is a number from 0 to 1000.")?.min(1000)) },
-        "fixedcost" => p.tasks[i].fixed_cost = money(v)?,
+        "fixedcost" => { let unit = 10f64.powi(p.currency.decimals.min(4) as i32); p.tasks[i].fixed_cost = (money(v)? * unit).round() / unit }
         "accrual" => p.tasks[i].accrual = match v.to_lowercase().chars().next() { Some('s') => Accrual::Start, Some('e') => Accrual::End, _ => Accrual::Prorated },
         "costaccount" => p.tasks[i].cost_account = v.into(),
         "responsible" => p.tasks[i].responsible = v.into(),

@@ -21,6 +21,6 @@ Checks before pushing:
 - `cargo deny check` (licences, advisories, sources; CI runs it)
 
 Releasing:
-1. Bump the version in `src-tauri/Cargo.toml` and `crates/core/Cargo.toml`.
+1. Bump the version in `src-tauri/Cargo.toml`, `crates/core/Cargo.toml` and `crates/cli/Cargo.toml`.
 2. Add a CHANGELOG section, and keep `docs/site.json` true to the release (`about`, `steps`, `highlights`, `roadmap`; no commercial product names).
 3. Push the tag `vX.Y.Z`, or run `release.yml` with workflow_dispatch when tag pushes are blocked. The workflow creates the tag and publishes the installer.

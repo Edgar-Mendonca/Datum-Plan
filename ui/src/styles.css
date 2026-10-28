@@ -702,3 +702,7 @@ a.link { color: var(--blue); cursor: pointer; text-decoration: underline; }
 .credit .list > button:not(.btn) { text-align: left; border: 1px solid var(--line); background: var(--bg2); border-radius: 4px; padding: 6px 8px; display: flex; justify-content: space-between; gap: 8px; cursor: pointer; }
 .credit .list > button.on { border-color: var(--blue); background: var(--pale); }
 .credit .tbl input.num { width: 72px; }
+
+/* 0.4.2: on paper, Schedule Risk's charts each take the full width */
+.pflow .riskcharts { grid-template-columns: 1fr !important; }
+.pflow .riskcharts > .panel { grid-column: auto !important; }

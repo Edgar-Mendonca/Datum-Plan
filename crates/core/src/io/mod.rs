@@ -21,7 +21,7 @@ fn ext(path: &Path) -> String {
 }
 
 pub fn import(path: &Path) -> Result<Imported, String> {
-    let read = || std::fs::read(path).map(|b| String::from_utf8_lossy(&b).into_owned()).map_err(|e| format!("Could not open {}: {e}", path.display()));
+    let read = || crate::doc::read_limited(path);
     match ext(path).as_str() {
         "xml" | "xer" => {
             let text = read()?;
@@ -31,7 +31,11 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             Ok(Imported::Plan(Box::new(p), notes))
         }
         "json" | "dplan" => Project::from_json(&read()?).map(|p| Imported::Plan(Box::new(p), vec![])),
-        "csv" | "txt" | "xlsx" | "xlsm" | "xls" | "ods" => table::read(path).map(Imported::Table),
+        "csv" | "txt" | "xlsx" | "xlsm" | "xls" | "ods" => {
+            let len = std::fs::metadata(path).map_err(|e| format!("Could not open {}: {e}", path.display()))?.len();
+            if len > crate::doc::MAX_FILE { return Err(format!("{} is too large to import.", path.display())) }
+            table::read(path).map(Imported::Table)
+        }
         "mpp" => Err("MS Project .mpp files are a closed format. In MS Project, use File › Save As › XML, then import the XML file.".into()),
         e => Err(format!("Datum Plan cannot import .{e} files. Use XML, XER, XLSX, CSV or JSON.")),
     }
@@ -89,7 +93,7 @@ fn compare_dates(p: &Project, want: &std::collections::HashMap<u32, (String, Str
 /// table-like formats (CSV, Excel, JSON, HTML); empty means the standard set.
 pub fn export(p: &Project, path: &Path, fmt: &str, today: NaiveDate, cols: &[String]) -> Result<(), String> {
     let s = sched::schedule(p)?;
-    let write = |text: String| std::fs::write(path, text).map_err(|e| format!("Could not save {}: {e}", path.display()));
+    let write = |text: String| crate::doc::write_atomic(path, text.as_bytes());
     let std_cols: Vec<String> = table::OUT.iter().map(|c| c.to_string()).collect();
     let cols = if cols.is_empty() { &std_cols[..] } else { cols };
     let calc = || Calc::new(p, fmt, today);

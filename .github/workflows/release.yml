@@ -30,14 +30,16 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match version $V in src-tauri/Cargo.toml"; exit 1
           fi
           echo "V=$V" >> "$GITHUB_ENV"
-      - run: cargo test -p datum-core
+      - run: cargo test -p datum-core -p datum-cli
       - run: npx tauri build --bundles nsis
-      - name: Installer and checksum
+      - run: cargo build --release -p datum-cli
+      - name: Installer, command line and checksums
         shell: bash
         run: |
           mkdir out
           cp target/release/bundle/nsis/*-setup.exe "out/DatumPlan-$V-setup.exe"
-          cd out && sha256sum "DatumPlan-$V-setup.exe" > SHA256SUMS.txt && cat SHA256SUMS.txt
+          cp target/release/datum-cli.exe "out/datum-cli-$V.exe"
+          cd out && sha256sum "DatumPlan-$V-setup.exe" "datum-cli-$V.exe" > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Release notes from CHANGELOG.md
         shell: bash
         run: |
@@ -53,4 +55,5 @@ jobs:
           make_latest: true
           files: |
             out/DatumPlan-${{ env.V }}-setup.exe
+            out/datum-cli-${{ env.V }}.exe
             out/SHA256SUMS.txt

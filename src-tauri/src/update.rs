@@ -6,6 +6,8 @@ use std::io::{Read, Write};
 use tauri::{AppHandle, Emitter};
 
 const REPO: &str = "Edgar-Mendonca/Datum-Plan";
+/// No installer is anywhere near this size (they are about 4 MB).
+const MAX_INSTALLER: u64 = 200 * 1024 * 1024;
 
 #[derive(Serialize)]
 pub struct Info {
@@ -85,11 +87,19 @@ pub fn install(app: &AppHandle, url: &str, sums: Option<&str>) -> Result<(), Str
     if !url.starts_with(&base) || sums.is_some_and(|s| !s.starts_with(&base)) {
         return Err("Updates are only installed from the Datum Plan releases page.".into());
     }
+    // Every release publishes SHA256SUMS.txt; without it nothing is installed.
+    let Some(sums) = sums else { return Err("This release has no checksum file, so it cannot be installed safely. Download it from the releases page.".into()) };
     if !cfg!(windows) {
         return Err("Automatic install is for Windows. Download the new version from the releases page.".into());
     }
-    let name = url.rsplit('/').next().unwrap_or("DatumPlan-setup.exe").to_string();
-    let dest = std::env::temp_dir().join(&name);
+    let name = url.rsplit('/').next().unwrap_or("").to_string();
+    if !name.ends_with("-setup.exe") || !name.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) || name.starts_with('.') {
+        return Err("The installer's name is not what Datum Plan expects.".into());
+    }
+    // A new folder of its own, so nothing else can swap the file between the check and the start.
+    let dir = std::env::temp_dir().join(format!("datumplan-update-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos())));
+    std::fs::create_dir(&dir).map_err(|e| format!("Could not prepare the download: {e}"))?;
+    let dest = dir.join(&name);
     let resp = agent().get(url).call().map_err(|e| format!("Download failed: {e}"))?;
     let total: u64 = resp.header("Content-Length").and_then(|v| v.parse().ok()).unwrap_or(0);
     let (mut src, mut file) = (resp.into_reader(), std::fs::File::create(&dest).map_err(|e| e.to_string())?);
@@ -102,21 +112,25 @@ pub fn install(app: &AppHandle, url: &str, sums: Option<&str>) -> Result<(), Str
         file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
         hash.update(&buf[..n]);
         done += n as u64;
+        if done > MAX_INSTALLER {
+            drop(file);
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err("The download is far larger than an installer should be, so it was stopped and deleted.".into());
+        }
         if total > 0 && done * 100 / total > last {
             last = done * 100 / total;
             let _ = app.emit("update-progress", last);
         }
     }
     drop(file);
-    if let Some(s) = sums {
-        let fail = |e: String| format!("Could not fetch checksums: {e}");
-        let list = agent().get(s).call().map_err(|e| fail(e.to_string()))?.into_string().map_err(|e| fail(e.to_string()))?;
-        let want = list.lines().find(|l| l.trim_end().ends_with(&name)).and_then(|l| l.split_whitespace().next()).unwrap_or("");
-        let got: String = hash.finalize().iter().map(|b| format!("{b:02x}")).collect();
-        if !want.eq_ignore_ascii_case(&got) {
-            let _ = std::fs::remove_file(&dest);
-            return Err("The download did not match its checksum and was deleted. Try again.".into());
-        }
+    let fail = |e: String| format!("Could not fetch checksums: {e}");
+    let list = agent().get(sums).call().map_err(|e| fail(e.to_string()))?.into_string().map_err(|e| fail(e.to_string()))?;
+    // "<64 hex digits>  <file name>", the file name matched exactly.
+    let want = list.lines().filter_map(|l| { let mut w = l.split_whitespace(); Some((w.next()?, w.next()?.trim_start_matches('*'))) }).find(|(_, f)| *f == name).map(|(h, _)| h).unwrap_or("");
+    let got: String = hash.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    if want.len() != 64 || !want.eq_ignore_ascii_case(&got) {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err("The download did not match its checksum and was deleted. Try again.".into());
     }
     let _ = app.emit("update-progress", 100u64);
     launch(&dest)?;

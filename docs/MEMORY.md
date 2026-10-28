@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.4.1** (released 2026-10-28). Earlier: 0.1.0 … 0.4.0 |
+| **Current version** | **0.4.2** (released 2026-10-29). Earlier: 0.1.0 … 0.4.1 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -95,6 +95,8 @@ flowchart LR
 | `crates/core/examples/` | `bench.rs` (20k-task timing), `dump.rs` (JSON fixtures for UI tests). |
 | `crates/core/src/tests.rs` | Engine tests (26). |
 | `crates/core/src/risk.rs` | Schedule risk (Monte Carlo): `SimOpts` (iterations, default range −low/+high %, seed), `simulate` → P10/50/80/90, chance of the planned finish, finish-day histogram, cost P50/P80, criticality, drivers (correlation), risk hit rates. Triangular draws; every run is a full `schedule()`. |
+| `crates/core/src/ops.rs` | The named operations catalogue (name, what it does, example JSON); a test applies every example. |
+| `crates/cli/` | `datum-cli`: info, schedule, ops, apply, export, risk, lookahead, new, templates, and `mcp` (Model Context Protocol over stdio: open_plan, new_plan, get_schedule, list_operations, apply_operation, undo, schedule_risk, lookahead, save_plan…). Shipped as `datum-cli-X.Y.Z.exe` in each release (in SHA256SUMS.txt). |
 | `crates/core/src/progress.rs` | Progress history: `credit_library`, `manpower` (people per period by trade: planned / done / forecast), `earned_schedule` (ES, SPI(t), SV(t), IEAC(t)), `lookahead` (tasks in the next weeks + open/overdue constraints). |
 | `ui/src/progress.tsx` | Manpower and Look-ahead views, Rules of Credit dialog. |
 | `ui/src/risk.tsx` | The Schedule Risk view (`simrisk`). |
@@ -165,7 +167,7 @@ flowchart LR
 8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
 9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
 
-Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report), 0.4.1 (progress history).
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report), 0.4.1 (progress history), 0.4.2 (hardening, CLI + MCP, print).
 
 ---
 
@@ -211,6 +213,15 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
 | 0.3.9 | **? help beside the tools in every Datum app**: a small ? beside each ribbon group, page, panel and main dialog opens a card (what it is for, how to use it) from one `HELP` table in `ui/src/help.tsx`; Help › What Is This Tool? lists them all. No separate teaching mode | The user's words: "at some of the tools, we can add a small question mark icon… we should do it in all of our applications." Built first in Datum Atlas 0.1.1; same code and styles in every app. |
+| 0.4.2 | Release builds unwind (not abort); `guard()` in the shell turns a panic in apply/open/import/risk/level preview into an error message; a panic hook appends to `crash.log` in the app data folder | Abort closed the app on any panic and made the poisoned-lock recovery useless. |
+| 0.4.2 | `Project::normalize` clamps spans to `MAX_SPAN` (10,000,000 working minutes ≈ 80 years), lags in % to ±10,000, units to 0–1000, non-finite numbers to 0, splits to 100, `day_min` to 1–1440; `parse::dur` caps at `MAX_SPAN`; `WorkCal` saturates at a horizon (1800–2600), `date_of` saturates | Hostile values panicked in calendar arithmetic (`succ_opt().unwrap()` past the last date). |
+| 0.4.2 | `WorkCal::between` counts whole weeks arithmetically (plus exception corrections) for spans over 28 days; daily S-curves fall back to weeks beyond ~10 years | A task spanning centuries froze the S-curve (O(days²)). |
+| 0.4.2 | Saves use `doc::write_atomic` (temp file + rename) for plans, autosave, recovery, options, recent, exports; reads use `doc::read_limited` (300 MB) | No half-written files; no out-of-memory on giant files. |
+| 0.4.2 | Updater: SHA256SUMS.txt is required; exact file-name match; installer name `*-setup.exe` of safe characters; unique download folder; 200 MB cap | A release without checksums used to install unverified. |
+| 0.4.2 | CSV export prefixes `'` to text starting with = + - @ (unless a plain number) | Formula (CSV) injection. |
+| 0.4.2 | Money: each task's cost and actual cost rounded to the currency's minor unit before roll-up (rates keep their decimals); typed fixed costs rounded | Totals equal the sum of shown amounts, without changing the f64 model. |
+| 0.4.2 | CLI and MCP change plans only through `Op` (the window's operations); the MCP server writes only plan/export extensions and only on `save_plan`; panics in a tool call are caught | One way to change a plan; safe for an assistant. |
+| 0.4.2 | Print: Schedule Risk, Look-ahead and Manpower are flow views (`FLOWS`), named in `VIEW_NAMES`; the last risk run is stored in `project.ui.risk` | They printed the Dashboard (the `FLOWS` fallback). |
 | 0.4.1 | Actual progress between stored periods is a straight line through each snapshot's % (then to today's % at the status date); tasks no snapshot recorded keep the old working-time line (`report::history`, `along`) | The actual S-curve should show when progress really happened; snapshots already stored each task's %. |
 | 0.4.1 | Manpower "Done" is earned hours (planned hours × progress), not booked hours; planned spreads work evenly over baseline (or current) dates; people = hours ÷ one person's working hours in the period | There are no timesheets in the model; earned hours are honest and consistent with the S-curve. |
 | 0.4.1 | Earned schedule uses the same weights and curves as the S-curve, in working days on the project calendar | One definition of progress everywhere; works without costs. |
@@ -271,7 +282,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.12 | Trust in the dates | Hand-worked cases (`cases.rs`), parity files (`parity.rs`), random plans with constraints/calendars (links hold, tight forward pass, row order), random edit sequences, damaged CSV/xlsx; fixed ALAP (free float) and late dates of started work | ✅ |
 | 0.4.0 | Risk & resources | Schedule Risk (Monte Carlo: P50/P80/P90, cost, criticality, drivers, risk delays, optimistic/pessimistic durations), workload by trade (Group) in hours or people, levelling preview, import report + XER activity types | ✅ |
 | 0.4.1 | Progress history | Actual S-curve through the stored periods, Manpower by trade (planned / done / forecast), earned schedule, rules of credit + installed quantities, look-ahead with constraint log | ✅ |
-| 0.4.2 | Command line & automation | Hardening plan items 10–12: `datum-cli`, named commands with schemas, MCP server, exact money | 🔜 |
+| 0.4.2 | Hardening, command line & print | Security/robustness pass (hostile values, atomic saves, crash log + unwind, updater, CSP, CSV injection, npm audit), `datum-cli` + MCP server + ops catalogue, exact money (cents), Schedule Risk / Look-ahead / Manpower print, risk run kept | ✅ |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
@@ -453,6 +464,12 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Checked in the real app (Engineering template): look-ahead from the status date with ready flags, adding a constraint (found and fixed the task box showing the first task: `<option selected>`; same fix in Resource Graph and the progress report's period list), Rules of Credit → Concrete steps in the Steps tab, Manpower (forecast line made straight: the smoothed curve overshot). My look-ahead test first expected an unstarted task before the status date; with a status date it moves after it (engine right).
 - Not done: Manpower "Done" is earned hours, not timesheet hours; the look-ahead and Manpower are not on the Print page yet.
 
+### 2026-10-29: Session 14 (0.4.2, hardening, command line, print)
+- User: build 0.4.2 and 0.4.3 together overnight, with a complete security, robustness and hardening pass of the whole app.
+- Audit and fixes. Probing hostile values found panics in calendar arithmetic (huge durations, lags, splits, delays) and a divide-by-zero (zero-length day); fixed with clamping in `normalize`, a calendar horizon and saturating dates. A battery (`hardening::exercise`) now runs every engine function on hostile plans, extreme edits and the random plans; it found the S-curve freezing on century-long plans (fast whole-week `between`, weekly fallback). Also: atomic saves, 300 MB read limit, unwind + `guard()` + crash.log (release builds aborted on any panic), updater requires checksums (it installed unverified without SHA256SUMS.txt), stricter CSP (and `blob:` images: progress-report photos were blocked), CSV formula injection, ics line breaks, `allowed_url`, `npm audit` in CI. Hostile sheet formulas were already safe (#CIRC!, #NUM!).
+- Built `ops.rs` (catalogue), `crates/cli` (`datum-cli` + MCP server, tests drive a whole assistant session), money to the cent, the release ships `datum-cli-X.Y.Z.exe`. Print: the three views printed the Dashboard (fixed); risk charts full width on paper; last risk run in `project.ui.risk`. Found on the way: "-0 hrs" on an empty plan (float sum of nothing is -0).
+- Not done: JSON schemas for every op (examples only); Tell Me still lists window commands; the CLI cannot import spreadsheets (column mapping is in the window).
+
 ## 5. Known limits and next steps
 
 ### Hardening plan (from the ProjectCraft comparison, 2026-10-27; not started)
@@ -473,9 +490,9 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 9. ✅ (0.3.12; the import report moves to 0.4.0) Hostile-file tests for XML, XER, MPX, xlsx import: damaged, huge, odd values; the import report lists what was changed or dropped.
 
 **Reach (a week each)**
-10. `datum-cli` (new `apps/cli` or `src-cli`): open, schedule, run ops, export, print the schedule as a table. Uses `crates/core` only.
-11. Every action is an op with a name and a JSON schema (`ops list`); the CLI, the ribbon and Tell Me share them. Then an MCP server so AI agents can build and update plans.
-12. Exact money: store costs in minor units (integers), not floats.
+10. ✅ (0.4.2, `crates/cli`) `datum-cli` (new `apps/cli` or `src-cli`): open, schedule, run ops, export, print the schedule as a table. Uses `crates/core` only.
+11. ✅ (0.4.2: `ops::catalog` with examples, not full JSON schemas; Tell Me keeps its own window commands) Every action is an op with a name and a JSON schema (`ops list`); the CLI, the ribbon and Tell Me share them. Then an MCP server so AI agents can build and update plans.
+12. ✅ (0.4.2, rounded to minor units per task, f64 kept) Exact money: store costs in minor units (integers), not floats.
 13. ✅ (0.3.11, no separate threat model yet) Docs they have that we lack: SECURITY.md, CONTRIBUTING.md, a threat model (files hold people's names; the only network call is the updater).
 
 **Keep (where we lead):** the window (ribbon, sidebar, 18 views), tracking and EVM, reports and print, formulas and Sheets, XER and P6 power features, in-app updates, the Datum family.
@@ -504,9 +521,9 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 - Finishing: a text-styles editor (by task type), saved custom views, a user guide for 1.0.
 
 **Known limits:**
-- Manpower "Done" is earned hours from progress, not hours booked (no timesheets). Look-ahead, Manpower and Schedule Risk are not on the Print page yet.
+- `datum-cli` reads .dplan, XML and XER (not spreadsheets); the ops catalogue has examples, not full JSON schemas.
+- Manpower "Done" is earned hours from progress, not hours booked (no timesheets).
 - Actual progress is modelled linearly between stored periods (snapshots); without snapshots, linearly from the actual start to today.
-- Schedule Risk results are not on the Print page yet, and are not saved with the plan (run again after opening).
 - Windows SmartScreen warns on the first install (unsigned). Updates after that are silent.
 - XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).

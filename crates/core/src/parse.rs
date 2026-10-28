@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 /// Working minutes per unit, given the minutes in a working day.
 pub fn unit_min(u: Unit, day: i64) -> i64 {
+    let day = day.max(1);
     match u { Unit::M => 1, Unit::H => 60, Unit::D => day, Unit::W => 5 * day, Unit::Mo => 20 * day }
 }
 
@@ -43,8 +44,8 @@ pub fn dur(s: &str, day: i64) -> Result<(i64, Unit), String> {
         u => return Err(format!("Unknown duration unit \"{u}\". Use h, d, w or mo.")),
     };
     let m = (v * unit_min(u, day) as f64).round();
-    if !(0.0..=1e9).contains(&m) {
-        return Err("Duration is out of range.".into());
+    if !(0.0..=crate::model::MAX_SPAN as f64).contains(&m) {
+        return Err("Duration is out of range (at most about 80 years).".into());
     }
     Ok((m as i64, u))
 }
@@ -66,6 +67,7 @@ pub fn fmt_lag(min: i64, day: i64) -> String {
     if min == 0 {
         return String::new();
     }
+    let day = day.max(1);
     let (v, u) = if min % day == 0 { (min / day, "d") } else if min % 60 == 0 { (min / 60, "h") } else { (min, "m") };
     format!("{}{v}{u}", if min > 0 { "+" } else { "" })
 }

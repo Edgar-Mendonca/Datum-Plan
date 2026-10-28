@@ -88,6 +88,7 @@ fn random_plans_schedule_without_panics() {
             assert!(c.between(s.es[i], s.ls[i]) >= 0 && c.between(s.ef[i], s.lf[i]) >= 0, "late dates before early dates (round {round}, task {i})");
         }
         let _ = load::compute(&p, &s);
+        if round % 25 == 0 { exercise(&p) }
     }
 }
 
@@ -275,4 +276,161 @@ fn damaged_spreadsheets_never_panic() {
         }
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Runs every engine function the window or a script can reach on a plan: none may panic.
+fn exercise(p: &Project) {
+    use crate::{check, network, progress, query::Query, report, risk};
+    let Ok(s) = schedule(p) else { return };
+    let _ = load::compute(p, &s);
+    let c = crate::fields::Calc::new(p, "%d-%b-%y", start());
+    let _ = c.summary();
+    let q = Query { cols: ["code", "name", "dur", "start", "finish", "preds", "res", "tf", "cost", "work", "pct"].map(String::from).to_vec(), ..Query::default() };
+    let _ = c.grid(&q);
+    for unit in ["day", "week", "month"] {
+        let _ = report::usage(&c, "resource", "work", unit);
+        let _ = report::usage(&c, "group", "cost", unit);
+        let _ = report::usage(&c, "task", "work", unit);
+        let _ = report::scurve(&c, unit, "duration", None);
+        let _ = report::curve(&c, unit);
+        let _ = progress::manpower(&c, unit);
+    }
+    let _ = report::period_report(&c, "week", None);
+    let _ = progress::earned_schedule(&c);
+    let _ = progress::lookahead(&c, 3);
+    let _ = check::run(&c, &check::Limits::default());
+    let rows: Vec<usize> = (0..p.tasks.len()).collect();
+    let _ = network::layout(&c, &rows);
+    let _ = crate::level::preview(p, &[]);
+    let _ = risk::simulate(p, &risk::SimOpts { iterations: 20, ..Default::default() });
+    let cost = load::compute(p, &s).cost;
+    let _ = mspdi::write(p, &s, &cost);
+    let _ = xer::write(p, &s, start());
+    let cols: Vec<String> = q.cols.clone();
+    let _ = (crate::io::formats::json(&c, &cols), crate::io::formats::html(&c, &cols), crate::io::formats::ics(&c), crate::io::formats::mpx(&c), crate::io::formats::pmxml(&c));
+}
+
+#[test]
+/// Values no plan should hold, as a damaged or hand-made file could: nothing may panic or hang.
+fn hostile_values_never_panic() {
+    let run = |name: &str, f: &dyn Fn(&mut Project)| {
+        let mut p = sample();
+        f(&mut p);
+        // As loaded (no clamping): the scheduler alone must not panic.
+        assert!(panic::catch_unwind(panic::AssertUnwindSafe(|| { let _ = schedule(&p); })).is_ok(), "{name}: the raw plan panicked");
+        // As every way into the app leaves it (opening, importing, editing): everything must work, quickly.
+        p.normalize();
+        let t = Instant::now();
+        let r = panic::catch_unwind(panic::AssertUnwindSafe(|| exercise(&p)));
+        assert!(r.is_ok(), "{name}: panicked");
+        assert!(t.elapsed().as_secs() < 60, "{name}: took {} s", t.elapsed().as_secs());
+    };
+    run("no working time", &|p| { for c in &mut p.calendars { c.week = Default::default() } });
+    run("huge duration", &|p| p.tasks[1].dur = 1_000_000_000_000);
+    run("year 9999 start", &|p| p.start = NaiveDate::from_ymd_opt(9999, 12, 20).unwrap_or_default());
+    run("year 1 start", &|p| p.start = NaiveDate::from_ymd_opt(1, 1, 1).unwrap_or_default());
+    run("constraint far future", &|p| { p.tasks[1].constraint = Constraint::MSO; p.tasks[1].cdate = NaiveDate::from_ymd_opt(9000, 1, 1) });
+    run("huge lag", &|p| { if let Some(t) = p.tasks.iter_mut().find(|t| !t.preds.is_empty()) { t.preds[0].lag = i64::MAX / 4 } });
+    run("negative huge lag", &|p| { if let Some(t) = p.tasks.iter_mut().find(|t| !t.preds.is_empty()) { t.preds[0].lag = i64::MIN / 4 } });
+    run("next_uid max", &|p| p.next_uid = u32::MAX);
+    run("outline level 255", &|p| p.tasks[3].level = 255);
+    run("status year 9999", &|p| p.status = NaiveDate::from_ymd_opt(9999, 1, 1));
+    run("weird hours", &|p| p.calendars[0].week[0] = vec![(2000, 100), (900, 900), (0, 1440)]);
+    run("splits huge", &|p| p.tasks[1].splits = vec![(1, i64::MAX / 4)]);
+    run("level delay huge", &|p| p.tasks[1].level_delay = i64::MAX / 4);
+    run("units huge", &|p| { if let Some(t) = p.tasks.iter_mut().find(|t| !t.res.is_empty()) { t.res[0].units = 1e300 } });
+    run("zero-length day", &|p| p.day_min = 0);
+    run("day longer than a day", &|p| p.day_min = 100_000);
+    run("nan costs", &|p| { p.tasks[1].fixed_cost = f64::NAN; p.tasks[1].qty = f64::INFINITY });
+    run("every task linked to itself", &|p| { for t in &mut p.tasks { let u = t.uid; t.preds.push(Link { pred: u, kind: LinkType::FS, lag: 0, pct: false }) } });
+    run("exception span", &|p| p.calendars[0].exceptions.push(Exception { name: "x".into(), from: NaiveDate::from_ymd_opt(1, 1, 1).unwrap_or_default(), to: NaiveDate::from_ymd_opt(9999, 1, 1).unwrap_or_default(), hours: vec![] }));
+}
+
+#[test]
+fn hostile_plan_files_open_safely() {
+    // The same values as a .dplan file: opening it clamps them, and the plan schedules.
+    let mut v = serde_json::to_value(sample()).unwrap_or_default();
+    v["tasks"][1]["dur"] = serde_json::json!(9_000_000_000_000_i64);
+    v["tasks"][1]["level_delay"] = serde_json::json!(-5);
+    v["tasks"][2]["splits"] = serde_json::json!([[1, 9_000_000_000_000_i64], [0, 0]]);
+    v["next_uid"] = serde_json::json!(u32::MAX);
+    v["day_min"] = serde_json::json!(0);
+    let p = Project::from_json(&v.to_string()).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!((p.tasks[1].dur, p.tasks[1].level_delay, p.tasks[2].splits.len(), p.day_min), (MAX_SPAN, 0, 1, 480));
+    assert!(schedule(&p).is_ok());
+}
+
+#[test]
+fn hostile_sheet_formulas() {
+    let cases: Vec<(&str, String)> = vec![
+        ("whole sheet sum", "=SUM(A1:XFD1048576)".into()),
+        ("circular", "=B1+1".into()),
+        ("self", "=A1".into()),
+        ("deep nesting", format!("={}1{}", "(".repeat(5000), ")".repeat(5000))),
+        ("long text", format!("=\"{}\"", "x".repeat(200_000))),
+        ("huge number", "=10^308*10".into()),
+        ("repeat", "=REPT(\"x\",100000000)".into()),
+        ("sequence", "=SEQUENCE(100000000)".into()),
+        ("bad address", "=ZZZZZZZZ99999999999".into()),
+        ("plan range", "=SUM(Plan!A1:XFD1048576)".into()),
+        ("indirect", "=INDIRECT(\"A1\")".into()),
+    ];
+    for (name, f) in cases {
+        let mut d = Doc::new(sample());
+        let _ = d.apply(Op::Sheet { k: None, sheet: Some(SheetData { name: "S".into(), ..Default::default() }) }, "%d-%b-%y");
+        let t = Instant::now();
+        let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            let _ = d.apply(Op::SheetCells { k: 0, cells: vec![("A1".into(), f.clone()), ("B1".into(), "=A1".into())], fmt: None }, "%d-%b-%y");
+            let c = crate::fields::Calc::new(&d.p, "%d-%b-%y", start());
+            let v = crate::sheet::sheet_view(&c, 0);
+            assert!(v.is_some(), "{name}: no sheet");
+        }));
+        assert!(r.is_ok(), "{name}: panicked");
+        assert!(t.elapsed().as_secs() < 10, "{name}: took {} s", t.elapsed().as_secs());
+    }
+}
+
+#[test]
+fn extreme_edits_never_panic() {
+    let base = sample();
+    let (a, b) = (base.tasks[1].uid, base.tasks[2].uid);
+    let mut evil = base.tasks[1].clone();
+    (evil.uid, evil.dur, evil.level, evil.preds) = (u32::MAX, i64::MAX, 250, vec![Link { pred: u32::MAX, kind: LinkType::SF, lag: i64::MIN, pct: false }]);
+    let ops = vec![
+        Op::Insert { at: usize::MAX, name: "x".repeat(100_000), ms: false },
+        Op::InsertRows { at: usize::MAX, rows: vec![vec![("dur".into(), "99999999d".into()), ("name".into(), "x".into())]; 2000] },
+        Op::Paste { at: 3, tasks: vec![evil.clone(), evil] },
+        Op::Recurring { at: 0, name: "R".into(), dur: "1d".into(), every: "month".into(), interval: u32::MAX, count: 500, start: "05-Nov-26".into() },
+        Op::Split { uid: a, after: i64::MAX / 2, gap: i64::MAX / 2 },
+        Op::Split { uid: a, after: 1, gap: i64::MAX },
+        Op::LinkSet { pred: a, succ: b, kind: Some(LinkType::FS), lag: "99999999999d".into() },
+        Op::LinkSet { pred: a, succ: b, kind: Some(LinkType::SS), lag: "-1e300%".into() },
+        Op::Set { uid: a, field: "leveldelay".into(), value: "9e99d".into() },
+        Op::Set { uid: a, field: "dmax".into(), value: "99999999999999d".into() },
+        Op::Set { uid: a, field: "cdate".into(), value: "31-Dec-9999".into() },
+        Op::Set { uid: a, field: "pct".into(), value: "255".into() },
+        Op::Set { uid: a, field: "qty".into(), value: "1e308".into() },
+        Op::Columns { cols: vec![("name".into(), i32::MIN), ("nonsense".into(), i32::MAX)] },
+        Op::Cells { cells: vec![(a, "dur".into(), "1e18d".into()); 1000] },
+        Op::Baseline { uids: vec![], clear: false, n: 250 },
+        Op::Interim { n: 255 },
+        Op::UpdateProject { through: "01-Jan-2600".into(), reschedule: true },
+        Op::Snapshot { label: "x".repeat(10_000), comment: String::new() },
+        Op::Level { uids: vec![u32::MAX], clear: false },
+        Op::Log { id: u32::MAX, item: Some(LogItem { uid: a, need: NaiveDate::from_ymd_opt(1, 1, 1), ..Default::default() }) },
+        Op::ApplyCredit { uids: vec![a, b], rule: "Cable".into() },
+        Op::Credit { old: None, rule: Some(CreditRule { name: "Nan".into(), steps: vec![("x".into(), f64::NAN)] }) },
+    ];
+    for o in ops {
+        let mut d = Doc::new(sample());
+        let name = format!("{o:?}").chars().take(60).collect::<String>();
+        let before = d.json();
+        let t = Instant::now();
+        let r = panic::catch_unwind(panic::AssertUnwindSafe(|| d.apply(o, "%d-%b-%y")));
+        let Ok(r) = r else { panic!("{name}: panicked") };
+        if r.is_err() { assert_eq!(d.json(), before, "{name}: failed but changed the plan") }
+        assert!(schedule(&d.p).is_ok(), "{name}: left a plan that does not schedule");
+        exercise(&d.p);
+        assert!(t.elapsed().as_secs() < 60, "{name}: took {} s", t.elapsed().as_secs());
+    }
 }

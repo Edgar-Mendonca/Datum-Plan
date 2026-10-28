@@ -1,0 +1,15 @@
+[package]
+name = "datum-cli"
+version = "0.4.2"
+edition = "2021"
+license = "MIT"
+description = "Datum Plan on the command line: inspect, schedule, change and export plans, and an MCP server for AI assistants."
+
+[[bin]]
+name = "datum-cli"
+path = "src/main.rs"
+
+[dependencies]
+datum-core = { path = "../core" }
+chrono.workspace = true
+serde_json.workspace = true

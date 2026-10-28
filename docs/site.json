@@ -31,7 +31,8 @@
     "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
     "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
     "Dashboard, progress reports and a report builder; print to PDF from every view.",
-    "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel export with formulas."
+    "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel export with formulas.",
+    "A command line and an MCP server, so scripts and AI assistants can build and update plans with the same operations as the window."
   ],
   "screenshots": [
     "docs/images/gantt.png",
@@ -42,19 +43,9 @@
   ],
   "roadmap": [
     {
-      "v": "0.4.2",
-      "title": "Command line and automation",
-      "when": "Next",
-      "items": [
-        "datum-cli: open, schedule, change and export plans from the command line.",
-        "Every action is a named command shared by the ribbon, Tell Me and the command line.",
-        "Connect AI assistants to build and update plans; costs stored exactly in whole cents."
-      ]
-    },
-    {
       "v": "0.5",
       "title": "Schedule quality and scenarios",
-      "when": "Later",
+      "when": "Next",
       "items": [
         "A schedule health score with its trend; baseline compare with ghost bars; a log of logic changes; a milestone trend chart.",
         "What-if scenarios: branch a plan, change it, compare side by side, keep or discard.",

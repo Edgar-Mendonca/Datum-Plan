@@ -9,6 +9,7 @@ pub mod level;
 pub mod load;
 pub mod model;
 pub mod network;
+pub mod ops;
 pub mod parse;
 pub mod progress;
 pub mod query;

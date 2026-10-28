@@ -3,7 +3,7 @@
 // happening with its probability; this page shows when the project is likely to finish and why.
 import { For, Show, createSignal } from "solid-js";
 import { SimResult, fmtAt, money } from "./api";
-import { call, P, setView } from "./store";
+import { call, P, setView, act } from "./store";
 import { selectUid } from "./cmds";
 import { Page } from "./views";
 import { Kpi } from "./reports";
@@ -11,12 +11,18 @@ import { ChartBox, bar, line, COL } from "./charts";
 import { fmtDay } from "./api";
 
 const [res, setRes] = createSignal<SimResult | null>(null);
+/** The last run is kept with the plan (project.ui.risk), so it is still there after reopening and prints. */
+const saved = () => (P().ui?.risk?.result ? (P().ui.risk as { result: SimResult; at: string; opts: { iterations: number; low: number; high: number } }) : null);
+const shown = () => res() ?? saved()?.result ?? null;
 const [busy, setBusy] = createSignal(false);
 const [opts, setOpts] = createSignal({ iterations: 1000, low: 10, high: 25, seed: 1 });
 
 export const runRisk = async () => {
   setBusy(true);
-  try { const r = await call<SimResult>("risk_run", { opts: opts() }); if (r) setRes(r); } finally { setBusy(false); }
+  try {
+    const r = await call<SimResult>("risk_run", { opts: opts() });
+    if (r) { setRes(r); act({ Ui: { key: "risk", value: { result: r, at: new Date().toISOString().slice(0, 16).replace("T", " "), opts: opts() } } }); }
+  } finally { setBusy(false); }
 };
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -30,7 +36,8 @@ export const ScheduleRisk = () => {
       <label class="muted" title="Tasks without their own optimistic and pessimistic durations vary between these limits.">Default range −<input class="num" type="number" min="0" max="100" value={opts().low} onChange={e => num("low", e.currentTarget.value)} />% to +<input class="num" type="number" min="0" value={opts().high} onChange={e => num("high", e.currentTarget.value)} />%</label>
       <button class="btn pri" disabled={busy()} onClick={runRisk}>{busy() ? "Running…" : res() ? "Run again" : "Run analysis"}</button>
     </>}>
-      <Show when={res()} fallback={
+      <Show when={!res() && saved()}><p class="muted">Results of the run on {saved()!.at} ({saved()!.opts.iterations.toLocaleString()} runs, −{saved()!.opts.low}% to +{saved()!.opts.high}%). Run again after changing the plan.</p></Show>
+      <Show when={shown()} fallback={
         <div class="panel"><p>Schedule Risk runs the plan {opts().iterations.toLocaleString()} times. In each run every unfinished task takes a duration between its <b>optimistic</b> and <b>pessimistic</b> duration (most often its planned one), and each open risk in the <a class="link" onClick={() => setView("risks")}>Risk Register</a> with a <b>Delay (days)</b> happens with its probability (1 = 10 %, 2 = 30 %, 3 = 50 %, 4 = 70 %, 5 = 90 %).</p>
           <p class="muted">Add the Optimistic Duration and Pessimistic Duration columns to the task sheet (right-click a column heading › Insert Column) to give tasks their own range. Tasks without one use the default range above.</p>
           <p><button class="btn pri" disabled={busy()} onClick={runRisk}>{busy() ? "Running…" : "Run analysis"}</button></p></div>
@@ -48,7 +55,7 @@ export const ScheduleRisk = () => {
             <Kpi v={cur(r().cost_p50)} l={`Cost P50 (plan ${cur(r().cost)})`} />
             <Kpi v={cur(r().cost_p80)} l="Cost P80" />
           </div>
-          <div class="cols">
+          <div class="cols riskcharts">
             <div class="panel" style={{ "grid-column": "span 2" }}>
               <ChartBox title="Finish date: share of runs per day and cumulative" type="bar" fmt="pct" y="Runs" labels={r().days.map(([d]) => fmtDay(d))}
                 datasets={[bar("Finished that day", r().days.map(([, n]) => n / total() * 100), COL.sky), line("Finished by then (cumulative)", cum(), COL.blue)]}

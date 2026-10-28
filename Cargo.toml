@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "src-tauri"]
+members = ["crates/core", "crates/cli", "src-tauri"]
 
 [workspace.dependencies]
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
@@ -11,5 +11,6 @@ serde_json = "1"
 opt-level = "s"
 lto = true
 codegen-units = 1
-panic = "abort"
+# Unwind (not abort): an internal error in one action is caught and reported instead of closing the app.
+panic = "unwind"
 strip = true

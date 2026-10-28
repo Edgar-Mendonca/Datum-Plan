@@ -60,6 +60,14 @@ impl St {
 }
 type R<T> = Result<T, String>;
 
+/// Runs an action so that an internal error (a panic) becomes an error message instead of
+/// closing the app. Edits work on a copy of the plan, so the plan is left as it was.
+fn guard<T>(f: impl FnOnce() -> R<T>) -> R<T> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|_| {
+        Err("Datum Plan met an internal error and stopped that action; your plan is as it was. Details are in crash.log; please report it (Help › Report an Issue).".into())
+    })
+}
+
 /// What the window needs after every change: the project settings (everything except tasks),
 /// its overall figures and the file state. Rows come separately through `query`.
 #[derive(Serialize)]
@@ -133,10 +141,12 @@ fn state(st: State<St>) -> Out {
 
 #[tauri::command]
 fn apply(st: State<St>, op: Op) -> R<Out> {
-    let mut a = st.lock();
-    let fmt = a.opts.date_fmt.clone();
-    a.doc.apply(op, &fmt)?;
-    Ok(out(&a))
+    guard(|| {
+        let mut a = st.lock();
+        let fmt = a.opts.date_fmt.clone();
+        a.doc.apply(op, &fmt)?;
+        Ok(out(&a))
+    })
 }
 
 #[tauri::command]
@@ -195,7 +205,7 @@ fn pick(app: &AppHandle, name: &str, exts: &[&str]) -> Option<PathBuf> {
 async fn open(app: AppHandle, st: State<'_, St>, path: Option<String>) -> R<Option<Out>> {
     let Some(path) = path.map(PathBuf::from).or_else(|| pick(&app, "Datum Plan", &["dplan"])) else { return Ok(None) };
     backup_old(&path);
-    let d = Doc::open(&path)?;
+    let d = guard(|| Doc::open(&path))?;
     remember(&app, &path);
     let mut a = st.lock();
     a.doc = d;
@@ -249,7 +259,7 @@ async fn import(app: AppHandle, st: State<'_, St>) -> R<Option<Imported>> {
     let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let fields = io::table::FIELDS.iter().map(|f| (f.0, f.1)).collect();
     let mut a = st.lock();
-    match io::import(&path)? {
+    match guard(|| io::import(&path))? {
         io::Imported::Plan(p, notes) => {
             let p = fresh(&a, *p);
             a.doc = Doc::new(p);
@@ -308,7 +318,7 @@ async fn save_file(app: AppHandle, name: String, data: String) -> R<Option<Strin
         Some((_, b64)) => base64_decode(b64)?,
         None => data.into_bytes(),
     };
-    std::fs::write(&path, bytes).map_err(|e| format!("Could not save {}: {e}", path.display()))?;
+    doc::write_atomic(&path, &bytes)?;
     Ok(Some(path.display().to_string()))
 }
 
@@ -434,7 +444,7 @@ fn curve(st: State<St>, unit: String) -> report::Curve {
 /// Runs off the window's thread: a big plan takes a few seconds.
 async fn risk_run(st: State<'_, St>, opts: datum_core::risk::SimOpts) -> R<datum_core::risk::SimResult> {
     let p = st.lock().doc.p.clone();
-    datum_core::risk::simulate(&p, &opts)
+    guard(|| datum_core::risk::simulate(&p, &opts))
 }
 
 #[tauri::command]
@@ -459,7 +469,7 @@ fn credit_library() -> Vec<datum_core::CreditRule> {
 
 #[tauri::command]
 fn level_preview(st: State<St>, uids: Vec<u32>) -> R<datum_core::level::Preview> {
-    datum_core::level::preview(&st.lock().doc.p, &uids)
+    guard(|| datum_core::level::preview(&st.lock().doc.p, &uids))
 }
 
 #[tauri::command]
@@ -505,7 +515,7 @@ async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String
         let mut a = st.lock();
         a.opts.workspace = folder.clone();
         if let Some(f) = options_file(&app) {
-            let _ = std::fs::write(f, serde_json::to_string(&a.opts).unwrap_or_default());
+            let _ = doc::write_atomic(&f, serde_json::to_string(&a.opts).unwrap_or_default().as_bytes());
         }
     }
     let fmt = st.lock().opts.date_fmt.clone();
@@ -574,7 +584,7 @@ fn options(st: State<St>) -> Options {
 #[tauri::command]
 fn set_options(app: AppHandle, st: State<St>, opts: Options) -> Out {
     if let Some(f) = options_file(&app) {
-        let _ = std::fs::write(f, serde_json::to_string(&opts).unwrap_or_default());
+        let _ = doc::write_atomic(&f, serde_json::to_string(&opts).unwrap_or_default().as_bytes());
     }
     let mut a = st.lock();
     a.opts = opts;
@@ -601,8 +611,8 @@ fn autosave(app: AppHandle, st: State<St>) {
     let a = st.lock();
     if let (true, Some((plan, meta))) = (a.doc.dirty, recovery_files(&app)) {
         let info = Recovery { name: a.doc.p.name.clone(), path: a.doc.path.as_ref().map(|p| p.display().to_string()), saved: chrono::Local::now().format("%d-%b-%y %H:%M").to_string() };
-        let _ = std::fs::write(plan, a.doc.json());
-        let _ = std::fs::write(meta, serde_json::to_string(&info).unwrap_or_default());
+        let _ = doc::write_atomic(&plan, a.doc.json().as_bytes());
+        let _ = doc::write_atomic(&meta, serde_json::to_string(&info).unwrap_or_default().as_bytes());
     }
 }
 
@@ -644,7 +654,7 @@ fn remember(app: &AppHandle, path: &Path) {
     v.insert(0, p);
     v.truncate(15);
     if let Some(f) = options_file(app).map(|f| f.with_file_name("recent.json")) {
-        let _ = std::fs::write(f, serde_json::to_string(&v).unwrap_or_default());
+        let _ = doc::write_atomic(&f, serde_json::to_string(&v).unwrap_or_default().as_bytes());
     }
 }
 
@@ -668,10 +678,17 @@ fn startup_file(app: AppHandle, st: State<St>) -> Option<String> {
     std::env::args().skip(1).find(|a| a.to_lowercase().ends_with(".dplan")).or_else(last)
 }
 
+/// Only the project's own GitHub pages, with plain URL characters.
+fn allowed_url(url: &str) -> bool {
+    const HOME: &str = "https://github.com/Edgar-Mendonca/Datum-Plan";
+    let rest = url.strip_prefix(HOME).unwrap_or("x");
+    (rest.is_empty() || rest.starts_with(['/', '?', '#'])) && rest.len() < 300 && rest.chars().all(|c| c.is_ascii_alphanumeric() || "-._~/?#&=%+".contains(c))
+}
+
 /// Opens one of the project's GitHub pages in the browser (only those, so the window cannot open anything else).
 #[tauri::command]
 fn open_url(url: String) -> R<()> {
-    if !url.starts_with("https://github.com/Edgar-Mendonca/Datum-Plan") {
+    if !allowed_url(&url) {
         return Err("Only the Datum Plan GitHub pages can be opened.".into());
     }
     #[cfg(windows)]
@@ -707,6 +724,19 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Anything that ever panics is written to crash.log (version, place, message) for an issue report.
+            if let Some(log) = dir(app.handle(), true).map(|d| d.join("crash.log")) {
+                let default = std::panic::take_hook();
+                std::panic::set_hook(Box::new(move |info| {
+                    use std::io::Write;
+                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log) {
+                        let at = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_default();
+                        let what = info.payload().downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| info.payload().downcast_ref::<String>().cloned()).unwrap_or_default();
+                        let _ = writeln!(f, "{} Datum Plan {} panicked at {at}: {what}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), env!("CARGO_PKG_VERSION"));
+                    }
+                    default(info);
+                }));
+            }
             let opts = options_file(app.handle()).and_then(|f| std::fs::read_to_string(f).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
             app.manage(St(Mutex::new(App { doc: Doc::new(Project::new("Project1", today())), opts, clip: vec![], table: None })));
             Ok(())
@@ -728,4 +758,17 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("Datum Plan failed to start");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn only_the_projects_own_pages_open() {
+        for ok in ["https://github.com/Edgar-Mendonca/Datum-Plan", "https://github.com/Edgar-Mendonca/Datum-Plan/issues/new", "https://github.com/Edgar-Mendonca/Datum-Plan/releases"] {
+            assert!(super::allowed_url(ok), "{ok}");
+        }
+        for bad in ["https://github.com/Edgar-Mendonca/Datum-PlanX", "https://evil.com/Edgar-Mendonca/Datum-Plan", "https://github.com/Edgar-Mendonca/Datum-Plan/\"&calc.exe", "https://github.com/Edgar-Mendonca/Datum-Plan/ x", "file:///C:/Windows", "javascript:alert(1)"] {
+            assert!(!super::allowed_url(bad), "{bad}");
+        }
+    }
 }

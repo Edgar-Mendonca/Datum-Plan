@@ -62,7 +62,7 @@ tr.sum td{font-weight:600;background:#f5f8fc}tr.crit td{color:#c81e1e}footer{mar
 pub fn ics(c: &Calc) -> String {
     let p = c.p;
     let mut o = String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Datum Plan//EN\r\nCALSCALE:GREGORIAN\r\n");
-    let fold = |s: &str| s.replace('\\', "\\\\").replace(',', "\\,").replace(';', "\\;").replace('\n', "\\n");
+    let fold = |s: &str| s.replace('\\', "\\\\").replace(',', "\\,").replace(';', "\\;").replace('\r', "").replace('\n', "\\n");
     for (i, t) in p.tasks.iter().enumerate().filter(|&(i, _)| !c.s.summary[i] && !c.s.off[i]) {
         let a = date_of(c.s.es[i]);
         let b = date_of((c.s.ef[i] - 1).max(c.s.es[i])).succ_opt().unwrap_or(a);

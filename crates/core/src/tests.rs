@@ -791,3 +791,59 @@ fn lookahead_and_constraint_log() {
     op(&mut doc, Op::Log { id: 1, item: None }).unwrap();
     assert_eq!(doc.p.log.len(), 1);
 }
+
+#[test]
+fn long_spans_count_working_time_fast_and_right() {
+    // The whole-week shortcut must agree with counting day by day, holidays included.
+    let mut cal = Calendar::standard("S");
+    cal.exceptions.push(Exception { name: "Xmas".into(), from: d(2026, 12, 24), to: d(2027, 1, 1), hours: vec![] });
+    cal.exceptions.push(Exception { name: "Sat shift".into(), from: d(2027, 2, 6), to: d(2027, 2, 6), hours: vec![(480, 720)] });
+    let c = WorkCal::new(&cal);
+    let slow = |a: i64, b: i64| { let mut n = 0; let mut t = a; while t < b { n += c.between(t, (t + 20 * DAY).min(b)); t += 20 * DAY; } n };
+    for (a, b) in [(at(d(2026, 11, 2)) + 9 * H, at(d(2027, 3, 17)) + 15 * H), (at(d(2026, 12, 20)), at(d(2027, 2, 9))), (at(d(2026, 1, 1)) + 1, at(d(2030, 6, 30)) + 777)] {
+        assert_eq!(c.between(a, b), slow(a, b));
+    }
+    let t = std::time::Instant::now();
+    assert!(c.between(at(d(1900, 1, 1)), at(d(2500, 1, 1))) > 0);
+    assert!(t.elapsed().as_millis() < 200);
+}
+
+#[test]
+fn exports_cannot_run_formulas_and_saves_are_atomic() {
+    let dir = std::env::temp_dir().join(format!("datum-safe-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let mut p = plan(&[(5, ""), (3, "1")]);
+    p.tasks[0].name = "=HYPERLINK(\"http://x\",\"click\")".into();
+    p.tasks[1].name = "-2+3".into();
+    let c = Calc::new(&p, "%d-%b-%y", d(2026, 11, 1));
+    let f = dir.join("a.csv");
+    crate::io::table::write_csv(&c, &["name".to_string(), "tf".to_string()], &f).unwrap();
+    let text = std::fs::read_to_string(&f).unwrap();
+    assert!(text.contains("\"'=HYPERLINK(") && text.contains("'-2+3"), "{text}");
+    assert!(!std::fs::read_dir(&dir).unwrap().any(|e| e.unwrap().path().to_string_lossy().ends_with(".saving")));
+    // A file that is too large is refused before it is read.
+    let big = dir.join("big.dplan");
+    let fh = std::fs::File::create(&big).unwrap();
+    fh.set_len(crate::doc::MAX_FILE + 1).unwrap();
+    assert!(Doc::open(&big).is_err_and(|e| e.contains("MB")));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn money_is_exact_to_the_cent() {
+    // 3 tasks at $33.333/h for 3 h: each costs $99.999 → $100.00, and the project $300.00, not $299.997.
+    let mut p = plan(&[(0, ""), (0, ""), (0, "")]);
+    p.resources.push(Resource { uid: 1, name: "Tech".into(), rate: 33.333, max: 1.0, ..Default::default() });
+    for t in &mut p.tasks { t.dur = 180; t.res = vec![Assign { res: 1, units: 1.0, table: 0 }] }
+    let all = p.new_task("All", 0, 0);
+    p.tasks.insert(0, all);
+    for t in &mut p.tasks[1..] { t.level = 1 }
+    let s = schedule(&p).unwrap();
+    let l = load::compute(&p, &s);
+    assert_eq!((l.cost[1], l.cost[0]), (100.0, 300.0));
+    // A typed fixed cost keeps whole cents.
+    let mut doc = Doc::new(p);
+    let uid = doc.p.tasks[1].uid;
+    op(&mut doc, Op::Set { uid, field: "fixedcost".into(), value: "$1,234.5678".into() }).unwrap();
+    assert_eq!(doc.p.tasks[1].fixed_cost, 1234.57);
+}
