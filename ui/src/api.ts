@@ -21,7 +21,7 @@ export interface Resource {
 export interface Indicator { scope: number; test: string; value: string; icon: string }
 export interface CustomDef { key: string; alias: string; lookup: { value: string; desc: string }[]; restrict: boolean; default: string; formula: string; rollup: string; indicators: Indicator[]; show_icons: boolean }
 export interface CodeDef { name: string; scope: string; values: { value: string; desc: string; color: string }[] }
-export interface Risk { id: number; name: string; cause: string; prob: number; impact: number; owner: string; response: string; status: string; tasks: number[]; kind: string }
+export interface Risk { id: number; name: string; cause: string; prob: number; impact: number; owner: string; response: string; status: string; tasks: number[]; kind: string; days: number }
 export interface SchedOpts {
   retained: boolean; critical_float: number; longest_path: boolean; lag_cal: string; float_paths: number; open_ends_critical: boolean;
   level_within_slack: boolean; level_split: boolean; level_order: string; effort_default: boolean; task_type_default: string; from_finish: boolean; finish_date: string | null;
@@ -61,7 +61,12 @@ export interface TaskInfo {
   task: any; fields: [string, string, string, string][]; preds: Rel[]; succs: Rel[];
   assigns: { res: number; name: string; kind: string; units: string; work: string; cost: string }[];
 }
-export interface Usage { buckets: number[]; unit: string; rows: { uid: number; of: number | null; name: string; lvl: number; sum: boolean; total: number; vals: number[]; over: boolean[] }[] }
+export interface Usage { buckets: number[]; unit: string; person: number[]; rows: { uid: number; of: number | null; name: string; lvl: number; sum: boolean; total: number; vals: number[]; over: boolean[]; cap?: number[] }[] }
+export interface TaskRisk { uid: number; name: string; value: number }
+export interface SimResult { runs: number; planned: number; planned_chance: number; p10: number; p50: number; p80: number; p90: number; days: [number, number][]; cost: number; cost_p50: number; cost_p80: number; criticality: TaskRisk[]; drivers: TaskRisk[]; risks: TaskRisk[]; notes: string[] }
+export interface LevelPreview { moved: { uid: number; name: string; start: number; new_start: number; finish: number; new_finish: number }[]; finish: number; new_finish: number; over_before: number; over_after: number }
+/** An instant (minutes) as a short date: finishes at midnight belong to the day before. */
+export const fmtAt = (t: number, fin = false) => fmtDay(Math.floor(((fin ? t - 1 : t)) / 1440));
 export interface Curve { buckets: number[]; planned: number[]; forecast: number[]; actual: number[]; earned: number[] }
 export interface Check { key: string; name: string; about: string; count: number; total: number; value: number; limit: string; pass: boolean; uids: number[] }
 export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean; driving: boolean; lag: string }[]; cols: number; rows: number; bands?: { name: string; row: number; rows: number }[] }

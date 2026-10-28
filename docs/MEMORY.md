@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.3.12** (released 2026-10-28). Earlier: 0.1.0 … 0.3.11 |
+| **Current version** | **0.4.0** (released 2026-10-28). Earlier: 0.1.0 … 0.3.12 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -94,6 +94,8 @@ flowchart LR
 | `crates/core/src/io/` | `mspdi.rs`, `xer.rs`, `table.rs` (CSV/XLSX in with mapping; out with chosen columns), `formats.rs` (JSON, HTML, ICS, MPX, PMXML out), `xml.rs`. JSON/dplan import. |
 | `crates/core/examples/` | `bench.rs` (20k-task timing), `dump.rs` (JSON fixtures for UI tests). |
 | `crates/core/src/tests.rs` | Engine tests (26). |
+| `crates/core/src/risk.rs` | Schedule risk (Monte Carlo): `SimOpts` (iterations, default range −low/+high %, seed), `simulate` → P10/50/80/90, chance of the planned finish, finish-day histogram, cost P50/P80, criticality, drivers (correlation), risk hit rates. Triangular draws; every run is a full `schedule()`. |
+| `ui/src/risk.tsx` | The Schedule Risk view (`simrisk`). |
 | `crates/core/src/cases.rs` | Hand-worked scheduling cases (47 cases, 90+ task dates): rows as "duration \| preds \| field=value" set through `doc::set`, results as "early start, early finish, float". |
 | `crates/core/src/parity.rs`, `crates/core/tests/parity/` | Parity files: XML/XER plans with their own dates (`network.xml`, `network.xer`, hand-made); the test reschedules and compares every task to the minute. Drop real exports from other tools in the folder. |
 | `crates/core/src/hardening.rs` | Hardening tests: a failed edit changes nothing, 1,000 random plans schedule with sane dates, ~3,000 damaged XML/XER/JSON files never panic, 2,000 tasks reschedule fast (debug < 400 ms; release ~3 ms). |
@@ -161,7 +163,7 @@ flowchart LR
 8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
 9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
 
-Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates).
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report).
 
 ---
 
@@ -207,6 +209,11 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
 | 0.3.9 | **? help beside the tools in every Datum app**: a small ? beside each ribbon group, page, panel and main dialog opens a card (what it is for, how to use it) from one `HELP` table in `ui/src/help.tsx`; Help › What Is This Tool? lists them all. No separate teaching mode | The user's words: "at some of the tools, we can add a small question mark icon… we should do it in all of our applications." Built first in Datum Atlas 0.1.1; same code and styles in every app. |
+| 0.4.0 | Monte Carlo uses triangular draws (min, planned, max) and the full scheduler per run; a fixed seed (same plan + settings = same answer); risks 1–5 → 10/30/50/70/90 %; `Risk.days` = working days added to each linked task (opportunities subtract); cost scales with duration except fixed cost | Simple, explainable, and exact to the engine's own rules (calendars, constraints, progress). |
+| 0.4.0 | Trades are the resources' Group; `usage("group")` sums work resources per group with capacity; rows carry `cap`, `Usage.person` = one person's hours per bucket (hours → people) | No new model field; the window shows the engine's capacity instead of computing it. |
+| 0.4.0 | Levelling always previews (`level::preview` levels a clone and diffs the dates) | See what moves before changing the plan. |
+| 0.4.0 | Imports return notes (`Imported::Plan(p, notes)`): reader notes plus a date comparison with the file (`io::stated_dates`, shared with the parity test) | The import report the user asked for in 0.3.12; the comparison makes every import a parity check. |
+| 0.4.0 | Charts over plain numbers use `<Index>`, not `<For>` | `<For>` reuses nodes by value, so bars with equal values kept stale positions. |
 | 0.3.12 | ALAP uses free float only: the largest shift (≤ free float) that every successor link still allows, found by bisection with the forward pass's own rule | Standard rule; using total float pushed ALAP tasks past their successors (found by the random-plan link check). |
 | 0.3.12 | A started task's late start is that of its remaining work; finished successors (and, with progress override, started ones) do not limit a predecessor's late dates | Standard progress rules; the old backward pass gave false negative float under retained logic (found by a hand-worked case). |
 | 0.3.12 | Parity files are hand-made until real exports are added; the README says "checked against hand-worked cases and plan files", never names another product | Honest claim; FAMILY §13. |
@@ -254,8 +261,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.10 | Roadmap + fixes | File › Roadmap (`ui/src/roadmap.tsx` reading `docs/site.json`); print fit-to-pages fix; lighter network cross | ✅ |
 | 0.3.11 | Fixes + hardening quick wins | Dashboard progress without a status date; date picker closes; hardening tests (found and fixed 2 XER crashes); poisoned-lock recovery; `cargo deny`; CI on Windows + macOS; SECURITY/CONTRIBUTING | ✅ |
 | 0.3.12 | Trust in the dates | Hand-worked cases (`cases.rs`), parity files (`parity.rs`), random plans with constraints/calendars (links hold, tight forward pass, row order), random edit sequences, damaged CSV/xlsx; fixed ALAP (free float) and late dates of started work | ✅ |
-| 0.4.0 | Risk & resources | Monte Carlo schedule risk (P50/P80, tornado, criticality), roles and skills with histograms, levelling preview, import report | 🔜 |
-| 0.4.1 | Progress history | Actual S-curve from snapshots, earned schedule, rules of credit, 3-week look-ahead | ⬜ |
+| 0.4.0 | Risk & resources | Schedule Risk (Monte Carlo: P50/P80/P90, cost, criticality, drivers, risk delays, optimistic/pessimistic durations), workload by trade (Group) in hours or people, levelling preview, import report + XER activity types | ✅ |
+| 0.4.1 | Progress history | Actual S-curve from snapshots, manpower planned vs actual by trade, earned schedule, rules of credit, 3-week look-ahead | 🔜 |
 | 0.4.2 | Command line & automation | Hardening plan items 10–12: `datum-cli`, named commands with schemas, MCP server, exact money | ⬜ |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -427,6 +434,11 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Found and fixed: (1) a started successor's late start used its whole duration, so its predecessor showed negative float under retained logic; finished successors also limited predecessors; (2) ALAP tasks took their total float and could break a successor link (and a mixed-calendar negative lag case), now the largest shift within free float that every link allows. My own arithmetic was wrong in five expected values (checked each against the rules before changing the test).
 - Ran the random tests 10× longer in release: clean. README gained "Dates you can trust"; site.json roadmap: 0.4.0 is next (with the import report).
 
+### 2026-10-28: Session 12 (0.4.0, risk and resources)
+- User: build 0.4.0. Built `risk.rs` (+ `dmin`/`dmax` task fields, `Risk.days`), usage by group with capacity and `person`, `level::preview`, import notes in both readers + `compare_dates`, XER activity types; window: Schedule Risk view and sidebar item, Delay (days) column, Resource Graph People/Trades and Hours/People, levelling preview dialog, import report dialog, help cards. 6 engine tests and 8 UI checks added.
+- Checked in the real app (Engineering template): Schedule Risk (1 % chance of the planned 15 Feb; P50 19 Feb, P80 23 Feb; parts lead time drives the finish), levelling preview (5 tasks move, finish 15 → 19 Feb, overallocated days 4 → 0), trades in people. Found and fixed there: stale bars and labels in Resource Graph (`<For>` over numbers → `<Index>`), and the drivers chart skipping every other task name (`autoSkip: false` on horizontal bars).
+- Not built from the old 0.4 list: manpower planned vs actual (needs actuals history, moved to 0.4.1) and the shared resource pool (moved to 0.6 with the portfolio). Schedule Risk is not on the Print page yet.
+
 ## 5. Known limits and next steps
 
 ### Hardening plan (from the ProjectCraft comparison, 2026-10-27; not started)
@@ -468,7 +480,7 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 - The clipboard with real Excel; the Aptos font.
 
 **Features still to build (roadmap):**
-- 0.4 Risk and resources: Monte Carlo schedule risk (P50/P80, tornado, criticality); roles and skills with histograms by trade; a shared resource pool across plans; levelling preview; manpower curves planned vs actual.
+- ✅ 0.4.0 Risk and resources (schedule risk, trades, levelling preview, import report). Left for later: manpower planned vs actual (0.4.1), a shared resource pool across plans (0.6).
 - Progress history: the actual S-curve from snapshots (not a straight line); earned schedule; rules of credit and installed quantities; a 3-week look-ahead with a constraint log.
 - Schedule quality: a health score with trend; baseline compare with ghost bars; a logic change log; a milestone trend chart.
 - Beyond other tools: what-if scenarios (branch, compare, merge); delay analysis (as-planned vs as-built, time impact, windows); line of balance and takt for repetitive work; an optional assistant (review the schedule, draft a plan, write the report narrative).
@@ -478,6 +490,7 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 - Finishing: a text-styles editor (by task type), saved custom views, a user guide for 1.0.
 
 **Known limits:**
+- Schedule Risk results are not on the Print page yet, and are not saved with the plan (run again after opening).
 - Windows SmartScreen warns on the first install (unsigned). Updates after that are silent.
 - XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).

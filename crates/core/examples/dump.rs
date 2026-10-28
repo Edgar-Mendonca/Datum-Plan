@@ -12,6 +12,7 @@ fn main() {
     println!("{}", serde_json::json!({
         "state": { "project": proj, "summary": c.summary(), "path": null, "dirty": false, "undo": false, "redo": false, "clip": 0, "rev": 1 },
         "query": g, "scurve": report::scurve(&c, "week", "duration", None), "period_report": report::period_report(&c, "week", None),
-        "periods": report::period_ends(&c, "week"), "curve": report::curve(&c, "week"), "usage": report::usage(&c, "resource", "work", "week"), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
+        "periods": report::period_ends(&c, "week"), "curve": report::curve(&c, "week"), "usage": report::usage(&c, "resource", "work", "week"), "usage:group": report::usage(&c, "group", "work", "week"),
+        "risk_run": risk::simulate(&p, &risk::SimOpts { iterations: 300, ..Default::default() }).unwrap(), "level_preview": level::preview(&p, &[]).unwrap(), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
     }));
 }

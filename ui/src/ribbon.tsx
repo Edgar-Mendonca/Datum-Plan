@@ -171,7 +171,7 @@ export const Ribbon = () => (
     </Show>
     <Show when={tab() === "report"}>
       <G l="View Reports" h="reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="builder" l="Report Builder" run={() => C.view("builder")} /><B big i="report" l="Reports" run={() => C.view("reports")} /></G>
-      <G l="Health" h="health"><B big i="check" l="Check Schedule" run={() => C.view("checks")} /><B big i="risk" l="Risks" run={() => C.view("risks")} /></G>
+      <G l="Health" h="health"><B big i="check" l="Check Schedule" run={() => C.view("checks")} /><B big i="risk" l="Risks" run={() => C.view("risks")} /><B big i="ev" l="Schedule Risk" run={() => C.view("simrisk")} /></G>
       <G l="Portfolio" h="portfolio"><B big i="folder" l="Portfolio" run={() => C.view("portfolio")} /><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
       <G l="Export" h="export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="pagesetup" l="Page Setup" run={C.pageSetup} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /></G>
     </Show>

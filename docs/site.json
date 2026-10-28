@@ -8,7 +8,7 @@
   "for": "Project managers, planners, engineers and contractors.",
   "about": [
     "Datum Plan is a desktop scheduler for project managers, planners, engineers and contractors. You enter tasks in a sheet that works like a spreadsheet, link them, and the engine works out the critical path to the minute, with working calendars, constraints, every link type and resource levelling.",
-    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value, S-curves, a dashboard and progress reports. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF."
+    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value, S-curves, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF."
   ],
   "steps": [
     {
@@ -26,36 +26,27 @@
   ],
   "highlights": [
     "A task sheet that works like a spreadsheet, with formula columns and Sheets tabs.",
-    "Critical path to the minute: calendars, constraints, all link types, levelling.",
-    "Resources, man-hours and costs; Tracking Gantt with 11 baselines; earned value and S-curves.",
+    "Critical path to the minute: calendars, constraints, all link types, levelling with a preview of what moves.",
+    "Resources, man-hours and costs with workload by trade; Tracking Gantt with 11 baselines; earned value and S-curves.",
+    "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
     "Dashboard, progress reports and a report builder; print to PDF from every view.",
     "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel export with formulas."
   ],
   "screenshots": [
     "docs/images/gantt.png",
     "docs/images/tracking.png",
+    "docs/images/risk.png",
     "docs/images/network.png",
     "docs/images/dashboard.png"
   ],
   "roadmap": [
     {
-      "v": "0.4.0",
-      "title": "Risk and resources",
-      "when": "Next",
-      "items": [
-        "Schedule risk analysis (Monte Carlo): P50 and P80 finish dates and costs, tornado chart, criticality.",
-        "Roles and skills, with histograms by trade; manpower curves planned against actual.",
-        "One resource pool shared by several plans.",
-        "A preview before levelling, showing what moves.",
-        "An import report that lists anything changed or left out when a file is opened."
-      ]
-    },
-    {
       "v": "0.4.1",
       "title": "Progress history",
-      "when": "Soon",
+      "when": "Next",
       "items": [
         "Actual S-curve built from the saved period snapshots.",
+        "Manpower curves: people planned against people who actually worked, by trade.",
         "Earned schedule, so schedule performance stays meaningful near the end.",
         "Progress from installed quantities (rules of credit).",
         "A 3-week look-ahead with a constraint log."
@@ -87,7 +78,7 @@
       "title": "Portfolio and hardening",
       "when": "Later",
       "items": [
-        "Master plans with subprojects, links between projects, a portfolio dashboard.",
+        "Master plans with subprojects, one resource pool shared by several plans, links between projects, a portfolio dashboard.",
         "Smooth with 100,000 tasks; a signed installer (no Windows warning); crash reports.",
         "Exchange files checked against real files from other tools; custom fields and codes in exported files."
       ]

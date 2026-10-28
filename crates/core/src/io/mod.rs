@@ -10,7 +10,8 @@ use chrono::NaiveDate;
 use std::path::Path;
 
 pub enum Imported {
-    Plan(Box<Project>),
+    /// A plan and the import report: what was changed or left out, and how its dates compare.
+    Plan(Box<Project>, Vec<String>),
     /// A spreadsheet that needs its columns mapped first.
     Table(table::Table),
 }
@@ -22,12 +23,65 @@ fn ext(path: &Path) -> String {
 pub fn import(path: &Path) -> Result<Imported, String> {
     let read = || std::fs::read(path).map(|b| String::from_utf8_lossy(&b).into_owned()).map_err(|e| format!("Could not open {}: {e}", path.display()));
     match ext(path).as_str() {
-        "xml" => mspdi::read(&read()?).map(|p| Imported::Plan(Box::new(p))),
-        "xer" => xer::read(&read()?).map(|p| Imported::Plan(Box::new(p))),
-        "json" | "dplan" => Project::from_json(&read()?).map(|p| Imported::Plan(Box::new(p))),
+        "xml" | "xer" => {
+            let text = read()?;
+            let xml = ext(path) == "xml";
+            let (p, mut notes) = if xml { mspdi::read_notes(&text)? } else { xer::read_notes(&text)? };
+            notes.extend(compare_dates(&p, &stated_dates(&text, xml)));
+            Ok(Imported::Plan(Box::new(p), notes))
+        }
+        "json" | "dplan" => Project::from_json(&read()?).map(|p| Imported::Plan(Box::new(p), vec![])),
         "csv" | "txt" | "xlsx" | "xlsm" | "xls" | "ods" => table::read(path).map(Imported::Table),
         "mpp" => Err("MS Project .mpp files are a closed format. In MS Project, use File › Save As › XML, then import the XML file.".into()),
         e => Err(format!("Datum Plan cannot import .{e} files. Use XML, XER, XLSX, CSV or JSON.")),
+    }
+}
+
+/// Task uid → (start, finish) as a Project XML or XER file states them, "YYYY-MM-DD HH:MM".
+pub(crate) fn stated_dates(text: &str, is_xml: bool) -> std::collections::HashMap<u32, (String, String)> {
+    let cut = |s: &str| s.replace('T', " ").chars().take(16).collect::<String>();
+    if is_xml {
+        let Ok(root) = xml::parse(text) else { return Default::default() };
+        return root.get("Tasks").into_iter().flat_map(|t| t.all("Task"))
+            .filter(|t| t.val("OutlineLevel") != "0" && t.val("Start").len() >= 16)
+            .filter_map(|t| Some((t.val("UID").parse().ok()?, (cut(t.val("Start")), cut(t.val("Finish"))))))
+            .collect();
+    }
+    let (mut fields, mut table, mut out) = (vec![], "", std::collections::HashMap::new());
+    for line in text.lines() {
+        let v: Vec<&str> = line.split('\t').collect();
+        match v[0] {
+            "%T" => table = v.get(1).copied().unwrap_or(""),
+            "%F" => fields = v[1..].to_vec(),
+            "%R" if table == "TASK" => {
+                let f = |k: &str| fields.iter().position(|x| *x == k).and_then(|i| v.get(i + 1)).map_or(String::new(), |s| cut(s));
+                if let (Ok(uid), true) = (f("task_id").parse(), f("early_start_date").len() >= 16) { out.insert(uid, (f("early_start_date"), f("early_end_date"))); }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Datum Plan's start and finish against the file's, as notes for the import report.
+fn compare_dates(p: &Project, want: &std::collections::HashMap<u32, (String, String)>) -> Vec<String> {
+    let Ok(s) = sched::schedule(p) else { return vec!["The plan does not schedule yet (see the message in the window).".into()] };
+    let fmt = |t: i64| crate::cal::date_of(t).format("%Y-%m-%d").to_string() + &format!(" {:02}:{:02}", t.rem_euclid(1440) / 60, t.rem_euclid(60));
+    let (mut n, mut diff) = (0, vec![]);
+    for (i, t) in p.tasks.iter().enumerate() {
+        let Some((ws, wf)) = want.get(&t.uid) else { continue };
+        n += 1;
+        let (gs, gf) = (fmt(s.es[i]), fmt(s.ef[i]));
+        if (&gs, &gf) != (ws, wf) { diff.push(format!("\"{}\": file {ws} → {wf}, Datum Plan {gs} → {gf}", t.name)) }
+    }
+    match (n, diff.len()) {
+        (0, _) => vec![],
+        (n, 0) => vec![format!("All {n} tasks get the same start and finish as in the file.")],
+        (n, d) => {
+            let mut v = vec![format!("{d} of {n} tasks get different dates in Datum Plan than in the file. Calendars, progress or scheduling options that work differently are the usual reasons. The first ones:")];
+            v.extend(diff.into_iter().take(5).map(|x| format!("  {x}")));
+            v
+        }
     }
 }
 

@@ -51,6 +51,7 @@ pub fn task_fields() -> &'static [FieldDef] {
             ("tf", "Total Slack", Dur, false), ("ff", "Free Slack", Dur, false), ("leveldelay", "Leveling Delay", Dur, true), ("acttype", "Activity Type", Text, true),
             ("pcttype", "% Complete Type", Text, true), ("lp", "Longest Path", Flag, false), ("fpath", "Float Path", Int, false), ("elapsed", "Elapsed Duration", Flag, false),
             ("split", "Split", Flag, false), ("project_finish_var", "Finish Slack", Dur, false),
+            ("dmin", "Optimistic Duration", Dur, true), ("dmax", "Pessimistic Duration", Dur, true),
         ] { add(k, n, kd, "Schedule", e) }
         for (k, n, kd, e) in [
             ("pct", "% Complete", Pct, true), ("phys", "Physical % Complete", Pct, true), ("workpct", "% Work Complete", Pct, false), ("astart", "Actual Start", Date, true),
@@ -348,6 +349,7 @@ impl<'a> Calc<'a> {
             "tf" => F::Num(s.tf[i] as f64),
             "ff" => F::Num(s.ff[i] as f64),
             "leveldelay" => F::Num(t.level_delay as f64),
+            "dmin" | "dmax" => match if key == "dmin" { t.dmin } else { t.dmax } { 0 => F::Null, m => F::Num(m as f64) },
             "acttype" => txt(match t.act_type { ActType::Task => "Task Dependent", ActType::ResourceDep => "Resource Dependent", ActType::Loe => "Level of Effort", ActType::StartMs => "Start Milestone", ActType::FinishMs => "Finish Milestone", ActType::WbsSummary => "WBS Summary" }),
             "pcttype" => txt(match t.pct_type { PctType::Duration => "Duration", PctType::Units => "Units", PctType::Physical => "Physical" }),
             "lp" => F::Bool(s.lp[i]),

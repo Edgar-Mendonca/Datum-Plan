@@ -680,3 +680,12 @@ tr.behind td { background: var(--err-bg); }
 .rmstage .pill { margin-left: auto; }
 .rmstage ul { margin: 6px 0 4px 54px; padding: 0; }
 .rmstage li { margin: 3px 0; }
+
+/* 0.4.0: Schedule Risk, levelling preview, import report */
+.tbl .meter { display: inline-block; width: 90px; vertical-align: middle; }
+input.num { width: 52px; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--pale); }
+.notes li { margin: 4px 0; }
+.notes li.sub { list-style: none; font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); }
+a.link { color: var(--blue); cursor: pointer; text-decoration: underline; }

@@ -12,6 +12,7 @@ pub mod network;
 pub mod parse;
 pub mod query;
 pub mod report;
+pub mod risk;
 pub mod sched;
 pub mod sheet;
 pub mod templates;

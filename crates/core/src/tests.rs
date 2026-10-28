@@ -285,7 +285,7 @@ fn exchange_round_trips() {
     for ext in ["xml", "xer"] {
         let f = dir.join(format!("plan.{ext}"));
         crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
-        let crate::io::Imported::Plan(q) = crate::io::import(&f).unwrap() else { panic!("{ext} should import as a plan") };
+        let crate::io::Imported::Plan(q, _) = crate::io::import(&f).unwrap() else { panic!("{ext} should import as a plan") };
         same_schedule(&p, &q);
         assert_eq!(q.tasks[1].act_finish, Some(d(2026, 11, 3)), "{ext}");
         assert!(q.calendars.iter().any(|c| c.exceptions.iter().any(|e| e.from == d(2026, 12, 24))), "{ext}");
@@ -623,4 +623,68 @@ fn progress_without_a_status_date() {
     p.status = Some(d(2026, 11, 3));
     let c = Calc::new(&p, "%d-%b-%y", today);
     assert_eq!((c.progress_date(), c.summary().measured_at.as_str()), (d(2026, 11, 3), ""));
+}
+
+#[test]
+fn workload_by_trade_with_capacity() {
+    let mut p = plan(&[(5, ""), (5, ""), (5, "")]);
+    for (uid, name, group) in [(1, "Alice", "Electrical"), (2, "Bob", "Electrical"), (3, "Carl", "Civil"), (4, "Dan", "")] {
+        p.resources.push(Resource { uid, name: name.into(), group: group.into(), max: 1.0, ..Default::default() });
+    }
+    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0 }, Assign { res: 2, units: 1.0, table: 0 }];
+    p.tasks[1].res = vec![Assign { res: 2, units: 1.0, table: 0 }];
+    p.tasks[2].res = vec![Assign { res: 3, units: 0.5, table: 0 }];
+    let c = Calc::new(&p, "%d-%b-%y", d(2026, 11, 1));
+    let u = report::usage(&c, "group", "work", "week");
+    let row = |n: &str| u.rows.iter().find(|r| r.name == n && r.of.is_none()).unwrap_or_else(|| panic!("{n}"));
+    let names: Vec<&str> = u.rows.iter().filter(|r| r.of.is_none()).map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["Civil", "Electrical", "No trade"]);
+    let e = row("Electrical");
+    let k = e.vals.iter().position(|&v| v > 0.0).unwrap_or(0);
+    // Alice 40 h + Bob 80 h (two tasks at once) against 2 people × 40 h: over capacity.
+    assert_eq!((e.vals[k], e.cap[k], e.over[k]), (120.0, 80.0, true));
+    assert_eq!((row("Civil").vals[k], row("Civil").over[k]), (20.0, false));
+    assert_eq!(u.person[k], 40.0);
+    assert_eq!(u.rows.iter().filter(|r| r.of == Some(e.uid)).count(), 2);
+    // By resource, rows now carry their capacity too.
+    let r = report::usage(&c, "resource", "work", "week");
+    assert_eq!(r.rows.iter().find(|x| x.name == "Bob").map(|x| (x.vals[k], x.cap[k])), Some((80.0, 40.0)));
+}
+
+#[test]
+fn levelling_preview_changes_nothing() {
+    let mut p = plan(&[(5, ""), (5, ""), (2, "2")]);
+    p.resources.push(Resource { uid: 1, name: "Alice".into(), max: 1.0, ..Default::default() });
+    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+    p.tasks[1].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+    let before = p.clone();
+    let v = crate::level::preview(&p, &[]).unwrap_or_default();
+    assert_eq!(p, before);
+    // Task 1 has the float (tasks 2 and 3 are the longer path), so it is the one that waits for Alice.
+    assert_eq!(v.moved.iter().map(|m| (m.name.as_str(), when(m.new_start))).collect::<Vec<_>>(), [("T1", "09 08:00".to_string())]);
+    assert_eq!((when(v.finish), when(v.new_finish)), ("10 17:00".to_string(), "13 17:00".to_string()));
+    assert_eq!((v.over_before, v.over_after), (5, 0));
+}
+
+#[test]
+fn import_report_lists_changes_and_compares_dates() {
+    let dir = std::env::temp_dir().join(format!("datum-import-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let src = |f: &str| std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/parity").join(f)).unwrap_or_default();
+    let notes = |name: &str, text: &str| {
+        let f = dir.join(name);
+        let _ = std::fs::write(&f, text);
+        match crate::io::import(&f) { Ok(crate::io::Imported::Plan(_, n)) => n, _ => panic!("{name} did not import as a plan") }
+    };
+    assert_eq!(notes("a.xml", &src("network.xml")), ["All 9 tasks get the same start and finish as in the file."]);
+    // A relationship to an activity that is not there, a secondary constraint, and one date moved in the file.
+    let xer = src("network.xer").replace("%E", "").replace("cstr_type\n", "cstr_type\tcstr_type2\n")
+        .replace("2026-11-17 08:00\t2026-11-17 17:00\t", "2026-11-18 08:00\t2026-11-18 17:00\t\tCS_MSO")
+        + "%R\t99\t6\t777\t1\t1\tPR_FS\t0\n%E\n";
+    let n = notes("b.xer", &xer);
+    assert!(n.iter().any(|x| x.starts_with("1 relationships point to activities that are not in this project")), "{n:?}");
+    assert!(n.iter().any(|x| x.starts_with("1 activities have a secondary constraint")), "{n:?}");
+    assert!(n.iter().any(|x| x.starts_with("1 of 9 tasks get different dates")), "{n:?}");
+    assert!(n.iter().any(|x| x.contains("\"F Test\": file 2026-11-18 08:00")), "{n:?}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

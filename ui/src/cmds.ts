@@ -65,7 +65,7 @@ export const C = {
   details: () => setDetails(!details()),
   timelineBar: () => setTimeline(!timeline()),
   setup: () => setSetupOpen(!setupOpen()),
-  level: (all = true) => act({ Level: { uids: all ? [] : uids(), clear: false } }).then(ok => ok && toast("Resources leveled.", true)),
+  level: (all = true) => D.levelPreview(all ? [] : uids()),
   clearLevel: () => act({ Level: { uids: [], clear: true } }),
   baseline: () => D.setBaseline(uids()),
   update: () => D.updateProject(),

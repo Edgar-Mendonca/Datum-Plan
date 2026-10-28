@@ -84,3 +84,25 @@ pub fn clear(p: &mut Project, only: &[u32]) {
         t.level_delay = 0;
     }
 }
+
+/// A task that levelling would move.
+#[derive(serde::Serialize, Debug)]
+pub struct Moved { pub uid: u32, pub name: String, pub start: i64, pub new_start: i64, pub finish: i64, pub new_finish: i64 }
+
+#[derive(serde::Serialize, Debug, Default)]
+pub struct Preview { pub moved: Vec<Moved>, pub finish: i64, pub new_finish: i64, pub over_before: usize, pub over_after: usize }
+
+/// What levelling the given tasks (all when empty) would do, without changing the plan.
+pub fn preview(p: &Project, only: &[u32]) -> Result<Preview, String> {
+    let mut q = p.clone();
+    level(&mut q, only)?;
+    let (a, b) = (schedule(p)?, schedule(&q)?);
+    // Days on which some work resource is booked over its capacity.
+    let pc = p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0);
+    let over = |p: &Project, s: &Sched| loads(p, s).iter()
+        .filter(|((d, k), (m, _))| *m > p.resources[*k].max_on(date_of(d * DAY)) * s.cals[pc].day_minutes(date_of(d * DAY)).max(1) as f64 + 0.5)
+        .map(|((d, _), _)| *d).collect::<HashSet<_>>().len();
+    let moved = (0..p.tasks.len()).filter(|&i| !a.summary[i] && (a.es[i] != b.es[i] || a.ef[i] != b.ef[i]))
+        .map(|i| Moved { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), start: a.es[i], new_start: b.es[i], finish: a.ef[i], new_finish: b.ef[i] }).collect();
+    Ok(Preview { moved, finish: a.finish, new_finish: b.finish, over_before: over(p, &a), over_after: over(&q, &b) })
+}

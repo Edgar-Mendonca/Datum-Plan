@@ -23,7 +23,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: null, task_info: null };
     window.__calls = [];
-    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
+    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   }, fix);
   await p.goto(url);
   await p.waitForTimeout(700);
@@ -201,11 +201,37 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 0.3.10: Roadmap on the File page; "fit to 1 page wide" gives exactly one page across.
   await p.click(".tabs .file"); await p.waitForTimeout(150);
   await p.click(".tile:has-text('Roadmap')"); await p.waitForTimeout(200);
-  check("Roadmap page lists what comes next", (await p.$$(".rmstage")).length >= 5 && (await p.textContent(".roadmap")).includes("Monte Carlo"));
+  check("Roadmap page lists what comes next", (await p.$$(".rmstage")).length >= 5 && (await p.textContent(".roadmap")).includes("Earned schedule"));
   await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(600);
   const across = await p.$$eval(".pprev .ppage", ps => ps.length);
   check("fit to 1 page wide gives one page for this plan", across === 1, String(across));
   await p.click(".bs aside .back"); await p.waitForTimeout(150);
+
+  // 0.4.0: Schedule Risk, the Delay column, the levelling preview, trades and the import report.
+  await p.click('.side button[title="Sched. Risk"]'); await p.waitForTimeout(200);
+  await p.click(".page .ptools .btn.pri"); await p.waitForTimeout(500);
+  const rk = await p.textContent(".page");
+  check("Schedule Risk runs and shows P50, P80 and criticality", rk.includes("P80") && rk.includes("P50") && (await p.$$(".page tr.click")).length >= 3 && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "risk_run").pop())).includes('"iterations":1000'));
+  await p.click('.side button[title="Risks"]'); await p.waitForTimeout(200);
+  check("the risk register has a Delay (days) column", (await p.textContent(".page thead")).includes("Delay (days)"));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+  await p.click(".tabs > button:text-is('Schedule')"); await p.waitForTimeout(100);
+  await p.click(".ribbon button[title='Level All'], .ribbon button:has-text('Level All')"); await p.waitForTimeout(250);
+  check("Level All with nobody overallocated says so and changes nothing", (await p.textContent("#toast")).includes("Nobody is overallocated") && !(await p.$(".dlg")));
+  await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => c === "level_preview" ? { moved: [{ uid: 3, name: "Wire panel", start: 29990880, new_start: 29993760, finish: 29991900, new_finish: 29994780 }], finish: 30010000, new_finish: 30012000, over_before: 4, over_after: 0 } : c === "import" ? { plan: await inv("state"), notes: ["1 of 9 tasks get different dates in Datum Plan than in the file.", "  \"F Test\": file 2026-11-18 08:00 → 2026-11-18 17:00, Datum Plan 2026-11-17 08:00 → 2026-11-17 17:00"], table: null, fields: [] } : inv(c, a); });
+  await p.click(".ribbon button[title='Level All'], .ribbon button:has-text('Level All')"); await p.waitForTimeout(250);
+  check("Level All shows a preview first", (await p.textContent(".dlg header")).includes("preview") && (await p.$$(".dlg tbody tr")).length === 1 && !JSON.stringify(await p.evaluate(() => window.__calls.slice(-2))).includes("Level"));
+  await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(200);
+  check("Level in the preview levels the plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop())).includes('"Level"'));
+  await p.click(".tabs > button:text-is('Resource')"); await p.waitForTimeout(100);
+  await p.click(".ribbon button:has-text('Resource Graph')"); await p.waitForTimeout(250);
+  await p.click(".page .ptools button:text-is('Trades')"); await p.waitForTimeout(250);
+  check("Resource Graph shows trades against their capacity", (await p.$$eval(".page .ptools select option", o => o.map(x => x.textContent))).includes("Engineering") && (await p.$$(".rgraph rect")).length > 3);
+  await p.click(".tabs .file"); await p.waitForTimeout(150);
+  await p.click(".bs aside button:has-text('Import')"); await p.waitForTimeout(300);
+  check("an imported plan shows its import report", (await p.textContent(".dlg header")).includes("Import report") && (await p.$$(".dlg .notes li")).length === 2);
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {

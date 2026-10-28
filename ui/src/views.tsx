@@ -1,12 +1,12 @@
 // Views other than the Gantt chart.
-import { For, Show, createSignal, createResource, createMemo, createEffect, JSX } from "solid-js";
+import { For, Index, Show, createSignal, createResource, createMemo, createEffect, JSX } from "solid-js";
 import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money } from "./api";
 import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut } from "./store";
 import { C, selectUid } from "./cmds";
 import { Seg, Icon, Check as Chk } from "./ui";
 import { Help } from "./help";
 
-const Page = (p: { title: string; help?: string; tools?: JSX.Element; children: JSX.Element }) => (
+export const Page = (p: { title: string; help?: string; tools?: JSX.Element; children: JSX.Element }) => (
   <section class="page"><div class="ptools"><h1>{p.title}{p.help && <Help k={p.help} />}</h1><span class="grow" />{p.tools}</div>{p.children}</section>
 );
 
@@ -245,30 +245,36 @@ export const ResourceSheet = () => {
 // ---------- Resource Graph ----------
 export const ResourceGraph = () => {
   const [unit, setUnit] = createSignal("week");
-  const [res, setRes] = createSignal(0);
-  const [u] = createResource(() => [tick(), unit()], () => call<Usage>("usage", { by: "resource", what: "work", unit: unit() }));
-  const work = () => P().resources.filter(r => r.kind === "Work");
-  createEffect(() => { if (!res() && work()[0]) setRes(work()[0].uid); });
-  const row = () => u()?.rows.find(r => r.of === null && r.uid === res());
-  const r = () => P().resources.find(x => x.uid === res());
-  const cap = (b: number, k: number) => { const n = (u()?.buckets[k + 1] ?? b + (unit() === "day" ? 1 : 7)) - b; const days = unit() === "day" ? 1 : unit() === "week" ? 5 : Math.round(n * 5 / 7); return (r()?.max ?? 1) * days * P().day_min / 60; };
+  const [by, setBy] = createSignal("resource");
+  const [show, setShow] = createSignal("hours");
+  const [pick, setPick] = createSignal("");
+  const [u] = createResource(() => [tick(), unit(), by()], () => call<Usage>("usage", { by: by(), what: "work", unit: unit() }));
+  const heads = () => (u()?.rows ?? []).filter(r => r.of === null && r.cap?.length);
+  createEffect(() => { if (!heads().some(r => `${r.uid}` === pick()) && heads()[0]) setPick(`${heads()[0].uid}`); });
+  const row = () => heads().find(r => `${r.uid}` === pick());
+  const per = (v: number, k: number) => (show() === "people" ? v / Math.max(1, u()!.person[k] ?? 1) : v);
+  const unitL = () => (show() === "people" ? " people" : "h");
   return (
     <Page title="Resource Graph" help="resviews" tools={<>
-      <select value={res()} onChange={e => setRes(+e.currentTarget.value)}><For each={work()}>{x => <option value={x.uid}>{x.name}</option>}</For></select>
+      <Seg options={[["resource", "People"], ["group", "Trades"]]} value={by()} set={setBy} />
+      <select value={pick()} onChange={e => setPick(e.currentTarget.value)}><For each={heads()}>{x => <option value={x.uid}>{x.name}</option>}</For></select>
+      <Seg options={[["hours", "Hours"], ["people", "People"]]} value={show()} set={setShow} />
       <Seg options={[["day", "Days"], ["week", "Weeks"], ["month", "Months"]]} value={unit()} set={setUnit} />
     </>}>
-      <Show when={row() && u()} fallback={<p class="empty">Add work resources and assign them to see their load.</p>}>{_ => {
-        const vals = row()!.vals, b = u()!.buckets, max = Math.max(1, ...vals, ...b.map(cap)), W = Math.max(600, vals.length * 34), H = 300;
+      <Show when={row() && u()} fallback={<p class="empty">{by() === "group" ? "Give work resources a Group (their trade) in the Resource Sheet and assign them to see each trade's load." : "Add work resources and assign them to see their load."}</p>}>{_ => {
+        const vals = () => row()!.vals.map(per), caps = () => row()!.cap!.map(per), b = () => u()!.buckets;
+        const W = () => Math.max(600, vals().length * 34), H = 300, max = () => Math.max(1, ...vals(), ...caps());
         return (
-          <div class="wlwrap panel"><svg width={W + 60} height={H + 50}>
-            <For each={[0, 0.25, 0.5, 0.75, 1]}>{f => <><line x1="50" x2={W + 50} y1={H - f * H + 10} y2={H - f * H + 10} stroke="#E6EBF2" /><text x="44" y={H - f * H + 14} text-anchor="end" class="ax">{Math.round(max * f)}h</text></>}</For>
-            <For each={vals}>{(v, k) => {
-              const x = 54 + k() * (W / vals.length), w = W / vals.length - 6, c = cap(b[k()], k()), h = v / max * H;
-              return <><rect x={x} y={H - h + 10} width={w} height={h} fill={v > c + 0.01 ? "#D64545" : "#6E9FE6"} rx="2"><title>{`${fmtB(b[k()], unit())}: ${Math.round(v * 10) / 10}h of ${Math.round(c)}h`}</title></rect>
-                <line x1={x - 2} x2={x + w + 2} y1={H - c / max * H + 10} y2={H - c / max * H + 10} stroke="#14325E" stroke-dasharray="4 3" />
-                <Show when={vals.length < 40 || k() % Math.ceil(vals.length / 30) === 0}><text x={x + w / 2} y={H + 28} text-anchor="middle" class="ax">{fmtB(b[k()], unit())}</text></Show></>;
-            }}</For>
-          </svg><p class="muted">Bars show assigned hours; the dashed line is capacity (max units × working hours). Red is over capacity.</p></div>
+          <div class="wlwrap panel"><svg width={W() + 60} height={H + 50} class="rgraph">
+            <For each={[0, 0.25, 0.5, 0.75, 1]}>{f => <><line x1="50" x2={W() + 50} y1={H - f * H + 10} y2={H - f * H + 10} stroke="#E6EBF2" /><text x="44" y={H - f * H + 14} text-anchor="end" class="ax">{Math.round(max() * f * 10) / 10}{show() === "people" ? "" : "h"}</text></>}</For>
+            <Index each={vals()}>{(v, k) => {
+              // Index (not For): bars are plain numbers, so each slot keeps its position when the data changes.
+              const x = () => 54 + k * (W() / vals().length), w = () => W() / vals().length - 6, c = () => caps()[k] ?? 0, h = () => v() / max() * H;
+              return <><rect x={x()} y={H - h() + 10} width={w()} height={h()} fill={v() > c() + 0.01 ? "#D64545" : "#6E9FE6"} rx="2"><title>{`${fmtB(b()[k], unit())}: ${Math.round(v() * 10) / 10}${unitL()} of ${Math.round(c() * 10) / 10}${unitL()}`}</title></rect>
+                <line x1={x() - 2} x2={x() + w() + 2} y1={H - c() / max() * H + 10} y2={H - c() / max() * H + 10} stroke="#14325E" stroke-dasharray="4 3" />
+                <Show when={vals().length < 40 || k % Math.ceil(vals().length / 30) === 0}><text x={x() + w() / 2} y={H + 28} text-anchor="middle" class="ax">{fmtB(b()[k], unit())}</text></Show></>;
+            }}</Index>
+          </svg><p class="muted">Bars show the {show() === "people" ? "people needed (hours ÷ one person's working hours)" : "assigned hours"}{by() === "group" ? " for everyone in the trade" : ""}; the dashed line is capacity (max units × working hours). Red is over capacity.</p></div>
         );
       }}</Show>
     </Page>
@@ -304,14 +310,14 @@ export const TeamPlanner = () => {
 
 // ---------- Risks ----------
 export const Risks = () => {
-  const blank = () => ({ id: Math.max(0, ...P().risks.map(r => r.id)) + 1, name: "New risk", cause: "", prob: 3, impact: 3, owner: "", response: "", status: "Open", tasks: [], kind: "Threat" });
+  const blank = () => ({ id: Math.max(0, ...P().risks.map(r => r.id)) + 1, name: "New risk", cause: "", prob: 3, impact: 3, owner: "", response: "", status: "Open", tasks: [], kind: "Threat", days: 0 });
   const put = (r: any) => act({ Risk: { id: r.id, risk: r } });
   const color = (s: number) => s >= 15 ? "#F8D4D4" : s >= 8 ? "#FDF0D2" : "#DDF2E5";
   return (
-    <Page title="Risk Register" help="risks" tools={<button class="btn pri" onClick={() => put(blank())}>+ Add risk</button>}>
+    <Page title="Risk Register" help="risks" tools={<><button class="btn" onClick={() => setView("simrisk")}>Schedule Risk…</button><button class="btn pri" onClick={() => put(blank())}>+ Add risk</button></>}>
       <div class="cols">
         <div class="panel" style={{ "grid-column": "span 2" }}>
-          <table class="tbl"><thead><tr><th>ID</th><th>Risk</th><th>Type</th><th>Cause</th><th>Prob. (1–5)</th><th>Impact (1–5)</th><th>Score</th><th>Owner</th><th>Response</th><th>Status</th><th>Tasks</th><th /></tr></thead>
+          <table class="tbl"><thead><tr><th>ID</th><th>Risk</th><th>Type</th><th>Cause</th><th>Prob. (1–5)</th><th>Impact (1–5)</th><th>Score</th><th title="Working days added to each linked task when the risk happens (taken off for an opportunity). Used by Schedule Risk.">Delay (days)</th><th>Owner</th><th>Response</th><th>Status</th><th>Tasks</th><th /></tr></thead>
             <tbody><For each={P().risks}>{r => (
               <tr>
                 <td>R{r.id}</td><td><input value={r.name} onChange={e => put({ ...r, name: e.currentTarget.value })} /></td>
@@ -320,6 +326,7 @@ export const Risks = () => {
                 <td><input type="number" min="1" max="5" value={r.prob} onChange={e => put({ ...r, prob: +e.currentTarget.value })} /></td>
                 <td><input type="number" min="1" max="5" value={r.impact} onChange={e => put({ ...r, impact: +e.currentTarget.value })} /></td>
                 <td style={{ background: color(r.prob * r.impact) }}><b>{r.prob * r.impact}</b></td>
+                <td><input type="number" min="0" step="0.5" value={r.days ?? 0} onChange={e => put({ ...r, days: +e.currentTarget.value || 0 })} /></td>
                 <td><input value={r.owner} onChange={e => put({ ...r, owner: e.currentTarget.value })} /></td>
                 <td><input value={r.response} onChange={e => put({ ...r, response: e.currentTarget.value })} /></td>
                 <td><select value={r.status} onChange={e => put({ ...r, status: e.currentTarget.value })}><option>Open</option><option>Mitigating</option><option>Closed</option></select></td>

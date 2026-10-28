@@ -297,6 +297,10 @@ pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str
         "responsible" => p.tasks[i].responsible = v.into(),
         "hyperlink" => p.tasks[i].hyperlink = v.into(),
         "leveldelay" => p.tasks[i].level_delay = if v.is_empty() { 0 } else { parse::dur(v, day)?.0 },
+        "dmin" | "dmax" => {
+            let m = if v.is_empty() { 0 } else { parse::dur(v, day)?.0 };
+            if field == "dmin" { p.tasks[i].dmin = m } else { p.tasks[i].dmax = m }
+        }
         "style" => p.tasks[i].style = serde_json::from_str(value).unwrap_or(serde_json::Value::Null),
         "pct" => set_pct(p, i, v.trim_end_matches('%').trim().parse().map_err(|_| "Enter a number from 0 to 100.")?)?,
         "rem" => {

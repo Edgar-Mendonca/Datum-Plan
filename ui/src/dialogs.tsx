@@ -1,7 +1,7 @@
 // Dialogs: information, settings and editors, MS Project style.
 import { For, Show, createSignal, createMemo, Index } from "solid-js";
 import { createStore, produce } from "solid-js/store";
-import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay, invoke } from "./api";
+import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay, invoke, LevelPreview, fmtAt } from "./api";
 import { allCols, saveAll, deleteCol, act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query } from "./store";
 import { Dialog, Row, Text, Pick, Check, Tabs } from "./ui";
 import * as F from "./fmt";
@@ -434,9 +434,19 @@ export const sortEditor = () => openDialog(() => {
 
 // ---------- files ----------
 export const importFile = async () => {
-  const r = await call<{ plan: Out | null; table: { headers: string[]; rows: string[][]; guess: string[] } | null; fields: [string, string][] } | null>("import");
+  const r = await call<{ plan: Out | null; notes: string[]; table: { headers: string[]; rows: string[][]; guess: string[] } | null; fields: [string, string][] } | null>("import");
   if (!r) return;
-  if (r.plan) { setOut(r.plan); setBackstage(null); toast("Imported. Save it as a .dplan file to keep it.", true); return; }
+  if (r.plan) {
+    setOut(r.plan); setBackstage(null);
+    if (!r.notes.length) { toast("Imported. Save it as a .dplan file to keep it.", true); return; }
+    openDialog(() => (
+      <Dialog title="Import report" wide help="importReport">
+        <p>The plan is open. Save it as a .dplan file to keep it. What Datum Plan noticed on the way in:</p>
+        <ul class="notes"><For each={r.notes}>{n => <li classList={{ sub: n.startsWith("  ") }}>{n.trim()}</li>}</For></ul>
+      </Dialog>
+    ));
+    return;
+  }
   const t = r.table!;
   openDialog(() => {
     const [map, setMap] = createSignal([...t.guess]);
@@ -700,4 +710,27 @@ export const cfStyle = (key: string, text: string): Record<string, string> | und
     if (hit) return { color: r.color, ...(r.bg ? { background: `${r.bg} !important` } : {}), ...(r.bold ? { "font-weight": "700" } : {}) };
   }
   return undefined;
+};
+
+// ---------- levelling preview ----------
+/** Shows what levelling would move before it changes anything. */
+export const levelPreview = async (uids: number[]) => {
+  const v = await call<LevelPreview>("level_preview", { uids });
+  if (!v) return;
+  if (!v.moved.length) { toast(v.over_before ? "Levelling cannot move anything: the overallocated tasks are started, fixed or manual." : "Nobody is overallocated: nothing to level.", !v.over_before); return; }
+  openDialog(() => (
+    <Dialog title={`Level ${uids.length ? "selection" : "all"}: preview`} wide help="leveling" okText="Level" ok={async () => {
+      const ok = await act({ Level: { uids, clear: false } });
+      if (ok) toast(`Resources leveled: ${v.moved.length} tasks moved.`, true);
+    }}>
+      <div class="kpis small">
+        <div class="kpi"><div class="v">{v.moved.length}</div><div class="l">tasks move</div></div>
+        <div class="kpi" classList={{ bad: v.new_finish > v.finish }}><div class="v">{fmtAt(v.finish, true)} → {fmtAt(v.new_finish, true)}</div><div class="l">project finish</div></div>
+        <div class="kpi" classList={{ good: v.over_after < v.over_before }}><div class="v">{v.over_before} → {v.over_after}</div><div class="l">days with someone overallocated</div></div>
+      </div>
+      <div class="mapwrap"><table class="tbl"><thead><tr><th>Task</th><th>Start</th><th>New start</th><th>Finish</th><th>New finish</th></tr></thead>
+        <tbody><For each={v.moved}>{m => <tr><td>{m.name}</td><td>{fmtAt(m.start)}</td><td><b>{fmtAt(m.new_start)}</b></td><td>{fmtAt(m.finish, true)}</td><td><b>{fmtAt(m.new_finish, true)}</b></td></tr>}</For></tbody></table></div>
+      <p class="muted">Nothing changes until you click Level. Clear Leveling takes the delays out again.</p>
+    </Dialog>
+  ));
 };

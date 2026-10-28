@@ -236,6 +236,8 @@ async fn save(app: AppHandle, st: State<'_, St>, as_new: bool) -> R<Option<Out>>
 #[serde(rename_all = "camelCase")]
 struct Imported {
     plan: Option<Out>,
+    /// The import report: what was changed or left out, and how the dates compare with the file.
+    notes: Vec<String>,
     table: Option<io::table::Table>,
     fields: Vec<(&'static str, &'static str)>,
 }
@@ -248,16 +250,16 @@ async fn import(app: AppHandle, st: State<'_, St>) -> R<Option<Imported>> {
     let fields = io::table::FIELDS.iter().map(|f| (f.0, f.1)).collect();
     let mut a = st.lock();
     match io::import(&path)? {
-        io::Imported::Plan(p) => {
+        io::Imported::Plan(p, notes) => {
             let p = fresh(&a, *p);
             a.doc = Doc::new(p);
             a.doc.dirty = true;
-            Ok(Some(Imported { plan: Some(out(&a)), table: None, fields }))
+            Ok(Some(Imported { plan: Some(out(&a)), notes, table: None, fields }))
         }
         io::Imported::Table(t) => {
             let shown = io::table::Table { headers: t.headers.clone(), rows: t.rows.iter().take(8).cloned().collect(), guess: t.guess.clone() };
             a.table = Some((t, name));
-            Ok(Some(Imported { plan: None, table: Some(shown), fields }))
+            Ok(Some(Imported { plan: None, notes: vec![], table: Some(shown), fields }))
         }
     }
 }
@@ -429,6 +431,18 @@ fn curve(st: State<St>, unit: String) -> report::Curve {
 }
 
 #[tauri::command]
+/// Runs off the window's thread: a big plan takes a few seconds.
+async fn risk_run(st: State<'_, St>, opts: datum_core::risk::SimOpts) -> R<datum_core::risk::SimResult> {
+    let p = st.lock().doc.p.clone();
+    datum_core::risk::simulate(&p, &opts)
+}
+
+#[tauri::command]
+fn level_preview(st: State<St>, uids: Vec<u32>) -> R<datum_core::level::Preview> {
+    datum_core::level::preview(&st.lock().doc.p, &uids)
+}
+
+#[tauri::command]
 fn checks(st: State<St>, limits: check::Limits) -> Vec<check::Check> {
     check::run(&calc(&st.lock()), &limits)
 }
@@ -449,7 +463,7 @@ fn network(st: State<St>, q: Query, summaries: Option<bool>, wbs: Option<bool>) 
 async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, Vec<report::Diff>)>> {
     let Some(path) = pick(&app, "Datum Plan", &["dplan", "xml", "xer"]) else { return Ok(None) };
     let old = match io::import(&path)? {
-        io::Imported::Plan(p) => *p,
+        io::Imported::Plan(p, _) => *p,
         io::Imported::Table(_) => return Err("Compare needs a plan file (.dplan, .xml or .xer).".into()),
     };
     let a = st.lock();
@@ -689,7 +703,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, network, compare, workspace, snapshot_rows, sheet_view, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, network, compare, workspace, snapshot_rows, sheet_view, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update
         ])
         .run(tauri::generate_context!())

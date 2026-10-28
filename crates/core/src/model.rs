@@ -140,6 +140,11 @@ pub struct Task {
     /// Working minutes added by resource leveling.
     #[serde(skip_serializing_if = "is_zero")]
     pub level_delay: i64,
+    /// Schedule risk: optimistic and pessimistic durations in working minutes (0 = use the plan's default range).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub dmin: i64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub dmax: i64,
     /// Leveling priority 0–1000 (500 when not set).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<u16>,
@@ -383,6 +388,8 @@ pub struct Risk {
     pub status: String,
     pub tasks: Vec<u32>,
     pub kind: String,
+    /// Schedule impact in working days on each linked task when the risk occurs (schedule risk analysis).
+    pub days: f64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

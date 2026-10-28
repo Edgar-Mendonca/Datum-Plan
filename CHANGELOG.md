@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 — 2026-10-28
+
+Risk and resources: see how likely your finish date is, see the workload of each trade, preview levelling, and get a report on every import.
+
+**Schedule Risk** (Report › Schedule Risk, or the sidebar)
+- Runs the plan 500 to 5,000 times. In each run every unfinished task takes a duration between its optimistic and pessimistic duration (most often the planned one), and each open risk in the register happens with its probability.
+- Shows the chance of finishing by the planned date, the P50, P80 and P90 finish dates, the cost at P50 and P80, a chart of finish dates with the cumulative curve, how often each task was critical, and which tasks drive the finish.
+- New task columns **Optimistic Duration** and **Pessimistic Duration**. Tasks without them use a default range (−10 % to +25 %, which you can change).
+- The Risk Register has a new **Delay (days)** column: working days a risk adds to its linked tasks when it happens (an opportunity takes them off). Probabilities 1–5 count as 10 %, 30 %, 50 %, 70 % and 90 %.
+- The same plan and settings always give the same answer, so you can compare before and after a change.
+
+**Resources**
+- Resource Graph › **Trades** adds up everyone in the same Group (their trade or role) against the trade's capacity. **People** shows the load as people instead of hours.
+- **Level All** and **Level Selection** first show a preview: which tasks move, the new finish date, and how many overallocated days remain. Nothing changes until you click Level.
+
+**Import report**
+- Opening an XML or XER file ends with a short report: anything Datum Plan changed or left out (links to tasks that are not in the file, secondary constraints, elapsed lags), and whether every task gets the same start and finish as in the file, with the first differences listed.
+- XER files keep their activity types: level of effort, WBS summary, resource dependent and milestones.
+
+**Fixes**
+- Resource Graph bars and labels stay in place when you switch between people, trades and periods.
+- A horizontal bar chart now names every bar.
+
 ## 0.3.12 — 2026-10-28
 
 Trust in the dates: the scheduling engine is now checked against worked examples, plan files that carry their own dates, and thousands of random plans. The checks found two scheduling mistakes, now fixed.

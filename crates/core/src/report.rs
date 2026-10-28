@@ -19,10 +19,19 @@ pub struct UseRow {
     pub total: f64,
     pub vals: Vec<f64>,
     pub over: Vec<bool>,
+    /// Hours available per bucket (resource and trade rows).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cap: Vec<f64>,
 }
 
 #[derive(Serialize)]
-pub struct Usage { pub buckets: Vec<i64>, pub unit: String, pub rows: Vec<UseRow> }
+pub struct Usage {
+    pub buckets: Vec<i64>,
+    pub unit: String,
+    pub rows: Vec<UseRow>,
+    /// Working hours of one person full time in each bucket (to show hours as people).
+    pub person: Vec<f64>,
+}
 
 fn bucket_of(b: &[i64], d: i64) -> Option<usize> {
     if b.is_empty() || d < b[0] {
@@ -42,14 +51,18 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
         let a = p.tasks[i].res.iter().find(|a| p.res_idx(a.res) == Some(k)).map_or(0, |a| a.table);
         p.resources[k].rate_on(a, date_of(d * DAY)).0
     };
-    if by == "resource" {
+    let pc = &s.cals[p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0)];
+    let tail = b.last().map_or(0, |&x| buckets(x, x + 400, unit).get(1).copied().unwrap_or(x + 1));
+    let days_of = |j: usize| b[j]..b.get(j + 1).copied().unwrap_or(tail);
+    let person: Vec<f64> = (0..b.len()).map(|j| days_of(j).map(|d| pc.day_minutes(date_of(d * DAY)) as f64 / 60.0).sum()).collect();
+    if by == "resource" || by == "group" {
         let mut per: BTreeMap<(usize, usize), Vec<f64>> = BTreeMap::new();
         for (&(k, i, d), &m) in &l.assign_daily {
             if let Some(j) = bucket_of(&b, d) {
                 per.entry((k, i)).or_insert_with(empty)[j] += if cost { m / 60.0 * rate(k, i, d) } else { m / 60.0 };
             }
         }
-        let pc = &s.cals[p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0)];
+        let mut res_rows = vec![];
         for (k, r) in p.resources.iter().enumerate() {
             let kids: Vec<(&(usize, usize), &Vec<f64>)> = per.range((k, 0)..(k + 1, 0)).collect();
             let mut vals = empty();
@@ -58,9 +71,32 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
                 let end = b.get(j + 1).copied().unwrap_or(d0 + 1);
                 r.kind == ResKind::Work && (d0..end).any(|d| l.daily.get(&(k, d)).is_some_and(|&m| m > r.max_on(date_of(d * DAY)) * pc.day_minutes(date_of(d * DAY)) as f64 + 0.5))
             }).collect();
-            rows.push(UseRow { uid: r.uid, of: None, name: r.name.clone(), lvl: 0, sum: true, total: vals.iter().sum(), vals, over });
-            for ((_, i), v) in kids {
-                rows.push(UseRow { uid: p.tasks[*i].uid, of: Some(r.uid), name: p.tasks[*i].name.clone(), lvl: 1, sum: false, total: v.iter().sum(), vals: v.clone(), over: vec![] });
+            let cap = if r.kind == ResKind::Work { (0..b.len()).map(|j| days_of(j).map(|d| r.max_on(date_of(d * DAY)) * pc.day_minutes(date_of(d * DAY)) as f64 / 60.0).sum()).collect() } else { vec![] };
+            let kid_rows: Vec<UseRow> = kids.iter().map(|((_, i), v)| UseRow { uid: p.tasks[*i].uid, of: Some(r.uid), name: p.tasks[*i].name.clone(), lvl: 1, sum: false, total: v.iter().sum(), vals: (*v).clone(), over: vec![], cap: vec![] }).collect();
+            res_rows.push((UseRow { uid: r.uid, of: None, name: r.name.clone(), lvl: 0, sum: true, total: vals.iter().sum(), vals, over, cap }, kid_rows));
+        }
+        if by == "resource" {
+            for (r, kids) in res_rows {
+                rows.push(r);
+                rows.extend(kids);
+            }
+        } else {
+            // Trades (resource groups) of work resources: the total against the trade's capacity.
+            let mut groups: Vec<(String, Vec<UseRow>)> = vec![];
+            for ((mut r, _), res) in res_rows.into_iter().zip(&p.resources).filter(|(_, x)| x.kind == ResKind::Work) {
+                let g = if res.group.trim().is_empty() { "No trade".to_string() } else { res.group.trim().to_string() };
+                (r.sum, r.lvl) = (false, 1);
+                match groups.iter_mut().find(|x| x.0 == g) { Some(x) => x.1.push(r), None => groups.push((g, vec![r])) }
+            }
+            groups.sort_by(|a, b| (a.0 == "No trade").cmp(&(b.0 == "No trade")).then(a.0.cmp(&b.0)));
+            for (k, (g, mut members)) in groups.into_iter().enumerate() {
+                let (mut vals, mut cap) = (empty(), empty());
+                for m in &members { (0..b.len()).for_each(|j| { vals[j] += m.vals[j]; cap[j] += m.cap.get(j).copied().unwrap_or(0.0) }) }
+                let over = (0..b.len()).map(|j| vals[j] > cap[j] + 0.01).collect();
+                let uid = k as u32 + 1;
+                members.iter_mut().for_each(|m| m.of = Some(uid));
+                rows.push(UseRow { uid, of: None, name: g, lvl: 0, sum: true, total: vals.iter().sum(), vals, over, cap });
+                rows.extend(members);
             }
         }
     } else {
@@ -77,7 +113,7 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
             }
         }
         for (i, t) in p.tasks.iter().enumerate().filter(|&(i, _)| !s.off[i]) {
-            rows.push(UseRow { uid: t.uid, of: None, name: t.name.clone(), lvl: t.level, sum: s.summary[i], total: per[i].iter().sum(), vals: per[i].clone(), over: vec![] });
+            rows.push(UseRow { uid: t.uid, of: None, name: t.name.clone(), lvl: t.level, sum: s.summary[i], total: per[i].iter().sum(), vals: per[i].clone(), over: vec![], cap: vec![] });
             if s.summary[i] {
                 continue;
             }
@@ -89,11 +125,11 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
                         v[j] += if cost { m / 60.0 * rate(k, i, d) } else { m / 60.0 };
                     }
                 }
-                rows.push(UseRow { uid: p.resources[k].uid, of: Some(t.uid), name: p.resources[k].name.clone(), lvl: t.level + 1, sum: false, total: v.iter().sum(), vals: v, over: vec![] });
+                rows.push(UseRow { uid: p.resources[k].uid, of: Some(t.uid), name: p.resources[k].name.clone(), lvl: t.level + 1, sum: false, total: v.iter().sum(), vals: v, over: vec![], cap: vec![] });
             }
         }
     }
-    Usage { buckets: b, unit: unit.into(), rows }
+    Usage { buckets: b, unit: unit.into(), rows, person }
 }
 
 /// Cash flow and S-curve data per bucket: baseline (planned value), current forecast and actual cost.

@@ -54,12 +54,13 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 ### Schedule
 - A critical path engine that works to the minute, with working calendars, holidays, task and resource calendars, all constraint types, deadlines and elapsed durations.
 - Longest path, float paths, free and total float, retained logic or progress override, scheduling from the finish.
-- Resource levelling (all tasks or a selection) and clearing it again.
+- Resource levelling (all tasks or a selection), with a preview of which tasks move and the new finish before anything changes, and clearing it again.
+- **Schedule risk analysis:** the plan runs a thousand times with uncertain durations and the risks from the register, to show the chance of finishing by each date (P50, P80, P90), the likely cost, how often each task is critical, and which tasks drive the finish.
 - A schedule health check with drill-down to the tasks behind each finding.
 
 ### Resources and cost
 - Work, material and cost resources, with groups, rates over time, overtime, cost per use, availability, and 8-hour days or any calendar you set.
-- Man-hours and costs per task, resource and period; resource usage, histograms and overallocation warnings; Team Planner.
+- Man-hours and costs per task, resource and period; resource usage, histograms and overallocation warnings, per person or per trade (in hours or people); Team Planner.
 - Fixed costs, expenses, any currency, and cash flow.
 
 ### Track progress
@@ -70,15 +71,16 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 ### Report, print and share
 - **Dashboard** with key figures and charts, **Progress reports** for any week or month with notes and photos, **S-curves**, and a **Report Builder** with templates (weekly management, monthly client, schedule health, cost).
 - **Print to paper or PDF from every view:** paper size, orientation, scaling or fit to pages, margins, date ranges, page ranges, headers and footers with your logo and your client's, page numbers and a legend.
-- Excel export keeps formulas and formatting. Also exports to CSV, HTML, iCalendar and JSON, and imports and exports the common project exchange files (XML, XER, PMXML, MPX).
+- Excel export keeps formulas and formatting. Also exports to CSV, HTML, iCalendar and JSON, and imports and exports the common project exchange files (XML, XER, PMXML, MPX). Every import ends with a report of anything changed or left out, and whether every task gets the same dates as in the file.
 
 ### Views
-Gantt Chart · Tracking Gantt · Network Diagram (whiteboard canvas, legend, WBS bands, mini-map, path highlight) · Calendar · Timeline with a zoom box · Task Usage · Resource Sheet · Resource Usage · Resource Graph · Team Planner · Relationship Diagram · Sheets · Dashboard · Progress · S-Curves · Checks · Risks · Portfolio.
+Gantt Chart · Tracking Gantt · Schedule Risk · Network Diagram (whiteboard canvas, legend, WBS bands, mini-map, path highlight) · Calendar · Timeline with a zoom box · Task Usage · Resource Sheet · Resource Usage · Resource Graph · Team Planner · Relationship Diagram · Sheets · Dashboard · Progress · S-Curves · Checks · Risks · Portfolio.
 
 ### Help when you need it
 Tell Me (Ctrl+K) finds any command. Help › **Getting Started** and a searchable **Glossary** explain every term. Light, dark or automatic theme.
 
 <img src="docs/images/tracking.png" alt="Tracking Gantt: baseline, progress and actual dates" width="100%">
+<img src="docs/images/risk.png" alt="Schedule Risk: chance of each finish date, criticality and the tasks that drive the finish" width="100%">
 <img src="docs/images/network.png" alt="Network Diagram with legend" width="100%">
 <img src="docs/images/dashboard.png" alt="Project Dashboard with S-curve" width="100%">
 

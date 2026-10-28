@@ -185,7 +185,11 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
     o
 }
 
-pub fn read(text: &str) -> Result<Project, String> {
+pub fn read(text: &str) -> Result<Project, String> { read_notes(text).map(|x| x.0) }
+
+/// Reads an XER file and notes what was changed or left out on the way in.
+pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
+    let mut notes = vec![];
     let mut tables: HashMap<String, Vec<HashMap<String, String>>> = HashMap::new();
     let (mut cur, mut fields): (String, Vec<String>) = (String::new(), vec![]);
     for line in text.lines() {
@@ -269,8 +273,9 @@ pub fn read(text: &str) -> Result<Project, String> {
         let ty = g(t, "task_type");
         let dur = if ty.contains("Mile") { 0 } else { (g(t, "target_drtn_hr_cnt").parse::<f64>().unwrap_or(0.0) * 60.0).round() as i64 };
         let ct = cons(&g(t, "cstr_type"));
+        let act_type = match ty.as_str() { "TT_LOE" => ActType::Loe, "TT_WBS" => ActType::WbsSummary, "TT_Rsrc" => ActType::ResourceDep, "TT_Mile" => ActType::StartMs, "TT_FinMile" => ActType::FinishMs, _ => ActType::Task };
         Task {
-            uid: g(t, "task_id").parse().unwrap_or(0), name: g(t, "task_name"), level, dur, code: g(t, "task_code"),
+            uid: g(t, "task_id").parse().unwrap_or(0), name: g(t, "task_name"), level, dur, code: g(t, "task_code"), act_type,
             pct: g(t, "phys_complete_pct").parse::<f64>().unwrap_or(0.0).round() as u8,
             constraint: ct, cdate: if matches!(ct, Constraint::ASAP | Constraint::ALAP) { None } else { date(g(t, "cstr_date")) },
             cal: cal_names.get(&g(t, "clndr_id")).cloned(),
@@ -286,15 +291,21 @@ pub fn read(text: &str) -> Result<Project, String> {
     // Activities outside the WBS tree go at the end.
     let have: std::collections::HashSet<String> = p.tasks.iter().map(|x| x.uid.to_string()).collect();
     let rest: Vec<Task> = rows("TASK").iter().filter(mine).filter(|t| !have.contains(&g(t, "task_id"))).map(|t| mk(t, 0)).collect();
+    if !rest.is_empty() { notes.push(format!("{} activities are outside the WBS; they are at the end of the plan.", rest.len())) }
     p.tasks.extend(rest);
+    let second = rows("TASK").iter().filter(mine).filter(|t| !g(t, "cstr_type2").is_empty()).count();
+    if second > 0 { notes.push(format!("{second} activities have a secondary constraint, which Datum Plan does not use yet; only the primary constraint was kept.")) }
+    let mut dropped = 0;
     for l in rows("TASKPRED") {
         let (s, q): (u32, u32) = (g(l, "task_id").parse().unwrap_or(0), g(l, "pred_task_id").parse().unwrap_or(0));
         let kind = match g(l, "pred_type").as_str() { "PR_SS" => LinkType::SS, "PR_FF" => LinkType::FF, "PR_SF" => LinkType::SF, _ => LinkType::FS };
         let lag = (g(l, "lag_hr_cnt").parse::<f64>().unwrap_or(0.0) * 60.0).round() as i64;
-        if let Some(t) = p.tasks.iter_mut().find(|t| t.uid == s) {
-            t.preds.push(Link { pred: q, kind, lag, pct: false });
+        match p.tasks.iter().position(|t| t.uid == q).and(p.tasks.iter_mut().find(|t| t.uid == s)) {
+            Some(t) => t.preds.push(Link { pred: q, kind, lag, pct: false }),
+            None => dropped += 1,
         }
     }
+    if dropped > 0 { notes.push(format!("{dropped} relationships point to activities that are not in this project (another project or a deleted activity); they were left out.")) }
     for r in rows("RSRC") {
         let kind = if g(r, "rsrc_type") == "RT_Mat" { ResKind::Material } else { ResKind::Work };
         p.resources.push(Resource { uid: g(r, "rsrc_id").parse().unwrap_or(0), name: g(r, "rsrc_name"), kind, ..Default::default() });
@@ -310,5 +321,5 @@ pub fn read(text: &str) -> Result<Project, String> {
         }
     }
     p.normalize();
-    Ok(p)
+    Ok((p, notes))
 }

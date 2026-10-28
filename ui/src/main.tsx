@@ -24,12 +24,13 @@ import { Backstage, update, checkUpdate } from "./backstage";
 import { Setup } from "./setup";
 import { Menu, Toast, Icon, Dialog } from "./ui";
 import * as D from "./dialogs";
+import { ScheduleRisk } from "./risk";
 
 const SIDE: ([View, string, string] | "-")[] = [
   ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
   ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["team", "team", "Team"], "-",
   ["sheets", "table", "Sheets"], "-",
-  ["update", "update", "Update"], ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["builder", "builder", "Builder"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["portfolio", "folder", "Portfolio"],
+  ["update", "update", "Update"], ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["builder", "builder", "Builder"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["simrisk", "ev", "Sched. Risk"], ["portfolio", "folder", "Portfolio"],
 ];
 
 const GanttView = () => {
@@ -139,6 +140,7 @@ const App = () => {
               <Match when={view() === "builder"}><ReportBuilder /></Match>
               <Match when={view() === "reports"}><Reports /></Match>
               <Match when={view() === "risks"}><Risks /></Match>
+              <Match when={view() === "simrisk"}><ScheduleRisk /></Match>
               <Match when={view() === "checks"}><Checks /></Match>
               <Match when={view() === "portfolio"}><Portfolio /></Match>
             </Switch>

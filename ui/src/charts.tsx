@@ -74,6 +74,8 @@ export const ChartBox = (p: ChartProps) => {
     });
     const vAxis = { ...axis(p.y, true), beginAtZero: true, ...(p.max !== undefined ? { max: p.max } : {}) };
     const hAxis = axis(p.x, false);
+    // A horizontal bar chart names every bar (task names), so none may be skipped.
+    if (p.horizontal) hAxis.ticks = { ...hAxis.ticks, autoSkip: false } as typeof hAxis.ticks;
     ch = new Chart(cv, {
       type: p.type,
       data: { labels: p.labels, datasets: p.datasets as ChartDataset<"line" | "bar", (number | null)[]>[] },

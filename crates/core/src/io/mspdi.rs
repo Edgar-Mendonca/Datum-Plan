@@ -150,7 +150,11 @@ fn read_hours(n: &Node) -> Hours {
     }).collect())
 }
 
-pub fn read(text: &str) -> Result<Project, String> {
+pub fn read(text: &str) -> Result<Project, String> { read_notes(text).map(|x| x.0) }
+
+/// Reads a Project XML file and notes what was changed or left out on the way in.
+pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
+    let (mut notes, mut elapsed, mut late_bl) = (vec![], 0, 0);
     let root = parse(text)?;
     if root.name != "Project" {
         return Err("This XML file is not a Microsoft Project XML file.".into());
@@ -230,11 +234,13 @@ pub fn read(text: &str) -> Result<Project, String> {
             if let Ok(pred) = l.val("PredecessorUID").parse() {
                 let lag = l.val("LinkLag").parse::<i64>().unwrap_or(0) / 10;
                 let pct = matches!(l.val("LagFormat"), "19" | "20");
+                if matches!(l.val("LagFormat"), "4" | "6" | "8" | "10" | "12" | "20") { elapsed += 1 }
                 k.preds.push(Link { pred, kind: l.val("Type").parse::<usize>().ok().and_then(|i| LINKS.get(i).copied()).unwrap_or(LinkType::FS), lag, pct });
             }
         }
         for b in t.all("Baseline") {
             let Ok(n) = b.val("Number").parse::<u8>() else { continue };
+            if n > 10 { late_bl += 1 }
             if let (Some(bs), Some(bf), true) = (date(b.val("Start")), date(b.val("Finish")), n <= 10) {
                 let tm = |s: &str| s.get(11..16).and_then(|x| Some(x.get(..2)?.parse::<i64>().ok()? * 60 + x.get(3..)?.parse::<i64>().ok()?)).unwrap_or(0);
                 k.bls.insert(n, Baseline { start: at(bs) + tm(b.val("Start")), finish: at(bf) + tm(b.val("Finish")), dur: read_dur(b.val("Duration")), cost: b.val("Cost").parse().unwrap_or(0.0) });
@@ -263,6 +269,11 @@ pub fn read(text: &str) -> Result<Project, String> {
             t.res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0), table: 0 });
         }
     }
+    let uids: std::collections::HashSet<u32> = p.tasks.iter().map(|t| t.uid).collect();
+    let missing: usize = p.tasks.iter_mut().map(|t| { let n = t.preds.len(); t.preds.retain(|l| uids.contains(&l.pred)); n - t.preds.len() }).sum();
+    if missing > 0 { notes.push(format!("{missing} links point to tasks that are not in the file; they were left out.")) }
+    if elapsed > 0 { notes.push(format!("{elapsed} links have an elapsed lag (counted round the clock); Datum Plan counts them in working time.")) }
+    if late_bl > 0 { notes.push(format!("{late_bl} baseline values beyond Baseline 10 were left out.")) }
     p.normalize();
-    Ok(p)
+    Ok((p, notes))
 }
