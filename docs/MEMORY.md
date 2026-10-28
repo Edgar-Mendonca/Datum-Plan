@@ -495,7 +495,7 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 
 **Features still to build (roadmap):**
 - ✅ 0.4.0 Risk and resources (schedule risk, trades, levelling preview, import report). Left for later: manpower planned vs actual (0.4.1), a shared resource pool across plans (0.6).
-- Progress history: the actual S-curve from snapshots (not a straight line); earned schedule; rules of credit and installed quantities; a 3-week look-ahead with a constraint log.
+- ✅ 0.4.1 Progress history (actual S-curve through stored periods, earned schedule, manpower by trade, rules of credit and quantities, look-ahead with constraint log).
 - Schedule quality: a health score with trend; baseline compare with ghost bars; a logic change log; a milestone trend chart.
 - Beyond other tools: what-if scenarios (branch, compare, merge); delay analysis (as-planned vs as-built, time impact, windows); line of balance and takt for repetitive work; an optional assistant (review the schedule, draft a plan, write the report narrative).
 - Portfolio: master plans and subprojects, cross-project links, a portfolio dashboard.
