@@ -99,7 +99,7 @@ Tell Me (Ctrl+K) finds any command. Help › **Getting Started** and a searchabl
 
 See the [changelog](CHANGELOG.md) for every release and the [roadmap](docs/MEMORY.md#3-roadmap) for what is next: schedule risk analysis (Monte Carlo), a shared resource pool across plans, portfolio dashboards, signed installers, and working together on shared plans.
 
-Datum Plan is the first of the **Datum** family of tools; [docs/FAMILY.md](docs/FAMILY.md) describes the shared design.
+Datum Plan is part of [Datum](https://edgar-mendonca.github.io/Datum/); see its page: https://edgar-mendonca.github.io/Datum/apps/plan. [docs/FAMILY.md](docs/FAMILY.md) describes the shared design.
 
 ## Build from source
 

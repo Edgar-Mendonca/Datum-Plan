@@ -6,6 +6,24 @@
   "logo": "docs/brand/datum-plan-icon.svg",
   "tagline": "Plan, schedule, track and report your projects: one small, fast app for Windows.",
   "for": "Project managers, planners, engineers and contractors.",
+  "about": [
+    "Datum Plan is a desktop scheduler for project managers, planners, engineers and contractors. You enter tasks in a sheet that works like a spreadsheet, link them, and the engine works out the critical path to the minute, with working calendars, constraints, every link type and resource levelling.",
+    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value, S-curves, a dashboard and progress reports. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF."
+  ],
+  "steps": [
+    {
+      "title": "Enter the tasks",
+      "text": "Type tasks, durations and resources into the sheet, or open an existing plan."
+    },
+    {
+      "title": "Link and schedule",
+      "text": "Link the tasks; the engine works out dates, float and the critical path."
+    },
+    {
+      "title": "Track and report",
+      "text": "Save a baseline, record progress, and print the Gantt, the S-curve and the reports."
+    }
+  ],
   "highlights": [
     "A task sheet that works like a spreadsheet, with formula columns and Sheets tabs.",
     "Critical path to the minute: calendars, constraints, all link types, levelling.",
