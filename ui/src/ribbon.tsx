@@ -3,6 +3,7 @@ import { For, Show, JSX, createSignal, createMemo, onMount } from "solid-js";
 import { call, out, tab, setTab, setBackstage, view, openMenu, Item, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import * as D from "./dialogs";
+import * as P2 from "./progress";
 import { Icon } from "./ui";
 import { STYLES, gstyle } from "./gantt";
 import { showCrit, setShowCrit, showBase, setShowBase, showSlack, setShowSlack, showLate, setShowLate, showLabels, setShowLabels } from "./gantt";
@@ -159,9 +160,10 @@ export const Ribbon = () => (
     <Show when={tab() === "progress"}>
       <G l="Update" h="update"><div class="pcts"><For each={[0, 25, 50, 75, 100]}>{v => <button class="rb" title={`${v}% complete`} onClick={() => C.pct(v)}><Icon n="pct" /><span>{v}%</span></button>}</For></div>
         <S><B i="track" l="Mark on Track" run={C.onTrack} /><B i="info" l="Update Tasks" run={C.info} /><B i="track" l="Update Project" run={C.update} /></S></G>
-      <G l="Period" h="period"><B big i="update" l="Update Progress" run={() => C.view("update")} /><S><B i="calendar2" l="Status Date" run={() => D.projectInfo()} /><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /></S></G>
+      <G l="Period" h="period"><B big i="update" l="Update Progress" run={() => C.view("update")} /><B big i="cal" l="Look-ahead" run={() => C.view("lookahead")} /><S><B i="calendar2" l="Status Date" run={() => D.projectInfo()} /><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /></S></G>
       <G l="Baselines" h="baselines"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="report" l="Store Snapshot" run={() => D.snapshot()} /><B i="base" l="Show Baseline" dd={e => openMenu(e, baselineMenu())} on={showBase()} /><B i="base" l="Tracking Gantt" run={() => C.view("tracking")} /></S></G>
-      <G l="Progress Reports" h="progressReports"><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /></G>
+      <G l="Progress Reports" h="progressReports"><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="team" l="Manpower" run={() => C.view("manpower")} /><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /></G>
+      <G l="Measure" h="credit"><B big i="list" l="Rules of Credit" run={() => P2.rulesOfCredit()} /></G>
     </Show>
     <Show when={tab() === "resource"}>
       <G l="View" h="resviews"><B big i="res" l="Resource Sheet" run={() => C.view("ressheet")} dd={e => openMenu(e, viewMenu())} /><B big i="team" l="Team Planner" run={() => C.view("team")} /></G>

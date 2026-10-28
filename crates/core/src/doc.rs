@@ -71,6 +71,12 @@ pub enum Op {
     Style { cells: Vec<(u32, String, String)> },
     /// Sets the text formatting of spreadsheet cells.
     SheetStyle { k: usize, cells: Vec<(String, String)> },
+    /// Adds, replaces (`old`) or (rule None) removes a rule of credit.
+    Credit { old: Option<String>, rule: Option<CreditRule> },
+    /// Gives the tasks the steps of a rule of credit (from the plan or the built-in library).
+    ApplyCredit { uids: Vec<u32>, rule: String },
+    /// Adds, changes or (item None) removes a constraint-log entry by id (0 = new).
+    Log { id: u32, item: Option<LogItem> },
     /// Saves the notes of a reporting period (replacing the same kind and end date).
     Note { note: PeriodNote },
     Batch(Vec<Op>),
@@ -297,6 +303,15 @@ pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str
         "responsible" => p.tasks[i].responsible = v.into(),
         "hyperlink" => p.tasks[i].hyperlink = v.into(),
         "leveldelay" => p.tasks[i].level_delay = if v.is_empty() { 0 } else { parse::dur(v, day)?.0 },
+        "qty" | "qtydone" => {
+            let n: f64 = if v.is_empty() { 0.0 } else { v.replace(',', "").parse().map_err(|_| "Enter a quantity, like 120 or 37.5.")? };
+            if !(0.0..1e12).contains(&n) { return Err("Enter a quantity of 0 or more.".into()) }
+            let t = &mut p.tasks[i];
+            if field == "qty" { t.qty = n } else { t.qty_done = n }
+            // Installed quantities measure physical progress.
+            if t.qty > 0.0 { (t.pct_type, t.phys) = (PctType::Physical, (t.qty_done / t.qty * 100.0).clamp(0.0, 100.0).round() as u8) }
+        }
+        "qtyunit" => p.tasks[i].qty_unit = v.into(),
         "dmin" | "dmax" => {
             let m = if v.is_empty() { 0 } else { parse::dur(v, day)?.0 };
             if field == "dmin" { p.tasks[i].dmin = m } else { p.tasks[i].dmax = m }
@@ -663,6 +678,34 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 }
                 p.codes.retain(|c| c.name != d.name);
                 p.codes.push(d);
+            }
+        }
+        Op::Credit { old, rule } => {
+            if let Some(o) = &old { p.credit.retain(|r| &r.name != o) }
+            if let Some(r) = rule {
+                if r.name.trim().is_empty() || r.steps.iter().map(|x| x.1).sum::<f64>() <= 0.0 { return Err("A rule needs a name and steps whose weights add up to more than 0.".into()) }
+                p.credit.retain(|x| x.name != r.name);
+                p.credit.push(r);
+            }
+        }
+        Op::ApplyCredit { uids, rule } => {
+            let r = p.credit.iter().find(|r| r.name == rule).cloned().or_else(|| crate::progress::credit_library().into_iter().find(|r| r.name == rule)).ok_or(format!("There is no rule of credit called \"{rule}\"."))?;
+            let idx: Vec<usize> = uids.iter().filter_map(|u| p.idx(*u)).filter(|&i| !p.is_summary(i)).collect();
+            if idx.is_empty() { return Err("Select the tasks to apply the rule to.".into()) }
+            for i in idx {
+                let t = &mut p.tasks[i];
+                t.steps = r.steps.iter().map(|(n, w)| Step { name: n.clone(), weight: *w, done: false }).collect();
+                (t.pct_type, t.phys) = (PctType::Physical, 0);
+            }
+        }
+        Op::Log { id, item } => {
+            p.log.retain(|x| x.id != id || id == 0);
+            if let Some(mut x) = item {
+                if p.idx(x.uid).is_none() { return Err("Choose the task this constraint holds up.".into()) }
+                x.id = if id == 0 { p.log.iter().map(|x| x.id).max().unwrap_or(0) + 1 } else { id };
+                if x.status.is_empty() { x.status = "Open".into() }
+                p.log.push(x);
+                p.log.sort_by_key(|x| x.id);
             }
         }
         Op::Risk { id, risk } => {

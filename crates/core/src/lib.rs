@@ -10,6 +10,7 @@ pub mod load;
 pub mod model;
 pub mod network;
 pub mod parse;
+pub mod progress;
 pub mod query;
 pub mod report;
 pub mod risk;

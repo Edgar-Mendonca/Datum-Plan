@@ -688,3 +688,106 @@ fn import_report_lists_changes_and_compares_dates() {
     assert!(n.iter().any(|x| x.contains("\"F Test\": file 2026-11-18 08:00")), "{n:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn actual_progress_follows_the_stored_periods() {
+    // One 10-day task, baselined. On Wed 4 Nov the period closed at 50 %; on Mon 9 Nov it is 60 %.
+    let mut doc = Doc::new(plan(&[(10, "")]));
+    op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
+    doc.p.tasks[0].act_start = Some(d(2026, 11, 2));
+    (doc.p.tasks[0].pct, doc.p.status) = (50, Some(d(2026, 11, 4)));
+    op(&mut doc, Op::Snapshot { label: "Week 1".into(), comment: String::new() }).unwrap();
+    (doc.p.tasks[0].pct, doc.p.status) = (60, Some(d(2026, 11, 9)));
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 9));
+    let sc = report::scurve(&c, "day", "duration", None);
+    let at = |day: u32| sc.days.iter().position(|&x| x == at(d(2026, 11, day)) / DAY).and_then(|k| sc.actual[k]).unwrap_or(-1.0);
+    // Not a straight line from 0 to 60 %: 50 % at the stored period, then on to 60 % at the status date.
+    assert_eq!((at(4).round(), at(9).round()), (50.0, 60.0));
+    assert!(at(3) > 30.0 && at(6) > 50.0 && at(6) < 60.0, "{} {}", at(3), at(6));
+    // Earned schedule: 60 % done is where the plan was after 6 of 10 days; 6 days have passed.
+    let es = crate::progress::earned_schedule(&c).unwrap();
+    assert_eq!((es.es.round(), es.at, es.pd), (6.0, 6.0, 10.0));
+    assert!((es.spi_t - 1.0).abs() < 0.02, "{}", es.spi_t);
+}
+
+#[test]
+fn earned_schedule_when_behind() {
+    // 25 % of a 10-day task done after 5 days: ES 2.5 days, SPI(t) 0.5, finish forecast at 20 days.
+    let mut doc = Doc::new(plan(&[(10, "")]));
+    op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
+    doc.p.tasks[0].act_start = Some(d(2026, 11, 2));
+    (doc.p.tasks[0].pct, doc.p.status) = (25, Some(d(2026, 11, 6)));
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 6));
+    let es = crate::progress::earned_schedule(&c).unwrap();
+    assert_eq!((es.es, es.at, es.spi_t, es.sv_t, es.ieac), (2.5, 5.0, 0.5, -2.5, 20.0));
+    assert_eq!(when(es.forecast_finish), "27 17:00");
+}
+
+#[test]
+fn manpower_by_trade_planned_done_and_forecast() {
+    let mut p = plan(&[(5, ""), (5, "")]);
+    for (uid, name, group) in [(1, "Ann", "Civil"), (2, "Ben", "Electrical")] {
+        p.resources.push(Resource { uid, name: name.into(), group: group.into(), max: 1.0, ..Default::default() });
+    }
+    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+    p.tasks[1].res = vec![Assign { res: 2, units: 2.0, table: 0 }];
+    let mut doc = Doc::new(p);
+    op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
+    doc.p.tasks[0].act_start = Some(d(2026, 11, 2));
+    (doc.p.tasks[0].pct, doc.p.status) = (40, Some(d(2026, 11, 3)));
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 3));
+    let m = crate::progress::manpower(&c, "week");
+    let t = |n: &str| m.trades.iter().find(|t| t.name == n).unwrap_or_else(|| panic!("{n}"));
+    assert_eq!(m.trades.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["All trades", "Civil", "Electrical"]);
+    let k = m.buckets.iter().position(|&b| b <= at(d(2026, 11, 2)) / DAY && b + 7 > at(d(2026, 11, 2)) / DAY).unwrap();
+    // Planned: Ann alone, Ben's task needs two people; done so far: 40 % of Ann's 40 h = 16 h = 0.4 people-weeks.
+    assert_eq!((t("Civil").planned[k], t("Electrical").planned[k], t("All trades").planned[k]), (1.0, 2.0, 3.0));
+    assert_eq!(t("Civil").actual[k].map(|x| (x * 100.0).round() / 100.0), Some(0.4));
+    assert!(t("Civil").forecast[k].is_some_and(|x| x > 0.4) && t("Civil").actual.get(k + 1).is_none_or(|x| x.is_none()));
+}
+
+#[test]
+fn rules_of_credit_and_installed_quantities() {
+    let mut doc = Doc::new(plan(&[(5, ""), (5, ""), (5, "")]));
+    let (a, b) = (doc.p.tasks[0].uid, doc.p.tasks[1].uid);
+    op(&mut doc, Op::ApplyCredit { uids: vec![a], rule: "Cable".into() }).unwrap();
+    let t = &doc.p.tasks[0];
+    assert_eq!((t.steps.len(), t.pct_type), (3, PctType::Physical));
+    let mut steps = t.steps.clone();
+    steps[0].done = true; // pulled: 60 %
+    op(&mut doc, Op::TaskList { uid: a, field: "steps".into(), value: serde_json::to_value(&steps).unwrap() }).unwrap();
+    assert_eq!(doc.p.tasks[0].phys, 60);
+    // A plan's own rule replaces the built-in one of the same name.
+    op(&mut doc, Op::Credit { old: None, rule: Some(CreditRule { name: "Cable".into(), steps: vec![("Pulled".into(), 1.0), ("Done".into(), 1.0)] }) }).unwrap();
+    op(&mut doc, Op::ApplyCredit { uids: vec![b], rule: "Cable".into() }).unwrap();
+    assert_eq!(doc.p.tasks[1].steps.len(), 2);
+    assert!(op(&mut doc, Op::ApplyCredit { uids: vec![b], rule: "No such rule".into() }).is_err());
+    // Installed quantities: 50 of 200 m is 25 % physical progress, and earned value uses it.
+    let c = doc.p.tasks[2].uid;
+    op(&mut doc, Op::Set { uid: c, field: "qty".into(), value: "200".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: c, field: "qtydone".into(), value: "50".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: c, field: "qtyunit".into(), value: "m".into() }).unwrap();
+    let t = &doc.p.tasks[2];
+    assert_eq!((t.phys, t.pct_type, t.qty_unit.as_str()), (25, PctType::Physical, "m"));
+    assert!(op(&mut doc, Op::Set { uid: c, field: "qty".into(), value: "lots".into() }).is_err());
+}
+
+#[test]
+fn lookahead_and_constraint_log() {
+    let mut doc = Doc::new(plan(&[(5, ""), (10, "1"), (5, "2"), (5, "3")]));
+    doc.p.status = Some(d(2026, 11, 6));
+    let t = &mut doc.p.tasks[0];
+    (t.act_start, t.act_finish, t.pct) = (Some(d(2026, 11, 2)), Some(d(2026, 11, 6)), 100);
+    let (b, c3) = (doc.p.tasks[1].uid, doc.p.tasks[2].uid);
+    op(&mut doc, Op::Log { id: 0, item: Some(LogItem { uid: b, kind: "Material".into(), text: "Cable drums on site".into(), need: Some(d(2026, 11, 5)), ..Default::default() }) }).unwrap();
+    op(&mut doc, Op::Log { id: 0, item: Some(LogItem { uid: c3, kind: "Permit".into(), text: "Hot work permit".into(), status: "Cleared".into(), ..Default::default() }) }).unwrap();
+    assert!(op(&mut doc, Op::Log { id: 0, item: Some(LogItem { uid: 999, ..Default::default() }) }).is_err());
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 6));
+    let la = crate::progress::lookahead(&c, 3);
+    // From Sat 7 Nov for three weeks: tasks 2 (9–20 Nov) and 3 (23–27 Nov); task 1 ends before, task 4 starts after.
+    assert_eq!(la.rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["T2", "T3"]);
+    assert_eq!((la.rows[0].open, la.rows[0].overdue, la.rows[1].open), (1, 1, 0));
+    assert_eq!(doc.p.log.iter().map(|x| (x.id, x.status.as_str())).collect::<Vec<_>>(), [(1, "Open"), (2, "Cleared")]);
+    op(&mut doc, Op::Log { id: 1, item: None }).unwrap();
+    assert_eq!(doc.p.log.len(), 1);
+}

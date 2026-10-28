@@ -689,3 +689,16 @@ tr.click:hover td { background: var(--pale); }
 .notes li { margin: 4px 0; }
 .notes li.sub { list-style: none; font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); }
 a.link { color: var(--blue); cursor: pointer; text-decoration: underline; }
+
+/* 0.4.1: look-ahead, rules of credit */
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; background: var(--line2); }
+.badge.ok { background: #DDF2E5; color: #1D6B3A; }
+.badge.warn { background: #FDF0D2; color: #7A5300; }
+.badge.bad { background: #F8D4D4; color: #9C1F1F; }
+.tbl.look td.lbar, .tbl.look th.lbar { padding: 2px 6px; width: 372px; }
+.tbl.look tr.on td { background: var(--sel); }
+.credit { display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
+.credit .list { display: flex; flex-direction: column; gap: 4px; }
+.credit .list > button:not(.btn) { text-align: left; border: 1px solid var(--line); background: var(--bg2); border-radius: 4px; padding: 6px 8px; display: flex; justify-content: space-between; gap: 8px; cursor: pointer; }
+.credit .list > button.on { border-color: var(--blue); background: var(--pale); }
+.credit .tbl input.num { width: 72px; }

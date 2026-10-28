@@ -201,7 +201,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 0.3.10: Roadmap on the File page; "fit to 1 page wide" gives exactly one page across.
   await p.click(".tabs .file"); await p.waitForTimeout(150);
   await p.click(".tile:has-text('Roadmap')"); await p.waitForTimeout(200);
-  check("Roadmap page lists what comes next", (await p.$$(".rmstage")).length >= 5 && (await p.textContent(".roadmap")).includes("Earned schedule"));
+  check("Roadmap page lists what comes next", (await p.$$(".rmstage")).length >= 5 && (await p.textContent(".roadmap")).includes("datum-cli"));
   await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(600);
   const across = await p.$$eval(".pprev .ppage", ps => ps.length);
   check("fit to 1 page wide gives one page for this plan", across === 1, String(across));
@@ -231,6 +231,29 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".bs aside button:has-text('Import')"); await p.waitForTimeout(300);
   check("an imported plan shows its import report", (await p.textContent(".dlg header")).includes("Import report") && (await p.$$(".dlg .notes li")).length === 2);
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+
+  // 0.4.1: look-ahead and constraint log, manpower by trade, rules of credit, earned schedule.
+  await p.click('.side button[title="Look-ahead"]'); await p.waitForTimeout(300);
+  check("Look-ahead lists the coming work with a ready flag", (await p.$$(".tbl.look tbody tr")).length >= 2 && (await p.textContent(".tbl.look")).includes("Ready"));
+  await p.click(".tbl.look tbody tr:nth-child(2)"); await p.waitForTimeout(100);
+  await p.click(".page .panel .btn.pri:has-text('Add constraint')"); await p.waitForTimeout(200);
+  const logCall = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop());
+  const chosen = await p.$eval(".tbl.look tbody tr:nth-child(2) td:nth-child(2)", e => e.textContent);
+  check("+ Add constraint logs one for the chosen task", JSON.stringify(logCall).includes('"Log"') && (await p.textContent(".page")).includes(`to ${chosen}`));
+  await p.click('.side button[title="Manpower"]'); await p.waitForTimeout(400);
+  check("Manpower shows people per trade: planned, done, forecast", (await p.$$eval(".page .ptools select option", o => o.map(x => x.textContent))).includes("Engineering") && !!(await p.$(".page canvas")));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+  await p.click(".tabs > button:text-is('Progress')"); await p.waitForTimeout(100);
+  await p.click(".ribbon button:has-text('Rules of Credit')"); await p.waitForTimeout(300);
+  check("Rules of Credit lists the built-in rules", (await p.textContent(".dlg .credit")).includes("Cable") && (await p.textContent(".dlg .credit")).includes("built in"));
+  await p.click(".dlg .credit .list button:has-text('Cable')"); await p.waitForTimeout(100);
+  await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(200);
+  check("applying a rule of credit sends it to the engine", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop())).includes('"rule":"Cable"'));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => c === "earned_schedule" ? { es: 8, at: 10, pd: 40, spi_t: 0.8, sv_t: -2, ieac: 50, planned_finish: 30010000, forecast_finish: 30024400 } : inv(c, a); });
+  await p.click('.side button[title="S-Curves"]'); await p.waitForTimeout(400);
+  check("S-Curves show earned schedule: SPI(t) and the finish at this pace", (await p.textContent(".page .kpis")).includes("SPI(t)") && (await p.textContent(".page .kpis")).includes("0.80"));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 6. Every view opens without script errors.

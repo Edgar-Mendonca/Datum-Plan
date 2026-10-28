@@ -257,7 +257,7 @@ export const ResourceGraph = () => {
   return (
     <Page title="Resource Graph" help="resviews" tools={<>
       <Seg options={[["resource", "People"], ["group", "Trades"]]} value={by()} set={setBy} />
-      <select value={pick()} onChange={e => setPick(e.currentTarget.value)}><For each={heads()}>{x => <option value={x.uid}>{x.name}</option>}</For></select>
+      <select onChange={e => setPick(e.currentTarget.value)}><For each={heads()}>{x => <option value={x.uid} selected={`${x.uid}` === pick()}>{x.name}</option>}</For></select>
       <Seg options={[["hours", "Hours"], ["people", "People"]]} value={show()} set={setShow} />
       <Seg options={[["day", "Days"], ["week", "Weeks"], ["month", "Months"]]} value={unit()} set={setUnit} />
     </>}>

@@ -255,7 +255,7 @@ pub fn period_ends(c: &Calc, kind: &str) -> Vec<i64> {
 
 /// Weight of each leaf task for progress: duration, cost, work or (physical) duration, and the
 /// weighting actually used (a plan without costs or work falls back to duration).
-fn weights(c: &Calc, how: &str) -> (Vec<f64>, String) {
+pub(crate) fn weights(c: &Calc, how: &str) -> (Vec<f64>, String) {
     let (p, s) = (c.p, &c.s);
     let w: Vec<f64> = (0..p.tasks.len()).map(|i| {
         if s.summary[i] || s.off[i] {
@@ -271,23 +271,55 @@ fn weights(c: &Calc, how: &str) -> (Vec<f64>, String) {
 }
 
 /// Share (0–1) of a task's work done by instant `t` if it runs evenly from `a` to `b`.
-fn share(cal: &crate::cal::WorkCal, a: i64, b: i64, t: i64) -> f64 {
+pub(crate) fn share(cal: &crate::cal::WorkCal, a: i64, b: i64, t: i64) -> f64 {
     if t <= a { 0.0 } else if t >= b { 1.0 } else { cal.between(a, t) as f64 / cal.between(a, b).max(1) as f64 }
 }
 
+/// Each task's progress (0–1) as stored in the snapshots (period closes): (end of the snapshot
+/// day, share done), oldest first. Empty for a task no snapshot recorded.
+pub(crate) fn history(c: &Calc) -> Vec<Vec<(i64, f64)>> {
+    let p = c.p;
+    let mut h = vec![vec![]; p.tasks.len()];
+    let dd = c.progress_at();
+    let mut snaps: Vec<&crate::model::Snapshot> = p.snapshots.iter().filter(|s| s.date.is_some_and(|d| crate::cal::at(d) + DAY <= dd)).collect();
+    snaps.sort_by_key(|s| s.date);
+    for sn in snaps {
+        let t = crate::cal::at(sn.date.unwrap_or_default()) + DAY;
+        for r in &sn.rows {
+            if let Some(i) = p.idx(r.uid) { h[i].push((t, r.pct as f64 / 100.0)) }
+        }
+    }
+    h
+}
+
+/// Share done at `t` from the recorded points: straight lines between the actual start, each
+/// stored period and the status date.
+fn along(points: &[(i64, f64)], t: i64) -> f64 {
+    match points.iter().position(|&(x, _)| x >= t) {
+        None => points.last().map_or(0.0, |p| p.1),
+        Some(0) => if t >= points[0].0 { points[0].1 } else { 0.0 },
+        Some(k) => { let ((a, u), (b, v)) = (points[k - 1], points[k]); if b > a { u + (v - u) * (t - a) as f64 / (b - a) as f64 } else { v } }
+    }
+}
+
 /// Progress of task `i` (0–1) at instant `t`: planned (baseline, or current dates without one),
-/// actual (linear from the actual start to today's %, up to the status date) and forecast.
-fn progress_at(c: &Calc, i: usize, t: i64) -> (f64, f64, f64) {
+/// actual (through the stored periods in `h`, else linear from the actual start to today's %, up
+/// to the status date) and forecast.
+pub(crate) fn progress_at(c: &Calc, i: usize, t: i64, h: &[Vec<(i64, f64)>]) -> (f64, f64, f64) {
     let (p, s) = (c.p, &c.s);
     let task = &p.tasks[i];
     let cal = &s.cals[s.ci[i]];
     let (bs, bf) = task.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
     let planned = share(cal, bs, bf, t);
     let dd = c.progress_at();
-    let done = if c.p.periods.weight == "physical" && task.pct_type == crate::model::PctType::Physical { task.phys } else { c.pct[i] } as f64 / 100.0;
+    let done = if task.pct_type == crate::model::PctType::Physical { task.phys } else { c.pct[i] } as f64 / 100.0;
     let a0 = task.act_start.map_or(s.es[i], crate::cal::at);
     let a1 = task.act_finish.map_or(dd, |d| crate::cal::at(d) + DAY).max(a0 + 1);
-    let actual = if done == 0.0 { 0.0 } else { done * share(cal, a0, a1, t.min(dd)) };
+    let actual = if done == 0.0 && h[i].iter().all(|x| x.1 == 0.0) { 0.0 } else if h[i].is_empty() { done * share(cal, a0, a1, t.min(dd)) } else {
+        let mut pts: Vec<(i64, f64)> = std::iter::once((a0.min(h[i][0].0), 0.0)).chain(h[i].iter().copied().filter(|x| x.0 < dd)).chain([(dd, done)]).collect();
+        pts.dedup_by_key(|x| x.0);
+        along(&pts, t.min(dd))
+    };
     let forecast = if t <= dd { actual } else { done + (1.0 - done) * share(cal, dd.max(s.es[i]), s.ef[i].max(dd.max(s.es[i]) + 1), t) };
     (planned, actual, forecast)
 }
@@ -322,12 +354,13 @@ pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
     days.retain(|&d| d >= lo - 7);
     days.insert(0, lo - 1);
     let dd = c.progress_at();
+    let h = history(c);
     let mut out = SCurve { days: vec![], planned: vec![], actual: vec![], forecast: vec![], total, status_day: dd / DAY - 1, name: scope.and_then(|u| p.idx(u)).map_or(p.name.clone(), |k| p.tasks[k].name.clone()), weight };
     for d in days {
         let t = (d + 1) * DAY;
         let (mut a, mut b, mut f) = (0.0, 0.0, 0.0);
         for &i in &tasks {
-            let (x, y, z) = progress_at(c, i, t);
+            let (x, y, z) = progress_at(c, i, t, &h);
             a += w[i] * x;
             b += w[i] * y;
             f += w[i] * z;
@@ -388,7 +421,8 @@ pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
     let before = k.and_then(|k| k.checked_sub(2)).map_or(prev - (to - prev), |k| ends[k]);
     let (w, _) = weights(c, &p.periods.weight);
     let total: f64 = w.iter().sum::<f64>().max(1e-9);
-    let at = |d: i64, which: usize| (0..p.tasks.len()).filter(|&i| w[i] > 0.0).map(|i| { let v = progress_at(c, i, (d + 1) * DAY); w[i] * [v.0, v.1, v.2][which] }).sum::<f64>() / total * 100.0;
+    let h = history(c);
+    let at = |d: i64, which: usize| (0..p.tasks.len()).filter(|&i| w[i] > 0.0).map(|i| { let v = progress_at(c, i, (d + 1) * DAY, &h); w[i] * [v.0, v.1, v.2][which] }).sum::<f64>() / total * 100.0;
     let row = |i: usize, note: &str| PRow {
         uid: p.tasks[i].uid, code: p.tasks[i].code.clone(), name: p.tasks[i].name.clone(), start: c.text(i, "start"), finish: c.text(i, "finish"), pct: c.pct[i], note: note.into(),
     };
@@ -429,7 +463,7 @@ pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
     for i in (0..p.tasks.len()).filter(|&i| s.summary[i] && p.tasks[i].level == 0) {
         let sub: Vec<usize> = p.subtree(i).filter(|&j| w[j] > 0.0).collect();
         let tw: f64 = sub.iter().map(|&j| w[j]).sum::<f64>().max(1e-9);
-        let pa = |d: i64, which: usize| sub.iter().map(|&j| { let v = progress_at(c, j, (d + 1) * DAY); w[j] * [v.0, v.1][which] }).sum::<f64>() / tw * 100.0;
+        let pa = |d: i64, which: usize| sub.iter().map(|&j| { let v = progress_at(c, j, (d + 1) * DAY, &h); w[j] * [v.0, v.1][which] }).sum::<f64>() / tw * 100.0;
         r.wbs.push(WbsRow { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), planned_prev: pa(prev, 0), planned: pa(to, 0), actual_prev: pa(prev, 1), actual: pa(to.min(dd), 1) });
     }
     let mut last = i64::MIN;

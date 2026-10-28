@@ -216,7 +216,7 @@ fn random_edits_never_break_the_plan() {
     let mut r = Rng(0xA076_1D64_78BD_642F);
     let words = ["5d", "0", "2w", "-3", "abc", "1,2", "3SS+2d", "99", "1FS-200d", "Yes", "No", "100", "50", "", "15-Nov-26", "31-Feb-26",
         "Start No Earlier Than", "Must Finish On", "As Late As Possible", "Alice", "Alice[50%], Bob", "Four tens", "1e9", "∞", "\u{0}", "Fixed Work"];
-    let fields = ["name", "dur", "preds", "pct", "ctype", "cdate", "deadline", "res", "cal", "astart", "afinish", "active", "mode", "type", "work", "leveldelay", "start", "finish", "notes", "fixedcost"];
+    let fields = ["name", "dur", "preds", "pct", "ctype", "cdate", "deadline", "res", "cal", "astart", "afinish", "active", "mode", "type", "work", "leveldelay", "start", "finish", "notes", "fixedcost", "qty", "qtydone", "dmin", "dmax"];
     for round in 0..30 {
         let mut d = Doc::new(sample());
         for step in 0..60 {

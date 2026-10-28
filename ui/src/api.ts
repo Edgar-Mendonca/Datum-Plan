@@ -30,7 +30,7 @@ export interface Project {
   format: number; name: string; start: string; status: string | null; day_min: number; manual_default: boolean; calendar: string; calendars: Calendar[];
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
-  fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
+  fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
   titles: Record<string, string>; sheets: SheetData[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {
@@ -62,6 +62,11 @@ export interface TaskInfo {
   assigns: { res: number; name: string; kind: string; units: string; work: string; cost: string }[];
 }
 export interface Usage { buckets: number[]; unit: string; person: number[]; rows: { uid: number; of: number | null; name: string; lvl: number; sum: boolean; total: number; vals: number[]; over: boolean[]; cap?: number[] }[] }
+export interface LogItem { id: number; uid: number; kind: string; text: string; owner: string; need: string | null; status: string }
+export interface CreditRule { name: string; steps: [string, number][] }
+export interface Manpower { buckets: number[]; unit: string; status_day: number; trades: { name: string; planned: number[]; actual: (number | null)[]; forecast: (number | null)[] }[] }
+export interface EarnedSchedule { es: number; at: number; pd: number; spi_t: number; sv_t: number; ieac: number; planned_finish: number; forecast_finish: number }
+export interface Lookahead { from: number; to: number; rows: { uid: number; code: string; name: string; es: number; ef: number; pct: number; res: string; crit: boolean; open: number; overdue: number }[] }
 export interface TaskRisk { uid: number; name: string; value: number }
 export interface SimResult { runs: number; planned: number; planned_chance: number; p10: number; p50: number; p80: number; p90: number; days: [number, number][]; cost: number; cost_p50: number; cost_p80: number; criticality: TaskRisk[]; drivers: TaskRisk[]; risks: TaskRisk[]; notes: string[] }
 export interface LevelPreview { moved: { uid: number; name: string; start: number; new_start: number; finish: number; new_finish: number }[]; finish: number; new_finish: number; over_before: number; over_after: number }

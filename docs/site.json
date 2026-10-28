@@ -8,7 +8,7 @@
   "for": "Project managers, planners, engineers and contractors.",
   "about": [
     "Datum Plan is a desktop scheduler for project managers, planners, engineers and contractors. You enter tasks in a sheet that works like a spreadsheet, link them, and the engine works out the critical path to the minute, with working calendars, constraints, every link type and resource levelling.",
-    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value, S-curves, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF."
+    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value and earned schedule, S-curves built from each period's progress, manpower by trade, a look-ahead with a constraint log, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF."
   ],
   "steps": [
     {
@@ -27,8 +27,9 @@
   "highlights": [
     "A task sheet that works like a spreadsheet, with formula columns and Sheets tabs.",
     "Critical path to the minute: calendars, constraints, all link types, levelling with a preview of what moves.",
-    "Resources, man-hours and costs with workload by trade; Tracking Gantt with 11 baselines; earned value and S-curves.",
+    "Resources, man-hours and costs with workload and manpower by trade; Tracking Gantt with 11 baselines; earned value, earned schedule and S-curves from each period's progress.",
     "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
+    "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
     "Dashboard, progress reports and a report builder; print to PDF from every view.",
     "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel export with formulas."
   ],
@@ -41,21 +42,9 @@
   ],
   "roadmap": [
     {
-      "v": "0.4.1",
-      "title": "Progress history",
-      "when": "Next",
-      "items": [
-        "Actual S-curve built from the saved period snapshots.",
-        "Manpower curves: people planned against people who actually worked, by trade.",
-        "Earned schedule, so schedule performance stays meaningful near the end.",
-        "Progress from installed quantities (rules of credit).",
-        "A 3-week look-ahead with a constraint log."
-      ]
-    },
-    {
       "v": "0.4.2",
       "title": "Command line and automation",
-      "when": "Soon",
+      "when": "Next",
       "items": [
         "datum-cli: open, schedule, change and export plans from the command line.",
         "Every action is a named command shared by the ribbon, Tell Me and the command line.",

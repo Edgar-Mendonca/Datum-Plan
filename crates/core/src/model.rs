@@ -46,6 +46,16 @@ pub enum Accrual { Start, #[default] Prorated, End }
 #[serde(default)]
 pub struct Step { pub name: String, pub weight: f64, pub done: bool }
 
+/// A rule of credit: the steps of a kind of work and the share of progress each earns.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CreditRule { pub name: String, pub steps: Vec<(String, f64)> }
+
+/// An entry in the constraint log: something a task needs before it can start.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LogItem { pub id: u32, pub uid: u32, pub kind: String, pub text: String, pub owner: String, pub need: Option<NaiveDate>, pub status: String }
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NoteTopic { pub topic: String, pub text: String }
@@ -145,6 +155,14 @@ pub struct Task {
     pub dmin: i64,
     #[serde(skip_serializing_if = "is_zero")]
     pub dmax: i64,
+    /// Installed quantities: planned and installed so far, in `qty_unit` (m, t, m³, each…).
+    /// When `qty` is set, the installed share is the task's physical % complete.
+    #[serde(skip_serializing_if = "is_zero_f")]
+    pub qty: f64,
+    #[serde(skip_serializing_if = "is_zero_f")]
+    pub qty_done: f64,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub qty_unit: String,
     /// Leveling priority 0–1000 (500 when not set).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<u16>,
@@ -465,6 +483,10 @@ pub struct Project {
     pub codes: Vec<CodeDef>,
     pub risks: Vec<Risk>,
     pub snapshots: Vec<Snapshot>,
+    /// Rules of credit: named sets of weighted steps that measure physical progress.
+    pub credit: Vec<CreditRule>,
+    /// Constraint log for the look-ahead: what must be in place before a task can start.
+    pub log: Vec<LogItem>,
     /// Column titles chosen by the user (field key → title).
     pub titles: BTreeMap<String, String>,
     pub sheets: Vec<SheetData>,
@@ -504,7 +526,7 @@ impl Project {
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
             id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
-            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], titles: BTreeMap::new(), sheets: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null,
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null,
         }
     }
 

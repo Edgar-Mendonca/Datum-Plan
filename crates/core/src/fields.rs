@@ -56,7 +56,7 @@ pub fn task_fields() -> &'static [FieldDef] {
         for (k, n, kd, e) in [
             ("pct", "% Complete", Pct, true), ("phys", "Physical % Complete", Pct, true), ("workpct", "% Work Complete", Pct, false), ("astart", "Actual Start", Date, true),
             ("afinish", "Actual Finish", Fin, true), ("adur", "Actual Duration", Dur, true), ("rem", "Remaining Duration", Dur, true), ("status", "Status", Text, false),
-            ("steps", "Steps", Int, false), ("plannedpct", "Baseline % Complete", Pct, false), ("pctvar", "% Complete Variance", Pct, false),
+            ("qty", "Quantity", Num, true), ("qtydone", "Installed Quantity", Num, true), ("qtyunit", "Quantity Unit", Text, true), ("steps", "Steps", Int, false), ("plannedpct", "Baseline % Complete", Pct, false), ("pctvar", "% Complete Variance", Pct, false),
         ] { add(k, n, kd, "Progress", e) }
         for (k, n, kd, e) in [
             ("work", "Work", Work, true), ("awork", "Actual Work", Work, false), ("rwork", "Remaining Work", Work, false), ("cost", "Cost", Cost, false),
@@ -366,6 +366,9 @@ impl<'a> Calc<'a> {
             "rem" => F::Num((dur * (100 - self.pct[i] as i64) / 100) as f64),
             "status" => txt(if self.pct[i] == 100 { "Complete" } else if s.es[i] >= self.status_at() { "Future Task" } else if self.val(i, "late").truth() { "Late" } else { "On Schedule" }),
             "steps" => F::Num(t.steps.len() as f64),
+            "qty" => if t.qty > 0.0 { F::Num(t.qty) } else { F::Null },
+            "qtydone" => if t.qty > 0.0 || t.qty_done > 0.0 { F::Num(t.qty_done) } else { F::Null },
+            "qtyunit" => txt(&t.qty_unit),
             "plannedpct" | "pctvar" => {
                 // Where the baseline (or, without one, the current plan) says the task should be at the status date.
                 let (a, b) = t.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));

@@ -2,7 +2,7 @@
 // this week or month with the previous one; S-curves for the project, phases, cost and hours.
 import { For, Show, createSignal, createResource, createMemo, createEffect, on, JSX } from "solid-js";
 import { createStore } from "solid-js/store";
-import { Curve, Grid, Rule, fmtDay, money, dateDay, iso, SCurve, PeriodReport, PeriodNote, PRow, Usage } from "./api";
+import { Curve, Grid, Rule, fmtDay, money, dateDay, iso, SCurve, PeriodReport, PeriodNote, PRow, Usage, EarnedSchedule, fmtAt } from "./api";
 import { call, out, P, tick, toast, act } from "./store";
 import { C, selectUid } from "./cmds";
 import { Seg } from "./ui";
@@ -45,6 +45,19 @@ export const Rows = (p: { rows: PRow[]; empty: string; note?: string }) => (
       <tbody><For each={p.rows.slice(0, 300)}>{x => <tr><td>{x.code}</td><td>{x.name}</td><td>{x.start}</td><td>{x.finish}</td><td class="r">{x.pct}%</td><Show when={p.note}><td>{x.note}</td></Show></tr>}</For></tbody></table>
   </Show>
 );
+/** Earned schedule: when the plan expected the progress made so far, and the finish that implies. */
+export const EsKpis = () => {
+  const [es] = createResource(() => tick(), () => call<EarnedSchedule | null>("earned_schedule"));
+  const d1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString();
+  return (
+    <Show when={es()}>{e => <>
+      <Kpi v={e().spi_t.toFixed(2)} l="SPI(t): schedule performance in time" bad={e().spi_t < 0.95} good={e().spi_t >= 1} />
+      <Kpi v={`${e().sv_t > 0 ? "+" : ""}${d1(e().sv_t)} d`} l={`Earned schedule ${d1(e().es)} of ${d1(e().at)} days`} bad={e().sv_t < -0.5} good={e().sv_t >= 0} />
+      <Kpi v={fmtAt(e().forecast_finish, true)} l={`Finish at this pace (plan ${fmtAt(e().planned_finish, true)})`} bad={e().forecast_finish > e().planned_finish} />
+    </>}</Show>
+  );
+};
+
 export const Tools = (p: { title: string; help?: string; children?: JSX.Element }) => (
   <div class="ptools noprint">{p.help && <Help k={p.help} />}{p.children}<span class="grow" /><button class="btn" onClick={() => C.print()}>Print / PDF</button><button class="btn" onClick={() => saveHtml(p.title)}>Save as HTML</button></div>
 );
@@ -87,6 +100,7 @@ export const Dashboard = () => {
         <Kpi v={rep() ? `${(rep()!.actual - rep()!.planned).toFixed(1)}%` : "—"} l="Variance (actual − planned)" bad={!!rep() && rep()!.actual < rep()!.planned - 0.5} good={!!rep() && rep()!.actual >= rep()!.planned} />
         <Kpi v={s().finish} l={`Forecast finish${s().var_finish ? ` (${s().var_finish} vs baseline)` : ""}`} />
         <Kpi v={s().spi?.toFixed(2) ?? "—"} l="SPI" bad={s().spi !== null && s().spi! < 0.95} good={s().spi !== null && s().spi! >= 1} />
+        <EsKpis />
         <Kpi v={s().cpi?.toFixed(2) ?? "—"} l="CPI" bad={s().cpi !== null && s().cpi! < 0.95} good={s().cpi !== null && s().cpi! >= 1} />
         <Kpi v={s().cost} l="Forecast cost" /><Kpi v={s().late} l="Late tasks" bad={s().late > 0} /><Kpi v={`${s().done} / ${s().tasks}`} l="Tasks complete" /><Kpi v={s().critical} l="Critical tasks" />
       </div>
@@ -123,6 +137,8 @@ export const SCurves = () => {
     <section class="page report">
       <Tools title="S-Curves" help="scurves"><Seg options={[["week", "Weekly"], ["month", "Monthly"]]} value={unit()} set={setUnit} /><Seg options={WEIGHTS} value={how()} set={setHow} /></Tools>
       <Brand title="S-Curves" sub={`Weighted by ${WEIGHTS.find(w => w[0] === how())?.[1].toLowerCase()}`} />
+      <div class="kpis"><EsKpis /></div>
+      <Show when={P().snapshots.length}><p class="muted">Actual progress follows the {P().snapshots.length} stored period{P().snapshots.length === 1 ? "" : "s"} (Close Period), then runs to today's status.</p></Show>
       <div class="charts">
         <Show when={main()}>{c => <SCurveChart c={c()} unit={unit()} title="Project progress" size="tall" />}</Show>
         <Show when={main()}>{c => <PeriodBars c={c()} unit={unit()} />}</Show>
@@ -168,8 +184,8 @@ export const Progress = () => {
     <section class="page report">
       <Tools title={`${name()} progress report`} help="period">
         <Seg options={[["week", "Weekly"], ["month", "Monthly"]]} value={kind()} set={k => { setKind(k); setEnd(null); }} />
-        <select value={end() ?? ""} onChange={e => setEnd(e.currentTarget.value ? +e.currentTarget.value : null)}>
-          <option value="">Current period</option><For each={(ends() ?? []).slice().reverse()}>{d => <option value={d}>Period ending {fmtDay(d, "long")}</option>}</For>
+        <select onChange={e => setEnd(e.currentTarget.value ? +e.currentTarget.value : null)}>
+          <option value="" selected={end() === null}>Current period</option><For each={(ends() ?? []).slice().reverse()}>{d => <option value={d} selected={d === end()}>Period ending {fmtDay(d, "long")}</option>}</For>
         </select>
         <button class="btn" onClick={() => import("./dialogs").then(d => d.periodSettings())}>Period settings</button>
       </Tools>

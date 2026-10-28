@@ -25,12 +25,13 @@ import { Setup } from "./setup";
 import { Menu, Toast, Icon, Dialog } from "./ui";
 import * as D from "./dialogs";
 import { ScheduleRisk } from "./risk";
+import { Lookahead, Manpower } from "./progress";
 
 const SIDE: ([View, string, string] | "-")[] = [
   ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
-  ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["team", "team", "Team"], "-",
+  ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["manpower", "team", "Manpower"], ["team", "team", "Team"], "-",
   ["sheets", "table", "Sheets"], "-",
-  ["update", "update", "Update"], ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["builder", "builder", "Builder"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["simrisk", "ev", "Sched. Risk"], ["portfolio", "folder", "Portfolio"],
+  ["update", "update", "Update"], ["lookahead", "cal", "Look-ahead"], ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["builder", "builder", "Builder"], ["checks", "check", "Checks"], ["risks", "risk", "Risks"], ["simrisk", "ev", "Sched. Risk"], ["portfolio", "folder", "Portfolio"],
 ];
 
 const GanttView = () => {
@@ -141,6 +142,8 @@ const App = () => {
               <Match when={view() === "reports"}><Reports /></Match>
               <Match when={view() === "risks"}><Risks /></Match>
               <Match when={view() === "simrisk"}><ScheduleRisk /></Match>
+              <Match when={view() === "lookahead"}><Lookahead /></Match>
+              <Match when={view() === "manpower"}><Manpower /></Match>
               <Match when={view() === "checks"}><Checks /></Match>
               <Match when={view() === "portfolio"}><Portfolio /></Match>
             </Switch>

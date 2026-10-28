@@ -66,7 +66,10 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 ### Track progress
 - Status date, % complete, actual dates, remaining duration, Mark on Track, Update Progress for a whole period, and Close Period with snapshots.
 - **11 baselines** and the **Tracking Gantt**: baseline bars under the current bars, the done part solid, and % labels.
-- Earned value (SPI, CPI, EAC, TCPI), period-by-period comparison, S-curves (planned, actual and forecast), and milestone tracking.
+- Earned value (SPI, CPI, EAC, TCPI) and **earned schedule** (SPI(t) and the finish at the current pace), period-by-period comparison, S-curves (planned, actual and forecast) whose actual line follows the progress stored at each period close, and milestone tracking.
+- Progress measured by **rules of credit** (weighted steps such as pulled, terminated, tested) or by **installed quantities** (200 m of cable, 50 m pulled).
+- A **look-ahead** of the next 2 to 6 weeks with a **constraint log** (materials, drawings, permits, access, people), showing which tasks are ready to start.
+- **Manpower** by trade: people planned, work done and forecast per week or month.
 
 ### Report, print and share
 - **Dashboard** with key figures and charts, **Progress reports** for any week or month with notes and photos, **S-curves**, and a **Report Builder** with templates (weekly management, monthly client, schedule health, cost).
@@ -74,7 +77,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 - Excel export keeps formulas and formatting. Also exports to CSV, HTML, iCalendar and JSON, and imports and exports the common project exchange files (XML, XER, PMXML, MPX). Every import ends with a report of anything changed or left out, and whether every task gets the same dates as in the file.
 
 ### Views
-Gantt Chart · Tracking Gantt · Schedule Risk · Network Diagram (whiteboard canvas, legend, WBS bands, mini-map, path highlight) · Calendar · Timeline with a zoom box · Task Usage · Resource Sheet · Resource Usage · Resource Graph · Team Planner · Relationship Diagram · Sheets · Dashboard · Progress · S-Curves · Checks · Risks · Portfolio.
+Gantt Chart · Tracking Gantt · Schedule Risk · Look-ahead · Manpower · Network Diagram (whiteboard canvas, legend, WBS bands, mini-map, path highlight) · Calendar · Timeline with a zoom box · Task Usage · Resource Sheet · Resource Usage · Resource Graph · Team Planner · Relationship Diagram · Sheets · Dashboard · Progress · S-Curves · Checks · Risks · Portfolio.
 
 ### Help when you need it
 Tell Me (Ctrl+K) finds any command. Help › **Getting Started** and a searchable **Glossary** explain every term. Light, dark or automatic theme.

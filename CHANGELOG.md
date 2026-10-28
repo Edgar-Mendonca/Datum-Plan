@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.1 — 2026-10-28
+
+Progress history: the actual S-curve follows what really happened at each period close, and new tools for the weeks ahead.
+
+**Progress over time**
+- **Actual S-curves follow the stored periods.** Each time you close a period (or store a snapshot), the progress of every task is kept. The actual line now runs through those points instead of a straight line from the start to today, and so do the progress report and the dashboard.
+- **Earned schedule** on the S-Curves page and the Dashboard: when the plan expected the progress made so far, SPI(t) (schedule performance in time, which stays meaningful near the end of a project), and the finish date at the current pace.
+- **Manpower** (Progress › Manpower, or the sidebar): people per week or month for all trades or one trade (a resource's Group), planned against the work done so far and the forecast for the rest.
+
+**Measuring progress**
+- **Rules of Credit** (Progress › Rules of Credit): split a kind of work into weighted steps (for example cable: pulled 60 %, terminated 30 %, tested 10 %). There are built-in rules for concrete, steel, piping, cable, equipment, documents and software, and you can make your own. Applying a rule gives the selected tasks those steps; ticking them off sets the task's physical % complete.
+- **Installed quantities:** new task columns Quantity, Installed Quantity and Quantity Unit. Installed ÷ planned quantity becomes the task's physical % complete.
+- Physical % complete now counts in the S-curves for every task that uses it, not only when progress is weighted by physical.
+
+**Look-ahead** (Progress › Look-ahead, or the sidebar)
+- The unfinished work in the next 2, 3, 4 or 6 weeks from the status date, with a bar for each task and whether it is ready to start.
+- A **constraint log**: what each task needs before it can start (material, drawings, permits, access, people, equipment), who owns it, the need-by date and whether it is cleared. A task is ready when all its constraints are cleared; overdue ones are flagged.
+
+**Fixes**
+- Drop-down lists whose choices load a moment later (the Resource Graph's person or trade, the progress report's period, the constraint log's task) now show the right choice.
+
 ## 0.4.0 — 2026-10-28
 
 Risk and resources: see how likely your finish date is, see the workload of each trade, preview levelling, and get a report on every import.

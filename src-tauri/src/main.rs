@@ -438,6 +438,26 @@ async fn risk_run(st: State<'_, St>, opts: datum_core::risk::SimOpts) -> R<datum
 }
 
 #[tauri::command]
+fn manpower(st: State<St>, unit: String) -> datum_core::progress::Manpower {
+    datum_core::progress::manpower(&calc(&st.lock()), &unit)
+}
+
+#[tauri::command]
+fn earned_schedule(st: State<St>) -> Option<datum_core::progress::EarnedSchedule> {
+    datum_core::progress::earned_schedule(&calc(&st.lock()))
+}
+
+#[tauri::command]
+fn lookahead(st: State<St>, weeks: u32) -> datum_core::progress::Lookahead {
+    datum_core::progress::lookahead(&calc(&st.lock()), weeks)
+}
+
+#[tauri::command]
+fn credit_library() -> Vec<datum_core::CreditRule> {
+    datum_core::progress::credit_library()
+}
+
+#[tauri::command]
 fn level_preview(st: State<St>, uids: Vec<u32>) -> R<datum_core::level::Preview> {
     datum_core::level::preview(&st.lock().doc.p, &uids)
 }
@@ -703,7 +723,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, network, compare, workspace, snapshot_rows, sheet_view, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update
         ])
         .run(tauri::generate_context!())
