@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3 — 2026-10-29
+
+- Windows now lists the publisher as Datum.
+- An update keeps a custom install folder chosen at the first install (the installer used to remember it under the old publisher name).
+
 ## 0.4.2 — 2026-10-29
 
 Stronger and safer, with a command line for scripts and AI assistants, and every report view printable.

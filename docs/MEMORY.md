@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.4.2** (released 2026-10-29). Earlier: 0.1.0 … 0.4.1 |
+| **Current version** | **0.4.3** (released 2026-10-29). Earlier: 0.1.0 … 0.4.2 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -167,7 +167,7 @@ flowchart LR
 8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
 9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
 
-Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report), 0.4.1 (progress history), 0.4.2 (hardening, CLI + MCP, print).
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report), 0.4.1 (progress history), 0.4.2 (hardening, CLI + MCP, print), 0.4.3 (publisher "Datum").
 
 ---
 
@@ -213,6 +213,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
 | 0.3.9 | **? help beside the tools in every Datum app**: a small ? beside each ribbon group, page, panel and main dialog opens a card (what it is for, how to use it) from one `HELP` table in `ui/src/help.tsx`; Help › What Is This Tool? lists them all. No separate teaching mode | The user's words: "at some of the tools, we can add a small question mark icon… we should do it in all of our applications." Built first in Datum Atlas 0.1.1; same code and styles in every app. |
+| 0.4.3 | Windows publisher is "Datum" (`bundle.publisher`; the copyright stays "© 2026 Edgar Mendonca"). `src-tauri/windows/hooks.nsh` (NSIS_HOOK_PREINSTALL) reads the old `Software\Edgar Mendonca\Datum Plan` install-folder key, installs there if it differs, and deletes the old key | Family rule (FAMILY §9 in the hub). Tauri's NSIS remembers the folder under `Software\<publisher>\<product>`; the uninstall entry and the default folder use only the product name, so default installs update in place. |
 | 0.4.2 | Release builds unwind (not abort); `guard()` in the shell turns a panic in apply/open/import/risk/level preview into an error message; a panic hook appends to `crash.log` in the app data folder | Abort closed the app on any panic and made the poisoned-lock recovery useless. |
 | 0.4.2 | `Project::normalize` clamps spans to `MAX_SPAN` (10,000,000 working minutes ≈ 80 years), lags in % to ±10,000, units to 0–1000, non-finite numbers to 0, splits to 100, `day_min` to 1–1440; `parse::dur` caps at `MAX_SPAN`; `WorkCal` saturates at a horizon (1800–2600), `date_of` saturates | Hostile values panicked in calendar arithmetic (`succ_opt().unwrap()` past the last date). |
 | 0.4.2 | `WorkCal::between` counts whole weeks arithmetically (plus exception corrections) for spans over 28 days; daily S-curves fall back to weeks beyond ~10 years | A task spanning centuries froze the S-curve (O(days²)). |
@@ -282,6 +283,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.12 | Trust in the dates | Hand-worked cases (`cases.rs`), parity files (`parity.rs`), random plans with constraints/calendars (links hold, tight forward pass, row order), random edit sequences, damaged CSV/xlsx; fixed ALAP (free float) and late dates of started work | ✅ |
 | 0.4.0 | Risk & resources | Schedule Risk (Monte Carlo: P50/P80/P90, cost, criticality, drivers, risk delays, optimistic/pessimistic durations), workload by trade (Group) in hours or people, levelling preview, import report + XER activity types | ✅ |
 | 0.4.1 | Progress history | Actual S-curve through the stored periods, Manpower by trade (planned / done / forecast), earned schedule, rules of credit + installed quantities, look-ahead with constraint log | ✅ |
+| 0.4.3 | Publisher | Windows publisher "Datum"; installer hook keeps a custom install folder | ✅ |
 | 0.4.2 | Hardening, command line & print | Security/robustness pass (hostile values, atomic saves, crash log + unwind, updater, CSP, CSV injection, npm audit), `datum-cli` + MCP server + ops catalogue, exact money (cents), Schedule Risk / Look-ahead / Manpower print, risk run kept | ✅ |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
@@ -469,6 +471,9 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Audit and fixes. Probing hostile values found panics in calendar arithmetic (huge durations, lags, splits, delays) and a divide-by-zero (zero-length day); fixed with clamping in `normalize`, a calendar horizon and saturating dates. A battery (`hardening::exercise`) now runs every engine function on hostile plans, extreme edits and the random plans; it found the S-curve freezing on century-long plans (fast whole-week `between`, weekly fallback). Also: atomic saves, 300 MB read limit, unwind + `guard()` + crash.log (release builds aborted on any panic), updater requires checksums (it installed unverified without SHA256SUMS.txt), stricter CSP (and `blob:` images: progress-report photos were blocked), CSV formula injection, ics line breaks, `allowed_url`, `npm audit` in CI. Hostile sheet formulas were already safe (#CIRC!, #NUM!).
 - Built `ops.rs` (catalogue), `crates/cli` (`datum-cli` + MCP server, tests drive a whole assistant session), money to the cent, the release ships `datum-cli-X.Y.Z.exe`. Print: the three views printed the Dashboard (fixed); risk charts full width on paper; last risk run in `project.ui.risk`. Found on the way: "-0 hrs" on an empty plan (float sum of nothing is -0).
 - Not done: JSON schemas for every op (examples only); Tell Me still lists window commands; the CLI cannot import spreadsheets (column mapping is in the window).
+
+### 2026-10-29: Session 15 (0.4.3, publisher "Datum")
+- User (family rule): the Windows publisher becomes "Datum". Changed `bundle.publisher` (copyright unchanged); nothing else in the repo writes the publisher (LICENSE, NOTICE and README keep the copyright holder). Read Tauri's NSIS template (in the CLI binary): the uninstall key and the default folder use the product name, but the remembered install folder lives under `Software\<publisher>\<product>`, so added `windows/hooks.nsh` to carry a custom folder across. Not tested on a real Windows upgrade.
 
 ## 5. Known limits and next steps
 

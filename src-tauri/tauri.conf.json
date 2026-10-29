@@ -28,7 +28,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "publisher": "Edgar Mendonca",
+    "publisher": "Datum",
     "copyright": "© 2026 Edgar Mendonca",
     "category": "Productivity",
     "shortDescription": "Project scheduling",
@@ -40,6 +40,7 @@
       "nsis": {
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico",
+        "installerHooks": "windows/hooks.nsh",
         "displayLanguageSelector": false
       }
     }
