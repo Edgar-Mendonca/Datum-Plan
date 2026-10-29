@@ -197,7 +197,9 @@ pub fn guide(app: &AppHandle, lang: &str) -> Result<std::path::PathBuf, String> 
     if want.len() != 64 || !want.eq_ignore_ascii_case(&got) || !pdf.starts_with(b"%PDF") {
         return Err("The download did not match its checksum, so it was not saved. Try again.".into());
     }
-    let dir = app.path().download_dir().or_else(|_| app.path().document_dir()).map_err(|e| format!("No Downloads folder: {e}"))?;
+    // Downloads; where a system has none set up, ~/Downloads (made if needed), Documents, then the temporary folder.
+    let home_dl = || app.path().home_dir().ok().map(|h| h.join("Downloads")).filter(|d| std::fs::create_dir_all(d).is_ok());
+    let dir = app.path().download_dir().ok().filter(|d| d.is_dir()).or_else(home_dl).or_else(|| app.path().document_dir().ok().filter(|d| d.is_dir())).unwrap_or_else(std::env::temp_dir);
     let path = dir.join(title);
     datum_core::doc::write_atomic(&path, &pdf)?;
     open_file(&path);

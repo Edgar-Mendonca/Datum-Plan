@@ -485,7 +485,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - User: users (some Chinese-speaking) need a guide, not a tutorial: English and mainland Simplified Chinese PDFs, inside the app as a PDF icon that downloads from GitHub (not in the installer); screenshots in English with markups.
 - Built: `dump guide` (Engineering template with baseline, two closed periods, progress, risks with delays, constraints, timeline milestones; plus `query:timeline`, `query:tracking` and `resources` answers for the harness), `guide_shots.cjs` (21 shots; markers by selector, ribbon group caption or text; badge placement; clips), real-app Home and Setup shots with a PIL markup, `guide.cjs` (PDF builder), the guide texts, `update::guide` + `guide` command, Help › Guide, File › Guide tile, `i-pdf` icon, first-start hint, Tell Me entry, release attaches both PDFs (in SHA256SUMS). UI test for the dialog.
 - Found on the way: the harness answered every query with the Gantt grid (timeline and Tracking looked wrong), fixed with per-query answers.
-- Not checked: a native Chinese reader has not reviewed the Chinese text; the download was tested only after release (see the release check).
+- Release check: the release has both PDFs and their SHA256SUMS lines; in the real app (Xvfb) Help › Guide › 中文 downloaded the v0.4.4 file, verified it, saved `~/Downloads/Datum Plan 使用指南.pdf` (identical to the release file) and opened it. On this Linux box Tauri's `download_dir()` failed (no XDG dirs), so after the release `update::guide` gained fallbacks (~/Downloads made if needed, Documents, temp); Windows always has Downloads, so 0.4.4 is unaffected. **Ship this fallback in the next release's CHANGELOG.**
+- Not checked: a native Chinese reader has not reviewed the Chinese text.
 
 ## 5. Known limits and next steps
 
