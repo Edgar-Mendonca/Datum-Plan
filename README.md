@@ -93,6 +93,10 @@ Tell Me (Ctrl+K) finds any command. Help › **Getting Started** and a searchabl
 2. Run it. It installs for your user account, with no administrator rights needed. The installer is not code-signed yet, so on the first install Windows may show *"Windows protected your PC"*. Click **More info › Run anyway**.
 3. Later versions install from inside the app: **File › Home › Update now**, or click the amber **Update available** badge. Every download is checked against its SHA-256 checksum.
 
+## The guide
+
+The **Datum Plan Guide** walks through everything step by step, with pictures: [English (PDF)](https://github.com/Edgar-Mendonca/Datum-Plan/releases/latest/download/DatumPlan-Guide-en.pdf) · [中文 (PDF)](https://github.com/Edgar-Mendonca/Datum-Plan/releases/latest/download/DatumPlan-Guide-zh.pdf). In the app: **Help › Guide**.
+
 ## Your first plan in five minutes
 
 1. **File › New** and pick a template (or Blank Project), then follow **Setup**.

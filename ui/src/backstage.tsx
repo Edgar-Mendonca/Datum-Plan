@@ -67,6 +67,7 @@ const Home = () => {
           <button class="tile" onClick={() => neu(null)}><div class="pic"><svg class="ic"><use href="#i-new" /></svg></div><b>Blank Project</b><span>Start with the Project Setup panel.</span></button>
           <For each={tpls() ?? []}>{t => <button class="tile" onClick={() => neu(t.id)}><div class="pic"><Mini t={t} /><small>{t.tasks} tasks · {t.days} days</small></div><b>{t.name}</b><span>{t.desc}</span></button>}</For>
           <button class="tile" onClick={() => C.importFile()}><div class="pic"><svg class="ic"><use href="#i-import" /></svg></div><b>Import</b><span>XML and XER project files, Excel, CSV or JSON.</span></button>
+          <button class="tile" onClick={() => D.guide()}><div class="pic"><svg class="ic"><use href="#i-pdf" /></svg></div><b>Guide</b><span>The step-by-step guide (PDF), in English or 中文.</span></button>
           <button class="tile" onClick={() => setBackstage("roadmap")}><div class="pic"><svg class="ic"><use href="#i-list" /></svg></div><b>Roadmap</b><span>Everything Datum Plan will do, and when.</span></button>
         </div>
         <h2>Recent</h2>

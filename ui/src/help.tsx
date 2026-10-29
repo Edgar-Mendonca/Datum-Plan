@@ -103,6 +103,8 @@ export const HELP: Record<string, Topic> = {
     tip: "Close a period each week (Progress › Update Progress › Close Period) so Done follows what really happened." },
   credit: { t: "Rules of credit", what: "Measure progress by steps that each earn a share of the work, like cable: pulled 60 %, terminated 30 %, tested 10 %.",
     how: ["Pick a built-in rule or make your own, then apply it to the selected tasks.", "Tick steps off in the task's Steps tab: the task's physical % complete follows.", "Or type the Quantity and Installed Quantity of a task (for example 200 m of cable, 50 m pulled): physical % complete is the installed share."] },
+  guide: { t: "Guide", what: "The Datum Plan Guide: a step-by-step PDF with pictures, in English or Simplified Chinese (中文).",
+    how: ["Help › Guide, or the Guide tile on the File page.", "Choose English or 中文: the guide downloads from GitHub, is checked against its checksum, is saved in your Downloads folder and opens."] },
   importReport: { t: "Import report", what: "What Datum Plan changed or left out when it opened the file, and whether every task gets the same dates as in the file.",
     how: ["Dates that differ usually come from calendars, progress or scheduling options that work differently.", "Check the tasks listed first; the plan is open either way."] },
   dashboard: { t: "Dashboard", what: "The plan on one page: progress, S-curve, cost and earned value, manpower, milestones and late tasks." },

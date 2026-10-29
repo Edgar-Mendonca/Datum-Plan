@@ -706,3 +706,11 @@ a.link { color: var(--blue); cursor: pointer; text-decoration: underline; }
 /* 0.4.2: on paper, Schedule Risk's charts each take the full width */
 .pflow .riskcharts { grid-template-columns: 1fr !important; }
 .pflow .riskcharts > .panel { grid-column: auto !important; }
+
+/* 0.4.4: the guide */
+.guidecards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+.guidecard { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center; text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); cursor: pointer; }
+.guidecard:hover:not(:disabled) { border-color: var(--blue); background: var(--pale); }
+.guidecard .ic { grid-row: span 2; width: 36px; height: 36px; color: var(--navy); }
+.guidecard b { font-size: 16px; }
+.guidecard span { color: var(--muted); font-size: 12px; }

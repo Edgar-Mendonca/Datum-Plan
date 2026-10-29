@@ -716,6 +716,11 @@ async fn check_update(st: State<'_, St>) -> R<update::Info> {
 }
 
 #[tauri::command]
+async fn guide(app: AppHandle, lang: String) -> R<String> {
+    tauri::async_runtime::spawn_blocking(move || update::guide(&app, &lang).map(|p| p.display().to_string())).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn install_update(app: AppHandle, url: String, sums: Option<String>) -> R<()> {
     tauri::async_runtime::spawn_blocking(move || update::install(&app, &url, sums.as_deref())).await.map_err(|e| e.to_string())?
 }
@@ -754,7 +759,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
             query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, scurve, periods, period_report,
-            options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update
+            options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())
         .expect("Datum Plan failed to start");

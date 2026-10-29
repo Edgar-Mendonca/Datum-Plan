@@ -32,7 +32,8 @@
     "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
     "Dashboard, progress reports and a report builder; print to PDF from every view.",
     "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel export with formulas.",
-    "A command line and an MCP server, so scripts and AI assistants can build and update plans with the same operations as the window."
+    "A command line and an MCP server, so scripts and AI assistants can build and update plans with the same operations as the window.",
+    "A step-by-step guide with pictures, in English and Simplified Chinese (Help › Guide)."
   ],
   "screenshots": [
     "docs/images/gantt.png",

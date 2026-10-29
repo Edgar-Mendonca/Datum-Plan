@@ -39,7 +39,8 @@ jobs:
           mkdir out
           cp target/release/bundle/nsis/*-setup.exe "out/DatumPlan-$V-setup.exe"
           cp target/release/datum-cli.exe "out/datum-cli-$V.exe"
-          cd out && sha256sum "DatumPlan-$V-setup.exe" "datum-cli-$V.exe" > SHA256SUMS.txt && cat SHA256SUMS.txt
+          cp docs/guide/pdf/DatumPlan-Guide-en.pdf docs/guide/pdf/DatumPlan-Guide-zh.pdf out/
+          cd out && sha256sum "DatumPlan-$V-setup.exe" "datum-cli-$V.exe" DatumPlan-Guide-en.pdf DatumPlan-Guide-zh.pdf > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Release notes from CHANGELOG.md
         shell: bash
         run: |
@@ -56,4 +57,6 @@ jobs:
           files: |
             out/DatumPlan-${{ env.V }}-setup.exe
             out/datum-cli-${{ env.V }}.exe
+            out/DatumPlan-Guide-en.pdf
+            out/DatumPlan-Guide-zh.pdf
             out/SHA256SUMS.txt

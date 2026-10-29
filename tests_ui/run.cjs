@@ -270,6 +270,18 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   }
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
+  // 0.4.4: Help › Guide offers the guide in English and Chinese and asks the shell to download it.
+  await p.click(".tabs > button:text-is('Help')"); await p.waitForTimeout(100);
+  await p.click(".ribbon button:has-text('Guide')"); await p.waitForTimeout(250);
+  const cards = await p.$$eval(".dlg .guidecard b", b => b.map(x => x.textContent));
+  await p.click(".dlg .guidecard:has-text('中文')"); await p.waitForTimeout(200);
+  check("Help › Guide offers English and 中文 and downloads the chosen one", cards.join() === "English,中文" && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "guide").pop())).includes('"lang":"zh"'));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click(".tabs .file"); await p.waitForTimeout(150);
+  check("the File page has a Guide tile", !!(await p.$(".tile:has-text('Guide')")));
+  await p.click(".bs aside .back"); await p.waitForTimeout(150);
+  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

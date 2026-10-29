@@ -8,6 +8,8 @@ use tauri::{AppHandle, Emitter};
 const REPO: &str = "Edgar-Mendonca/Datum-Plan";
 /// No installer is anywhere near this size (they are about 4 MB).
 const MAX_INSTALLER: u64 = 200 * 1024 * 1024;
+/// The guides are a few megabytes.
+const MAX_GUIDE: u64 = 60 * 1024 * 1024;
 
 #[derive(Serialize)]
 pub struct Info {
@@ -159,4 +161,53 @@ fn launch(installer: &std::path::Path) -> Result<(), String> {
 #[cfg(not(windows))]
 fn launch(_: &std::path::Path) -> Result<(), String> {
     Ok(())
+}
+
+/// Downloads the guide (PDF) in `lang` from this version's release (or the newest one), checks it
+/// against that release's SHA256SUMS.txt, saves it in Downloads and opens it. Returns the path.
+pub fn guide(app: &AppHandle, lang: &str) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager;
+    let (file, title) = match lang { "en" => ("DatumPlan-Guide-en.pdf", "Datum Plan Guide.pdf"), "zh" => ("DatumPlan-Guide-zh.pdf", "Datum Plan 使用指南.pdf"), _ => return Err("The guide is in English (en) or Chinese (zh).".into()) };
+    let get = |url: &str| -> Result<Option<Vec<u8>>, String> {
+        match agent().get(url).call() {
+            Ok(r) => {
+                let mut b = vec![];
+                r.into_reader().take(MAX_GUIDE + 1).read_to_end(&mut b).map_err(|e| format!("Download failed: {e}"))?;
+                if b.len() as u64 > MAX_GUIDE { return Err("The guide is far larger than expected, so it was not saved.".into()) }
+                Ok(Some(b))
+            }
+            Err(ureq::Error::Status(404, _)) => Ok(None),
+            Err(ureq::Error::Status(c, _)) => Err(format!("GitHub answered {c}. Try again later.")),
+            Err(_) => Err("Could not reach GitHub. Check your internet connection.".into()),
+        }
+    };
+    // This version's guide first; a version released without one uses the newest.
+    let mut found = None;
+    for base in [format!("https://github.com/{REPO}/releases/download/v{}/", env!("CARGO_PKG_VERSION")), format!("https://github.com/{REPO}/releases/latest/download/")] {
+        if let Some(pdf) = get(&format!("{base}{file}"))? {
+            found = Some((pdf, base));
+            break;
+        }
+    }
+    let (pdf, base) = found.ok_or("The guide is not on the releases page yet. Try again after the next update.")?;
+    let sums = get(&format!("{base}SHA256SUMS.txt"))?.ok_or("The release has no checksum file, so the guide was not saved.")?;
+    let sums = String::from_utf8_lossy(&sums);
+    let want = sums.lines().filter_map(|l| { let mut w = l.split_whitespace(); Some((w.next()?, w.next()?.trim_start_matches('*'))) }).find(|(_, f)| *f == file).map(|(h, _)| h).unwrap_or("");
+    let got: String = Sha256::digest(&pdf).iter().map(|b| format!("{b:02x}")).collect();
+    if want.len() != 64 || !want.eq_ignore_ascii_case(&got) || !pdf.starts_with(b"%PDF") {
+        return Err("The download did not match its checksum, so it was not saved. Try again.".into());
+    }
+    let dir = app.path().download_dir().or_else(|_| app.path().document_dir()).map_err(|e| format!("No Downloads folder: {e}"))?;
+    let path = dir.join(title);
+    datum_core::doc::write_atomic(&path, &pdf)?;
+    open_file(&path);
+    Ok(path)
+}
+
+/// Opens a file Datum Plan just saved with the program Windows uses for it.
+fn open_file(path: &std::path::Path) {
+    #[cfg(windows)]
+    let _ = std::process::Command::new("explorer").arg(path).spawn();
+    #[cfg(not(windows))]
+    let _ = std::process::Command::new("xdg-open").arg(path).spawn();
 }

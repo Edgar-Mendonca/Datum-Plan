@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.4 — 2026-10-29
+
+The Datum Plan Guide: a step-by-step guide with pictures, in English and Simplified Chinese.
+
+**The guide**
+- **Help › Guide** (and a **Guide** tile on the File page, with a PDF icon) offers the guide in **English** or **中文**. One click downloads it from GitHub, checks it against the release's checksums, saves it in your Downloads folder and opens it. The app itself stays small.
+- About 30 pages with numbered screenshots: installing and updating, the window, building a plan (tasks, durations, links, constraints, calendars), people, man-hours and costs, baseline and progress, reports and printing, risk, the look-ahead and manpower, sheets and formulas, files, the command line, a glossary of planning terms and the keyboard shortcuts.
+- The Chinese guide keeps the English names of buttons and menus (the app is in English) with their Chinese meaning beside them, and has an English–Chinese glossary.
+- The first time Datum Plan starts, a short hint points to the guide. Tell Me (Ctrl+K) finds it too.
+
 ## 0.4.3 — 2026-10-29
 
 - Windows now lists the publisher as Datum.

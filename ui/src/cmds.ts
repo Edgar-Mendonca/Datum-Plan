@@ -91,7 +91,7 @@ export const ALL_CMDS: [string, () => void, string?][] = [
   ["Team Planner", () => C.view("team")], ["Dashboard", () => C.view("dashboard")], ["Reports", () => C.view("reports")], ["Portfolio", () => C.view("portfolio")],
   ["Risks", () => C.view("risks")], ["Check schedule", () => C.view("checks")], ["Zoom in", C.zoomIn], ["Zoom out", C.zoomOut], ["Entire project", C.fit],
   ["Expand all", C.expandAll], ["Collapse all", C.collapseAll], ["Show details pane", C.details], ["Show timeline", C.timelineBar], ["Project setup", C.setup],
-  ["Level resources", () => C.level()], ["Clear leveling", C.clearLevel], ["Set baseline", C.baseline], ["Update project", C.update],
+  ["Open the guide (PDF, English or 中文)", () => D.guide()], ["Level resources", () => C.level()], ["Clear leveling", C.clearLevel], ["Set baseline", C.baseline], ["Update project", C.update],
   ["Project information", () => D.projectInfo()], ["Change working time", () => D.calendars()], ["Schedule options", () => D.scheduleOptions()],
   ["Custom fields", () => D.customFields()], ["Activity codes", () => D.activityCodes()], ["Filter", () => D.filterEditor()], ["Group by", () => D.groupEditor()],
   ["Sort", () => D.sortEditor()], ["Insert column", () => D.insertColumn()], ["Tables", () => D.tablesDialog()], ["Compare projects", () => D.compare()],

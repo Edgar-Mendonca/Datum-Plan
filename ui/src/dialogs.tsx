@@ -498,6 +498,34 @@ export const pasteSpecial = () => {
 };
 
 /** A one-page guide for people who know MS Project or Excel. */
+// ---------- the guide (PDF, English or Chinese) ----------
+/** Help › Guide: downloads the guide for this version from GitHub, checks it, saves it in Downloads and opens it. */
+export const guide = () => openDialog(() => {
+  const [busy, setBusy] = createSignal("");
+  const get = async (lang: string) => {
+    setBusy(lang);
+    try {
+      const path = await call<string>("guide", { lang });
+      if (path) { toast(`Saved in Downloads and opened: ${path}`, true); closeDialog(); }
+    } finally { setBusy(""); }
+  };
+  const Card = (p: { lang: string; title: string; sub: string }) => (
+    <button class="guidecard" disabled={!!busy()} onClick={() => get(p.lang)}>
+      <svg class="ic"><use href="#i-pdf" /></svg><b>{p.title}</b><span>{busy() === p.lang ? "Downloading…" : p.sub}</span>
+    </button>
+  );
+  return (
+    <Dialog title="Datum Plan Guide" help="guide">
+      <p>A step-by-step guide to Datum Plan, with pictures: from your first plan to progress, reports and risk. Choose a language; it downloads from GitHub, is checked, saved in your Downloads folder and opened.</p>
+      <div class="guidecards">
+        <Card lang="en" title="English" sub="Datum Plan Guide (PDF)" />
+        <Card lang="zh" title="中文" sub="Datum Plan 使用指南 (PDF)" />
+      </div>
+      <p class="muted">The guide matches this version of Datum Plan. You need an internet connection the first time.</p>
+    </Dialog>
+  );
+});
+
 export const gettingStarted = () => openDialog(() => (
   <Dialog title="Getting started" wide>
     <div class="gloss">

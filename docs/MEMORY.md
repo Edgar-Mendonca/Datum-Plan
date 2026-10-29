@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
-| **Current version** | **0.4.3** (released 2026-10-29). Earlier: 0.1.0 … 0.4.2 |
+| **Current version** | **0.4.4** (released 2026-10-29). Earlier: 0.1.0 … 0.4.3 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -95,6 +95,9 @@ flowchart LR
 | `crates/core/examples/` | `bench.rs` (20k-task timing), `dump.rs` (JSON fixtures for UI tests). |
 | `crates/core/src/tests.rs` | Engine tests (26). |
 | `crates/core/src/risk.rs` | Schedule risk (Monte Carlo): `SimOpts` (iterations, default range −low/+high %, seed), `simulate` → P10/50/80/90, chance of the planned finish, finish-day histogram, cost P50/P80, criticality, drivers (correlation), risk hit rates. Triangular draws; every run is a full `schedule()`. |
+| `docs/guide/en.md`, `zh.md`, `img/`, `pdf/` | The Datum Plan Guide: Markdown sources (English, Simplified Chinese), screenshots, built PDFs (attached to every release as `DatumPlan-Guide-en.pdf` / `-zh.pdf`). |
+| `tests_ui/guide_shots.cjs` | Guide screenshots: the built window with `dump guide` (a plan in progress) behind the mocked bridge, numbered markers drawn on the page, optional clip. Home and Project Setup come from the real app (Xvfb). |
+| `scripts/guide.cjs` | Builds the guide PDFs: small Markdown subset → HTML (cover, clickable contents, figures, tips, tables, `[[keys]]`) → Chromium A4 PDF with page numbers; IBM Plex + Noto Sans SC (`@fontsource/noto-sans-sc`, dev only). `npm run guide` runs both scripts. |
 | `crates/core/src/ops.rs` | The named operations catalogue (name, what it does, example JSON); a test applies every example. |
 | `crates/cli/` | `datum-cli`: info, schedule, ops, apply, export, risk, lookahead, new, templates, and `mcp` (Model Context Protocol over stdio: open_plan, new_plan, get_schedule, list_operations, apply_operation, undo, schedule_risk, lookahead, save_plan…). Shipped as `datum-cli-X.Y.Z.exe` in each release (in SHA256SUMS.txt). |
 | `crates/core/src/progress.rs` | Progress history: `credit_library`, `manpower` (people per period by trade: planned / done / forecast), `earned_schedule` (ES, SPI(t), SV(t), IEAC(t)), `lookahead` (tasks in the next weeks + open/overdue constraints). |
@@ -167,7 +170,7 @@ flowchart LR
 8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
 9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
 
-Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report), 0.4.1 (progress history), 0.4.2 (hardening, CLI + MCP, print), 0.4.3 (publisher "Datum").
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report), 0.4.1 (progress history), 0.4.2 (hardening, CLI + MCP, print), 0.4.3 (publisher "Datum"), 0.4.4 (the guide, English and Chinese).
 
 ---
 
@@ -213,6 +216,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
 | 0.3.9 | **? help beside the tools in every Datum app**: a small ? beside each ribbon group, page, panel and main dialog opens a card (what it is for, how to use it) from one `HELP` table in `ui/src/help.tsx`; Help › What Is This Tool? lists them all. No separate teaching mode | The user's words: "at some of the tools, we can add a small question mark icon… we should do it in all of our applications." Built first in Datum Atlas 0.1.1; same code and styles in every app. |
+| 0.4.4 | The guide is a PDF per language, downloaded on demand (not in the installer): `update::guide(lang)` fetches `DatumPlan-Guide-{lang}.pdf` from this version's release (else latest), requires a matching line in that release's SHA256SUMS.txt and a `%PDF` header, caps 60 MB, saves to Downloads ("Datum Plan Guide.pdf" / "Datum Plan 使用指南.pdf") with `write_atomic`, opens it | The user: keep the installer small; inside the app, one click. Same trust rules as updates. |
+| 0.4.4 | Guide text in Markdown in the repo; the Chinese guide keeps English UI names in bold with the Chinese meaning beside them; screenshots stay in English with numbered orange markers | The app is English-only; readers must find the buttons. Easy to keep up to date each release (CLAUDE.md step 3). |
 | 0.4.3 | Windows publisher is "Datum" (`bundle.publisher`; the copyright stays "© 2026 Edgar Mendonca"). `src-tauri/windows/hooks.nsh` (NSIS_HOOK_PREINSTALL) reads the old `Software\Edgar Mendonca\Datum Plan` install-folder key, installs there if it differs, and deletes the old key | Family rule (FAMILY §9 in the hub). Tauri's NSIS remembers the folder under `Software\<publisher>\<product>`; the uninstall entry and the default folder use only the product name, so default installs update in place. |
 | 0.4.2 | Release builds unwind (not abort); `guard()` in the shell turns a panic in apply/open/import/risk/level preview into an error message; a panic hook appends to `crash.log` in the app data folder | Abort closed the app on any panic and made the poisoned-lock recovery useless. |
 | 0.4.2 | `Project::normalize` clamps spans to `MAX_SPAN` (10,000,000 working minutes ≈ 80 years), lags in % to ±10,000, units to 0–1000, non-finite numbers to 0, splits to 100, `day_min` to 1–1440; `parse::dur` caps at `MAX_SPAN`; `WorkCal` saturates at a horizon (1800–2600), `date_of` saturates | Hostile values panicked in calendar arithmetic (`succ_opt().unwrap()` past the last date). |
@@ -283,6 +288,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.12 | Trust in the dates | Hand-worked cases (`cases.rs`), parity files (`parity.rs`), random plans with constraints/calendars (links hold, tight forward pass, row order), random edit sequences, damaged CSV/xlsx; fixed ALAP (free float) and late dates of started work | ✅ |
 | 0.4.0 | Risk & resources | Schedule Risk (Monte Carlo: P50/P80/P90, cost, criticality, drivers, risk delays, optimistic/pessimistic durations), workload by trade (Group) in hours or people, levelling preview, import report + XER activity types | ✅ |
 | 0.4.1 | Progress history | Actual S-curve through the stored periods, Manpower by trade (planned / done / forecast), earned schedule, rules of credit + installed quantities, look-ahead with constraint log | ✅ |
+| 0.4.4 | Guide | Datum Plan Guide in English and Simplified Chinese (PDF, ~30 pages, numbered screenshots); Help › Guide + File tile download, verify, save and open; first-start hint | ✅ |
 | 0.4.3 | Publisher | Windows publisher "Datum"; installer hook keeps a custom install folder | ✅ |
 | 0.4.2 | Hardening, command line & print | Security/robustness pass (hostile values, atomic saves, crash log + unwind, updater, CSP, CSV injection, npm audit), `datum-cli` + MCP server + ops catalogue, exact money (cents), Schedule Risk / Look-ahead / Manpower print, risk run kept | ✅ |
 | 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
@@ -474,6 +480,12 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 
 ### 2026-10-29: Session 15 (0.4.3, publisher "Datum")
 - User (family rule): the Windows publisher becomes "Datum". Changed `bundle.publisher` (copyright unchanged); nothing else in the repo writes the publisher (LICENSE, NOTICE and README keep the copyright holder). Read Tauri's NSIS template (in the CLI binary): the uninstall key and the default folder use the product name, but the remembered install folder lives under `Software\<publisher>\<product>`, so added `windows/hooks.nsh` to carry a custom folder across. Not tested on a real Windows upgrade.
+
+### 2026-10-29: Session 16 (0.4.4, the guide)
+- User: users (some Chinese-speaking) need a guide, not a tutorial: English and mainland Simplified Chinese PDFs, inside the app as a PDF icon that downloads from GitHub (not in the installer); screenshots in English with markups.
+- Built: `dump guide` (Engineering template with baseline, two closed periods, progress, risks with delays, constraints, timeline milestones; plus `query:timeline`, `query:tracking` and `resources` answers for the harness), `guide_shots.cjs` (21 shots; markers by selector, ribbon group caption or text; badge placement; clips), real-app Home and Setup shots with a PIL markup, `guide.cjs` (PDF builder), the guide texts, `update::guide` + `guide` command, Help › Guide, File › Guide tile, `i-pdf` icon, first-start hint, Tell Me entry, release attaches both PDFs (in SHA256SUMS). UI test for the dialog.
+- Found on the way: the harness answered every query with the Gantt grid (timeline and Tracking looked wrong), fixed with per-query answers.
+- Not checked: a native Chinese reader has not reviewed the Chinese text; the download was tested only after release (see the release check).
 
 ## 5. Known limits and next steps
 
