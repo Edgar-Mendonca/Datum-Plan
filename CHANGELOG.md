@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 — 2026-10-30
+
+Better-looking charts that are never cut off.
+
+- **A new look for every chart** (Dashboard, S-Curves, Manpower, Schedule Risk, reports, Report Builder): smooth lines with a soft fill under the actual progress, rounded bars, light horizontal gridlines instead of heavy black axes, round legend markers, a dark rounded tooltip and a status-date label, in a clearer set of colours.
+- **No more cropped charts.** Charts follow their box when the window, the sidebar or the panes change size, and they are laid out again for printing, so a printed or PDF dashboard shows every chart whole (two per row).
+- Charts in the same row are the same height, with no empty band under the shorter one.
+- A chart with nothing to show says so ("No costs in this plan yet", "No hours assigned yet") instead of drawing empty axes.
+- Manpower's forecast joins its weeks with straight lines (a smooth curve suggested values between the weeks).
+- The guide's pictures show the new charts.
+
 ## 0.5.1 — 2026-10-30
 
 Two fixes.

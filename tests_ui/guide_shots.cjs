@@ -17,7 +17,7 @@ const srv = http.createServer((q, r) => {
   const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
   await p.addInitScript(f => {
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "Northwind Engineering", logo: "", workspace: "", setupPanel: false, theme: "light" };
-    const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "0.5.0", checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
+    const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "0.5.2", checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__TAURI__ = { core: { invoke: async (c, a) => {
       if (c === "query" && JSON.stringify(a).includes('"timeline"')) return m["query:timeline"];
       if (c === "query" && JSON.stringify(a).includes('"astart"')) return m["query:tracking"];

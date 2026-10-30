@@ -437,15 +437,19 @@ input, select, textarea { background: var(--bg2); color: var(--text); }
 .theme:hover { color: var(--text); border-color: var(--line3); }
 
 /* ---------- 0.3.1: charts and reports ---------- */
-.chartbox { position: relative; background: var(--bg2); border: 1px solid var(--line); padding: 12px 14px 8px; min-width: 0; }
+.chartbox { position: relative; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px 10px; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
 .chartbox header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .chartbox header h3 { margin: 0; flex: 1; font: 500 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .chartbox header button { font: 500 9.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); padding: 1px 6px; }
 .chartbox header button:hover { color: var(--blue); border-color: var(--blue); }
-.chartbox .cv { position: relative; height: 280px; }
-.chartbox.tall .cv { height: 360px; }
-.chartbox.short .cv { height: 220px; }
-.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 12px; }
+/* The plot fills its box (as tall as the tallest chart in the row); the canvas never sizes the box. */
+.chartbox .cv { position: relative; flex: 1 1 auto; min-height: 280px; width: 100%; min-width: 0; overflow: hidden; }
+.chartbox .cv canvas { position: absolute; inset: 0; max-width: 100%; }
+.chartbox .cv.blank { visibility: hidden; }
+.chartbox .nodata { position: absolute; left: 0; right: 0; top: 50%; text-align: center; color: var(--muted); font-size: 12.5px; margin: 0; }
+.chartbox.tall .cv { min-height: 360px; }
+.chartbox.short .cv { min-height: 220px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 12px; }
 .notesec { display: grid; gap: 4px; margin-bottom: 10px; }
 .notesec label { font: 500 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .notesec textarea { min-height: 70px; resize: vertical; padding: 6px 8px; font: 12.5px/1.45 var(--sans); }
@@ -462,7 +466,7 @@ input, select, textarea { background: var(--bg2); color: var(--text); }
 .sheettabs { display: flex; gap: 0; border-top: 1px solid var(--line); background: var(--panel); flex: none; }
 .sheettabs button { padding: 4px 14px; font: 500 10.5px var(--mono); letter-spacing: .06em; border-right: 1px solid var(--line); color: var(--muted); }
 .sheettabs button.on { background: var(--bg2); color: var(--blue); box-shadow: inset 0 2px var(--blue); }
-@media print { .chartbox header button, .fbar { display: none !important; } .chartbox { break-inside: avoid; } }
+@media print { .chartbox header button, .fbar { display: none !important; } .chartbox { break-inside: avoid; } .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .printonly { display: none; }
 @media print { .printonly { display: block !important; } }
 
