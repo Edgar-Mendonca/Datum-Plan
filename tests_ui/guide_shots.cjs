@@ -17,11 +17,12 @@ const srv = http.createServer((q, r) => {
   const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
   await p.addInitScript(f => {
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "Northwind Engineering", logo: "", workspace: "", setupPanel: false, theme: "light" };
-    const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "0.5.2", checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
+    const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "0.5.3", checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__TAURI__ = { core: { invoke: async (c, a) => {
       if (c === "query" && JSON.stringify(a).includes('"timeline"')) return m["query:timeline"];
       if (c === "query" && JSON.stringify(a).includes('"astart"')) return m["query:tracking"];
       if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`];
+      if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? []);
       if (c in m) return m[c];
       if (c === "apply") return f.state;
       return null;
@@ -97,6 +98,13 @@ const srv = http.createServer((q, r) => {
   await shot("sheet-formula", [["input.edit", 1], [".fhint", 2, 0, "right"]], { x: 66, y: 160, width: 1374, height: 470 });
   await p.keyboard.press("Escape"); await p.keyboard.press("Escape"); await wait(200);
   await side("Dashboard"); await shot("dashboard", [[".kpis", 1]]);
+  // Own dashboards: the Client dashboard (tabs, tiles, a rule-coloured number, flags), then the Add tile dialog.
+  await p.click(".dashtabs button:text-is('Client dashboard')"); await wait(1500);
+  await shot("dashboards", [[".dashtabs", 1, 0, "in"], [".dashbar .btn", 2, 0], [".dtile.k-number", 3, 2], [".dtile.k-ring", 4]]);
+  await p.click(".dashbar button:has-text('Edit layout')"); await wait(200);
+  await p.click(".dashbar button:has-text('+ Add tile')"); await wait(300);
+  await shot("dashboard-tile", [[".dlg select", 1, 0], [".dlg input.mono", 2, 0], [".dlg select", 3, 2]], ".dlg");
+  await p.keyboard.press("Escape"); await p.click(".dashbar button:has-text('Done')"); await p.click(".dashtabs button:text-is('Project')"); await wait(300);
   await side("S-Curves"); await shot("scurve", [[".page .kpis", 1]]);
   await side("Progress"); await shot("progress-report");
   await side("Sched. Risk");

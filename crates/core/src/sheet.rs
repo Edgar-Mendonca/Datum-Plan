@@ -166,6 +166,7 @@ pub fn project_names(c: &Calc) -> Vec<(&'static str, Value, &'static str)> {
         ("BaselineFinish", bl.map_or(Value::Empty, |b| serial(b - 1)), "The baseline finish date"),
         ("FinishVariance", bl.map_or(Value::Empty, |b| Value::number(days(b, s.finish))), "Finish variance in working days (later is positive)"),
         ("PercentComplete", Value::number(sm.pct), "Duration-weighted % complete (0–100, like the task sheet)"),
+        ("PlannedPercent", Value::number(planned_pct(c)), "Where the baseline says the plan should be at the status date (0–100, duration-weighted)"),
         ("TotalCost", Value::number(tot(&c.l.cost)), "Total cost"),
         ("PlannedValue", Value::number(tot(&c.ev.pv)), "Planned value (PV) at the status date"),
         ("EarnedValue", Value::number(tot(&c.ev.ev)), "Earned value (EV)"),
@@ -178,6 +179,15 @@ pub fn project_names(c: &Calc) -> Vec<(&'static str, Value, &'static str)> {
         ("CriticalCount", Value::number(sm.critical as f64), "Critical tasks"),
         ("MilestoneCount", Value::number(sm.milestones as f64), "Milestones"),
     ]
+}
+
+/// Planned % complete at the status date, weighted by duration like `PercentComplete`.
+fn planned_pct(c: &Calc) -> f64 {
+    let (p, s) = (c.p, &c.s);
+    let leaves: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
+    let w: f64 = leaves.iter().map(|&i| p.tasks[i].dur as f64).sum();
+    if w <= 0.0 { return 0.0 }
+    leaves.iter().map(|&i| p.tasks[i].dur as f64 * c.val(i, "plannedpct").num()).sum::<f64>() / w
 }
 
 /// Names that hold dates (shown as dates when a cell has no format of its own).
@@ -232,7 +242,7 @@ fn gives_date(input: &str) -> bool {
 /// Whether a formula gives one of the plan's percentages (0–100), shown with a % sign.
 fn gives_pct(input: &str) -> bool {
     let up = input.to_uppercase();
-    let pct = up.contains("% COMPLETE]") || up.contains("PERCENTCOMPLETE");
+    let pct = up.contains("% COMPLETE]") || up.contains("PERCENTCOMPLETE") || up.contains("PLANNEDPERCENT");
     let Ok(e) = gridcraft_formula::parse(input.trim_start_matches('=')) else { return false };
     use gridcraft_formula::Expr;
     pct && match &e {
@@ -258,6 +268,11 @@ fn show(v: &Value, fmt: &str, input: &str, c: &Calc, sys: gridcraft_core::DateSy
 /// A workbook for the plan: the Plan and Resources sheets with their tables, the project names,
 /// then the user's tabs, all calculated.
 pub fn book(c: &Calc) -> Workbook {
+    book_with(c, &[])
+}
+
+/// [`book`] with one extra sheet per formula in `extra` (after the user's tabs), each in its A1.
+fn book_with(c: &Calc, extra: &[String]) -> Workbook {
     let p = c.p;
     let mut wb = Workbook::new();
     let cols = task_columns(c);
@@ -311,8 +326,57 @@ pub fn book(c: &Calc) -> Workbook {
         }
         wb.sheets.push(Arc::new(sh));
     }
+    for (k, f) in extra.iter().enumerate() {
+        let mut sh = Sheet::new(format!("__eval{k}"));
+        let f = if f.starts_with('=') { f.clone() } else { format!("={f}") };
+        sh.set_cell(CellRef::new(0, 0), Cell::formula(Formula::new(&f)));
+        wb.sheets.push(Arc::new(sh));
+    }
     gridcraft_calc::Calc::new().recalc_all(&mut wb);
     wb
+}
+
+/// One value as a dashboard shows it: the text, the number (if any) and the cell's format.
+pub type Shown = (String, Option<f64>, String);
+
+/// Works out dashboard formulas: each `(formula, format)` gives a table of shown values, one cell
+/// for a single value, more when the result spills (FILTER, a range). A plain reference to a range
+/// on a sheet keeps that sheet's formats (dates, money, flags). Tables are capped at 500 × 40.
+pub fn eval(c: &Calc, items: &[(String, String)]) -> Vec<Vec<Vec<Shown>>> {
+    let p = c.p;
+    let wb = book_with(c, &items.iter().map(|x| x.0.clone()).collect::<Vec<_>>());
+    let base = BUILT_IN + p.sheets.len();
+    let num = |v: &Value| match v { Value::Number(n) => Some(*n), _ => None };
+    items.iter().enumerate().map(|(k, (f, fmt))| {
+        // `=Sheet!A1:C9` shows the sheet's own cells, with their formats.
+        if let Some((tab, r)) = sheet_range(f).and_then(|(name, r)| p.sheets.iter().position(|s| s.name.eq_ignore_ascii_case(&name)).map(|t| (t, r))) {
+            let (sh, sd) = (wb.sheet(tab + BUILT_IN), &p.sheets[tab]);
+            return (r.start.row..=r.end.row.min(r.start.row + 499)).map(|row| (r.start.col..=r.end.col.min(r.start.col + 39)).map(|col| {
+                let at = CellRef::new(row, col);
+                let a1 = format!("{}{}", col_name(col), row + 1);
+                let v = sh.map_or(Value::Empty, |sh| sh.value(at));
+                let f = sd.fmt.get(&a1).cloned().unwrap_or_default();
+                (show(&v, &f, sd.cells.get(&a1).map_or("", String::as_str), c, wb.date_system).0, num(&v), f)
+            }).collect()).collect();
+        }
+        let Some(sh) = wb.sheet(base + k) else { return vec![] };
+        let end = sh.used_range().map_or(CellRef::new(0, 0), |u| u.end);
+        (0..=end.row.min(499)).map(|row| (0..=end.col.min(39)).map(|col| {
+            let v = sh.value(CellRef::new(row, col));
+            // The first cell's formula decides date and % formats; spilled cells use the given format.
+            let input = if row == 0 && col == 0 { f.as_str() } else { "" };
+            (show(&v, fmt, input, c, wb.date_system).0, num(&v), fmt.clone())
+        }).collect()).collect()
+    }).collect()
+}
+
+/// `=Sheet!A1:C9` or `='My sheet'!B2` → the sheet name and the range.
+fn sheet_range(f: &str) -> Option<(String, gridcraft_core::RangeRef)> {
+    let (name, r) = f.trim().strip_prefix('=')?.rsplit_once('!')?;
+    let name = name.trim().trim_matches('\'').replace("''", "'");
+    let cell = |x: &str| CellRef::parse(&x.replace('$', ""));
+    let (a, b) = match r.split_once(':') { Some((a, b)) => (cell(a)?, cell(b)?), None => (cell(r)?, cell(r)?) };
+    Some((name, gridcraft_core::RangeRef::new(a, b)))
 }
 
 /// The sheets before the user's tabs in [`book`].

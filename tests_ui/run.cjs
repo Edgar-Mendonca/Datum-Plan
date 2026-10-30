@@ -23,7 +23,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__calls = [];
-    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
+    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   }, fix);
   await p.goto(url);
   await p.waitForTimeout(700);
@@ -310,6 +310,33 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Insert Row Above asks the engine to move the cells", (await lastApply()).includes('"SheetInsert"') && (await lastApply()).includes('"at":2'));
   await p.click('.side button[title="Resources"]'); await p.waitForTimeout(300);
   check("the Resource Sheet has a Country column", (await p.textContent(".tbl.sheet thead")).includes("Country"));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+
+  // 0.5.3: custom dashboards: from a template, then edit tiles.
+  await p.click('.side button[title="Dashboard"]'); await p.waitForTimeout(300);
+  await p.click(".dashtabs .add"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('From template: Client dashboard')"); await p.waitForTimeout(700);
+  const tiles = async () => (await p.$$(".dboard .dtile")).length;
+  check("a dashboard from a template has its tiles", (await tiles()) === 8 && (await p.textContent(".dashtabs .on")) === "Client dashboard", String(await tiles()));
+  check("number tiles show what the engine works out", (await p.$$eval(".dnum .v", v => v.map(x => x.textContent))).includes("42"));
+  check("dashboards ask the engine for every formula at once", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "dash_eval").pop())).includes("COUNTIF(Tasks[Late],TRUE)"));
+  check("a progress ring and a chart are drawn", !!(await p.$(".dring svg .val")) && !!(await p.$(".dtile.k-chart canvas")));
+  await p.click(".dashbar button:has-text('Edit layout')"); await p.waitForTimeout(150);
+  await p.click(".dashbar button:has-text('+ Add tile')"); await p.waitForTimeout(200);
+  await p.selectOption(".dlg select >> nth=0", "text"); await p.fill(".dlg textarea", "Steel deliveries start in week 12."); await p.click(".dlg .btn.pri"); await p.waitForTimeout(400);
+  check("+ Add tile adds a text tile", (await tiles()) === 9 && (await p.textContent(".dboard")).includes("Steel deliveries"));
+  await p.click(".dtile:last-child .dtools button[title='Change']"); await p.waitForTimeout(200);
+  await p.selectOption(".dlg select >> nth=0", "number"); await p.waitForTimeout(100);
+  const fx = p.locator(".dlg input.mono").first(); await fx.click(); await fx.press("Control+A"); await p.keyboard.type("=TotalCost", { delay: 20 });
+  check("a formula can be typed into a tile without losing keys", (await fx.inputValue()) === "=TotalCost", await fx.inputValue());
+  await p.click(".dlg .btn.pri"); await p.waitForTimeout(300);
+  await p.click(".dtile:last-child .dtools button[title='Size']"); await p.waitForTimeout(100);
+  await p.hover(".menu button:has-text('Width')"); await p.waitForTimeout(150); await p.click(".menu button:has-text('Full width')"); await p.waitForTimeout(300);
+  check("a tile can be resized", await p.$eval(".dtile:last-child", t => t.classList.contains("dw12")));
+  await p.click(".dtile:last-child .dtools button[title='Remove']"); await p.waitForTimeout(300);
+  check("a tile can be removed", (await tiles()) === 8);
+  await p.click(".dashtabs button:text-is('Project')"); await p.waitForTimeout(300);
+  check("the Project tab still shows the built-in dashboard", !!(await p.$(".kpis")) && !(await p.$(".dboard")));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 0.5.1: Tell Me dims the window instead of hiding it.

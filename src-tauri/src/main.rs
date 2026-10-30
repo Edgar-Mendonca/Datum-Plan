@@ -567,6 +567,12 @@ fn sheet_catalog(st: State<St>) -> SheetCatalog {
     }
 }
 
+/// Dashboard tiles: each formula's result as a table of shown values (see `sheet::eval`).
+#[tauri::command]
+fn dash_eval(st: State<St>, items: Vec<(String, String)>) -> Vec<Vec<Vec<datum_core::sheet::Shown>>> {
+    datum_core::sheet::eval(&calc(&st.lock()), &items[..items.len().min(200)])
+}
+
 /// Formulas moved by rows and columns, for fill and paste (relative references follow).
 #[tauri::command]
 fn formula_shift(items: Vec<(String, i64, i64)>) -> Vec<String> {
@@ -780,7 +786,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

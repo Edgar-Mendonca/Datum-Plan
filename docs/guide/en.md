@@ -194,6 +194,25 @@ You can also type a **Quantity** and an **Installed Quantity** (insert those col
 
 Below them: the project S-curve, progress per week, cost, manpower, milestones and late tasks. **Print / PDF** and **Save as HTML** are at the top right.
 
+### Your own dashboards
+
+![Your own dashboard: the tabs, Edit layout, a number that turns red or green by a rule, and a progress ring.](img/dashboards.png)
+
+Make the dashboard your client or manager wants, as many as you like; they are saved with the plan and always show the plan as it is now.
+
+1. **The tabs.** **Project** is the built-in dashboard. **+ New dashboard** makes a blank one or one from a template: **Client dashboard**, **Weekly progress** or **Vendors and countries**.
+2. **Edit layout** shows a frame round every tile. Drag tiles to reorder them; on each tile ✎ changes it, ⤢ sets its width (a quarter to full width) and height (one to four rows), × removes it. **Dashboard ▾** renames, duplicates or deletes the dashboard.
+3. **A number** comes from a formula, the same as in Sheets: `=SPI`, `=ProjectFinish`, `=COUNTIF(Tasks[Late],TRUE)` or `=Vendors!B4`. A rule can turn it green or red, for example green when SPI ≥ 1.
+4. **A progress ring** shows a percentage (0–100), for example `=PercentComplete`, with a second line such as the planned %.
+
+![Add tile: the kind of tile, its formula and the green or red rule.](img/dashboard-tile.png)
+
+1. **Tile:** Number, Progress ring, Chart, Table, Countries or Text. A **Chart** is one of the plan's charts (S-curve, progress per period, progress by phase, cost and earned value, manpower) or a chart of a sheet range: columns, bars, line, area, doughnut or pie, with the labels in the first column and the series names in the first row. A **Table** is a plan list (milestones, late or critical tasks, starting next period, completed this period) or a sheet range or formula; a column of countries shows their flags. **Countries** counts the flags, for example of `=Resources[Country]`.
+2. **Value:** the formula. Besides the task and resource tables you can use `PercentComplete`, `PlannedPercent`, `ProjectFinish`, `BaselineFinish`, `SPI`, `CPI`, `TotalCost`, `TasksLate` and the other names in the Sheets chapter.
+3. **Green when:** the rule that colours a number.
+
+> **Tip:** **Print / PDF** prints the dashboard shown. Make a sheet with the figures you report every week, then point dashboard tiles at it.
+
 ### S-curves and earned schedule
 
 ![S-Curves with earned schedule.](img/scurve.png)
@@ -289,7 +308,7 @@ What a formula can read from the plan:
 | --- | --- |
 | `Tasks[Finish]` | One value per task. Columns include Name, WBS, Start, Finish, Duration, % Complete (0–100), Baseline Start, Baseline Finish, Cost, Work, Total Float, Critical, Late, Milestone, Summary, Resources, Status, Planned Value, Earned Value, and your custom fields. |
 | `Resources[Country]` | One value per resource: Name, Type, Group, Initials, Max Units, Rate, Work (hours), Cost, Country, Email. |
-| `ProjectFinish` | Also ProjectName, ProjectStart, StatusDate, BaselineFinish, FinishVariance (working days), PercentComplete (0–100), TotalCost, PlannedValue, EarnedValue, ActualCost, SPI, CPI, TaskCount, TasksDone, TasksLate, CriticalCount, MilestoneCount. |
+| `ProjectFinish` | Also ProjectName, ProjectStart, StatusDate, BaselineFinish, FinishVariance (working days), PercentComplete (0–100), PlannedPercent (0–100), TotalCost, PlannedValue, EarnedValue, ActualCost, SPI, CPI, TaskCount, TasksDone, TasksLate, CriticalCount, MilestoneCount. |
 
 - The fill handle and copy and paste move references, as in Excel: `=A1*2` filled down becomes `=A2*2`. Ctrl+D and Ctrl+R fill down and right.
 - Right-click a cell to insert or delete rows and columns; every formula that points at the moved cells follows. Drag a column's edge to resize it; double-click the edge to fit the text.

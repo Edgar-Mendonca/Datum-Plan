@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.3 — 2026-10-30
+
+Your own dashboards: build the board your client or manager wants, inside the plan, always up to date.
+
+- **Several dashboards per plan**, as tabs on the Dashboard page next to the built-in **Project** dashboard. **+ New dashboard** makes a blank one or starts from a template: **Client dashboard**, **Weekly progress** or **Vendors and countries**. Rename, duplicate or delete them from **Dashboard ▾**.
+- **Tiles you lay out yourself.** **Edit layout**, then **+ Add tile**; drag tiles to reorder them, and set each one's width (a quarter to full width) and height (one to four rows).
+  - **Number:** any formula, as in Sheets (`=SPI`, `=ProjectFinish`, `=COUNTIF(Tasks[Late],TRUE)`, `=Vendors!B4`), with a format, a second line and an optional rule that turns it green or red.
+  - **Progress ring:** a percentage as a ring.
+  - **Chart:** one of the plan's charts (S-curve, progress per period, progress by phase, cost and earned value, manpower), or a chart of a sheet range or formula: columns, stacked columns, bars, line, area, doughnut or pie.
+  - **Table:** a plan list (milestones, late or critical tasks, starting next period, completed this period), or a sheet range or formula; a column of countries shows their flags.
+  - **Countries:** flags with how many resources or vendors come from each country.
+  - **Text:** a heading or a note.
+- Dashboards are saved with the plan, follow every change and print with **Print / PDF**.
+- A new name for formulas: `PlannedPercent`, where the baseline says the plan should be at the status date (0–100).
+- The guide has a new section on dashboards, in English and Chinese.
+
 ## 0.5.2 — 2026-10-30
 
 Better-looking charts that are never cut off.

@@ -1,5 +1,6 @@
 // Dashboards and reports in this order: KPIs → charts → tables → notes. Period reports compare
 // this week or month with the previous one; S-curves for the project, phases, cost and hours.
+import { CustomDashboard, DashTabs, dashK, dashboards } from "./dashboards";
 import { For, Show, createSignal, createResource, createMemo, createEffect, on, JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Curve, Grid, Rule, fmtDay, money, dateDay, iso, SCurve, PeriodReport, PeriodNote, PRow, Usage, EarnedSchedule, fmtAt } from "./api";
@@ -63,24 +64,32 @@ export const Tools = (p: { title: string; help?: string; children?: JSX.Element 
 );
 
 /** S-curve chart from engine data: planned, actual and forecast cumulative %. */
-export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short"; money?: boolean }) => {
+export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short" | "fill"; money?: boolean; bare?: boolean }) => {
   const k = createMemo(() => p.c.days.findIndex(d => d >= p.c.status_day));
   const conv = (v: (number | null)[]) => (p.money ? v.map(x => (x === null ? null : (x / 100) * p.c.total)) : v);
   return <ChartBox title={p.title ?? `S-curve: ${p.c.name}`} type="line" size={p.size} labels={p.c.days.map(d => label(d, p.unit))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
-    y={p.money ? `Cumulative (${P().currency.code})` : "Cumulative progress"} marker={k() >= 0 ? k() : null}
+    y={p.money ? `Cumulative (${P().currency.code})` : "Cumulative progress"} marker={k() >= 0 ? k() : null} bare={p.bare}
     datasets={[line("Planned (baseline)", conv(p.c.planned), COL.grey, [6, 4]), line("Actual", conv(p.c.actual), COL.blue, undefined, true), line("Forecast", conv(p.c.forecast.map((v, i) => (i >= k() && k() >= 0 ? v : null))), COL.red, [2, 3])]} />;
 };
 /** Progress per period (not cumulative): planned vs actual bars. */
-export const PeriodBars = (p: { c: SCurve; unit: string; last?: number }) => {
+export const PeriodBars = (p: { c: SCurve; unit: string; last?: number; size?: "fill"; bare?: boolean }) => {
   const n = () => p.c.days.length;
   const from = () => Math.max(1, n() - (p.last ?? 24));
   const delta = (v: (number | null)[]) => v.slice(from()).map((x, i) => (x === null || v[from() + i - 1] === null ? null : x - (v[from() + i - 1] as number)));
-  return <ChartBox title={`Progress per ${p.unit}`} type="bar" fmt="pct" y="Progress in period" labels={p.c.days.slice(from()).map(d => label(d, p.unit))}
+  return <ChartBox title={`Progress per ${p.unit}`} type="bar" fmt="pct" y="Progress in period" size={p.size} bare={p.bare} labels={p.c.days.slice(from()).map(d => label(d, p.unit))}
     datasets={[bar("Planned", delta(p.c.planned), COL.grey), bar("Actual", delta(p.c.actual), COL.blue)]} />;
 };
 
 // ---------- dashboard ----------
-export const Dashboard = () => {
+/** The Dashboard page: the built-in project dashboard, or one of the plan's own (tabs on top). */
+export const Dashboard = () => (
+  <section class="page report">
+    <Tools title="Dashboard" help="dashboard" />
+    <DashTabs />
+    <Show when={dashK() >= 0 && dashboards()[dashK()]} fallback={<ProjectDashboard />}><CustomDashboard k={dashK()} /></Show>
+  </section>
+);
+const ProjectDashboard = () => {
   const s = () => out()!.summary;
   const unit = () => (s().f - s().s > 240 ? "month" : "week");
   const [sc] = createResource(() => [tick(), P().periods.weight], () => call<SCurve>("scurve", { unit: unit(), how: P().periods.weight, scope: null }));
@@ -90,8 +99,7 @@ export const Dashboard = () => {
   const [late] = useRows(() => 2, () => q(["code", "name", "finish", "pct", "res"], [r("late", "equals", "Yes"), r("summary", "equals", "No")]));
   const [ms] = useRows(() => 3, () => q(["code", "name", "finish", "b0finish", "vfinish", "pct"], [r("milestone", "equals", "Yes")]));
   return (
-    <section class="page report">
-      <Tools title="Dashboard" help="dashboard" />
+    <>
       <Brand title="Project Dashboard" />
       <Show when={s().error}><div class="panel late">{s().error}</div></Show>
       <div class="kpis">
@@ -119,7 +127,7 @@ export const Dashboard = () => {
         <div class="panel"><h2>Milestones</h2><Table g={ms()} empty="No milestones." /></div>
         <div class="panel"><h2>Late tasks</h2><Table g={late()} empty="Nothing is late." /></div>
       </div>
-    </section>
+    </>
   );
 };
 

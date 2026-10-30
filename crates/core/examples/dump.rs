@@ -36,13 +36,47 @@ fn guide_plan() -> (Project, NaiveDate) {
         ("A6", "Late tasks"), ("B6", "=COUNTIF(Tasks[Late],TRUE)"), ("A7", "SPI"), ("B7", "=SPI"),
         ("A9", "Milestone"), ("B9", "Finish"), ("C9", "% Complete"), ("A10", "=FILTER(CHOOSECOLS(Tasks,3,8,9),Tasks[Milestone]=TRUE,\"None\")"),
         ("E3", "Vendor"), ("F3", "Country"), ("G3", "Scope"), ("E4", "Northwind Castings"), ("F4", "DE"), ("G4", "Housings"), ("E5", "Pacific Circuits"), ("F5", "TW"), ("G5", "Control boards"),
-        ("E6", "Kestrel Test Labs"), ("F6", "GB"), ("G6", "Environmental tests"), ("E7", "Total orders"), ("G7", "=COUNTA(G4:G6)"),
+        ("E6", "Kestrel Test Labs"), ("F6", "GB"), ("G6", "Environmental tests"), ("H3", "Order ($k)"), ("H4", "120"), ("H5", "85"), ("H6", "40"), ("E7", "Total orders"), ("G7", "=COUNTA(G4:G6)"),
     ];
     let mut fmt: Vec<(String, String)> = [("B7", "0.00"), ("F4", "flag"), ("F5", "flag"), ("F6", "flag")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
     for r in 10..20 { fmt.push((format!("B{r}"), "date".into())); fmt.push((format!("C{r}"), "0\"%\"".into())); }
-    let style = ["A1", "A9", "B9", "C9", "E3", "F3", "G3"].iter().map(|a| (a.to_string(), "b".to_string())).collect();
+    let style = ["A1", "A9", "B9", "C9", "E3", "F3", "G3", "H3"].iter().map(|a| (a.to_string(), "b".to_string())).collect();
+    // Where the people come from (flags on dashboards), and two dashboards like the app's templates.
+    let res: Vec<u32> = doc.p.resources.iter().map(|r| r.uid).collect();
+    for (uid, c) in res.iter().zip(["DE", "IN", "GB", "DE", "CN", "AE", "IN", "US"]) { doc.apply(Op::ResSet { uid: *uid, field: "country".into(), value: c.into() }, f).unwrap_or_else(|e| panic!("{e}")) }
+    let tile = |kind: &str, title: &str, w: u8, h: u8, extra: serde_json::Value| { let mut t = serde_json::json!({ "id": title, "kind": kind, "title": title, "w": w, "h": h }); t.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone()); t };
+    let dashes = serde_json::json!([
+        { "name": "Client dashboard", "tiles": [
+            tile("number", "Actual progress", 3, 1, serde_json::json!({ "formula": "=PercentComplete", "sub": "=\"Planned \"&TEXT(PlannedPercent,\"0\")&\"%\"" })),
+            tile("number", "Forecast finish", 3, 1, serde_json::json!({ "formula": "=ProjectFinish", "sub": "=IF(BaselineFinish=\"\",\"No baseline yet\",\"Baseline \"&TEXT(BaselineFinish,\"dd-mmm-yy\"))" })),
+            tile("number", "SPI", 3, 1, serde_json::json!({ "formula": "=SPI", "fmt": "0.00", "good": [">=", 1], "sub": "Schedule performance index" })),
+            tile("number", "Late tasks", 3, 1, serde_json::json!({ "formula": "=COUNTIF(Tasks[Late],TRUE)", "good": ["<=", 0], "sub": "=\"of \"&TaskCount&\" tasks\"" })),
+            tile("chart", "Progress S-curve", 8, 3, serde_json::json!({ "plan": "scurve" })),
+            tile("ring", "Complete", 4, 3, serde_json::json!({ "formula": "=PercentComplete", "sub": "=\"Planned \"&TEXT(PlannedPercent,\"0\")&\"%\"" })),
+            tile("table", "Milestones", 6, 3, serde_json::json!({ "plan": "milestones" })),
+            tile("countries", "Where the team comes from", 6, 3, serde_json::json!({ "formula": "=Resources[Country]" })),
+        ] },
+        { "name": "Vendors", "tiles": [
+            tile("table", "Vendors", 6, 3, serde_json::json!({ "src": "=IFNA(VSTACK({\"Name\",\"Group\",\"Country\"},FILTER(CHOOSECOLS(Resources,1,3,9),Resources[Country]<>\"\",\"None yet\")),\"\")" })),
+            tile("chart", "Orders by vendor", 6, 3, serde_json::json!({ "src": "=HSTACK('Weekly report'!E4:E6,'Weekly report'!H4:H6)", "chart": "doughnut" })),
+        ] },
+    ]);
+    doc.apply(Op::Ui { key: "dashboards".into(), value: dashes.clone() }, f).unwrap_or_else(|e| panic!("{e}"));
     doc.p.sheets.push(SheetData { name: "Weekly report".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.into_iter().collect(), widths: [(0, 230), (4, 170), (5, 150), (6, 160)].into_iter().collect(), style });
     (doc.p, d(12, 4))
+}
+
+/// Every dashboard formula's result by "format\u{1}formula", for the window tests' mocked dash_eval.
+fn dash_map(c: &Calc) -> serde_json::Value {
+    let mut items: Vec<(String, String)> = vec![];
+    for d in c.p.ui.get("dashboards").and_then(|v| v.as_array()).into_iter().flatten() {
+        for t in d["tiles"].as_array().into_iter().flatten() {
+            let fmt = t["fmt"].as_str().unwrap_or("").to_string();
+            for k in ["formula", "sub", "src"] { if let Some(f) = t[k].as_str().filter(|f| f.starts_with('=')) { items.push((f.into(), if k == "formula" { fmt.clone() } else { String::new() })) } }
+        }
+    }
+    let r = sheet::eval(c, &items);
+    serde_json::Value::Object(items.iter().zip(r).map(|((f, fmt), v)| (format!("{fmt}\u{1}{f}"), serde_json::to_value(v).unwrap())).collect())
 }
 
 fn main() {
@@ -71,7 +105,7 @@ fn main() {
         "periods": report::period_ends(&c, "week"), "curve": report::curve(&c, "week"), "usage": report::usage(&c, "resource", "work", "week"), "usage:group": report::usage(&c, "group", "work", "week"),
         "risk_run": risk::simulate(&p, &risk::SimOpts { iterations: 300, ..Default::default() }).unwrap(), "level_preview": level::preview(&p, &[]).unwrap(),
         "manpower": progress::manpower(&c, "week"), "earned_schedule": progress::earned_schedule(&c), "lookahead": progress::lookahead(&c, 3), "credit_library": progress::credit_library(),
-        "sheet_view": sheet::sheet_view(&c, 0), "formula_shift": ["=C3*2"],
+        "sheet_view": sheet::sheet_view(&c, 0), "formula_shift": ["=C3*2"], "dash_map": dash_map(&c),
         "sheet_catalog": { "functions": sheet::functions(), "names": sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect::<Vec<_>>(), "tasks": sheet::task_columns(&c).into_iter().map(|x| x.1).collect::<Vec<_>>(), "resources": sheet::RES_COLS.iter().map(|x| x.1).collect::<Vec<_>>() },
         "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "country", "email", "work", "cost"].map(String::from)), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
     }));

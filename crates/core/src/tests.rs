@@ -584,6 +584,28 @@ fn sheets_read_the_plan_by_name_and_behave_like_excel() {
 }
 
 #[test]
+fn dashboard_tiles_evaluate_formulas_spills_and_sheet_ranges() {
+    let mut doc = Doc::new(plan(&[(2, ""), (3, "1"), (0, "2")]));
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Vendors".into(), ..Default::default() }) }).unwrap();
+    op(&mut doc, Op::SheetCells { k: 0, cells: vec![("A1".into(), "Vendor".into()), ("B1".into(), "Country".into()), ("A2".into(), "Steel Co".into()), ("B2".into(), "DE".into()), ("C2".into(), "1500".into())], fmt: None }).unwrap();
+    op(&mut doc, Op::SheetCells { k: 0, cells: vec![("B2".into(), String::new())], fmt: Some("flag".into()) }).unwrap();
+    op(&mut doc, Op::SheetCells { k: 0, cells: vec![("C2".into(), String::new())], fmt: Some("#,##0".into()) }).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2));
+    let items: Vec<(String, String)> = [("=ROWS(Tasks)", ""), ("=ProjectFinish", ""), ("=Tasks[Name]", ""), ("=Vendors!A1:C2", ""), ("=1/2", "0%"), ("=NOSUCH()", ""), ("=PlannedPercent", "")]
+        .iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+    let r = crate::sheet::eval(&c, &items);
+    assert_eq!((r[0][0][0].0.as_str(), r[0][0][0].1), ("3", Some(3.0)));
+    assert_eq!(r[1][0][0].0, "06-Nov-26", "a plan date shows as a date");
+    assert_eq!(r[2].iter().map(|row| row[0].0.as_str()).collect::<Vec<_>>(), ["T1", "T2", "T3"], "a spilled column becomes rows");
+    assert_eq!(r[3].len(), 2);
+    assert_eq!((r[3][1][1].0.as_str(), r[3][1][1].2.as_str()), ("DE", "flag"), "a sheet range keeps the sheet's formats");
+    assert_eq!(r[3][1][2].0, "1,500");
+    assert_eq!(r[4][0][0].0, "50%", "the tile's own format");
+    assert!(r[5][0][0].0.starts_with('#'), "an error shows as an error");
+    assert!(r[6][0][0].0.ends_with('%'));
+}
+
+#[test]
 fn text_formatting_on_tasks_and_sheets() {
     let mut doc = Doc::new(plan(&[(2, ""), (3, "1")]));
     let u = doc.p.tasks[0].uid;

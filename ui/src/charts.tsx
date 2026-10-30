@@ -19,6 +19,7 @@ const lines = (marker: () => number | null | undefined, label: string): Plugin =
   afterDatasetsDraw(ch) {
     const { ctx, chartArea: a, scales } = ch;
     const x = scales.x;
+    if (!x) return;
     const m = marker();
     ctx.save();
     if (m !== null && m !== undefined && m >= 0) {
@@ -60,7 +61,7 @@ export const fmtv = (v: number, f: Fmt = "num") => f === "pct" ? `${v.toFixed(1)
 
 export interface ChartProps {
   title: string;
-  type: "line" | "bar";
+  type: "line" | "bar" | "doughnut" | "pie";
   labels: string[];
   datasets: ChartDataset<"line" | "bar", (number | null)[]>[];
   y?: string;
@@ -71,7 +72,10 @@ export interface ChartProps {
   horizontal?: boolean;
   marker?: number | null;
   markerLabel?: string;
-  size?: "tall" | "short";
+  /** "fill": as tall as its box (dashboard tiles). */
+  size?: "tall" | "short" | "fill";
+  /** No title bar (a dashboard tile has its own). */
+  bare?: boolean;
   extra?: JSX.Element;
 }
 
@@ -96,6 +100,28 @@ export const ChartBox = (p: ChartProps) => {
     // A horizontal bar chart names every bar (task names), so none may be skipped.
     if (p.horizontal) hAxis.ticks = { ...hAxis.ticks, autoSkip: false, color: ink } as typeof hAxis.ticks;
     const many = p.labels.length > 40;
+    const round = p.type === "doughnut" || p.type === "pie";
+    if (round) {
+      // One colour per slice, a thin gap between slices, the legend beside the ring.
+      const pal = Object.values(COL).filter(c => c !== COL.black);
+      const bg = cssv("--bg2") || "#fff";
+      ch = new Chart(cv, {
+        type: p.type,
+        data: { labels: p.labels, datasets: p.datasets.map(d => ({ ...d, backgroundColor: p.labels.map((_, i) => pal[i % pal.length]), borderColor: bg, borderWidth: 2, hoverOffset: 6 })) as never },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: first ? { duration: 600, easing: "easeOutQuart" } : false, cutout: p.type === "doughnut" ? "62%" : 0,
+          layout: { padding: 6 },
+          plugins: {
+            legend: { position: "right", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: 7, boxHeight: 7, padding: 10 } },
+            tooltip: { backgroundColor: "rgba(17, 24, 39, 0.92)", cornerRadius: 8, padding: 10, usePointStyle: true, titleFont: { ...font, weight: 600 as const }, bodyFont: font,
+              callbacks: { label: (c: { label: string; parsed: unknown }) => ` ${c.label}: ${fmtv(c.parsed as number, p.fmt)}` } },
+          },
+        } as never,
+        plugins: [paper],
+      });
+      live.add(ch);
+      return;
+    }
     ch = new Chart(cv, {
       type: p.type,
       data: { labels: p.labels, datasets: p.datasets as ChartDataset<"line" | "bar", (number | null)[]>[] },
@@ -136,8 +162,8 @@ export const ChartBox = (p: ChartProps) => {
     if (path) toast(`Saved ${path}`, true);
   };
   return (
-    <div class="chartbox" classList={{ tall: p.size === "tall", short: p.size === "short" }}>
-      <header><h3>{p.title}</h3>{p.extra}<button onClick={save} title="Save as PNG">PNG</button></header>
+    <div class="chartbox" classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>
+      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={save} title="Save as PNG">PNG</button></header></Show>
       <div class="cv" classList={{ blank: empty() }}><canvas ref={cv} /></div>
       <Show when={empty()}><p class="nodata">{p.fmt === "money" ? "No costs in this plan yet." : p.fmt === "hours" ? "No hours assigned yet." : "No data yet."}</p></Show>
     </div>

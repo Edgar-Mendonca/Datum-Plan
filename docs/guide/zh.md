@@ -194,6 +194,25 @@ Datum Plan 自动排程：修改工期或逻辑关系后，所有相关的日期
 
 下方是项目 S 曲线、每周进度、费用、人力、里程碑和延误任务。右上角有 **Print / PDF**（打印/PDF）和 **Save as HTML**（另存为 HTML）。
 
+### 自定义仪表板
+
+![自定义仪表板：标签、Edit layout（编辑布局）、按规则显示红色或绿色的数字，以及进度环。](img/dashboards.png)
+
+按客户或领导的要求制作自己的仪表板，数量不限；它们随计划保存，并始终显示计划的最新情况。
+
+1. **标签。** **Project**（项目）是内置仪表板。**+ New dashboard**（新建仪表板）可新建空白仪表板或使用模板：**Client dashboard**（客户仪表板）、**Weekly progress**（每周进度）或 **Vendors and countries**（供应商与国家）。
+2. **Edit layout**（编辑布局）在每个图块周围显示边框。拖动图块可调整顺序；每个图块上的 ✎ 用于修改，⤢ 设置宽度（四分之一到整行）和高度（一到四行），× 用于删除。**Dashboard ▾** 可重命名、复制或删除仪表板。
+3. **数字图块**来自公式，与工作表中的写法相同：`=SPI`、`=ProjectFinish`、`=COUNTIF(Tasks[Late],TRUE)` 或 `=Vendors!B4`。可设置规则使其显示为绿色或红色，例如 SPI ≥ 1 时为绿色。
+4. **进度环**显示一个百分比（0–100），例如 `=PercentComplete`，下方可加第二行，例如计划百分比。
+
+![Add tile（添加图块）：图块类型、公式以及绿色/红色规则。](img/dashboard-tile.png)
+
+1. **Tile**（图块类型）：Number（数字）、Progress ring（进度环）、Chart（图表）、Table（表格）、Countries（国家）或 Text（文字）。**Chart** 可以是计划自带的图表（S 曲线、每期进度、各阶段进度、费用与挣值、人力），也可以是工作表区域的图表：柱形图、条形图、折线图、面积图、环形图或饼图，第一列为标签，第一行为系列名称。**Table** 可以是计划清单（里程碑、延误或关键任务、下期开始、本期完成），也可以是工作表区域或公式；国家列会显示国旗。**Countries** 统计各国旗出现的次数，例如 `=Resources[Country]`。
+2. **Value**（值）：公式。除任务表和资源表外，还可以使用 `PercentComplete`、`PlannedPercent`、`ProjectFinish`、`BaselineFinish`、`SPI`、`CPI`、`TotalCost`、`TasksLate` 以及工作表一章中列出的其他名称。
+3. **Green when**（绿色条件）：决定数字颜色的规则。
+
+> **提示：** **Print / PDF** 打印当前显示的仪表板。可以先在工作表中整理每周要汇报的数据，再让仪表板图块引用它们。
+
 ### S 曲线与挣得进度
 
 ![S 曲线与挣得进度。](img/scurve.png)
@@ -289,7 +308,7 @@ S 曲线显示累计进度：灰色虚线是基准计划，蓝线是实际进度
 | --- | --- |
 | `Tasks[Finish]` | 每个任务一个值。列包括 Name（名称）、WBS、Start（开始）、Finish（完成）、Duration（工期）、% Complete（完成百分比，0–100）、Baseline Start / Baseline Finish（基准开始/完成）、Cost（费用）、Work（工时）、Total Float（总浮动时间）、Critical（关键）、Late（延误）、Milestone（里程碑）、Summary（摘要）、Resources（资源）、Status（状态）、Planned Value / Earned Value（计划值/挣值），以及自定义字段。 |
 | `Resources[Country]` | 每个资源一个值：Name、Type（类型）、Group（组）、Initials（缩写）、Max Units（最大单位）、Rate（费率）、Work（工时，小时）、Cost、Country（国家）、Email。 |
-| `ProjectFinish` | 另有 ProjectName、ProjectStart、StatusDate（状态日期）、BaselineFinish、FinishVariance（完成偏差，工作日）、PercentComplete（0–100）、TotalCost、PlannedValue、EarnedValue、ActualCost、SPI、CPI、TaskCount、TasksDone、TasksLate、CriticalCount、MilestoneCount。 |
+| `ProjectFinish` | 另有 ProjectName、ProjectStart、StatusDate（状态日期）、BaselineFinish、FinishVariance（完成偏差，工作日）、PercentComplete（0–100）、PlannedPercent（计划百分比，0–100）、TotalCost、PlannedValue、EarnedValue、ActualCost、SPI、CPI、TaskCount、TasksDone、TasksLate、CriticalCount、MilestoneCount。 |
 
 - 与 Excel 相同，填充柄和复制粘贴会移动引用：`=A1*2` 向下填充变为 `=A2*2`。Ctrl+D 和 Ctrl+R 向下和向右填充。
 - 右键单击单元格可插入或删除行和列；指向被移动单元格的公式会自动跟随。拖动列边界可调整列宽；双击边界自动适应文字。
