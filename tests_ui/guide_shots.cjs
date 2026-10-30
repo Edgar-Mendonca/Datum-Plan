@@ -17,7 +17,7 @@ const srv = http.createServer((q, r) => {
   const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
   await p.addInitScript(f => {
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "Northwind Engineering", logo: "", workspace: "", setupPanel: false, theme: "light" };
-    const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "0.4.4", checks: [], sheet_view: null, task_info: null };
+    const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "0.5.0", checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__TAURI__ = { core: { invoke: async (c, a) => {
       if (c === "query" && JSON.stringify(a).includes('"timeline"')) return m["query:timeline"];
       if (c === "query" && JSON.stringify(a).includes('"astart"')) return m["query:tracking"];
@@ -88,6 +88,14 @@ const srv = http.createServer((q, r) => {
   await side("Network"); await shot("network");
   await side("Update"); await shot("update");
   await side("Resources"); await shot("resources", [["text:Group", 1], ["text:Std. Rate", 2]], { x: 66, y: 160, width: 1374, height: 320 });
+  // Sheets: a weekly report that reads the plan, then a formula being typed.
+  await side("Sheets");
+  const cells = (r0, c0, r1, c1) => p.evaluate(([r0, c0, r1, c1]) => { const rows = document.querySelectorAll(".sheetgrid .gbody .row"), a = rows[r0].children[c0 + 1].getBoundingClientRect(), z = rows[r1].children[c1 + 1].getBoundingClientRect(); return { x: a.x, y: a.y, width: z.right - a.x, height: z.bottom - a.y }; }, [r0, c0, r1, c1]);
+  const toolsBox = await p.evaluate(() => { const bs = [...document.querySelectorAll(".sheettools .btn")]; const a = bs[0].getBoundingClientRect(), z = bs[4].getBoundingClientRect(); return { x: a.x, y: a.y, width: z.right - a.x, height: a.height }; });
+  await shot("sheets", [[toolsBox, 1], [await cells(2, 0, 6, 1), 2, 0, "right"], [await cells(8, 0, 12, 2), 3, 0, "right"], [await cells(3, 5, 5, 5), 4]], { x: 66, y: 160, width: 1374, height: 470 });
+  const g8 = await cells(8, 4, 8, 4); await p.mouse.click(g8.x + 20, g8.y + 10); await p.keyboard.type("=COUNTIF(Tasks[La"); await wait(300);
+  await shot("sheet-formula", [["input.edit", 1], [".fhint", 2, 0, "right"]], { x: 66, y: 160, width: 1374, height: 470 });
+  await p.keyboard.press("Escape"); await p.keyboard.press("Escape"); await wait(200);
   await side("Dashboard"); await shot("dashboard", [[".kpis", 1]]);
   await side("S-Curves"); await shot("scurve", [[".page .kpis", 1]]);
   await side("Progress"); await shot("progress-report");

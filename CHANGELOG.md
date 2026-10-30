@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.5.0 — 2026-10-30
+
+Sheets that work like Excel and read the plan live: your own reports and vendor lists inside the plan file, with nothing copied by hand.
+
+**Formulas as in Excel**
+- **Click cells into a formula.** Type `=`, then click a cell or drag over several to add them (A1, A1:A5), or click another sheet's tab; each reference gets a coloured box. F4 cycles the `$` anchors, and Enter closes any bracket left open.
+- **Suggestions as you type:** all 490 functions, the plan's names and table columns, with Tab to insert. Inside a function, a hint shows its arguments with the current one underlined.
+- **Σ AutoSum** (Alt+=; also Average, Count, Max, Min) and **fx Insert Function**, which finds a function by name or by what it does.
+- **Fill and paste carry formulas:** the fill handle, Ctrl+D, Ctrl+R and copy and paste move references as Excel does (`=A1*2` becomes `=A2*2`); Cut moves cells.
+- **Insert and delete rows and columns** (right-click, the toolbar, Ctrl+Shift++ and Ctrl+−); formulas on every sheet follow, and references to deleted cells show `#REF!`. Renaming a sheet updates the formulas that name it.
+- **Number formats:** Excel format codes (`#,##0.00`, `0.0%`, `dd-mmm-yy`, custom codes), more or fewer decimals, currency and the plan's date format. Results of TODAY, DATE or a lookup of plan dates show as dates by themselves, and plan percentages get a % sign.
+- Results that spill into several cells (FILTER, SORT, UNIQUE, SEQUENCE…) are shown. Column widths can be dragged or fitted with a double-click. Pointing at an error explains it.
+- Fixed: typing quickly into a cell no longer loses the second key.
+
+**The plan, live, by name**
+- `Tasks[column]` has one row per task (Name, Start, Finish, % Complete, baseline dates and cost, float, Critical, Late, Milestone, Resources, earned value, custom fields…); `Resources[column]` has Name, Group, Country, Rate, Work, Cost….
+- Names for the plan's numbers: `ProjectFinish`, `BaselineFinish`, `FinishVariance`, `PercentComplete`, `SPI`, `CPI`, `TotalCost`, `TasksLate`, `CriticalCount` and more.
+- **Plan Data…** puts a live list at the selected cell: milestones, critical, late, unfinished or in-progress tasks, or those starting in the next four weeks, with the columns, order and number of rows you choose. One formula fills the rows and follows the plan.
+- Older formulas such as `=SUM(Plan!M2:M200)` keep working. Excel export adds the Tasks and Resources tables and the names, so the workbook works in Excel too.
+
+**Country flags**
+- A **Country with flag** number format shows a country's flag and name: type a code (DE, cn) or a name (Germany, UK).
+- Resources have a **Country** (person, crew or vendor), shown with its flag in the Resource Sheet and readable as `Resources[Country]`.
+
+**Also**
+- Help › Guide works on computers without a Downloads folder set up (it saves in the home folder's Downloads, Documents or the temporary folder instead).
+- The guide's chapter on Sheets is rewritten with two new pictures, in English and Chinese.
+
 ## 0.4.4 — 2026-10-29
 
 The Datum Plan Guide: a step-by-step guide with pictures, in English and Simplified Chinese.

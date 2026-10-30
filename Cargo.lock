@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "datum-cli"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "datum-core",
@@ -590,13 +590,16 @@ dependencies = [
 
 [[package]]
 name = "datum-core"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "calamine",
  "chrono",
  "gridcraft-calc",
  "gridcraft-core",
+ "gridcraft-formula",
+ "gridcraft-functions",
  "gridcraft-model",
+ "gridcraft-numfmt",
  "rust_xlsxwriter",
  "serde",
  "serde_json",
@@ -604,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "datum-plan"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "datum-core",

@@ -282,13 +282,36 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         for (k, w) in &s.widths { ws.set_column_width_pixels(*k as u16, *w as u32).map_err(e)?; }
     }
     if !c.p.sheets.is_empty() {
+        // The sheets' formulas read the plan as tables (Tasks[Finish]) and names (=ProjectFinish).
+        let table = |cols: &[String]| rust_xlsxwriter::Table::new().set_columns(&cols.iter().map(|n| rust_xlsxwriter::TableColumn::new().set_header(n)).collect::<Vec<_>>());
         let ws = wb.add_worksheet();
         ws.set_name("Plan").map_err(e)?;
-        for (k, key) in crate::sheet::PLAN_COLS.iter().enumerate() {
-            ws.write_string_with_format(0, k as u16, c.name(key), &head_fmt).map_err(e)?;
+        let cols = crate::sheet::task_columns(c);
+        for (k, (key, _)) in cols.iter().enumerate() {
             for i in 0..c.p.tasks.len() {
                 put(ws, i as u32 + 1, k as u16, i, key, false, "")?;
             }
+        }
+        let names: Vec<String> = cols.iter().map(|x| x.1.clone()).collect();
+        ws.add_table(0, 0, c.p.tasks.len().max(1) as u32, names.len() as u16 - 1, &table(&names).set_name("Tasks")).map_err(e)?;
+        let ws = wb.add_worksheet();
+        ws.set_name("Resources").map_err(e)?;
+        let book = crate::sheet::book(c);
+        if let Some(rs) = book.sheet(1) {
+            for r in 1..=c.p.resources.len() as u32 {
+                for k in 0..crate::sheet::RES_COLS.len() as u32 {
+                    match rs.value(gridcraft_core::CellRef::new(r, k)) {
+                        gridcraft_core::Value::Number(n) => { ws.write_number(r, k as u16, n).map_err(e)?; }
+                        v => { ws.write_string(r, k as u16, v.display()).map_err(e)?; }
+                    }
+                }
+            }
+        }
+        let names: Vec<String> = crate::sheet::RES_COLS.iter().map(|x| x.1.to_string()).collect();
+        ws.add_table(0, 0, c.p.resources.len().max(1) as u32, names.len() as u16 - 1, &table(&names).set_name("Resources")).map_err(e)?;
+        for (name, v, _) in crate::sheet::project_names(c) {
+            let f = match v { gridcraft_core::Value::Number(n) => format!("={n}"), v => format!("=\"{}\"", v.display().replace('"', "\"\"")) };
+            wb.define_name(name, &f).map_err(e)?;
         }
     }
     wb.save(path).map_err(|x| format!("Could not save {}: {x}", path.display()))

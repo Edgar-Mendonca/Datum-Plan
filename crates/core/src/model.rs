@@ -270,6 +270,9 @@ pub struct Resource {
     /// Availability over time (max units between dates).
     pub avail: Vec<Avail>,
     pub custom: BTreeMap<String, Value>,
+    /// Where the resource (a person, crew or vendor) comes from: an ISO code such as DE, or a name.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub country: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -284,7 +287,7 @@ impl Default for Resource {
     fn default() -> Self {
         Self {
             uid: 0, name: String::new(), kind: ResKind::Work, group: String::new(), max: 1.0, rate: 0.0, per_use: 0.0, label: String::new(),
-            initials: String::new(), email: String::new(), code: String::new(), notes: String::new(), cal: None, ovt: 0.0, tables: vec![], avail: vec![], custom: BTreeMap::new(),
+            initials: String::new(), email: String::new(), code: String::new(), notes: String::new(), cal: None, ovt: 0.0, tables: vec![], avail: vec![], custom: BTreeMap::new(), country: String::new(),
         }
     }
 }

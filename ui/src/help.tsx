@@ -74,6 +74,13 @@ export const HELP: Record<string, Topic> = {
   ganttstyle: { t: "Gantt chart style", what: "Ready-made colour sets for the bars. Click one to use it; Bar Styles changes each colour." },
   showhide: { t: "Show and hide", what: "The project summary row (the whole plan as one row), summary tasks, and the labels beside the bars." },
   // Panels, pages and dialogs
+  sheets: { t: "Sheets", what: "Spreadsheets inside the plan that work like Excel and read the plan live: your own reports, dashboards, quantities and vendor lists, with nothing copied by hand.",
+    how: ["Type = and click or drag over cells to add them to the formula; F4 adds $ anchors. Tab inserts a suggested function or name.",
+      "Read the plan by name: Tasks[Finish], Tasks[% Complete] (0–100), Resources[Country], ProjectFinish, PercentComplete, SPI, TasksLate…",
+      "Plan Data… puts a live list of tasks or resources (milestones, late, critical, the next four weeks) at the selected cell.",
+      "Σ AutoSum adds up the numbers above (Alt+=). Right-click to insert or delete rows and columns; formulas follow.",
+      "The Country with flag format shows a country's flag: type a code (DE) or a name (Germany)."],
+    tip: "File › Export to Excel keeps the formulas and adds the Tasks and Resources tables, so the workbook works in Excel too." },
   sheet: { t: "Task sheet and Gantt chart", what: "The plan as rows on the left and bars on a timescale on the right.",
     how: ["Type in a cell to change it; drag to select, Ctrl+C / Ctrl+V with Excel, drag the small square to fill.", "Drag a bar to move it, its end to change the duration, its progress edge to set % complete, or down onto another bar to link them.", "Right-click a heading for column commands."] },
   details: { t: "Details pane", what: "The selected task's fields in tabs: general, predecessors and successors, resources, notes, steps, codes and more.",

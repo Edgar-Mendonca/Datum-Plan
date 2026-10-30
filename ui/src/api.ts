@@ -16,7 +16,7 @@ export interface Rate { from: string | null; std: number; ovt: number; per_use: 
 export interface Resource {
   uid: number; name: string; kind: "Work" | "Material" | "Cost"; group: string; max: number; rate: number; per_use: number; label: string;
   initials: string; email: string; code: string; notes: string; cal: string | null; ovt: number; tables: Rate[][];
-  avail: { from: string | null; to: string | null; max: number }[]; custom: Record<string, any>;
+  avail: { from: string | null; to: string | null; max: number }[]; custom: Record<string, any>; country?: string;
 }
 export interface Indicator { scope: number; test: string; value: string; icon: string }
 export interface CustomDef { key: string; alias: string; lookup: { value: string; desc: string }[]; restrict: boolean; default: string; formula: string; rollup: string; indicators: Indicator[]; show_icons: boolean }

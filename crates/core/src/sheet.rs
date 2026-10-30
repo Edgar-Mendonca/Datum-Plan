@@ -1,6 +1,6 @@
 //! Excel formulas through the Gridcraft engine: formula columns on tasks (`=[% Complete]-[Baseline
 //! % Complete]`) and the plan's spreadsheet tabs, which can also read a "Plan" sheet of all tasks.
-use crate::cal::{date_of, DAY};
+use crate::cal::DAY;
 use crate::fields::{money, Calc, Kind};
 use crate::formula::F;
 use crate::model::SheetData;
@@ -123,46 +123,180 @@ pub fn task_formulas(c: &Calc, defs: &[(String, String)]) -> HashMap<String, Vec
     }).collect()
 }
 
-/// Fields on the "Plan" sheet that spreadsheet tabs can read (row 1 holds the titles).
-pub const PLAN_COLS: [&str; 18] = ["id", "code", "name", "level", "summary", "dur", "start", "finish", "pct", "b0start", "b0finish", "b0dur", "cost", "b0cost", "work", "tf", "critical", "res"];
+/// Columns of the "Plan" sheet and the `Tasks` table: field key and column name. The first 18
+/// keep their letters (A–R) so older `Plan!M:M` references still work.
+pub const PLAN_COLS: [(&str, &str); 30] = [
+    ("id", "ID"), ("code", "WBS"), ("name", "Name"), ("level", "Level"), ("summary", "Summary"), ("dur", "Duration"),
+    ("start", "Start"), ("finish", "Finish"), ("pct", "% Complete"), ("b0start", "Baseline Start"), ("b0finish", "Baseline Finish"),
+    ("b0dur", "Baseline Duration"), ("cost", "Cost"), ("b0cost", "Baseline Cost"), ("work", "Work"), ("tf", "Total Float"),
+    ("critical", "Critical"), ("res", "Resources"), ("milestone", "Milestone"), ("astart", "Actual Start"), ("afinish", "Actual Finish"),
+    ("rem", "Remaining Duration"), ("ff", "Free Float"), ("status", "Status"), ("late", "Late"), ("plannedpct", "Planned % Complete"),
+    ("bcws", "Planned Value"), ("bcwp", "Earned Value"), ("acwp", "Actual Cost"), ("uid", "Unique ID"),
+];
+/// Columns of the "Resources" sheet and table: field key and column name.
+pub const RES_COLS: [(&str, &str); 10] = [
+    ("name", "Name"), ("kind", "Type"), ("group", "Group"), ("initials", "Initials"), ("max", "Max Units"), ("rate", "Rate"),
+    ("work", "Work"), ("cost", "Cost"), ("country", "Country"), ("email", "Email"),
+];
+/// Column names a sheet formula can use after `Tasks[`: the plan columns, then the custom fields.
+pub fn task_columns(c: &Calc) -> Vec<(String, String)> {
+    let mut v: Vec<(String, String)> = PLAN_COLS.iter().map(|(k, n)| (k.to_string(), n.to_string())).collect();
+    for d in c.p.fields.iter().filter(|d| !d.key.starts_with('r')) {
+        let name = if d.alias.is_empty() { c.name(&format!("c:{}", d.key)) } else { d.alias.clone() };
+        if !v.iter().any(|(_, n)| n.eq_ignore_ascii_case(&name)) { v.push((format!("c:{}", d.key), name)); }
+    }
+    v
+}
+
+/// The plan's numbers as workbook names (`=ProjectFinish`, `=SPI`), with what each means.
+pub fn project_names(c: &Calc) -> Vec<(&'static str, Value, &'static str)> {
+    let (p, s, sm) = (c.p, &c.s, c.summary());
+    let serial = |t: i64| Value::number(t as f64 / DAY as f64 + EPOCH);
+    let opt = |v: Option<f64>| v.map_or(Value::Empty, Value::number);
+    let bl = p.tasks.iter().filter_map(|t| t.bls.get(&0).map(|b| b.finish)).max();
+    let top: Vec<usize> = (0..p.tasks.len()).filter(|&i| p.tasks[i].level == 0 && !s.off[i]).collect();
+    let tot = |v: &[f64]| top.iter().map(|&i| v[i]).sum::<f64>();
+    let pc = p.calendars.iter().position(|k| k.name == p.calendar).unwrap_or(0);
+    let days = |a: i64, b: i64| { let m = if b >= a { s.cals[pc].between(a, b) } else { -s.cals[pc].between(b, a) }; m as f64 / p.day_min.max(1) as f64 };
+    vec![
+        ("ProjectName", Value::text(p.name.as_str()), "The plan's name"),
+        ("ProjectStart", serial(s.start), "The plan's start date"),
+        ("ProjectFinish", serial((s.finish - 1).max(s.start)), "The plan's finish date"),
+        ("StatusDate", p.status.map_or(Value::Empty, |d| serial(crate::cal::at(d))), "The status date (empty when not set)"),
+        ("BaselineFinish", bl.map_or(Value::Empty, |b| serial(b - 1)), "The baseline finish date"),
+        ("FinishVariance", bl.map_or(Value::Empty, |b| Value::number(days(b, s.finish))), "Finish variance in working days (later is positive)"),
+        ("PercentComplete", Value::number(sm.pct), "Duration-weighted % complete (0–100, like the task sheet)"),
+        ("TotalCost", Value::number(tot(&c.l.cost)), "Total cost"),
+        ("PlannedValue", Value::number(tot(&c.ev.pv)), "Planned value (PV) at the status date"),
+        ("EarnedValue", Value::number(tot(&c.ev.ev)), "Earned value (EV)"),
+        ("ActualCost", Value::number(tot(&c.ev.ac)), "Actual cost (AC)"),
+        ("SPI", opt(sm.spi), "Schedule performance index (EV/PV)"),
+        ("CPI", opt(sm.cpi), "Cost performance index (EV/AC)"),
+        ("TaskCount", Value::number(sm.tasks as f64), "Number of tasks (no summaries)"),
+        ("TasksDone", Value::number(sm.done as f64), "Tasks 100% complete"),
+        ("TasksLate", Value::number(sm.late as f64), "Late tasks"),
+        ("CriticalCount", Value::number(sm.critical as f64), "Critical tasks"),
+        ("MilestoneCount", Value::number(sm.milestones as f64), "Milestones"),
+    ]
+}
+
+/// Names that hold dates (shown as dates when a cell has no format of its own).
+const DATE_NAMES: [&str; 4] = ["PROJECTSTART", "PROJECTFINISH", "STATUSDATE", "BASELINEFINISH"];
 
 #[derive(Serialize)]
 pub struct SheetOut {
     pub name: String,
     pub rows: u32,
     pub cols: u32,
-    /// Non-empty cells: address, what was typed, what is shown, and whether it is a number.
+    /// Non-empty cells: address, what was typed (empty for spilled results), what is shown, and
+    /// whether it is a number.
     pub cells: Vec<(String, String, String, bool)>,
 }
 
-fn show(v: &Value, fmt: &str, c: &Calc) -> (String, bool) {
-    match (v, fmt) {
-        (Value::Number(n), "date") => (date_of(((n - EPOCH) * DAY as f64) as i64).format(&c.fmt).to_string(), true),
-        (Value::Number(n), "pct") => (format!("{:.1}%", n * 100.0), true),
-        (Value::Number(n), "money") => (money(*n, &c.p.currency), true),
-        (Value::Number(n), "0") => (format!("{n:.0}"), true),
-        (Value::Number(n), "0.00") => (format!("{n:.2}"), true),
-        (Value::Number(n), _) => {
-            let s = format!("{:.6}", n);
-            (s.trim_end_matches('0').trim_end_matches('.').to_string(), true)
-        }
-        (v, _) => (v.display(), false),
+/// The plan's date format as an Excel format code (`%d-%b-%y` → `dd-mmm-yy`).
+pub fn excel_date(fmt: &str) -> String {
+    let mut out = String::new();
+    let mut it = fmt.chars();
+    while let Some(ch) = it.next() {
+        if ch != '%' { out.push(ch); continue; }
+        out.push_str(match it.next() { Some('d') => "dd", Some('e') => "d", Some('m') => "mm", Some('b') => "mmm", Some('B') => "mmmm", Some('y') => "yy", Some('Y') => "yyyy", Some('a') => "ddd", Some('A') => "dddd", _ => "" });
+    }
+    out
+}
+
+/// The Excel format code for one of our short format names, or the code itself.
+fn code_of(fmt: &str, c: &Calc) -> String {
+    match fmt {
+        "date" => excel_date(&c.fmt),
+        "pct" => "0.0%".into(),
+        "0" | "0.00" => fmt.into(),
+        _ => fmt.into(),
     }
 }
 
-/// The plan's workbook: the Plan sheet first, then the user's tabs, all calculated.
+/// Whether a formula gives a date: a date function at the top, or a lookup or MIN/MAX over plan
+/// dates. (Excel guesses the same way.)
+fn gives_date(input: &str) -> bool {
+    let Ok(e) = gridcraft_formula::parse(input.trim_start_matches('=')) else { return false };
+    let up = input.to_uppercase();
+    let dates = ["START]", "FINISH]", "!G", "!H", "!J", "!K"].iter().any(|d| up.contains(d)) || DATE_NAMES.iter().any(|n| up.contains(n));
+    use gridcraft_formula::Expr;
+    match &e {
+        Expr::Call(n, _) if ["TODAY", "NOW", "DATE", "EDATE", "EOMONTH", "WORKDAY", "WORKDAY.INTL", "DATEVALUE"].contains(&n.as_str()) => true,
+        Expr::Call(n, _) if ["MIN", "MAX", "MINIFS", "MAXIFS", "XLOOKUP", "VLOOKUP", "HLOOKUP", "LOOKUP", "INDEX", "IF", "IFERROR", "SMALL", "LARGE"].contains(&n.as_str()) => dates,
+        Expr::Name(_) | Expr::Ref(_) | Expr::Struct(_) => dates,
+        _ => false,
+    }
+}
+
+/// Whether a formula gives one of the plan's percentages (0–100), shown with a % sign.
+fn gives_pct(input: &str) -> bool {
+    let up = input.to_uppercase();
+    let pct = up.contains("% COMPLETE]") || up.contains("PERCENTCOMPLETE");
+    let Ok(e) = gridcraft_formula::parse(input.trim_start_matches('=')) else { return false };
+    use gridcraft_formula::Expr;
+    pct && match &e {
+        Expr::Call(n, _) => ["MIN", "MAX", "AVERAGE", "AVERAGEIFS", "MEDIAN", "XLOOKUP", "VLOOKUP", "INDEX", "IF", "IFERROR", "ROUND"].contains(&n.as_str()),
+        Expr::Name(_) | Expr::Ref(_) | Expr::Struct(_) => true,
+        _ => false,
+    }
+}
+
+fn show(v: &Value, fmt: &str, input: &str, c: &Calc, sys: gridcraft_core::DateSystem) -> (String, bool) {
+    let code = match (v, fmt) {
+        (Value::Number(n), "money") => return (money(*n, &c.p.currency), true),
+        (_, "flag") => return (v.display(), false),
+        (_, "") if input.starts_with('=') && matches!(v, Value::Number(_)) && gives_date(input) => excel_date(&c.fmt),
+        (_, "") if input.starts_with('=') && matches!(v, Value::Number(_)) && gives_pct(input) => "0\"%\"".into(),
+        (_, "") => gridcraft_core::parse::parse_input(input, sys).format.unwrap_or("General").to_string(),
+        _ => code_of(fmt, c),
+    };
+    let f = gridcraft_numfmt::format_value(v, &gridcraft_numfmt::NumberFormat::parse_cached(&code), sys);
+    (f.text, f.numeric)
+}
+
+/// A workbook for the plan: the Plan and Resources sheets with their tables, the project names,
+/// then the user's tabs, all calculated.
 pub fn book(c: &Calc) -> Workbook {
     let p = c.p;
     let mut wb = Workbook::new();
+    let cols = task_columns(c);
+    let n = p.tasks.len() as u32;
     if let Some(sh) = wb.sheet_mut(0) {
         sh.name = "Plan".into();
-        for (k, key) in PLAN_COLS.iter().enumerate() {
-            sh.set_value(CellRef::new(0, k as u32), Value::text(c.name(key).as_str()));
+        for (k, (key, name)) in cols.iter().enumerate() {
+            sh.set_value(CellRef::new(0, k as u32), Value::text(name.as_str()));
             let kind = c.kind(key);
             for i in 0..p.tasks.len() {
                 sh.set_value(CellRef::new(i as u32 + 1, k as u32), to_value(&c.val(i, key), kind, p.day_min));
             }
         }
+        sh.tables.push(table(1, "Tasks", cols.iter().map(|x| x.1.clone()).collect(), n));
+    }
+    let mut rs = Sheet::new("Resources");
+    for (k, (key, name)) in RES_COLS.iter().enumerate() {
+        rs.set_value(CellRef::new(0, k as u32), Value::text(*name));
+        for r in 0..p.resources.len() {
+            let v = match *key {
+                "max" => Value::number(p.resources[r].max),
+                "rate" => Value::number(p.resources[r].rate),
+                "work" => Value::number(c.l.res_work[r] / 60.0),
+                "cost" => Value::number(c.l.res_cost[r]),
+                "country" => Value::text(p.resources[r].country.as_str()),
+                _ => Value::text(crate::fields::res_text(c, r, key).as_str()),
+            };
+            rs.set_value(CellRef::new(r as u32 + 1, k as u32), v);
+        }
+    }
+    rs.tables.push(table(2, "Resources", RES_COLS.iter().map(|x| x.1.to_string()).collect(), p.resources.len() as u32));
+    wb.sheets.push(Arc::new(rs));
+    for (name, v, _) in project_names(c) {
+        let formula = match &v {
+            Value::Number(x) => format!("{x}"),
+            Value::Empty => "\"\"".into(),
+            v => format!("\"{}\"", v.display().replace('"', "\"\"")),
+        };
+        wb.names.push(gridcraft_model::DefinedName { name: name.into(), scope: None, formula, comment: String::new(), hidden: false });
     }
     for s in &p.sheets {
         let mut sh = Sheet::new(s.name.as_str());
@@ -181,20 +315,82 @@ pub fn book(c: &Calc) -> Workbook {
     wb
 }
 
-/// One spreadsheet tab as shown: `k` is its index in `Project.sheets` (the Plan sheet is not
-/// editable and is shown through the task views).
+/// The sheets before the user's tabs in [`book`].
+pub const BUILT_IN: usize = 2;
+
+fn table(id: u32, name: &str, cols: Vec<String>, rows: u32) -> gridcraft_model::Table {
+    use gridcraft_core::RangeRef;
+    gridcraft_model::Table {
+        id, name: name.into(), range: RangeRef::new(CellRef::new(0, 0), CellRef::new(rows.max(1), cols.len().max(1) as u32 - 1)),
+        header_row: true, totals_row: false,
+        columns: cols.into_iter().map(|name| gridcraft_model::TableColumn { name, totals: Default::default(), totals_label: None, formula: None, unique_name: None, xml: None }).collect(),
+        style: String::new(), banded_rows: false, banded_cols: false, first_col: false, last_col: false, filter_button: false, filter: vec![], table_type: None, connection_id: None,
+    }
+}
+
+/// One spreadsheet tab as shown: `k` is its index in `Project.sheets` (the Plan and Resources
+/// sheets are not editable; they are shown through the task and resource views).
 pub fn sheet_view(c: &Calc, k: usize) -> Option<SheetOut> {
     let s: &SheetData = c.p.sheets.get(k)?;
     let wb = book(c);
-    let sh = wb.sheet(k + 1)?;
-    let mut cells = vec![];
-    let (mut rows, mut cols) = (0, 0);
-    for (a1, input) in &s.cells {
-        let Some(at) = CellRef::parse(a1) else { continue };
-        let (text, num) = show(&sh.value(at), s.fmt.get(a1).map_or("", String::as_str), c);
+    let sh = wb.sheet(k + BUILT_IN)?;
+    let (mut rows, mut cols, mut cells) = (0, 0, vec![]);
+    let mut add = |a1: String, input: String, at: CellRef, cells: &mut Vec<(String, String, String, bool)>| {
+        let (text, num) = show(&sh.value(at), s.fmt.get(&a1).map_or("", String::as_str), &input, c, wb.date_system);
         rows = rows.max(at.row + 1);
         cols = cols.max(at.col + 1);
-        cells.push((a1.clone(), input.clone(), text, num));
+        cells.push((a1, input, text, num));
+    };
+    for (a1, input) in &s.cells {
+        if let Some(at) = CellRef::parse(a1) { add(a1.clone(), input.clone(), at, &mut cells); }
+    }
+    // Results that spill from a formula into the cells next to it (UNIQUE, FILTER, SORT…).
+    if let Some(used) = sh.used_range() {
+        for r in used.start.row..=used.end.row.min(used.start.row + 5000) {
+            for k in used.start.col..=used.end.col.min(used.start.col + 200) {
+                let at = CellRef::new(r, k);
+                let a1 = format!("{}{}", col_name(k), r + 1);
+                if !s.cells.contains_key(&a1) && sh.spill_anchor(at).is_some_and(|x| x != at) && !matches!(sh.value(at), Value::Empty) {
+                    add(a1, String::new(), at, &mut cells);
+                }
+            }
+        }
     }
     Some(SheetOut { name: s.name.clone(), rows, cols, cells })
+}
+
+/// Every worksheet function: name, signature, one-line description and category.
+pub fn functions() -> Vec<(&'static str, &'static str, &'static str, String)> {
+    let mut v: Vec<_> = gridcraft_functions::all().iter().map(|f| (f.name, f.signature, f.description, format!("{:?}", f.category))).collect();
+    v.sort_by_key(|f| f.0);
+    v
+}
+
+/// Moves a formula's relative references by `dr` rows and `dc` columns (fill and paste).
+/// Inputs that are not formulas come back unchanged.
+pub fn shift(input: &str, dr: i64, dc: i64) -> String {
+    let Some(body) = input.strip_prefix('=') else { return input.into() };
+    match gridcraft_formula::parse(body) {
+        Ok(e) => format!("={}", gridcraft_formula::printer::print(&gridcraft_formula::adjust::shift_relative(e, dr, dc))),
+        Err(_) => input.into(),
+    }
+}
+
+/// A formula after rows or columns were inserted or deleted on sheet `target`.
+pub fn adjust(input: &str, host: &str, target: &str, edit: &gridcraft_formula::adjust::Edit) -> String {
+    rewrite(input, |e| gridcraft_formula::adjust::adjust(e, host, target, edit))
+}
+
+/// A formula after sheet `old` was renamed to `new` (`new` empty: deleted, its references go to #REF!).
+pub fn rename(input: &str, old: &str, new: &str, order: &[String]) -> String {
+    use gridcraft_formula::adjust as a;
+    rewrite(input, |e| if new.is_empty() { a::delete_sheet(e, old, order) } else { a::rename_sheet(e, old, new) })
+}
+
+fn rewrite(input: &str, f: impl FnOnce(gridcraft_formula::Expr) -> gridcraft_formula::Expr) -> String {
+    let Some(body) = input.strip_prefix('=') else { return input.into() };
+    match gridcraft_formula::parse(body) {
+        Ok(e) => format!("={}", gridcraft_formula::printer::print(&f(e))),
+        Err(_) => input.into(),
+    }
 }

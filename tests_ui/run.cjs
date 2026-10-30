@@ -21,7 +21,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   p.on("pageerror", e => errors.push(e.message));
   await p.addInitScript(f => {
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
-    const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: null, task_info: null };
+    const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__calls = [];
     window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   }, fix);
@@ -281,6 +281,36 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("the File page has a Guide tile", !!(await p.$(".tile:has-text('Guide')")));
   await p.click(".bs aside .back"); await p.waitForTimeout(150);
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+
+  // 0.5.0: Sheets work like Excel: flags, suggestions, clicking cells into a formula, Plan Data, inserting rows.
+  const lastApply = () => p.evaluate(() => JSON.stringify(window.__calls.filter(c => c[0] === "apply").pop()));
+  await p.click('.side button[title="Sheets"]'); await p.waitForTimeout(400);
+  const sc = (r, c) => p.evaluate(([r, c]) => { const el = document.querySelectorAll(".sheetgrid .gbody .row")[r].children[c + 1].getBoundingClientRect(); return { x: el.left + el.width / 2, y: el.top + el.height / 2 }; }, [r, c]);
+  check("Sheets show a vendor's country with its flag", (await p.$$(".sheetgrid img.flag")).length === 2 && (await p.textContent(".sheetgrid")).includes("Germany"));
+  let q = await sc(5, 3); await p.mouse.click(q.x, q.y); await p.waitForTimeout(100);
+  await p.keyboard.type("=SU"); await p.waitForTimeout(250);
+  const offered = await p.$$eval(".fhint button b", b => b.map(x => x.textContent));
+  check("typing =SU suggests SUM and friends", offered.includes("SUM") && offered.includes("SUMIFS"), offered.join());
+  await p.keyboard.press("Tab"); await p.waitForTimeout(150);
+  check("Tab inserts the function with its bracket", (await p.inputValue("input.edit")) === "=SUM(");
+  check("the hint shows the function's arguments", (await p.textContent(".fhint .fsig").catch(() => "")).includes("number1"));
+  const a2 = await sc(1, 2), a3 = await sc(2, 2);
+  await p.mouse.move(a2.x, a2.y); await p.mouse.down(); await p.mouse.move(a3.x, a3.y, { steps: 4 }); await p.mouse.up(); await p.waitForTimeout(150);
+  check("clicking and dragging cells adds their range to the formula", (await p.inputValue("input.edit")) === "=SUM(C2:C3" && (await p.$$(".refbox")).length === 1, await p.inputValue("input.edit"));
+  await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check("Enter closes the bracket and saves the formula", (await lastApply()).includes('["D6","=SUM(C2:C3)"]'), await lastApply());
+  q = await sc(7, 0); await p.mouse.click(q.x, q.y); await p.keyboard.type("=Tasks["); await p.waitForTimeout(200);
+  check("after Tasks[ the plan's columns are offered", (await p.$$eval(".fhint button b", b => b.map(x => x.textContent))).includes("Finish"));
+  await p.keyboard.press("Escape"); await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click(".sheettools button:has-text('Plan Data')"); await p.waitForTimeout(250);
+  await p.click(".dlg .btn.pri"); await p.waitForTimeout(250);
+  check("Plan Data puts a live FILTER list of tasks with headings", /FILTER\(CHOOSECOLS\(Tasks/.test(await lastApply()) && (await lastApply()).includes('"Name"'));
+  q = await sc(2, 0); await p.mouse.click(q.x, q.y, { button: "right" }); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Insert Row Above')"); await p.waitForTimeout(150);
+  check("Insert Row Above asks the engine to move the cells", (await lastApply()).includes('"SheetInsert"') && (await lastApply()).includes('"at":2'));
+  await p.click('.side button[title="Resources"]'); await p.waitForTimeout(300);
+  check("the Resource Sheet has a Country column", (await p.textContent(".tbl.sheet thead")).includes("Country"));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {

@@ -126,6 +126,8 @@ Datum Plan 自动排程：修改工期或逻辑关系后，所有相关的日期
 1. **Group**（组）表示工种或岗位（工程、土建、电气……）。Manpower（人力）和 Resource Graph（资源图表）按组汇总人数。
 2. **Std. Rate**（标准费率）是每小时的费用（材料则为每单位）。**Max**（最大单位）表示可用程度：100% 是一名全职人员，300% 是三人班组。
 
+**Country**（国家）表示人员、班组或供应商来自哪个国家：输入代码（DE）或英文名称（Germany），即显示国旗。工作表可用 **Plan Data…** 按国家列出资源。
+
 ### 给任务分配人员
 
 在任务表的 **Resource Names**（资源名称）列中输入，例如 `Design Engineer` 或 `Design Engineer[50%], Analysis Engineer`。输入新名称会自动新建资源。工时和费用由工期、分配单位和费率自动算出。也可以使用 **Resource › Assign Resources**（分配资源）。
@@ -263,9 +265,40 @@ S 曲线显示累计进度：灰色虚线是基准计划，蓝线是实际进度
 
 1. 选择 **All trades**（全部工种）或某一工种。灰色柱是每周（或每月）计划的人数，蓝色柱是已完成工作所对应的人数（按进度挣得），虚线是剩余工作的预测。
 
-## 工作表与公式列
+## 工作表：自己的报告和仪表板
 
-侧边栏的 **Sheets**（工作表）是保存在计划文件中的电子表格，支持约 400 个 Excel 函数，可用于工程量、估算和各种自定义计算。工作表可以读取计划数据：隐藏的 **Plan** 工作表每个任务占一行（ID、作业代码、名称、日期、工期、完成百分比、基准日期和费用、费用、工时、浮动时间、是否关键、资源）。例如 `=SUM(Plan!M2:M200)` 是总费用，`=XLOOKUP("A1020", Plan!B:B, Plan!H:H)` 是任务 A1020 的完成日期。计划变化时会自动重算；用 **File › Export** 导出为 Excel 时公式会保留。
+![用作周报的工作表：工具栏、按名称读取的计划数据、实时里程碑清单，以及带国旗的供应商。](img/sheets.png)
+
+在侧边栏打开 **Sheets**（工作表）。工作表是保存在计划文件中的电子表格，用法和 Excel 一样，并且直接读取计划数据，所以以前要从进度计划复制到另一个 Excel 文件的数字，现在始终是最新的。用 **+** 新建工作表标签；右键单击标签可重命名或删除。
+
+1. **工具栏。** **Σ AutoSum**（自动求和）对所选单元格上方的数字求和（[[Alt+=]]；旁边的箭头还提供 Average 平均值、Count 计数、Max 最大值、Min 最小值）。**fx Function**（插入函数）可按名称或用途查找全部 490 个函数。**Plan Data…**（计划数据）插入一份实时清单。其后是数字格式、增加或减少小数位，以及插入（**Insert**）和删除（**Delete**）行和列。
+2. **按名称读取计划数据。** 例如 `=ProjectFinish`（项目完成日期）、`=BaselineFinish`（基准完成日期）、`=PercentComplete`（完成百分比）、`=SPI` 或 `=COUNTIF(Tasks[Late],TRUE)`（延误任务数）。日期和百分比会自动设置格式。
+3. **Plan Data… 生成的实时清单。** 选择 Tasks（任务）或 Resources（资源）、要显示的列、哪些行（里程碑、关键任务、延误任务、未完成、进行中、未来四周开始）、排序方式和行数。一个公式填满所有行，并随计划变化。
+4. **国旗。** 给单元格设置 **Country with flag**（国家及国旗）数字格式，然后输入国家代码（DE、cn）或英文名称（Germany、UK），即显示国旗和国家名称。
+
+### 像在 Excel 中一样编写公式
+
+![输入公式：单元格编辑框和推荐的 Tasks 表列。](img/sheet-formula.png)
+
+1. 输入 `=` 开始编写公式。单击一个单元格，或拖过多个单元格，即可把它们加入公式（A1、A1:A5）；单击其他工作表标签可引用该表。每个引用都有彩色边框。[[F4]] 切换 $ 绝对引用。[[Enter]] 保存公式，并自动补上缺少的右括号。
+2. 输入时会推荐函数、计划名称和表格列；[[Tab]] 插入所选项。在函数内部，提示会显示它的参数，当前参数带下划线。
+
+公式可以读取的计划数据：
+
+| 写法 | 含义 |
+| --- | --- |
+| `Tasks[Finish]` | 每个任务一个值。列包括 Name（名称）、WBS、Start（开始）、Finish（完成）、Duration（工期）、% Complete（完成百分比，0–100）、Baseline Start / Baseline Finish（基准开始/完成）、Cost（费用）、Work（工时）、Total Float（总浮动时间）、Critical（关键）、Late（延误）、Milestone（里程碑）、Summary（摘要）、Resources（资源）、Status（状态）、Planned Value / Earned Value（计划值/挣值），以及自定义字段。 |
+| `Resources[Country]` | 每个资源一个值：Name、Type（类型）、Group（组）、Initials（缩写）、Max Units（最大单位）、Rate（费率）、Work（工时，小时）、Cost、Country（国家）、Email。 |
+| `ProjectFinish` | 另有 ProjectName、ProjectStart、StatusDate（状态日期）、BaselineFinish、FinishVariance（完成偏差，工作日）、PercentComplete（0–100）、TotalCost、PlannedValue、EarnedValue、ActualCost、SPI、CPI、TaskCount、TasksDone、TasksLate、CriticalCount、MilestoneCount。 |
+
+- 与 Excel 相同，填充柄和复制粘贴会移动引用：`=A1*2` 向下填充变为 `=A2*2`。Ctrl+D 和 Ctrl+R 向下和向右填充。
+- 右键单击单元格可插入或删除行和列；指向被移动单元格的公式会自动跟随。拖动列边界可调整列宽；双击边界自动适应文字。
+- 鼠标指向错误值（#N/A、#NAME?、#SPILL! 等）可查看含义。
+- 旧公式（如 `=SUM(Plan!M2:M200)`）仍然有效。
+
+> **提示：** 用 **File › Export** 导出为 Excel 时会保留公式，并附带 Tasks 和 Resources 表以及上述名称，因此工作簿在 Excel 中同样可用。
+
+### 公式列
 
 **公式列**（**Format › Formula Column**）在任务表中增加一列，由其他列计算得出，例如 `=[% Complete]-[Baseline % Complete]` 或 `=IF([Finish]>[Baseline Finish],"Late","On time")`。
 

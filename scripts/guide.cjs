@@ -9,7 +9,8 @@ const version = fs.readFileSync(path.join(__dirname, "../src-tauri/Cargo.toml"),
 const logo = fs.readFileSync(path.join(__dirname, "../docs/brand/datum-plan-icon.svg"), "utf8");
 
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const inline = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/\*([^*]+)\*/g, "<i>$1</i>").replace(/\[\[([^\]]+)\]\]/g, "<kbd>$1</kbd>");
+// Code spans are kept as typed: a * or [[ inside them (=A1*2) is not formatting.
+const inline = s => esc(s).split(/(`[^`]+`)/).map((x, i) => (i % 2 ? `<code>${x.slice(1, -1)}</code>` : x.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/\*([^*]+)\*/g, "<i>$1</i>").replace(/\[\[([^\]]+)\]\]/g, "<kbd>$1</kbd>"))).join("");
 let anchors = 0;
 /** A small Markdown subset: # ## ### headings, paragraphs, - and 1. lists, > tips, | tables |, ![caption](img), --- page breaks. */
 function md(src) {

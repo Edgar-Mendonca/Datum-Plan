@@ -71,6 +71,9 @@ pub enum Op {
     Style { cells: Vec<(u32, String, String)> },
     /// Sets the text formatting of spreadsheet cells.
     SheetStyle { k: usize, cells: Vec<(String, String)> },
+    /// Inserts (`count` > 0) or deletes (`count` < 0) whole rows or columns of a spreadsheet tab
+    /// at `at` (0-based); formulas on every tab follow, as in Excel.
+    SheetInsert { k: usize, cols: bool, at: u32, count: i32 },
     /// Adds, replaces (`old`) or (rule None) removes a rule of credit.
     Credit { old: Option<String>, rule: Option<CreditRule> },
     /// Gives the tasks the steps of a rule of credit (from the plan or the built-in library).
@@ -524,6 +527,7 @@ fn res_set(p: &mut Project, uid: u32, field: &str, v: &str) -> Result<(), String
         "label" => r.label = v.into(),
         "initials" => r.initials = v.into(),
         "email" => r.email = v.into(),
+        "country" => r.country = v.chars().take(60).collect(),
         "code" => r.code = v.into(),
         "notes" => r.notes = v.into(),
         "ovt" => r.ovt = num(v)?,
@@ -907,11 +911,51 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if title.trim().is_empty() { p.titles.remove(&key); } else { p.titles.insert(key, title.trim().into()); }
         }
         Op::Sheet { k, sheet } => match (k, sheet) {
-            (None, Some(s)) => p.sheets.push(s),
-            (Some(k), Some(s)) if k < p.sheets.len() => p.sheets[k] = s,
-            (Some(k), None) if k < p.sheets.len() => { p.sheets.remove(k); }
+            (None, Some(s)) => {
+                if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || ["plan", "resources"].contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
+                p.sheets.push(s)
+            }
+            (Some(k), Some(s)) if k < p.sheets.len() => {
+                let old = p.sheets[k].name.clone();
+                if !old.eq_ignore_ascii_case(&s.name) {
+                    if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || ["plan", "resources"].contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
+                    rewrite_sheets(p, |f, _| crate::sheet::rename(f, &old, &s.name, &[]));
+                    // A rename keeps the cells, now pointing at the new name.
+                    p.sheets[k] = SheetData { cells: std::mem::take(&mut p.sheets[k].cells), ..s };
+                } else {
+                    p.sheets[k] = s;
+                }
+            }
+            (Some(k), None) if k < p.sheets.len() => {
+                let order: Vec<String> = ["Plan", "Resources"].iter().map(|x| x.to_string()).chain(p.sheets.iter().map(|x| x.name.clone())).collect();
+                let old = p.sheets.remove(k).name;
+                rewrite_sheets(p, |f, _| crate::sheet::rename(f, &old, "", &order));
+            }
             _ => return Err("That sheet does not exist.".into()),
         },
+        Op::SheetInsert { k, cols, at, count } => {
+            use gridcraft_formula::adjust::{Axis, Edit};
+            let target = p.sheets.get(k).ok_or("That sheet does not exist.")?.name.clone();
+            let n = count.unsigned_abs().min(100_000);
+            let axis = if cols { Axis::Cols } else { Axis::Rows };
+            let edit = if count > 0 { Edit::Insert { axis, at, count: n } } else { Edit::Delete { axis, at, count: n } };
+            rewrite_sheets(p, |f, host| crate::sheet::adjust(f, host, &target, &edit));
+            let s = &mut p.sheets[k];
+            // Moves every keyed map of the tab: cells, formats, styles (and column widths).
+            let shift = |a1: &str| -> Option<String> {
+                let r = gridcraft_core::CellRef::parse(a1)?;
+                let (pos, other) = if cols { (r.col, r.row) } else { (r.row, r.col) };
+                let pos = if pos < at { pos } else if count > 0 { pos + n } else if pos < at + n { return None } else { pos - n };
+                let (row, col) = if cols { (other, pos) } else { (pos, other) };
+                Some(format!("{}{}", crate::sheet::col_name(col), row + 1))
+            };
+            for m in [&mut s.cells, &mut s.fmt, &mut s.style] {
+                *m = std::mem::take(m).into_iter().filter_map(|(a1, v)| shift(&a1).map(|x| (x, v))).collect();
+            }
+            if cols {
+                s.widths = std::mem::take(&mut s.widths).into_iter().filter_map(|(c, w)| if c < at { Some((c, w)) } else if count > 0 { Some((c + n, w)) } else if c < at + n { None } else { Some((c - n, w)) }).collect();
+            }
+        }
         Op::SheetCells { k, cells, fmt } => {
             let s = p.sheets.get_mut(k).ok_or("That sheet does not exist.")?;
             for (a1, v) in cells {
@@ -941,4 +985,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Rewrites every formula on every spreadsheet tab: `f(formula, host sheet name)`.
+fn rewrite_sheets(p: &mut Project, f: impl Fn(&str, &str) -> String) {
+    for s in &mut p.sheets {
+        let host = s.name.clone();
+        for v in s.cells.values_mut().filter(|v| v.starts_with('=')) { *v = f(v, &host); }
+    }
 }

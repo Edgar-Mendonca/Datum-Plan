@@ -126,6 +126,8 @@ Open **Resources** in the sidebar. Each row is a person, a crew, a material or a
 1. **Group** is the trade or role (Engineering, Civil, Electrical…). Manpower and the Resource Graph add people up by group.
 2. **Std. Rate** is the cost per hour (for a material, per unit). **Max** is how much of the person is available: 100% is one full-time person, 300% a crew of three.
 
+**Country** says where a person, crew or vendor comes from: type a code (DE) or a name (Germany) and its flag is shown. A sheet can list resources by country with **Plan Data…**.
+
 ### Assign people to tasks
 
 Type in the **Resource Names** column of the task sheet, for example `Design Engineer` or `Design Engineer[50%], Analysis Engineer`. A new name creates the resource. The work (man-hours) and the cost follow from the duration, the units and the rates. You can also use **Resource › Assign Resources**.
@@ -263,9 +265,40 @@ Go through the look-ahead with your team every week: clear what is open, chase w
 
 1. Choose **All trades** or one trade. The grey bars are the people planned per week (or month), the blue bars the people's work done (earned from progress), and the dashed line the forecast for the rest.
 
-## Sheets and formula columns
+## Sheets: your own reports and dashboards
 
-**Sheets** in the sidebar are spreadsheet tabs saved inside your plan, with about 400 Excel functions. Use them for quantities, estimates and your own calculations. A sheet can read the plan: the hidden **Plan** sheet has one row per task (ID, Activity ID, name, dates, duration, % complete, baseline dates and cost, cost, work, float, critical, resources). For example `=SUM(Plan!M2:M200)` is the total cost, and `=XLOOKUP("A1020", Plan!B:B, Plan!H:H)` is the finish of task A1020. Everything recalculates when the plan changes, and **File › Export** to Excel keeps the formulas.
+![A sheet used as a weekly report: the toolbar, plan numbers by name, a live milestone list and vendors with their flags.](img/sheets.png)
+
+Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan file. It works like Excel and reads the plan directly, so the numbers you used to copy from the schedule into a separate workbook are always up to date. Add a tab with **+**; right-click a tab to rename or delete it.
+
+1. **The toolbar.** **Σ AutoSum** adds up the numbers above the selected cell ([[Alt+=]]; the arrow offers Average, Count, Max and Min). **fx Function** finds any of the 490 functions by name or by what it does. **Plan Data…** inserts a live list. Then number formats, more or fewer decimals, and **Insert** and **Delete** for rows and columns.
+2. **Plan numbers by name.** `=ProjectFinish`, `=BaselineFinish`, `=PercentComplete`, `=SPI` or `=COUNTIF(Tasks[Late],TRUE)`. Dates and percentages are formatted for you.
+3. **A live list from Plan Data….** Choose Tasks or Resources, the columns, which rows (milestones, critical, late, not finished, in progress, starting in the next four weeks), the order and how many. One formula fills the rows and changes with the plan.
+4. **Country flags.** Give cells the **Country with flag** number format and type a code (DE, cn) or a name (Germany, UK). The flag and the country's name are shown.
+
+### Write formulas as in Excel
+
+![Typing a formula: the cell editor and the suggested columns of the Tasks table.](img/sheet-formula.png)
+
+1. Type `=` to start a formula. Click a cell, or drag over several, to add them (A1, A1:A5); click another sheet's tab to read from it. Each reference gets a coloured box. [[F4]] cycles the $ anchors. [[Enter]] saves and closes any open bracket.
+2. As you type, functions, the plan's names and table columns are suggested; [[Tab]] inserts the chosen one. Inside a function, the hint shows its arguments with the current one underlined.
+
+What a formula can read from the plan:
+
+| Write | What it is |
+| --- | --- |
+| `Tasks[Finish]` | One value per task. Columns include Name, WBS, Start, Finish, Duration, % Complete (0–100), Baseline Start, Baseline Finish, Cost, Work, Total Float, Critical, Late, Milestone, Summary, Resources, Status, Planned Value, Earned Value, and your custom fields. |
+| `Resources[Country]` | One value per resource: Name, Type, Group, Initials, Max Units, Rate, Work (hours), Cost, Country, Email. |
+| `ProjectFinish` | Also ProjectName, ProjectStart, StatusDate, BaselineFinish, FinishVariance (working days), PercentComplete (0–100), TotalCost, PlannedValue, EarnedValue, ActualCost, SPI, CPI, TaskCount, TasksDone, TasksLate, CriticalCount, MilestoneCount. |
+
+- The fill handle and copy and paste move references, as in Excel: `=A1*2` filled down becomes `=A2*2`. Ctrl+D and Ctrl+R fill down and right.
+- Right-click a cell to insert or delete rows and columns; every formula that points at the moved cells follows. Drag a column's edge to resize it; double-click the edge to fit the text.
+- Point at an error (#N/A, #NAME?, #SPILL!…) to see what it means.
+- Older formulas such as `=SUM(Plan!M2:M200)` keep working.
+
+> **Tip:** **File › Export** to Excel keeps the formulas and adds the Tasks and Resources tables and the names, so the workbook also works in Excel.
+
+### Formula columns
 
 **Formula columns** (**Format › Formula Column**) add a column to the task sheet calculated from other columns, for example `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","On time")`.
 

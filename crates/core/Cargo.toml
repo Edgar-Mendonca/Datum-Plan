@@ -1,6 +1,6 @@
 [package]
 name = "datum-core"
-version = "0.4.4"
+version = "0.5.0"
 license = "MIT"
 edition = "2021"
 description = "Datum Plan scheduling engine: model, calendars, CPM, parsing, edit operations."
@@ -15,3 +15,6 @@ serde_json.workspace = true
 gridcraft-calc = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }
 gridcraft-model = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }
 gridcraft-core = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }
+gridcraft-functions = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }
+gridcraft-numfmt = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }
+gridcraft-formula = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }

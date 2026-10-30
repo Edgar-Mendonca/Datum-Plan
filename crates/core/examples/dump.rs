@@ -30,13 +30,30 @@ fn guide_plan() -> (Project, NaiveDate) {
     // Three milestones on the timeline.
     let on: Vec<(u32, bool)> = doc.p.tasks.iter().map(|t| (t.uid, ["Requirements signed off", "Critical design review", "Released to manufacturing"].contains(&t.name.as_str()))).collect();
     for (uid, yes) in on { doc.apply(Op::Set { uid, field: "timeline".into(), value: if yes { "Yes" } else { "No" }.into() }, f).unwrap_or_else(|e| panic!("{e}")) }
+    // A weekly report on a sheet: plan numbers by name, a live milestone list and the vendors with their flags.
+    let cells = [
+        ("A1", "Weekly report"), ("A3", "Project finish"), ("B3", "=ProjectFinish"), ("A4", "Baseline finish"), ("B4", "=BaselineFinish"), ("A5", "% complete"), ("B5", "=PercentComplete"),
+        ("A6", "Late tasks"), ("B6", "=COUNTIF(Tasks[Late],TRUE)"), ("A7", "SPI"), ("B7", "=SPI"),
+        ("A9", "Milestone"), ("B9", "Finish"), ("C9", "% Complete"), ("A10", "=FILTER(CHOOSECOLS(Tasks,3,8,9),Tasks[Milestone]=TRUE,\"None\")"),
+        ("E3", "Vendor"), ("F3", "Country"), ("G3", "Scope"), ("E4", "Northwind Castings"), ("F4", "DE"), ("G4", "Housings"), ("E5", "Pacific Circuits"), ("F5", "TW"), ("G5", "Control boards"),
+        ("E6", "Kestrel Test Labs"), ("F6", "GB"), ("G6", "Environmental tests"), ("E7", "Total orders"), ("G7", "=COUNTA(G4:G6)"),
+    ];
+    let mut fmt: Vec<(String, String)> = [("B7", "0.00"), ("F4", "flag"), ("F5", "flag"), ("F6", "flag")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+    for r in 10..20 { fmt.push((format!("B{r}"), "date".into())); fmt.push((format!("C{r}"), "0\"%\"".into())); }
+    let style = ["A1", "A9", "B9", "C9", "E3", "F3", "G3"].iter().map(|a| (a.to_string(), "b".to_string())).collect();
+    doc.p.sheets.push(SheetData { name: "Weekly report".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.into_iter().collect(), widths: [(0, 230), (4, 170), (5, 150), (6, 160)].into_iter().collect(), style });
     (doc.p, d(12, 4))
 }
 
 fn main() {
     let (p, today) = if std::env::args().nth(1).as_deref() == Some("guide") { guide_plan() } else {
         let t = &templates::TEMPLATES[2];
-        (templates::build(t, NaiveDate::from_ymd_opt(2026, 10, 26).unwrap()), NaiveDate::from_ymd_opt(2026, 10, 24).unwrap())
+        let mut p = templates::build(t, NaiveDate::from_ymd_opt(2026, 10, 26).unwrap());
+        // A vendor list on a sheet: flags, a total and a live count from the plan.
+        let cells = [("A1", "Vendor"), ("B1", "Country"), ("C1", "Order"), ("A2", "Steel Co"), ("B2", "DE"), ("C2", "1200"), ("A3", "Pipe Works"), ("B3", "cn"), ("C3", "800"), ("C4", "=SUM(C2:C3)"), ("E1", "=ROWS(Tasks)")];
+        let fmt = [("B2", "flag"), ("B3", "flag")];
+        p.sheets.push(SheetData { name: "Vendors".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), ..Default::default() });
+        (p, NaiveDate::from_ymd_opt(2026, 10, 24).unwrap())
     };
     let c = Calc::new(&p, "%d-%b-%y", today);
     let q = Query { cols: p.columns.iter().filter(|c| c.1 > 0).map(|c| c.0.clone()).collect(), ..Query::default() };
@@ -54,6 +71,8 @@ fn main() {
         "periods": report::period_ends(&c, "week"), "curve": report::curve(&c, "week"), "usage": report::usage(&c, "resource", "work", "week"), "usage:group": report::usage(&c, "group", "work", "week"),
         "risk_run": risk::simulate(&p, &risk::SimOpts { iterations: 300, ..Default::default() }).unwrap(), "level_preview": level::preview(&p, &[]).unwrap(),
         "manpower": progress::manpower(&c, "week"), "earned_schedule": progress::earned_schedule(&c), "lookahead": progress::lookahead(&c, 3), "credit_library": progress::credit_library(),
-        "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "email", "work", "cost"].map(String::from)), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
+        "sheet_view": sheet::sheet_view(&c, 0), "formula_shift": ["=C3*2"],
+        "sheet_catalog": { "functions": sheet::functions(), "names": sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect::<Vec<_>>(), "tasks": sheet::task_columns(&c).into_iter().map(|x| x.1).collect::<Vec<_>>(), "resources": sheet::RES_COLS.iter().map(|x| x.1).collect::<Vec<_>>() },
+        "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "country", "email", "work", "cost"].map(String::from)), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
     }));
 }

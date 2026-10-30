@@ -551,6 +551,28 @@ fn sheet_view(st: State<St>, k: usize) -> Option<datum_core::sheet::SheetOut> {
     datum_core::sheet::sheet_view(&calc(&st.lock()), k)
 }
 
+/// What a sheet formula can name: functions (with signatures), the plan's names and table columns.
+#[derive(serde::Serialize)]
+struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(&'static str, &'static str)>, tasks: Vec<String>, resources: Vec<&'static str> }
+
+#[tauri::command]
+fn sheet_catalog(st: State<St>) -> SheetCatalog {
+    let a = st.lock();
+    let c = calc(&a);
+    SheetCatalog {
+        functions: datum_core::sheet::functions(),
+        names: datum_core::sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect(),
+        tasks: datum_core::sheet::task_columns(&c).into_iter().map(|x| x.1).collect(),
+        resources: datum_core::sheet::RES_COLS.iter().map(|x| x.1).collect(),
+    }
+}
+
+/// Formulas moved by rows and columns, for fill and paste (relative references follow).
+#[tauri::command]
+fn formula_shift(items: Vec<(String, i64, i64)>) -> Vec<String> {
+    items.iter().take(200_000).map(|(f, dr, dc)| datum_core::sheet::shift(f, *dr, *dc)).collect()
+}
+
 #[tauri::command]
 fn scurve(st: State<St>, unit: String, how: String, scope: Option<u32>) -> report::SCurve {
     report::scurve(&calc(&st.lock()), &unit, &how, scope)
@@ -758,7 +780,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

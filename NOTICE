@@ -7,5 +7,6 @@ the formula parser, the Excel function library and the calculation engine (crate
 gridcraft-core, gridcraft-formula, gridcraft-functions, gridcraft-numfmt, gridcraft-model,
 gridcraft-calc).
 
-It also bundles Chart.js (MIT, https://www.chartjs.org), SolidJS (MIT) and the IBM Plex
-fonts (SIL Open Font Licence 1.1).
+It also bundles Chart.js (MIT, https://www.chartjs.org), SolidJS (MIT), the IBM Plex
+fonts (SIL Open Font Licence 1.1) and the country flags of flag-icons (MIT,
+https://github.com/lipis/flag-icons, Copyright (c) 2013 Panayiotis Lipiridis).

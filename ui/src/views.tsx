@@ -1,4 +1,5 @@
 // Views other than the Gantt chart.
+import { CountryList, Flag, countryCode, countryName } from "./flags";
 import { For, Index, Show, createSignal, createResource, createMemo, createEffect, JSX } from "solid-js";
 import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money } from "./api";
 import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut } from "./store";
@@ -205,7 +206,7 @@ export const UsageView = (p: { by: "task" | "resource" }) => {
 
 // ---------- Resource Sheet ----------
 const RES_COLS: [string, string, number][] = [["name", "Resource Name", 180], ["kind", "Type", 90], ["label", "Material", 70], ["initials", "Initials", 60], ["group", "Group", 100], ["max", "Max", 60],
-  ["rate", "Std. Rate", 90], ["ovt", "Ovt. Rate", 90], ["per_use", "Cost/Use", 80], ["cal", "Base Calendar", 110], ["code", "Code", 70], ["email", "Email", 150], ["work", "Work", 80], ["cost", "Cost", 100]];
+  ["rate", "Std. Rate", 90], ["ovt", "Ovt. Rate", 90], ["per_use", "Cost/Use", 80], ["cal", "Base Calendar", 110], ["code", "Code", 70], ["country", "Country", 150], ["email", "Email", 150], ["work", "Work", 80], ["cost", "Cost", 100]];
 export const ResourceSheet = () => {
   const [rows] = createResource(() => tick(), () => call<[number, boolean, string[]][]>("resources", { cols: RES_COLS.map(c => c[0]) }));
   const raw = (r: Resource, k: string): string => k === "max" ? `${Math.round(r.max * 100)}%` : k === "kind" ? r.kind : k === "cal" ? r.cal ?? "" : String((r as any)[k] ?? "");
@@ -217,6 +218,7 @@ export const ResourceSheet = () => {
       <button class="btn" onClick={() => C.level()}>Level all</button>
     </>}>
       <div class="wlwrap">
+        <CountryList />
         <table class="tbl sheet">
           <thead><tr><th /><th>ID</th><For each={RES_COLS}>{c => <th style={{ "min-width": `${c[2]}px` }}>{c[1]}</th>}</For><th /></tr></thead>
           <tbody><For each={P().resources}>{(r, k) => {
@@ -228,6 +230,7 @@ export const ResourceSheet = () => {
                 <For each={RES_COLS}>{([key], j) => <td>{
                   key === "work" || key === "cost" ? <span class="ro">{calc()?.[2][j()]}</span>
                     : key === "kind" ? <select value={r.kind} onChange={e => act({ ResSet: { uid: r.uid, field: "kind", value: e.currentTarget.value } })}><option>Work</option><option>Material</option><option>Cost</option></select>
+                    : key === "country" ? <span class="country"><Flag country={r.country ?? ""} /><input list="countries" value={countryCode(r.country ?? "") ? countryName(r.country ?? "") : r.country ?? ""} placeholder="Code or name" onChange={e => act({ ResSet: { uid: r.uid, field: key, value: e.currentTarget.value } })} /></span>
                     : key === "cal" ? <select value={r.cal ?? ""} onChange={e => act({ ResJson: { uid: r.uid, field: "cal", value: e.currentTarget.value || null } })}><option value="">(project)</option><For each={P().calendars}>{c => <option>{c.name}</option>}</For></select>
                     : <input value={raw(r, key)} onChange={e => act({ ResSet: { uid: r.uid, field: key, value: e.currentTarget.value } })} />
                 }</td>}</For>

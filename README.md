@@ -48,7 +48,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 - Links of every type (Finish-to-Start, Start-to-Start, Finish-to-Finish, Start-to-Finish) with lags and leads in days, hours or percent.
 - About 450 fields; rename any column, and hide, unhide, delete or reorder columns with the Columns dialog.
 - **Formula columns** in Excel syntax that refer to other columns, e.g. `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","On time")`, with about 400 Excel functions.
-- **Sheets:** spreadsheet tabs inside the plan for quantities, estimates and progress measurement, able to read the tasks.
+- **Sheets that work like Excel:** spreadsheet tabs inside the plan for your own reports, quantities, estimates and vendor lists. Click cells into a formula, 490 functions suggested as you type, AutoSum, fill and paste that move references, insert and delete rows and columns. They read the plan live by name (`Tasks[Finish]`, `Resources[Country]`, `ProjectFinish`, `SPI`), Plan Data puts a live list of milestones or late tasks in one click, and countries show their flags.
 - **Project Setup** walks you through a new plan: details, Activity IDs, calendar, currency, WBS, team and branding. Templates for engineering, EPC, construction, software and research come with people, rates, assignments and costs.
 
 ### Schedule
@@ -107,7 +107,7 @@ The **Datum Plan Guide** walks through everything step by step, with pictures: [
 
 ## Roadmap
 
-See the [changelog](CHANGELOG.md) for every release and the [roadmap](docs/MEMORY.md#3-roadmap) for what is next: schedule risk analysis (Monte Carlo), a shared resource pool across plans, portfolio dashboards, signed installers, and working together on shared plans.
+See the [changelog](CHANGELOG.md) for every release and the [roadmap](docs/MEMORY.md#3-roadmap) for what is next: custom dashboards, schedule quality and what-if scenarios, a shared resource pool across plans, portfolio dashboards, signed installers, and working together on shared plans.
 
 Datum Plan is part of [Datum](https://edgar-mendonca.github.io/Datum/); see its page: https://edgar-mendonca.github.io/Datum/apps/plan. [docs/FAMILY.md](docs/FAMILY.md) describes the shared design.
 

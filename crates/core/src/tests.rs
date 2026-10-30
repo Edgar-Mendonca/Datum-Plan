@@ -536,6 +536,54 @@ fn recurring_tasks_and_excel_export_with_formulas() {
 }
 
 #[test]
+fn sheets_read_the_plan_by_name_and_behave_like_excel() {
+    let mut doc = Doc::new(plan(&[(2, ""), (3, "1"), (0, "2")]));
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Dash".into(), ..Default::default() }) }).unwrap();
+    let cells = [
+        ("A1", "=SUM(Tasks[Duration])"), ("A2", "=ROWS(Tasks)"), ("A3", "=ProjectFinish"), ("A4", "=XLOOKUP(\"T3\",Tasks[Name],Tasks[Finish])"),
+        ("A5", "=COUNTIF(Tasks[Milestone],TRUE)"), ("A6", "=TODAY()-TODAY()"), ("A7", "1234.5"), ("A8", "=MAX(Tasks[% Complete])"), ("A9", "=SEQUENCE(3)"),
+        ("B1", "=A1*2"), ("C1", "=Dash!A1+1"),
+    ];
+    op(&mut doc, Op::SheetCells { k: 0, cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: None }).unwrap();
+    op(&mut doc, Op::SheetCells { k: 0, cells: vec![("A7".into(), String::new())], fmt: Some("#,##0.00".into()) }).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2));
+    let v = crate::sheet::sheet_view(&c, 0).unwrap();
+    let at = |a: &str| v.cells.iter().find(|x| x.0 == a).map(|x| x.2.clone()).unwrap_or_default();
+    assert_eq!((at("A1"), at("A2"), at("A5")), ("5".to_string(), "3".to_string(), "1".to_string()));
+    assert_eq!(at("A3"), "06-Nov-26", "a date name shows as a date");
+    assert_eq!(at("A4"), at("A3"), "lookups of plan dates show as dates");
+    assert_eq!(at("A6"), "0", "date arithmetic stays a number");
+    assert_eq!(at("A7"), "1,234.50", "Excel number formats");
+    assert_eq!(at("A8"), "0%", "plan percentages (0–100) get a % sign");
+    assert_eq!((at("A10"), at("A11")), ("2".to_string(), "3".to_string()), "spilled results are shown");
+    assert_eq!(v.cells.iter().find(|x| x.0 == "A10").map(|x| x.1.as_str()), Some(""), "a spilled cell has no input of its own");
+    // Fill and paste move relative references; absolute ones stay.
+    assert_eq!(crate::sheet::shift("=A1*$B$1+Tasks[Cost]", 2, 1), "=B3*$B$1+Tasks[Cost]");
+    assert_eq!(crate::sheet::shift("12", 2, 1), "12");
+    // Inserting a row above A1 moves the cells and the references to them.
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 0, count: 1 }).unwrap();
+    let s = &doc.p.sheets[0];
+    assert_eq!((s.cells.get("B2").map(String::as_str), s.cells.get("C2").map(String::as_str)), (Some("=A2*2"), Some("=Dash!A2+1")));
+    assert!(s.fmt.contains_key("A8") && !s.cells.contains_key("A1"));
+    // Deleting a column turns references into it into #REF!.
+    op(&mut doc, Op::SheetInsert { k: 0, cols: true, at: 0, count: -1 }).unwrap();
+    assert_eq!(doc.p.sheets[0].cells.get("A2").map(String::as_str), Some("=#REF!*2"));
+    // Renaming a sheet updates formulas that name it; names must stay unique.
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Other".into(), cells: [("A1".to_string(), "=Dash!B2".to_string())].into(), ..Default::default() }) }).unwrap();
+    let mut s = doc.p.sheets[0].clone();
+    s.name = "Board".into();
+    s.cells.clear();
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(s) }).unwrap();
+    assert_eq!(doc.p.sheets[1].cells.get("A1").map(String::as_str), Some("=Board!B2"));
+    assert!(!doc.p.sheets[0].cells.is_empty(), "a rename keeps the cells");
+    assert!(op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "board".into(), ..Default::default() }) }).is_err());
+    assert!(op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Plan".into(), ..Default::default() }) }).is_err());
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: None }).unwrap();
+    assert_eq!(doc.p.sheets[0].cells.get("A1").map(String::as_str), Some("=#REF!"));
+    assert!(crate::sheet::functions().iter().any(|f| f.0 == "SUMIFS" && f.1.contains("criteria")));
+}
+
+#[test]
 fn text_formatting_on_tasks_and_sheets() {
     let mut doc = Doc::new(plan(&[(2, ""), (3, "1")]));
     let u = doc.p.tasks[0].uid;
