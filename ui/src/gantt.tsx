@@ -255,7 +255,9 @@ export const Gantt = () => {
   /** Shows the dates a..b across the chart (the timeline's zoom box). */
   const range = (e: Event) => { const [a, b] = (e as CustomEvent<[number, number]>).detail; setZoom(Math.max(0.3, Math.min(120, body.clientWidth / Math.max(1, b - a)))); body.scrollLeft = (a - d0()) * zoom(); draw(); };
   const scrollDay = (e: Event) => { body.scrollLeft = Math.max(0, ((e as CustomEvent).detail - d0()) * zoom() - 60); };
-  const syncY = (e: Event) => { const v = (e as CustomEvent).detail; if (Math.abs(body.scrollTop - v) > 1) body.scrollTop = v; };
+  // Follows the sheet; a scroll caused by the sheet is not sent back to it (see grid.tsx).
+  let echo = false;
+  const syncY = (e: Event) => { const v = (e as CustomEvent).detail, was = body.scrollTop; if (Math.abs(was - v) > 1) { body.scrollTop = v; echo = body.scrollTop !== was; } };
 
   const ro = new ResizeObserver(() => setSize({ w: body.clientWidth, h: body.clientHeight }));
   onMount(() => {
@@ -276,7 +278,7 @@ export const Gantt = () => {
     <div class="chart">
       <canvas class="scale" ref={scaleCv} onDblClick={() => fitAll()} />
       <div class="cwrap">
-        <div class="cbody" ref={body} onMouseDown={down} onScroll={() => { draw(); document.dispatchEvent(new CustomEvent("grid-scroll", { detail: body.scrollTop })); document.dispatchEvent(new CustomEvent("tl-redraw")); }}
+        <div class="cbody" ref={body} onMouseDown={down} onScroll={() => { draw(); if (!echo) document.dispatchEvent(new CustomEvent("grid-scroll", { detail: body.scrollTop })); echo = false; document.dispatchEvent(new CustomEvent("tl-redraw")); }}
           onWheel={e => { if (e.ctrlKey) { e.preventDefault(); setZ(zoom() * (e.deltaY < 0 ? 1.2 : 1 / 1.2), d0() + (body.scrollLeft + e.offsetX) / zoom()); } }}
           onDblClick={() => C.info()} onContextMenu={e => { const h = hit(e); if (h.r && !sel().includes(h.r.uid)) { setSel([h.r.uid]); setCur({ row: h.i, col: cur().col }); } openMenu(e, [
             { label: "Task Information…", icon: "info", run: C.info }, { label: "Scroll to Task", icon: "scroll", run: C.scrollTo }, { label: "Split Task…", icon: "split", run: C.split }, { label: "Mark on Track", icon: "track", run: C.onTrack }, "-",

@@ -94,7 +94,10 @@ export const Grid = (p: { width?: number }) => {
   }), { defer: true }));
 
   const ro = new ResizeObserver(() => setViewH(box.clientHeight));
-  const sync = (e: Event) => { const v = (e as CustomEvent<number>).detail; if (Math.abs(box.scrollTop - v) > 1) box.scrollTop = v; };
+  // The chart scrolls with the sheet. A scroll the chart caused is not sent back to it: an echo
+  // arrives late during smooth scrolling and pulled the sheet back (it felt stuck).
+  let echo = false;
+  const sync = (e: Event) => { const v = (e as CustomEvent<number>).detail, was = box.scrollTop; if (Math.abs(was - v) > 1) { box.scrollTop = v; echo = box.scrollTop !== was; } };
   // Font and Alignment commands act on the selected cells (whole rows style the row).
   const fmtTarget: F.Target = {
     get: () => {
@@ -385,7 +388,7 @@ export const Grid = (p: { width?: number }) => {
       <div class="gscroll" ref={box} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onContextMenu={rowMenu}
         onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste}
         onDblClick={e => { const [r, c] = cellAt(e); if (c < 0) C.info(); else startEdit(r, c); }}
-        onScroll={() => { setScrollTop(box.scrollTop); document.dispatchEvent(new CustomEvent("chart-scroll", { detail: box.scrollTop })); }}>
+        onScroll={() => { setScrollTop(box.scrollTop); if (echo) { echo = false; return; } document.dispatchEvent(new CustomEvent("chart-scroll", { detail: box.scrollTop })); }}>
         <div class="gsheet" style={{ width: `${total() + 160}px`, height: `${(rows().length + 3) * RH + 40}px` }}>
           <div class="ghead" onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.stopPropagation()} onDblClick={e => e.stopPropagation()}>
             <div class="hc idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 2 }} title="Select all" onClick={() => setRanges([{ r0: 0, c0: 0, r1: rows().length - 1, c1: ncols() - 1 }])}>◢</div>

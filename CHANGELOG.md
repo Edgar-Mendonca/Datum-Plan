@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — 2026-10-30
+
+Two fixes.
+
+- **Scrolling the schedule no longer sticks.** The task sheet and the Gantt chart scroll together; each one used to echo the other's position back a moment late, so smooth scrolling fought itself and seemed to get stuck (worst near the end of the plan). Now a pane that was moved by the other does not echo it back.
+- **Tell Me (Ctrl+K) no longer hides the window.** The search box now opens over the plan with the window dimmed behind it, instead of a blank page.
+
 ## 0.5.0 — 2026-10-30
 
 Sheets that work like Excel and read the plan live: your own reports and vendor lists inside the plan file, with nothing copied by hand.

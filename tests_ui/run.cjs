@@ -312,6 +312,12 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("the Resource Sheet has a Country column", (await p.textContent(".tbl.sheet thead")).includes("Country"));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
+  // 0.5.1: Tell Me dims the window instead of hiding it.
+  await p.keyboard.press("Control+k"); await p.waitForTimeout(250);
+  const ovBg = await p.$eval(".ov", o => getComputedStyle(o).backgroundColor);
+  check("Tell Me shows the window behind it, dimmed", /rgba\(.*0\.\d+\)/.test(ovBg), ovBg);
+  await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);
