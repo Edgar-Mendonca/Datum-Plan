@@ -35,7 +35,6 @@ fn loads(p: &Project, s: &Sched) -> BTreeMap<(i64, usize), (f64, Vec<usize>)> {
 pub fn level(p: &mut Project, only: &[u32]) -> Result<usize, String> {
     let scope: HashSet<usize> = if only.is_empty() { (0..p.tasks.len()).collect() } else { only.iter().filter_map(|&u| p.idx(u)).collect() };
     scope.iter().for_each(|&i| p.tasks[i].level_delay = 0);
-    let pc = p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0);
     let mut stuck: HashSet<(i64, usize)> = HashSet::new();
     let mut moves = 0;
     // Rank once, from the unleveled schedule, so tasks do not take turns being delayed.
@@ -51,7 +50,7 @@ pub fn level(p: &mut Project, only: &[u32]) -> Result<usize, String> {
     for _ in 0..5000 {
         let s = schedule(p)?;
         let over = loads(p, &s).into_iter().find(|((d, k), (mins, _))| {
-            let cap = p.resources[*k].max_on(date_of(d * DAY)) * s.cals[pc].day_minutes(date_of(d * DAY)).max(1) as f64;
+            let cap = p.resources[*k].max_on(date_of(d * DAY)) * s.cals[s.rcal[*k]].day_minutes(date_of(d * DAY)).max(1) as f64;
             *mins > cap + 0.5 && !stuck.contains(&(*d, *k))
         });
         let Some(((day, k), (_, tasks))) = over else { break };
@@ -98,9 +97,8 @@ pub fn preview(p: &Project, only: &[u32]) -> Result<Preview, String> {
     level(&mut q, only)?;
     let (a, b) = (schedule(p)?, schedule(&q)?);
     // Days on which some work resource is booked over its capacity.
-    let pc = p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0);
     let over = |p: &Project, s: &Sched| loads(p, s).iter()
-        .filter(|((d, k), (m, _))| *m > p.resources[*k].max_on(date_of(d * DAY)) * s.cals[pc].day_minutes(date_of(d * DAY)).max(1) as f64 + 0.5)
+        .filter(|((d, k), (m, _))| *m > p.resources[*k].max_on(date_of(d * DAY)) * s.cals[s.rcal[*k]].day_minutes(date_of(d * DAY)).max(1) as f64 + 0.5)
         .map(|((d, _), _)| *d).collect::<HashSet<_>>().len();
     let moved = (0..p.tasks.len()).filter(|&i| !a.summary[i] && (a.es[i] != b.es[i] || a.ef[i] != b.ef[i]))
         .map(|i| Moved { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), start: a.es[i], new_start: b.es[i], finish: a.ef[i], new_finish: b.ef[i] }).collect();

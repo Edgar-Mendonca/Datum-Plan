@@ -81,6 +81,20 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
         }
         o.push_str("</Exceptions></Calendar>");
     }
+    // Each person with their own working time: a resource calendar on their base calendar, with their leave.
+    let base_uid = |r: &Resource| p.calendars.iter().position(|c| Some(&c.name) == r.cal.as_ref()).or_else(|| p.calendars.iter().position(|c| c.name == p.calendar)).unwrap_or(0) + 1;
+    for (k, r) in p.resources.iter().enumerate().filter(|(_, r)| r.kind == ResKind::Work) {
+        let _ = write!(o, "<Calendar><UID>{}</UID><Name>{}</Name><IsBaseCalendar>0</IsBaseCalendar><BaseCalendarUID>{}</BaseCalendarUID><Exceptions>", 1000 + k, esc(&r.name), base_uid(r));
+        for e in &r.exceptions {
+            let _ = write!(o, "<Exception><EnteredByOccurrences>0</EnteredByOccurrences><TimePeriod><FromDate>{}T00:00:00</FromDate><ToDate>{}T23:59:00</ToDate></TimePeriod>\
+<Occurrences>1</Occurrences><Name>{}</Name><Type>1</Type><DayWorking>{}</DayWorking>", e.from, e.to, esc(&e.name), !e.hours.is_empty() as u8);
+            if !e.hours.is_empty() {
+                hours_xml(&mut o, &e.hours);
+            }
+            o.push_str("</Exception>");
+        }
+        o.push_str("</Exceptions></Calendar>");
+    }
     o.push_str("</Calendars>\n<Tasks>");
     let mut wbs: Vec<u32> = vec![];
     for (i, t) in p.tasks.iter().enumerate() {
@@ -97,6 +111,9 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
             (s.tf[i] <= 0) as u8, t.pct, CONS.iter().position(|c| *c == t.constraint).unwrap_or(0), t.cal.as_deref().map_or(-1, |c| cal_uid(c) as i64), cost[i]);
         if let Some(c) = t.cdate {
             let _ = write!(o, "<ConstraintDate>{}T08:00:00</ConstraintDate>", c);
+        }
+        if t.ignore_rc {
+            o.push_str("<IgnoreResourceCalendar>1</IgnoreResourceCalendar>");
         }
         if let Some(c) = t.deadline {
             let _ = write!(o, "<Deadline>{}T17:00:00</Deadline>", c);
@@ -126,8 +143,8 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
     for (k, r) in p.resources.iter().enumerate() {
         let ty = match r.kind { ResKind::Work => 1, ResKind::Material => 0, ResKind::Cost => 2 };
         let _ = write!(o, "<Resource><UID>{}</UID><ID>{}</ID><Name>{}</Name><Type>{ty}</Type><IsNull>0</IsNull><Group>{}</Group><MaterialLabel>{}</MaterialLabel>\
-<MaxUnits>{:.2}</MaxUnits><StandardRate>{}</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>{}</CostPerUse></Resource>",
-            r.uid, k + 1, esc(&r.name), esc(&r.group), esc(&r.label), r.max, r.rate, r.per_use);
+<MaxUnits>{:.2}</MaxUnits><StandardRate>{}</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>{}</CostPerUse>{}</Resource>",
+            r.uid, k + 1, esc(&r.name), esc(&r.group), esc(&r.label), r.max, r.rate, r.per_use, if r.kind == ResKind::Work { format!("<CalendarUID>{}</CalendarUID>", 1000 + k) } else { String::new() });
     }
     o.push_str("</Resources>\n<Assignments>");
     let mut n = 1;
@@ -166,9 +183,10 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     p.day_min = root.val("MinutesPerDay").parse().unwrap_or(480);
     p.manual_default = root.val("NewTasksAreManual") == "1";
     let mut cal_names: HashMap<String, String> = HashMap::new();
+    let mut res_cals: HashMap<String, (Option<String>, Vec<Exception>)> = HashMap::new();
     if let Some(cs) = root.get("Calendars") {
         let mut cals = vec![];
-        for c in cs.all("Calendar") {
+        for c in cs.all("Calendar").filter(|c| c.val("IsBaseCalendar") != "0") {
             let mut cal = Calendar::standard(c.val("Name"));
             if cal.name.is_empty() || cals.iter().any(|x: &Calendar| x.name == cal.name) {
                 cal.name = format!("Calendar {}", c.val("UID"));
@@ -197,6 +215,29 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             cal_names.insert(c.val("UID").to_string(), cal.name.clone());
             cals.push(cal);
         }
+        // Resource calendars: a base calendar and the person's own exceptions (leave). One with
+        // its own working week becomes a calendar of its own.
+        for c in cs.all("Calendar").filter(|c| c.val("IsBaseCalendar") == "0") {
+            let exc: Vec<Exception> = c.get("Exceptions").into_iter().flat_map(|x| x.all("Exception")).filter_map(|e| {
+                let tp = e.get("TimePeriod")?;
+                Some(Exception { name: e.val("Name").to_string(), from: date(tp.val("FromDate"))?, to: date(tp.val("ToDate"))?, hours: if e.val("DayWorking") == "1" { read_hours(e) } else { vec![] } })
+            }).collect();
+            let base = cal_names.get(c.val("BaseCalendarUID")).cloned();
+            let week: Vec<_> = c.get("WeekDays").into_iter().flat_map(|w| w.all("WeekDay")).filter(|wd| (1..=7).contains(&wd.val("DayType").parse::<usize>().unwrap_or(0))).collect();
+            if week.is_empty() {
+                res_cals.insert(c.val("UID").to_string(), (base, exc));
+            } else {
+                let mut cal = base.and_then(|b| cals.iter().find(|x: &&Calendar| x.name == b).cloned()).unwrap_or_else(|| Calendar::standard(""));
+                cal.name = format!("{} (own)", c.val("Name"));
+                for wd in week {
+                    let ty: usize = wd.val("DayType").parse().unwrap_or(1);
+                    cal.week[(ty + 5) % 7] = if wd.val("DayWorking") == "1" { let h = read_hours(wd); if h.is_empty() { STD_HOURS.to_vec() } else { h } } else { vec![] };
+                }
+                cal_names.insert(c.val("UID").to_string(), cal.name.clone());
+                res_cals.insert(c.val("UID").to_string(), (Some(cal.name.clone()), exc));
+                cals.push(cal);
+            }
+        }
         if !cals.is_empty() {
             p.calendars = cals;
             if let Some(n) = cal_names.get(root.val("CalendarUID")) {
@@ -212,7 +253,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             continue;
         }
         let mut k = Task {
-            uid, name: t.val("Name").to_string(),
+            uid, name: t.val("Name").to_string(), ignore_rc: t.val("IgnoreResourceCalendar") == "1",
             level: t.val("OutlineLevel").parse::<u8>().unwrap_or(1).saturating_sub(1),
             dur: read_dur(t.val("Duration")), unit: unit(t.val("DurationFormat")),
             pct: t.val("PercentComplete").parse().unwrap_or(0),
@@ -260,8 +301,14 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             kind: match r.val("Type") { "0" => ResKind::Material, "2" => ResKind::Cost, _ => ResKind::Work },
             max: r.val("MaxUnits").parse().unwrap_or(1.0), rate: r.val("StandardRate").parse().unwrap_or(0.0), per_use: r.val("CostPerUse").parse().unwrap_or(0.0),
             initials: r.val("Initials").into(), email: r.val("EmailAddress").into(), ovt: r.val("OvertimeRate").parse().unwrap_or(0.0),
+            cal: res_cals.get(r.val("CalendarUID")).and_then(|x| x.0.clone()).or_else(|| cal_names.get(r.val("CalendarUID")).cloned()).filter(|c| *c != p.calendar),
+            exceptions: res_cals.get(r.val("CalendarUID")).map(|x| x.1.clone()).unwrap_or_default(),
             ..Default::default()
         });
+    }
+    // Microsoft Project always schedules on resource calendars: keep that when people have their own.
+    if p.resources.iter().any(|r| r.cal.is_some() || !r.exceptions.is_empty()) {
+        p.opts.res_cals = true;
     }
     for a in root.get("Assignments").into_iter().flat_map(|x| x.all("Assignment")) {
         let (tu, ru): (u32, u32) = (a.val("TaskUID").parse().unwrap_or(0), a.val("ResourceUID").parse().unwrap_or(0));

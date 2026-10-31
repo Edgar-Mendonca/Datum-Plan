@@ -99,10 +99,9 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
             charge(e.planned.max(e.actual), e.accrual, e.actual);
         }
     }
-    let pc = &s.cals[p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0)];
     for (&(k, day), &mins) in &l.daily {
         let d = date_of(day * DAY);
-        let cap = p.resources[k].max_on(d) * pc.day_minutes(d).max(0) as f64;
+        let cap = p.resources[k].max_on(d) * s.cals[s.rcal[k]].day_minutes(d).max(0) as f64;
         if mins > cap + 0.5 {
             l.over[k] = true;
         }
@@ -174,7 +173,6 @@ pub fn buckets(first: i64, last: i64, unit: &str) -> Vec<i64> {
 /// Hours per resource per week (or day) across the project.
 pub fn workload(p: &Project, s: &Sched, weekly: bool) -> Workload {
     let l = compute(p, s);
-    let pc = &s.cals[p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0)];
     let b = buckets(s.start.div_euclid(DAY), s.finish.div_euclid(DAY), if weekly { "week" } else { "day" });
     let rows = p.resources.iter().enumerate().filter(|(_, r)| r.kind == ResKind::Work).map(|(k, r)| {
         let (mut load, mut cap) = (vec![0.0; b.len()], vec![0.0; b.len()]);
@@ -182,7 +180,7 @@ pub fn workload(p: &Project, s: &Sched, weekly: bool) -> Workload {
             let end = b.get(j + 1).copied().unwrap_or(d0 + if weekly { 7 } else { 1 });
             for d in d0..end {
                 load[j] += l.daily.get(&(k, d)).copied().unwrap_or(0.0) / 60.0;
-                cap[j] += r.max_on(date_of(d * DAY)) * pc.day_minutes(date_of(d * DAY)) as f64 / 60.0;
+                cap[j] += r.max_on(date_of(d * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(d * DAY)) as f64 / 60.0;
             }
         }
         WorkRow { uid: r.uid, name: r.name.clone(), load, cap }

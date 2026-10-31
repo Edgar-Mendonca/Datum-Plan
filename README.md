@@ -54,6 +54,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 
 ### Schedule
 - A critical path engine that works to the minute, with working calendars, holidays, task and resource calendars, all constraint types, deadlines and elapsed durations.
+- **Resource calendars that drive task dates** (optional): each person's own working week and leave decide when their work is done; a task finishes when the last person on it does.
 - Longest path, float paths, free and total float, retained logic or progress override, scheduling from the finish.
 - Resource levelling (all tasks or a selection), with a preview of which tasks move and the new finish before anything changes, and clearing it again.
 - **Schedule risk analysis:** the plan runs a thousand times with uncertain durations and the risks from the register, to show the chance of finishing by each date (P50, P80, P90), the likely cost, how often each task is critical, and which tasks drive the finish.

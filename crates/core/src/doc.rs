@@ -316,6 +316,7 @@ pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str
             _ => return Err("Task type is Fixed Duration, Fixed Units or Fixed Work.".into()),
         },
         "effort" => p.tasks[i].effort = yes(v),
+        "ignore_rc" => p.tasks[i].ignore_rc = yes(v),
         "acttype" => {
             let t = &mut p.tasks[i];
             t.act_type = match v.to_lowercase().replace([' ', '-'], "").as_str() {
@@ -775,6 +776,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 "avail" => r.avail = serde_json::from_value(value).map_err(e)?,
                 "custom" => r.custom = serde_json::from_value(value).map_err(e)?,
                 "cal" => r.cal = value.as_str().filter(|s| !s.is_empty()).map(String::from),
+                "exceptions" => r.exceptions = serde_json::from_value(value).map_err(e)?,
                 f => return Err(format!("{f} cannot be set here.")),
             }
         }

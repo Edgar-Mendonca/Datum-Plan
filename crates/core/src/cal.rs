@@ -59,6 +59,23 @@ impl WorkCal {
         Self { week, exc }
     }
 
+    /// Working only when both calendars work (a task calendar and a person's calendar). If the two
+    /// never work at the same time, `self` is kept so dates can still be worked out.
+    pub fn intersect(&self, o: &WorkCal) -> WorkCal {
+        let both = |a: &[(i64, i64)], b: &[(i64, i64)]| -> Iv {
+            let mut v = vec![];
+            for &(s1, e1) in a { for &(s2, e2) in b { let (s, e) = (s1.max(s2), e1.min(e2)); if e > s { v.push((s, e)) } } }
+            v.sort_unstable();
+            v
+        };
+        let week: [Iv; 7] = std::array::from_fn(|i| both(&self.week[i], &o.week[i]));
+        if week.iter().all(Vec::is_empty) {
+            return WorkCal { week: self.week.clone(), exc: self.exc.clone() };
+        }
+        let exc = self.exc.keys().chain(o.exc.keys()).map(|&d| (d, both(self.day(d), o.day(d)))).collect();
+        WorkCal { week, exc }
+    }
+
     pub fn day(&self, d: NaiveDate) -> &[(i64, i64)] {
         self.exc.get(&d).unwrap_or(&self.week[d.weekday().num_days_from_monday() as usize])
     }

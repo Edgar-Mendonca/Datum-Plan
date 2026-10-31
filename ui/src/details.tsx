@@ -97,6 +97,7 @@ export const TaskTab = (p: { info: TaskInfo; tab: string }): JSX.Element => {
           <F info={p.info} k="acttype" opts={["Task Dependent", "Resource Dependent", "Level of Effort", "Start Milestone", "Finish Milestone", "WBS Summary"]} /><F info={p.info} k="pcttype" opts={["Duration", "Units", "Physical"]} />
           <F info={p.info} k="ctype" opts={["As Soon As Possible", "As Late As Possible", "Start No Earlier Than", "Start No Later Than", "Finish No Earlier Than", "Finish No Later Than", "Must Start On", "Must Finish On"]} /><F info={p.info} k="cdate" />
           <F info={p.info} k="deadline" /><F info={p.info} k="cal" opts={["", ...P().calendars.map(c => c.name)]} />
+          <Show when={P().opts.res_cals}><F info={p.info} k="ignore_rc" opts={["No", "Yes"]} /><span /><span /></Show>
           <F info={p.info} k="priority" /><F info={p.info} k="responsible" />
           <RO info={p.info} k="wbs" /><RO info={p.info} k="tf" />
         </div>

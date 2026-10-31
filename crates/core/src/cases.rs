@@ -204,3 +204,89 @@ fn critical_tasks_and_man_hours() {
     let s = schedule(&p).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(crate::load::compute(&p, &s).work[0], 2.0 * 5.0 * 480.0);
 }
+
+/// Resource calendars: a person's leave and base calendar drive their tasks when the option is on.
+#[test]
+fn resource_calendars_drive_task_dates() {
+    let leave = |p: &mut Project, who: &str, from: (u32, u32), to: (u32, u32)| {
+        let r = p.resources.iter_mut().find(|r| r.name == who).unwrap_or_else(|| panic!("{who}"));
+        r.exceptions.push(Exception { name: "Leave".into(), from: d(2026, from.0, from.1), to: d(2026, to.0, to.1), hours: vec![] });
+    };
+    // Ahmed is on leave Tue 3 – Wed 4 Nov. T1 5d is his; T2 1d follows it.
+    let rows = ["5d||res=Ahmed", "1d|1|"];
+    let mut p = build(&rows, plain);
+    leave(&mut p, "Ahmed", (11, 3), (11, 4));
+    let off = dates(&p);
+    assert_eq!(off[0], "Nov02 08:00 Nov06 17:00 0", "option off: nothing changes");
+    p.opts.res_cals = true;
+    let on = dates(&p);
+    // Works Mon 2, Thu 5, Fri 6, Mon 9, Tue 10; the successor follows on Wed 11.
+    assert_eq!(on, ["Nov02 08:00 Nov10 17:00 0", "Nov11 08:00 Nov11 17:00 0"]);
+    // Ignore Resource Calendar: the task keeps the project calendar.
+    p.tasks[0].ignore_rc = true;
+    assert_eq!(dates(&p)[0], "Nov02 08:00 Nov06 17:00 0");
+    p.tasks[0].ignore_rc = false;
+
+    // Two people on one task: the one who finishes last sets the finish (Bina has no leave).
+    let mut p = build(&["5d||res=Ahmed, Bina"], plain);
+    leave(&mut p, "Ahmed", (11, 3), (11, 4));
+    p.opts.res_cals = true;
+    assert_eq!(dates(&p)[0], "Nov02 08:00 Nov10 17:00 0");
+    // …even when Bina's leave is the later one.
+    leave(&mut p, "Bina", (11, 4), (11, 9));
+    assert_eq!(dates(&p)[0], "Nov02 08:00 Nov12 17:00 0", "Bina: Mon 2, Tue 3, then Tue 10 – Thu 12");
+
+    // A person on a six-day calendar works Saturdays.
+    let mut p = build(&["6d||res=Chen"], |p| {
+        let mut six = Calendar::standard("Six-day");
+        six.week[5] = crate::model::STD_HOURS.to_vec();
+        p.calendars.push(six);
+    });
+    p.resources.iter_mut().for_each(|r| r.cal = Some("Six-day".into()));
+    assert_eq!(dates(&p)[0], "Nov02 08:00 Nov09 17:00 0", "option off: the project calendar");
+    p.opts.res_cals = true;
+    assert_eq!(dates(&p)[0], "Nov02 08:00 Nov07 17:00 0", "Mon–Sat");
+
+    // A task calendar and a person's calendar: work only when both do (mornings only here).
+    let mut p = build(&["5d||res=Dana; cal=Mornings"], |p| {
+        let mut m = Calendar::standard("Mornings");
+        for k in 0..5 { m.week[k] = vec![(480, 720)] }
+        p.calendars.push(m);
+    });
+    p.opts.res_cals = true;
+    leave(&mut p, "Dana", (11, 6), (11, 6));
+    // 40 h of mornings is 10 mornings, and Dana is off Fri 6: Mon 2 … Fri 13, then Mon 16.
+    assert_eq!(dates(&p)[0], "Nov02 08:00 Nov16 12:00 0");
+
+    // Capacity follows the person: the week of Ahmed's leave holds 24 h, not 40.
+    let mut p = build(&["5d||res=Ahmed"], plain);
+    leave(&mut p, "Ahmed", (11, 3), (11, 4));
+    p.opts.res_cals = true;
+    let s = schedule(&p).unwrap_or_else(|e| panic!("{e}"));
+    let w = crate::load::workload(&p, &s, true);
+    assert_eq!(w.rows[0].cap[0], 24.0);
+}
+
+/// A plan with resource calendars keeps its dates through MS Project XML and P6 XER.
+#[test]
+fn resource_calendars_survive_exchange_files() {
+    let mut p = build(&["5d||res=Ahmed", "1d|1|", "3d||res=Bina; ignore_rc=Yes"], plain);
+    let r = p.resources.iter_mut().find(|r| r.name == "Ahmed").unwrap_or_else(|| panic!());
+    r.exceptions.push(Exception { name: "Leave".into(), from: d(2026, 11, 3), to: d(2026, 11, 4), hours: vec![] });
+    p.opts.res_cals = true;
+    let want = dates(&p);
+    assert_eq!(want[0], "Nov02 08:00 Nov10 17:00 0");
+    for ext in ["xml", "xer"] {
+        let f = std::env::temp_dir().join(format!("dp-rc-{}.{ext}", std::process::id()));
+        crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap_or_else(|e| panic!("{ext}: {e}"));
+        let got = crate::io::import(&f);
+        let _ = std::fs::remove_file(&f);
+        let Ok(crate::io::Imported::Plan(q, _)) = got else { panic!("{ext} did not import") };
+        // Rows may come back in another order (XER groups activities by WBS): compare by name.
+        let (dq, dp) = (dates(&q), dates(&p));
+        for (k, t) in p.tasks.iter().enumerate() {
+            let j = q.tasks.iter().position(|x| x.name == t.name).unwrap_or_else(|| panic!("{ext}: {} is missing", t.name));
+            assert_eq!(dq[j], dp[k], "{ext}: {}", t.name);
+        }
+    }
+}

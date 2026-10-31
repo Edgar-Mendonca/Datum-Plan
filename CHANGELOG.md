@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.4 — 2026-10-31
+
+Resource calendars that drive task dates: each person's own working week and leave decide when their work gets done.
+
+- **Working Time for each person.** **Resources › Info… › Working Time**: the person's base calendar (the project calendar, or another such as a six-day site week) and their leave or exceptions: annual leave, training, a holiday at home, or mornings or afternoons only.
+- **Turn it on in Project › Schedule Options › Resource calendars.** Each assignment then runs on the person's own calendar, and a task finishes when the last person on it finishes. A task with its own calendar works only when both the task and the person work. It is off until you switch it on, so existing plans keep their dates.
+- **Ignore Resource Calendar** (a task field, in the details and as a column) keeps a task on its own calendar whoever works on it: a cure time, a delivery.
+- Workload, the Resource Graph and levelling count each person's own available hours, so leave shows as less capacity.
+- Exchange files keep it: Project XML writes and reads a calendar per person with their leave (and Ignore Resource Calendar); XER writes resource calendars and resource-dependent activities, and reads them back.
+- The guide has a new section on resource calendars, in English and Chinese.
+
 ## 0.5.3 — 2026-10-30
 
 Your own dashboards: build the board your client or manager wants, inside the plan, always up to date.

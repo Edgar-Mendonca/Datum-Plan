@@ -144,6 +144,9 @@ pub struct Task {
     /// Elapsed duration: runs around the clock, ignoring calendars.
     #[serde(skip_serializing_if = "is_false")]
     pub elapsed: bool,
+    /// With resource calendars on: this task follows its own (or the project) calendar only.
+    #[serde(skip_serializing_if = "is_false")]
+    pub ignore_rc: bool,
     /// Pauses in the work: (after working minutes, gap working minutes).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub splits: Vec<(i64, i64)>,
@@ -270,6 +273,9 @@ pub struct Resource {
     /// Availability over time (max units between dates).
     pub avail: Vec<Avail>,
     pub custom: BTreeMap<String, Value>,
+    /// The resource's own working time on top of its base calendar: leave, holidays, part days.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub exceptions: Vec<Exception>,
     /// Where the resource (a person, crew or vendor) comes from: an ISO code such as DE, or a name.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub country: String,
@@ -287,7 +293,7 @@ impl Default for Resource {
     fn default() -> Self {
         Self {
             uid: 0, name: String::new(), kind: ResKind::Work, group: String::new(), max: 1.0, rate: 0.0, per_use: 0.0, label: String::new(),
-            initials: String::new(), email: String::new(), code: String::new(), notes: String::new(), cal: None, ovt: 0.0, tables: vec![], avail: vec![], custom: BTreeMap::new(), country: String::new(),
+            initials: String::new(), email: String::new(), code: String::new(), notes: String::new(), cal: None, ovt: 0.0, tables: vec![], avail: vec![], custom: BTreeMap::new(), country: String::new(), exceptions: vec![],
         }
     }
 }
@@ -345,6 +351,9 @@ pub struct SchedOpts {
     /// Schedule backward from `finish_date`.
     pub from_finish: bool,
     pub finish_date: Option<NaiveDate>,
+    /// Resource calendars drive task dates: each assigned person works on their own calendar
+    /// (base calendar plus their leave) and the task finishes when the last of them does.
+    pub res_cals: bool,
 }
 
 impl Default for SchedOpts {
@@ -352,7 +361,7 @@ impl Default for SchedOpts {
         Self {
             retained: true, critical_float: 0, longest_path: false, lag_cal: LagCal::Successor, float_paths: 0, open_ends_critical: false,
             level_within_slack: false, level_split: false, level_order: LevelOrder::Standard, effort_default: false,
-            task_type_default: TaskType::FixedDuration, from_finish: false, finish_date: None,
+            task_type_default: TaskType::FixedDuration, from_finish: false, finish_date: None, res_cals: false,
         }
     }
 }
@@ -691,6 +700,9 @@ impl Project {
             if r.cal.as_ref().is_some_and(|c| !cals.contains(c)) {
                 r.cal = None;
             }
+            // A person's leave: whole ranges the right way round, no more than a few hundred of them.
+            r.exceptions.retain(|e| e.to >= e.from);
+            r.exceptions.truncate(500);
         }
         if self.currency.code.is_empty() {
             self.currency = Currency::default();

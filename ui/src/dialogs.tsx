@@ -89,10 +89,11 @@ export const resourceInfo = (uid: number) => openDialog(() => {
   const [tab, setTab] = createSignal("general");
   const [tables, setTables] = createStore<any[][]>(JSON.parse(JSON.stringify(r().tables.length ? r().tables : [[{ from: null, std: r().rate, ovt: r().ovt, per_use: r().per_use }]])));
   const [avail, setAvail] = createStore<any[]>(JSON.parse(JSON.stringify(r().avail)));
+  const [leave, setLeave] = createStore<any[]>(JSON.parse(JSON.stringify(r().exceptions ?? [])));
   const [t, setT] = createSignal(0);
   return (
-    <Dialog title={`Resource Information: ${r().name}`} wide ok={() => act({ Batch: [{ ResJson: { uid, field: "tables", value: tables } }, { ResJson: { uid, field: "avail", value: avail } }] })}>
-      <Tabs tabs={[["general", "General"], ["costs", "Costs"], ["avail", "Availability"], ["notes", "Notes"]]} on={tab()} set={setTab} />
+    <Dialog title={`Resource Information: ${r().name}`} wide ok={() => act({ Batch: [{ ResJson: { uid, field: "tables", value: tables } }, { ResJson: { uid, field: "avail", value: avail } }, { ResJson: { uid, field: "exceptions", value: leave.filter(x => x.from && x.to) } }] })}>
+      <Tabs tabs={[["general", "General"], ["work", "Working Time"], ["costs", "Costs"], ["avail", "Availability"], ["notes", "Notes"]]} on={tab()} set={setTab} />
       <div class="dbody tibody">
         <Show when={tab() === "general"}><div class="form">
           <For each={[["name", "Name"], ["initials", "Initials"], ["group", "Group"], ["code", "Code"], ["email", "Email"], ["label", "Material label"]] as [string, string][]}>{([k, l]) =>
@@ -121,6 +122,19 @@ export const resourceInfo = (uid: number) => openDialog(() => {
               <td><button class="x" onClick={() => setAvail(v => v.filter((_, j) => j !== k()))}>×</button></td></tr>}</For>
             <tr class="add"><td colspan="4"><button class="btn sm" onClick={() => setAvail(v => [...v, { from: null, to: null, max: 1 }])}>+ Period</button></td></tr>
           </tbody></table>
+        </Show>
+        <Show when={tab() === "work"}>
+          <div class="form"><Row label="Base calendar"><Pick value={r().cal ?? ""} set={x => act({ ResJson: { uid, field: "cal", value: x || null } })} options={[["", "(project calendar)"], ...P().calendars.map(c => [c.name, c.name] as [string, string])]} /></Row></div>
+          <table class="tbl"><thead><tr><th>Leave or exception</th><th>From</th><th>To</th><th>Hours</th><th /></tr></thead><tbody>
+            <For each={leave}>{(x, k) => <tr><td><input value={x.name} placeholder="Annual leave" onChange={e => setLeave(k(), "name", e.currentTarget.value)} /></td>
+              <td><input type="date" value={x.from ?? ""} onChange={e => setLeave(k(), "from", e.currentTarget.value)} /></td>
+              <td><input type="date" value={x.to ?? ""} onChange={e => setLeave(k(), "to", e.currentTarget.value)} /></td>
+              <td><select onChange={e => setLeave(k(), "hours", e.currentTarget.value === "am" ? [[480, 720]] : e.currentTarget.value === "pm" ? [[780, 1020]] : [])}>
+                <option value="off" selected={!x.hours?.length}>Not working</option><option value="am" selected={x.hours?.[0]?.[0] === 480 && x.hours.length === 1}>Mornings only</option><option value="pm" selected={x.hours?.[0]?.[0] === 780}>Afternoons only</option></select></td>
+              <td><button class="x" onClick={() => setLeave(v => v.filter((_, j) => j !== k()))}>×</button></td></tr>}</For>
+            <tr class="add"><td colspan="5"><button class="btn sm" onClick={() => setLeave(v => [...v, { name: "Leave", from: iso(dateDay(new Date())), to: iso(dateDay(new Date())), hours: [] }])}>+ Leave or exception</button></td></tr>
+          </tbody></table>
+          <p class="muted">{P().opts.res_cals ? "This person's tasks are scheduled on their base calendar with these days off, and the workload counts only the time they are available." : "Turn on resource calendars in Schedule Options (Project tab) for this person's leave to move their tasks. Until then it is kept but not used."}</p>
         </Show>
         <Show when={tab() === "notes"}><textarea class="dnotes" value={r().notes} onChange={e => act({ ResSet: { uid, field: "notes", value: e.currentTarget.value } })} /></Show>
       </div>
@@ -179,6 +193,7 @@ export const scheduleOptions = () => openDialog(() => {
         <Row label="Float paths"><Text type="number" value={o.float_paths} set={x => setO("float_paths", +x)} /></Row>
         <Row label="New tasks"><Pick value={o.task_type_default} set={x => setO("task_type_default", x)} options={[["FixedDuration", "Fixed Duration"], ["FixedUnits", "Fixed Units"], ["FixedWork", "Fixed Work"]]} /></Row>
         <Row label=""><Check label="New tasks are effort driven" value={o.effort_default} set={x => setO("effort_default", x)} /></Row>
+        <Row label="Resource calendars"><Check label="People's own calendars and leave drive their tasks' dates" value={!!o.res_cals} set={x => setO("res_cals", x)} /></Row>
         <Row label=""><Check label="Schedule from the project finish date" value={o.from_finish} set={x => setO("from_finish", x)} /></Row>
         <Row label="Finish date"><Text type="date" value={o.finish_date} disabled={!o.from_finish} set={x => setO("finish_date", x || null)} /></Row>
         <Row label=""><Check label="Show open-ended tasks as critical" value={o.open_ends_critical} set={x => setO("open_ends_critical", x)} /></Row>

@@ -111,6 +111,21 @@ By default a task starts **As Soon As Possible**. In the details pane (**General
 
 **Project › Change Working Time** sets the working days and hours (for example Monday to Friday, 08:00–12:00 and 13:00–17:00) and the exceptions: public holidays, shutdowns, a Saturday shift. You can make several calendars and give one to a task (**Task Calendar**) or to a person (**Base Calendar** in the Resource Sheet).
 
+### Resource calendars
+
+![Resource Information › Working Time: the person's base calendar and their leave.](img/working-time.png)
+
+People do not all work the same days. With resource calendars, each person's work follows their own calendar, so leave, a part-time week or a site rota moves the tasks they work on.
+
+1. Open **Resources**, click **Info…** on the person's row and choose **Working Time**.
+2. **Base calendar** is the person's working week: the project calendar, or another calendar such as a six-day site week.
+3. **Leave or exception** lists the days the person does not work (or works half days): annual leave, a training course, a holiday at home.
+4. **+ Leave or exception** adds a line.
+
+Then turn it on: **Project › Schedule Options › Resource calendars**. From then on each person's assignment runs on their own calendar, and a task finishes when the last person on it finishes. A task with its own **Task Calendar** works only when both the task and the person work. Plans that do not use this are not changed: it is off until you switch it on.
+
+> **Tip.** A task that must keep its own calendar whoever works on it (a cure time, a delivery) gets **Ignore Resource Calendar = Yes** in its details.
+
 ### Check the schedule
 
 **Schedule › Check Schedule** runs quality checks on the logic, float, durations and constraints (open ends, long lags, high float, negative float and more). Click a check to see the tasks behind it.
@@ -359,6 +374,7 @@ What a formula can read from the plan:
 | Look-ahead | The work of the next few weeks, checked for readiness. |
 | Milestone | A task of zero duration that marks an event. |
 | P50, P80 | Finish dates that 5 or 8 out of 10 risk-analysis runs meet. |
+| Resource calendar | A person's own working week and leave; when switched on, it decides when their work is done. |
 | Rules of credit | Weighted steps that measure physical progress. |
 | Status date | The day progress is measured to. |
 | Summary task | A task that groups others; its dates come from them. |

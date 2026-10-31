@@ -123,9 +123,22 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
     let short = if short.is_empty() { "DATUM".into() } else { short };
     let cal_id = |n: Option<&str>| p.calendars.iter().position(|c| c.name == n.unwrap_or(&p.calendar)).unwrap_or(0) + 1;
     let hd = p.day_min as f64 / 60.0;
-    table("CALENDAR", "clndr_id default_flag clndr_name proj_id base_clndr_id last_chng_date clndr_type day_hr_cnt week_hr_cnt month_hr_cnt year_hr_cnt rsrc_private clndr_data",
-        p.calendars.iter().enumerate().map(|(k, c)| format!("{}\t{}\t{}\t1\t\t{today} 00:00\tCA_Project\t{hd}\t{}\t{}\t{}\tN\t{}",
-            k + 1, if c.name == p.calendar { "Y" } else { "N" }, clean(&c.name), hd * 5.0, hd * 20.0, hd * 250.0, clndr_data(c))).collect());
+    // A person with leave gets a resource calendar: their base calendar plus the leave.
+    let own = |r: &crate::model::Resource| (!r.exceptions.is_empty()).then(|| {
+        let mut c = p.calendars.iter().find(|c| Some(&c.name) == r.cal.as_ref()).unwrap_or(&p.calendars[cal_id(None) - 1]).clone();
+        c.exceptions.extend(r.exceptions.iter().cloned());
+        c.name = r.name.clone();
+        c
+    });
+    let rcal: Vec<usize> = p.resources.iter().enumerate().map(|(k, r)| if own(r).is_some() { 1000 + k } else { cal_id(r.cal.as_deref()) }).collect();
+    let mut cal_rows: Vec<String> = p.calendars.iter().enumerate().map(|(k, c)| format!("{}\t{}\t{}\t1\t\t{today} 00:00\tCA_Project\t{hd}\t{}\t{}\t{}\tN\t{}",
+        k + 1, if c.name == p.calendar { "Y" } else { "N" }, clean(&c.name), hd * 5.0, hd * 20.0, hd * 250.0, clndr_data(c))).collect();
+    for (k, r) in p.resources.iter().enumerate() {
+        if let Some(c) = own(r) {
+            cal_rows.push(format!("{}\tN\t{}\t\t{}\t{today} 00:00\tCA_Rsrc\t{hd}\t{}\t{}\t{}\tY\t{}", 1000 + k, clean(&c.name), cal_id(r.cal.as_deref()), hd * 5.0, hd * 20.0, hd * 250.0, clndr_data(&c)));
+        }
+    }
+    table("CALENDAR", "clndr_id default_flag clndr_name proj_id base_clndr_id last_chng_date clndr_type day_hr_cnt week_hr_cnt month_hr_cnt year_hr_cnt rsrc_private clndr_data", cal_rows);
     let data = p.status.map(|d| dt(at(d) + DAY)).unwrap_or_else(|| dt(s.start));
     table("PROJECT", "proj_id proj_short_name clndr_id plan_start_date last_recalc_date scd_end_date def_complete_pct_type",
         vec![format!("1\t{short}\t{}\t{}\t{data}\t{}\tCP_Phys", cal_id(None), dt(s.start), dt(s.finish))]);
@@ -149,7 +162,8 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
     table("TASK", "task_id proj_id wbs_id clndr_id phys_complete_pct complete_pct_type task_type duration_type status_code task_code task_name target_drtn_hr_cnt remain_drtn_hr_cnt act_start_date act_end_date early_start_date early_end_date target_start_date target_end_date cstr_date cstr_type",
         acts.iter().map(|&i| {
             let t = &p.tasks[i];
-            let kind = if t.dur > 0 { "TT_Task" } else if t.preds.is_empty() { "TT_Mile" } else { "TT_FinMile" };
+            let rsrc = t.act_type == ActType::ResourceDep || (p.opts.res_cals && !t.ignore_rc && t.res.iter().any(|a| p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work)));
+            let kind = match t.act_type { ActType::Loe => "TT_LOE", ActType::WbsSummary => "TT_WBS", _ if t.dur == 0 => if t.preds.is_empty() { "TT_Mile" } else { "TT_FinMile" }, _ if rsrc => "TT_Rsrc", _ => "TT_Task" };
             let status = if t.act_finish.is_some() { "TK_Complete" } else if t.act_start.is_some() { "TK_Active" } else { "TK_NotStart" };
             let (cd, ct) = match (t.cdate, CS.iter().find(|(c, _)| *c == t.constraint)) {
                 (_, Some((Constraint::ALAP, n))) => (String::new(), n.to_string()),
@@ -169,10 +183,10 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
             n += 1;
             format!("{n}\t{}\t{}\t1\t1\tPR_{:?}\t{}", p.tasks[i].uid, l.pred, l.kind, l.lag as f64 / 60.0)
         }).collect());
-    table("RSRC", "rsrc_id rsrc_name rsrc_short_name rsrc_type clndr_id", p.resources.iter().map(|r| {
+    table("RSRC", "rsrc_id rsrc_name rsrc_short_name rsrc_type clndr_id", p.resources.iter().enumerate().map(|(k, r)| {
         let ty = match r.kind { ResKind::Work => "RT_Labor", ResKind::Material => "RT_Mat", ResKind::Cost => "RT_Equip" };
         let short: String = r.name.chars().filter(|c| c.is_alphanumeric()).take(20).collect();
-        format!("{}\t{}\t{}\t{ty}\t{}", r.uid, clean(&r.name), short.to_uppercase(), cal_id(None))
+        format!("{}\t{}\t{}\t{ty}\t{}", r.uid, clean(&r.name), short.to_uppercase(), rcal[k])
     }).collect());
     let mut n = 0;
     table("TASKRSRC", "taskrsrc_id task_id proj_id rsrc_id target_qty remain_qty target_qty_per_hr", acts.iter().flat_map(|&i| p.tasks[i].res.iter().map(move |a| (i, a))).map(|(i, a)| {
@@ -275,7 +289,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let ct = cons(&g(t, "cstr_type"));
         let act_type = match ty.as_str() { "TT_LOE" => ActType::Loe, "TT_WBS" => ActType::WbsSummary, "TT_Rsrc" => ActType::ResourceDep, "TT_Mile" => ActType::StartMs, "TT_FinMile" => ActType::FinishMs, _ => ActType::Task };
         Task {
-            uid: g(t, "task_id").parse().unwrap_or(0), name: g(t, "task_name"), level, dur, code: g(t, "task_code"), act_type,
+            uid: g(t, "task_id").parse().unwrap_or(0), name: g(t, "task_name"), level, dur, code: g(t, "task_code"), act_type, ignore_rc: ty == "TT_Task",
             pct: g(t, "phys_complete_pct").parse::<f64>().unwrap_or(0.0).round() as u8,
             constraint: ct, cdate: if matches!(ct, Constraint::ASAP | Constraint::ALAP) { None } else { date(g(t, "cstr_date")) },
             cal: cal_names.get(&g(t, "clndr_id")).cloned(),
@@ -308,7 +322,8 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     if dropped > 0 { notes.push(format!("{dropped} relationships point to activities that are not in this project (another project or a deleted activity); they were left out.")) }
     for r in rows("RSRC") {
         let kind = if g(r, "rsrc_type") == "RT_Mat" { ResKind::Material } else { ResKind::Work };
-        p.resources.push(Resource { uid: g(r, "rsrc_id").parse().unwrap_or(0), name: g(r, "rsrc_name"), kind, ..Default::default() });
+        let cal = cal_names.get(&g(r, "clndr_id")).cloned().filter(|c| *c != p.calendar);
+        p.resources.push(Resource { uid: g(r, "rsrc_id").parse().unwrap_or(0), name: g(r, "rsrc_name"), kind, cal, ..Default::default() });
     }
     for a in rows("TASKRSRC").iter().filter(mine) {
         let (tu, ru): (u32, u32) = (g(a, "task_id").parse().unwrap_or(0), g(a, "rsrc_id").parse().unwrap_or(0));

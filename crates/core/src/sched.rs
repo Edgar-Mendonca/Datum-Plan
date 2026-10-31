@@ -25,6 +25,9 @@ pub struct Sched {
     pub fpath: Vec<u8>,
     /// Index into `cals` for each task.
     pub ci: Vec<usize>,
+    /// Index into `cals` for each resource: its own working time (with resource calendars on),
+    /// else the project calendar. Capacity in workload and levelling uses it.
+    pub rcal: Vec<usize>,
     pub cals: Vec<WorkCal>,
     pub edges: Vec<Edge>,
     /// Whether each edge drives its successor's dates.
@@ -52,12 +55,38 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     cals.push(WorkCal::new(&Calendar::full("24 Hours")));
     let def = names.iter().position(|n| *n == p.calendar).unwrap_or(0);
     let cal_of = |name: Option<&str>| name.and_then(|c| names.iter().position(|n| *n == c));
-    let ci: Vec<usize> = p.tasks.iter().map(|t| {
+    // Resource calendars: each person's own working time is their base calendar plus their leave.
+    let rcal: Vec<usize> = p.resources.iter().map(|r| {
+        let base = cal_of(r.cal.as_deref()).unwrap_or(def);
+        if !o.res_cals || r.exceptions.is_empty() { return if o.res_cals { base } else { def } }
+        let mut c = p.calendars[base].clone();
+        c.exceptions.extend(r.exceptions.iter().cloned());
+        cals.push(WorkCal::new(&c));
+        cals.len() - 1
+    }).collect();
+    // The calendars a task may run on: one per assigned person (with the task's own calendar,
+    // when it has one, working time must suit both). The task finishes when the last person does.
+    let mut both: HashMap<(usize, usize), usize> = HashMap::new();
+    let cand: Vec<Vec<usize>> = p.tasks.iter().map(|t| {
+        if !o.res_cals || t.elapsed || t.ignore_rc { return vec![] }
+        let tc = cal_of(t.cal.as_deref());
+        let mut v: Vec<usize> = t.res.iter().filter(|a| a.units > 0.0).filter_map(|a| p.res_idx(a.res)).filter(|&k| p.resources[k].kind == crate::model::ResKind::Work).map(|k| match tc {
+            None => rcal[k],
+            Some(tc) => *both.entry((tc, rcal[k])).or_insert_with(|| { let x = cals[tc].intersect(&cals[rcal[k]]); cals.push(x); cals.len() - 1 }),
+        }).collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    }).collect();
+    let ci: Vec<std::cell::Cell<usize>> = p.tasks.iter().zip(&cand).map(|(t, cd)| {
         if t.elapsed {
-            return h24;
+            return h24.into();
+        }
+        if let Some(&k) = cd.first() {
+            return k.into();
         }
         let res_cal = || t.res.first().and_then(|a| p.res_idx(a.res)).and_then(|k| cal_of(p.resources[k].cal.as_deref()));
-        (if t.act_type == ActType::ResourceDep { res_cal() } else { None }).or_else(|| cal_of(t.cal.as_deref())).unwrap_or(def)
+        (if t.act_type == ActType::ResourceDep { res_cal() } else { None }).or_else(|| cal_of(t.cal.as_deref())).unwrap_or(def).into()
     }).collect();
     let ix: HashMap<u32, usize> = p.tasks.iter().enumerate().map(|(i, t)| (t.uid, i)).collect();
     let ms_type = |i: usize| matches!(p.tasks[i].act_type, ActType::StartMs | ActType::FinishMs);
@@ -110,7 +139,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     }
 
     // The calendar a lag is counted on.
-    let lag_cal = |e: &Edge| match o.lag_cal { LagCal::Successor => ci[e.s], LagCal::Predecessor => ci[e.p], LagCal::H24 => h24, LagCal::Project => def };
+    let lag_cal = |e: &Edge| match o.lag_cal { LagCal::Successor => ci[e.s].get(), LagCal::Predecessor => ci[e.p].get(), LagCal::H24 => h24, LagCal::Project => def };
     let pc = &cals[def];
     let start = pc.next_start(at(p.start));
     let data = p.status.map(|d| at(d) + DAY);
@@ -121,8 +150,17 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         let lc = &cals[lag_cal(e)];
         match e.kind { LinkType::FS | LinkType::FF => lc.add(ef[e.p], e.lag), LinkType::SS | LinkType::SF => lc.add(es[e.p], e.lag) }
     };
+    // With several people on a task, the one who would finish last sets the task's calendar.
+    let pick = |i: usize, v: i64, sp: i64| {
+        if cand[i].len() > 1 {
+            let k = cand[i].iter().copied().max_by_key(|&k| (cals[k].add(cals[k].next_start(v), sp), std::cmp::Reverse(k))).unwrap_or(ci[i].get());
+            ci[i].set(k);
+        }
+    };
     for &i in &order {
-        let (t, c, d, sp) = (&p.tasks[i], &cals[ci[i]], dur[i], span[i]);
+        let (t, d, sp) = (&p.tasks[i], dur[i], span[i]);
+        if let Some(a) = t.act_start { pick(i, at(a), sp) }
+        let c = &cals[ci[i].get()];
         if let Some(a) = t.act_start {
             es[i] = c.next_start(at(a));
             ef[i] = match (t.act_finish, data) {
@@ -165,6 +203,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         if let (true, Some(m)) = (t.manual, t.mstart) {
             v = at(m);
         }
+        pick(i, v, sp);
+        let c = &cals[ci[i].get()];
         es[i] = if d > 0 || t.act_type == ActType::StartMs || !c.in_or_end(v) { c.next_start(v) } else { v };
         if t.level_delay > 0 {
             es[i] = c.next_start(c.add(es[i], t.level_delay));
@@ -190,14 +230,14 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         if loe[e.p] || fixed[e.s] {
             return false;
         }
-        let c = &cals[ci[e.s]];
+        let c = &cals[ci[e.s].get()];
         let x = need(e, &es, &ef);
         match e.kind { LinkType::FS | LinkType::SS => c.next_start(x) >= es[e.s] || x == es[e.s], _ => x >= ef[e.s] }
     }).collect();
 
     let (mut ls, mut lf, mut ff) = (es.clone(), ef.clone(), vec![0i64; n]);
     for &i in order.iter().rev() {
-        let (t, c, sp) = (&p.tasks[i], &cals[ci[i]], span[i]);
+        let (t, c, sp) = (&p.tasks[i], &cals[ci[i].get()], span[i]);
         let mut v = back_from;
         let mut free = c.between(ef[i], back_from);
         for &e in &out[i] {
@@ -257,7 +297,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                 f0 <= back_from && out[i].iter().all(|&e| {
                     let Edge { s, kind, lag, .. } = edges[e];
                     let x = cals[lag_cal(&edges[e])].add(if matches!(kind, LinkType::FS | LinkType::FF) { f0 } else { e0 }, lag);
-                    if matches!(kind, LinkType::FS | LinkType::SS) { cals[ci[s]].next_start(x) <= es[s] } else { x <= ef[s] }
+                    if matches!(kind, LinkType::FS | LinkType::SS) { cals[ci[s].get()].next_start(x) <= es[s] } else { x <= ef[s] }
                 })
             };
             let (mut lo, mut hi) = (0, ff[i]);
@@ -272,7 +312,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             ff[i] = 0;
         }
     }
-    let mut tf: Vec<i64> = (0..n).map(|i| if leaf(i) && !fixed[i] && !loe[i] { cals[ci[i]].between(ef[i], lf[i]) } else { 0 }).collect();
+    let mut tf: Vec<i64> = (0..n).map(|i| if leaf(i) && !fixed[i] && !loe[i] { cals[ci[i].get()].between(ef[i], lf[i]) } else { 0 }).collect();
     let mut start = start;
     if o.from_finish && o.finish_date.is_some() {
         start = order.iter().map(|&i| es[i]).min().unwrap_or(start);
@@ -321,7 +361,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         lp[i] = kids.iter().any(|&j| lp[j]);
         fpath[i] = kids.iter().map(|&j| fpath[j]).filter(|&f| f > 0).min().unwrap_or(0);
     }
-    Ok(Sched { es, ef, ls, lf, tf, ff, summary, off, loe, lp, fpath, ci, cals, edges, drive, start, finish })
+    let ci = ci.iter().map(std::cell::Cell::get).collect();
+    Ok(Sched { es, ef, ls, lf, tf, ff, summary, off, loe, lp, fpath, ci, rcal, cals, edges, drive, start, finish })
 }
 
 impl Sched {

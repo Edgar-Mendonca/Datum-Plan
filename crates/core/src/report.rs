@@ -69,9 +69,9 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
             kids.iter().for_each(|(_, v)| v.iter().enumerate().for_each(|(j, x)| vals[j] += x));
             let over = b.iter().enumerate().map(|(j, &d0)| {
                 let end = b.get(j + 1).copied().unwrap_or(d0 + 1);
-                r.kind == ResKind::Work && (d0..end).any(|d| l.daily.get(&(k, d)).is_some_and(|&m| m > r.max_on(date_of(d * DAY)) * pc.day_minutes(date_of(d * DAY)) as f64 + 0.5))
+                r.kind == ResKind::Work && (d0..end).any(|d| l.daily.get(&(k, d)).is_some_and(|&m| m > r.max_on(date_of(d * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(d * DAY)) as f64 + 0.5))
             }).collect();
-            let cap = if r.kind == ResKind::Work { (0..b.len()).map(|j| days_of(j).map(|d| r.max_on(date_of(d * DAY)) * pc.day_minutes(date_of(d * DAY)) as f64 / 60.0).sum()).collect() } else { vec![] };
+            let cap = if r.kind == ResKind::Work { (0..b.len()).map(|j| days_of(j).map(|d| r.max_on(date_of(d * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(d * DAY)) as f64 / 60.0).sum()).collect() } else { vec![] };
             let kid_rows: Vec<UseRow> = kids.iter().map(|((_, i), v)| UseRow { uid: p.tasks[*i].uid, of: Some(r.uid), name: p.tasks[*i].name.clone(), lvl: 1, sum: false, total: v.iter().sum(), vals: (*v).clone(), over: vec![], cap: vec![] }).collect();
             res_rows.push((UseRow { uid: r.uid, of: None, name: r.name.clone(), lvl: 0, sum: true, total: vals.iter().sum(), vals, over, cap }, kid_rows));
         }
