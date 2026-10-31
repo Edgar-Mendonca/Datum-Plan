@@ -336,6 +336,46 @@ What a formula can read from the plan:
 
 **Formula columns** (**Format › Formula Column**) add a column to the task sheet calculated from other columns, for example `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","On time")`.
 
+## Several plans: tabs and links
+
+A large job is often several plans: a main schedule and the plans of engineering, procurement and construction, each kept by its own team. Datum Plan opens each in its own tab and links tasks from one plan to another, so a delay in one plan shows in the others.
+
+### Tabs
+
+Every plan you open or create gets a tab above the ribbon. Click a tab to show that plan; a dot means it has unsaved changes, and × closes it (it asks to save first). **＋** makes a new plan, opens one, or opens the example. [[Ctrl+Tab]] goes to the next tab and [[Ctrl+W]] closes the one shown. When you close the window, Datum Plan lists every plan with unsaved changes and can save them all.
+
+### The example
+
+**File › Linked plans (example)** (or **＋ › Example**) asks for a folder, saves four plans of a compressor station there and opens them in tabs: **Main schedule**, **Engineering**, **Procurement** and **Construction**. The main schedule's milestones wait for the subplans, construction waits for the drawings and for the compressor package to arrive, and the engineering and construction plans use resource calendars (a lead engineer's leave, a six-day site week). Change a duration in Procurement, then update the links and watch the main schedule move.
+
+### Link a task to another plan
+
+![Link to Plan: the links this task already has, the other plan, its tasks, the type and the lag.](img/link-dialog.png)
+
+Save the other plan first, so the link knows its file. Then select the task that has to wait and choose **Project › Link to Plan** (or right-click › **Link to Plan…**).
+
+1. The links this task already has, with the date it last knew. × removes one.
+2. **Plan** is any other open plan; **Find** narrows its tasks by name or ID.
+3. Click the task to wait for (double-click adds it at once).
+4. **Type and lag**: FS, SS, FF or SF, and a lag in days (negative for a lead). **Add Link** adds it to the list.
+5. **OK** saves the links with the plan.
+
+The task now waits for the other plan's task like for a normal link. The **External Predecessors** column shows its links, for example `Engineering › E1180 Final documentation issued FS+5d`.
+
+### Keep the links up to date
+
+![Linked Plans: what each task waits for, the date it knew and the date now, and Update All Open Plans.](img/linked-plans.png)
+
+A link keeps the date the other task had when it was last updated, so a plan never changes behind your back. **Project › Linked Plans** shows them all:
+
+1. The tabs of the open plans.
+2. **Project › Linked Plans**: **Link to Plan**, **Linked Plans** and **Update Links**.
+3. **Waits for**: the plan and the task, with the type and lag, the last known finish and the finish now.
+4. **Moved – update**: the other plan has moved since the last update.
+5. **Update All Open Plans** brings in the new dates in every open plan, in the right order, until nothing moves (**Update This Plan** does only the one shown). Plans that are not open are read from their files.
+
+If two plans wait for each other in a loop, the update stops and says so.
+
 ## Files: save, import and export
 
 - **Save** ([[Ctrl+S]]) keeps the plan as a `.dplan` file on your computer. Saving is safe: the file is replaced only when the new one is complete.
@@ -366,6 +406,7 @@ What a formula can read from the plan:
 | Constraint | A date that holds a task, such as Start No Earlier Than. |
 | Critical path | The chain of tasks that decides the finish date; if one slips, the project finishes late. |
 | Duration | Working time a task takes, such as 5 days. |
+| External predecessor | A task in another plan that this task waits for. |
 | Earned value, SPI, CPI | Progress measured in money or hours. SPI below 1 is behind schedule, CPI below 1 is over budget. |
 | Earned schedule, SPI(t) | Progress measured in time: when the plan expected the work done so far. |
 | Float (slack) | How long a task can slip without delaying the finish (total float) or the next task (free float). |
@@ -394,6 +435,7 @@ What a formula can read from the plan:
 | [[Ctrl+Z]] / [[Ctrl+Y]] | Undo / redo |
 | [[Ctrl+S]] / [[Ctrl+O]] / [[Ctrl+P]] | Save / open / print |
 | [[Ctrl+K]] | Tell me what you want to do |
+| [[Ctrl+Tab]] / [[Ctrl+W]] | Next plan tab / close the plan shown |
 | [[Ctrl]] + mouse wheel | Zoom the timescale |
 
 **Windows protected your PC** on the first install: click **More info**, then **Run anyway**.

@@ -339,6 +339,26 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("the Project tab still shows the built-in dashboard", !!(await p.$(".kpis")) && !(await p.$(".dboard")));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
+  // 0.5.5: plans in tabs, links to tasks in other plans, the Linked Plans panel.
+  check("each open plan has a tab, unsaved ones marked", (await p.$$(".plantabs .ptab")).length === 2 && !!(await p.$(".plantabs .ptab:nth-child(2) .dot")));
+  await p.click(".plantabs .ptab:nth-child(2)"); await p.waitForTimeout(200);
+  check("clicking a tab shows that plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "switch_tab").pop())).includes('"k":1'));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+  q = await cellBox(2, 2); await p.mouse.click(q.x, q.y); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Project')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Link to Plan')"); await p.waitForTimeout(300);
+  await p.click(".linkpick button:has-text('IFC drawings issued')"); await p.fill(".dlg input[type=number]", "5"); await p.click(".dlg button:has-text('Add Link')"); await p.waitForTimeout(100);
+  check("the link dialog lists the new link with its type and lag", (await p.textContent(".dlg .tbl")).includes("Engineering › E1010 IFC drawings issued") && (await p.textContent(".dlg .tbl")).includes("FS+5d"));
+  await p.click(".dlg .btn.pri:text-is('OK')"); await p.waitForTimeout(200);
+  const ext = await lastApply();
+  check("OK saves the link with the other plan's file and task", ext.includes('"ExtSet"') && ext.includes("Engineering.dplan") && ext.includes('"uid":2') && ext.includes('"lag":2400'), ext);
+  await p.click(".ribbon button:has-text('Linked Plans')"); await p.waitForTimeout(300);
+  check("Linked Plans shows a link whose plan has moved", (await p.textContent(".dlg .linkstates")).includes("Moved"));
+  await p.click(".dlg button:has-text('Update All Open Plans')"); await p.waitForTimeout(200);
+  check("Update All Open Plans asks the engine to update every open plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "update_links").pop())).includes('"all":true'));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+
   // 0.5.1: Tell Me dims the window instead of hiding it.
   await p.keyboard.press("Control+k"); await p.waitForTimeout(250);
   const ovBg = await p.$eval(".ov", o => getComputedStyle(o).backgroundColor);

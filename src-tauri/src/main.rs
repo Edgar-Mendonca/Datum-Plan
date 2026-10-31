@@ -2,9 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod update;
 
-use datum_core::{check, doc::{self, Doc, Op}, fields::{self, Calc}, io, network, query::{self, Query}, report, templates, Project, Task};
+use datum_core::{check, doc::{self, Doc, Op}, fields::{self, Calc}, io, links, network, query::{self, Query}, report, templates, Project, Task};
 use serde::{Deserialize, Serialize};
-use std::{path::{Path, PathBuf}, sync::Mutex};
+use std::{collections::HashMap, path::{Path, PathBuf}, sync::Mutex};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
@@ -46,7 +46,10 @@ impl Default for Options {
 }
 
 struct App {
+    /// The plan in the tab shown; the other tabs' plans wait in `others` (slot `cur` is empty).
     doc: Doc,
+    others: Vec<Option<Doc>>,
+    cur: usize,
     opts: Options,
     clip: Vec<Task>,
     table: Option<(io::table::Table, String)>,
@@ -73,6 +76,9 @@ fn guard<T>(f: impl FnOnce() -> R<T>) -> R<T> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Out {
+    /// The open plans, one per tab, and which one is shown.
+    tabs: Vec<TabInfo>,
+    tab: usize,
     project: serde_json::Value,
     summary: query::Summary,
     path: Option<String>,
@@ -81,6 +87,63 @@ struct Out {
     redo: bool,
     clip: usize,
     rev: u64,
+}
+
+#[derive(Serialize)]
+struct TabInfo { name: String, path: Option<String>, dirty: bool }
+
+/// Every open plan in tab order (the shown one is `a.doc`).
+fn docs(a: &App) -> Vec<&Doc> {
+    (0..a.others.len()).map(|k| if k == a.cur { &a.doc } else { a.others[k].as_ref().unwrap_or(&a.doc) }).collect()
+}
+
+fn tab_list(a: &App) -> Vec<TabInfo> {
+    docs(a).iter().map(|d| TabInfo { name: d.p.name.clone(), path: d.path.as_ref().map(|p| p.display().to_string()), dirty: d.dirty }).collect()
+}
+
+/// Shows a plan in a new tab, or in place of an empty untouched one.
+fn add_tab(a: &mut App, d: Doc) {
+    if a.doc.path.is_none() && !a.doc.dirty && a.doc.p.tasks.is_empty() {
+        a.doc = d;
+        return;
+    }
+    let old = std::mem::replace(&mut a.doc, d);
+    a.others[a.cur] = Some(old);
+    a.others.push(None);
+    a.cur = a.others.len() - 1;
+}
+
+fn show_tab(a: &mut App, k: usize) {
+    if k == a.cur || k >= a.others.len() { return }
+    let Some(d) = a.others[k].take() else { return };
+    let old = std::mem::replace(&mut a.doc, d);
+    a.others[a.cur] = Some(old);
+    a.cur = k;
+}
+
+#[tauri::command]
+fn switch_tab(st: State<St>, k: usize) -> Out {
+    let mut a = st.lock();
+    show_tab(&mut a, k);
+    out(&a)
+}
+
+/// Closes a tab (the window asks about unsaved changes first). The last tab becomes a new plan.
+#[tauri::command]
+fn close_tab(st: State<St>, k: usize) -> Out {
+    let mut a = st.lock();
+    if k >= a.others.len() { return out(&a) }
+    if a.others.len() == 1 {
+        a.doc = Doc::new(Project::new("Project1", today()));
+        return out(&a);
+    }
+    if k == a.cur {
+        let next = if k + 1 < a.others.len() { k + 1 } else { k - 1 };
+        show_tab(&mut a, next);
+    }
+    a.others.remove(k);
+    if a.cur > k { a.cur -= 1 }
+    out(&a)
 }
 
 fn out(a: &App) -> Out {
@@ -93,6 +156,8 @@ fn out(a: &App) -> Out {
         }
     }
     Out {
+        tabs: tab_list(a),
+        tab: a.cur,
         project,
         summary: calc(a).summary(),
         path: d.path.as_ref().map(|p| p.display().to_string()),
@@ -193,7 +258,7 @@ fn new_plan(st: State<St>, template: Option<String>) -> Out {
     };
     let mut a = st.lock();
     let p = fresh(&a, p);
-    a.doc = Doc::new(p);
+    add_tab(&mut a, Doc::new(p));
     out(&a)
 }
 
@@ -205,10 +270,19 @@ fn pick(app: &AppHandle, name: &str, exts: &[&str]) -> Option<PathBuf> {
 async fn open(app: AppHandle, st: State<'_, St>, path: Option<String>) -> R<Option<Out>> {
     let Some(path) = path.map(PathBuf::from).or_else(|| pick(&app, "Datum Plan", &["dplan"])) else { return Ok(None) };
     backup_old(&path);
+    // A plan that is already open is shown, not opened twice.
+    {
+        let mut a = st.lock();
+        let same = |d: &Doc| d.path.as_ref().is_some_and(|x| x == &path || x.canonicalize().ok() == path.canonicalize().ok());
+        if let Some(k) = docs(&a).iter().position(|d| same(d)) {
+            show_tab(&mut a, k);
+            return Ok(Some(out(&a)));
+        }
+    }
     let d = guard(|| Doc::open(&path))?;
     remember(&app, &path);
     let mut a = st.lock();
-    a.doc = d;
+    add_tab(&mut a, d);
     Ok(Some(out(&a)))
 }
 
@@ -262,8 +336,9 @@ async fn import(app: AppHandle, st: State<'_, St>) -> R<Option<Imported>> {
     match guard(|| io::import(&path))? {
         io::Imported::Plan(p, notes) => {
             let p = fresh(&a, *p);
-            a.doc = Doc::new(p);
-            a.doc.dirty = true;
+            let mut d = Doc::new(p);
+            d.dirty = true;
+            add_tab(&mut a, d);
             Ok(Some(Imported { plan: Some(out(&a)), notes, table: None, fields }))
         }
         io::Imported::Table(t) => {
@@ -283,8 +358,9 @@ fn import_table(st: State<St>, map: Vec<String>) -> R<TableResult> {
     let (t, name) = a.table.take().ok_or("Choose a file to import first.")?;
     let (p, skipped) = io::table::to_project(&t, &map, &name, today(), &a.opts.date_fmt).inspect_err(|_| a.table = Some((io::table::Table { headers: t.headers.clone(), rows: t.rows.clone(), guess: t.guess.clone() }, name.clone())))?;
     let p = fresh(&a, p);
-    a.doc = Doc::new(p);
-    a.doc.dirty = true;
+    let mut d = Doc::new(p);
+    d.dirty = true;
+    add_tab(&mut a, d);
     Ok(TableResult { plan: out(&a), skipped })
 }
 
@@ -579,6 +655,133 @@ fn formula_shift(items: Vec<(String, i64, i64)>) -> Vec<String> {
     items.iter().take(200_000).map(|(f, dr, dc)| datum_core::sheet::shift(f, *dr, *dc)).collect()
 }
 
+/// Saves every tab with unsaved changes (asking for a file name where a plan has none).
+/// Returns None when a file name was not given.
+#[tauri::command]
+async fn save_all(app: AppHandle, st: State<'_, St>) -> R<Option<Out>> {
+    let n = st.lock().others.len();
+    for k in 0..n {
+        let (dirty, path, name) = {
+            let mut a = st.lock();
+            show_tab(&mut a, k);
+            (a.doc.dirty, a.doc.path.clone(), a.doc.p.name.clone())
+        };
+        if !dirty { continue }
+        let path = match path {
+            Some(p) => p,
+            None => match app.dialog().file().add_filter("Datum Plan", &["dplan"]).set_file_name(format!("{name}.dplan")).blocking_save_file() {
+                Some(f) => f.into_path().map_err(|e| e.to_string())?,
+                None => return Ok(None),
+            },
+        };
+        st.lock().doc.save(&path)?;
+        remember(&app, &path);
+    }
+    clear_recovery(&app);
+    Ok(Some(out(&st.lock())))
+}
+
+/// A plan another plan links to: an open tab with that file, or the file read from disk
+/// (looked for where it was, and next to this plan when the folder moved).
+fn linked_plan(a: &App, file: &str, here: Option<&Path>) -> Option<(String, Project)> {
+    let name = links::file_name(file).to_lowercase();
+    let same = |d: &&Doc| d.path.as_ref().is_some_and(|p| p.display().to_string() == file || p.file_name().is_some_and(|f| f.to_string_lossy().to_lowercase() == name));
+    if let Some(d) = docs(a).into_iter().find(same) {
+        return Some((name, d.p.clone()));
+    }
+    let near = here.and_then(Path::parent).map(|d| d.join(links::file_name(file)));
+    [Some(PathBuf::from(file)), near].into_iter().flatten().find(|p| p.is_file()).and_then(|p| Doc::open(&p).ok()).map(|d| (name, d.p))
+}
+
+/// The other open plans and their tasks, to link to (plans must be saved, so the link knows the file).
+#[derive(Serialize)]
+struct Target { tab: usize, name: String, path: Option<String>, tasks: Vec<(u32, String, String, u8, bool, i64, i64)> }
+
+#[tauri::command]
+fn link_targets(st: State<St>) -> Vec<Target> {
+    let a = st.lock();
+    docs(&a).into_iter().enumerate().filter(|(k, _)| *k != a.cur).map(|(tab, d)| {
+        let s = datum_core::sched::schedule(&d.p).ok();
+        let tasks = d.p.tasks.iter().enumerate().map(|(i, t)| (t.uid, t.code.clone(), t.name.clone(), t.level, s.as_ref().is_some_and(|s| s.summary[i]), s.as_ref().map_or(0, |s| s.es[i]), s.as_ref().map_or(0, |s| s.ef[i]))).collect();
+        Target { tab, name: d.p.name.clone(), path: d.path.as_ref().map(|p| p.display().to_string()), tasks }
+    }).collect()
+}
+
+/// Every link of the shown plan to other plans, and whether the other plan has moved since.
+#[tauri::command]
+fn link_states(st: State<St>) -> Vec<links::LinkState> {
+    let a = st.lock();
+    let here = a.doc.path.clone();
+    let mut cache: HashMap<String, Option<(Project, Option<datum_core::sched::Sched>)>> = HashMap::new();
+    links::states(&a.doc.p, &mut |x| {
+        let e = cache.entry(x.file.clone()).or_insert_with(|| linked_plan(&a, &x.file, here.as_deref()).map(|(_, p)| { let s = datum_core::sched::schedule(&p).ok(); (p, s) }));
+        let (p, s) = e.as_ref().ok_or("the file was not found")?;
+        let i = p.idx(x.uid).ok_or("the task is no longer in that plan")?;
+        let s = s.as_ref().ok_or("that plan cannot be scheduled")?;
+        Ok(links::Found { plan: p.name.clone(), code: p.tasks[i].code.clone(), name: p.tasks[i].name.clone(), start: s.es[i], finish: s.ef[i] })
+    })
+}
+
+/// Brings links up to date: the shown plan (`all` false) or every open plan. Plans that are not
+/// open are read from their files (and left unchanged). Plans may link both ways; the dates are
+/// passed round until they settle.
+#[tauri::command]
+fn update_links(st: State<St>, all: bool) -> R<(Out, String)> {
+    let mut a = st.lock();
+    let open: Vec<(String, Project, Option<PathBuf>)> = docs(&a).iter().map(|d| (d.path.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().to_lowercase()).unwrap_or_default(), d.p.clone(), d.path.clone())).collect();
+    let mut set: Vec<(String, Project)> = open.iter().map(|(f, p, _)| (f.clone(), p.clone())).collect();
+    // Closed plans that the open ones link to.
+    for (_, p, here) in &open {
+        for x in p.tasks.iter().flat_map(|t| &t.ext) {
+            let key = links::file_name(&x.file).to_lowercase();
+            if !set.iter().any(|(f, _)| *f == key) {
+                if let Some(found) = linked_plan(&a, &x.file, here.as_deref()) { set.push(found) }
+            }
+        }
+    }
+    let passes = links::update_all(&mut set)?;
+    let mut changed = 0;
+    for k in 0..open.len() {
+        if !all && k != a.cur { continue }
+        let new = &set[k].1;
+        let ops: Vec<Op> = new.tasks.iter().zip(&open[k].1.tasks).filter(|(n, o)| n.ext != o.ext).map(|(n, _)| Op::ExtSet { uid: n.uid, links: n.ext.clone() }).collect();
+        if ops.is_empty() { continue }
+        changed += ops.len();
+        let fmt = a.opts.date_fmt.clone();
+        let d = if k == a.cur { &mut a.doc } else { match a.others[k].as_mut() { Some(d) => d, None => continue } };
+        d.apply(Op::Batch(ops), &fmt)?;
+    }
+    let total: usize = open.iter().enumerate().filter(|(k, _)| all || *k == a.cur).map(|(_, (_, p, _))| p.tasks.iter().map(|t| t.ext.len()).sum::<usize>()).sum();
+    let msg = if total == 0 { "This plan has no links to other plans yet.".to_string() }
+        else if changed == 0 { format!("All {total} links are up to date.") }
+        else { format!("Updated {changed} {} ({passes} {}).", if changed == 1 { "task's links" } else { "tasks' links" }, if passes == 1 { "pass" } else { "passes" }) };
+    Ok((out(&a), msg))
+}
+
+/// File › New › Example: a main schedule and three linked subplans, saved in a new folder and opened in tabs.
+#[tauri::command]
+async fn linked_example(app: AppHandle, st: State<'_, St>) -> R<Option<Out>> {
+    let Some(base) = app.dialog().file().blocking_pick_folder().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let mut folder = base.join("Compressor Station Expansion");
+    let mut n = 2;
+    while folder.exists() { folder = base.join(format!("Compressor Station Expansion ({n})")); n += 1; }
+    std::fs::create_dir_all(&folder).map_err(|e| format!("Could not make the folder: {e}"))?;
+    let plans = datum_core::templates::linked_example(next_monday());
+    let mut a = st.lock();
+    let mut first = None;
+    for (f, p) in plans {
+        let path = folder.join(&f);
+        let p = fresh(&a, p);
+        let mut d = Doc::new(p);
+        d.save(&path)?;
+        remember(&app, &path);
+        add_tab(&mut a, d);
+        first.get_or_insert(a.cur);
+    }
+    if let Some(k) = first { show_tab(&mut a, k) }
+    Ok(Some(out(&a)))
+}
+
 #[tauri::command]
 fn scurve(st: State<St>, unit: String, how: String, scope: Option<u32>) -> report::SCurve {
     report::scurve(&calc(&st.lock()), &unit, &how, scope)
@@ -621,7 +824,12 @@ fn set_options(app: AppHandle, st: State<St>, opts: Options) -> Out {
 
 // ---------- recovery: a copy of unsaved work, kept until it is saved or discarded ----------
 #[derive(Serialize, Deserialize)]
-struct Recovery { name: String, path: Option<String>, saved: String }
+struct Recovery {
+    name: String, path: Option<String>, saved: String,
+    /// Every unsaved tab: its recovery file and the plan's own file (if it had one).
+    #[serde(default)]
+    items: Vec<(String, Option<String>)>,
+}
 
 fn recovery_files(app: &AppHandle) -> Option<(PathBuf, PathBuf)> {
     dir(app, true).map(|d| (d.join("recovery.dplan"), d.join("recovery.json")))
@@ -632,14 +840,24 @@ fn clear_recovery(app: &AppHandle) {
         let _ = std::fs::remove_file(a);
         let _ = std::fs::remove_file(b);
     }
+    if let Some(d) = dir(app, true) {
+        for k in 1..64 { let _ = std::fs::remove_file(d.join(format!("recovery-{k}.dplan"))); }
+    }
 }
 
 #[tauri::command]
 fn autosave(app: AppHandle, st: State<St>) {
     let a = st.lock();
-    if let (true, Some((plan, meta))) = (a.doc.dirty, recovery_files(&app)) {
-        let info = Recovery { name: a.doc.p.name.clone(), path: a.doc.path.as_ref().map(|p| p.display().to_string()), saved: chrono::Local::now().format("%d-%b-%y %H:%M").to_string() };
-        let _ = doc::write_atomic(&plan, a.doc.json().as_bytes());
+    // Every unsaved tab: recovery.dplan, recovery-1.dplan, …
+    let dirty: Vec<&Doc> = docs(&a).into_iter().filter(|d| d.dirty).collect();
+    if let (false, Some((plan, meta))) = (dirty.is_empty(), recovery_files(&app)) {
+        let mut items = vec![];
+        for (k, d) in dirty.iter().enumerate().take(63) {
+            let f = if k == 0 { plan.clone() } else { plan.with_file_name(format!("recovery-{k}.dplan")) };
+            let _ = doc::write_atomic(&f, d.json().as_bytes());
+            items.push((f.display().to_string(), d.path.as_ref().map(|p| p.display().to_string())));
+        }
+        let info = Recovery { name: dirty.iter().map(|d| d.p.name.as_str()).collect::<Vec<_>>().join(", "), path: dirty[0].path.as_ref().map(|p| p.display().to_string()), saved: chrono::Local::now().format("%d-%b-%y %H:%M").to_string(), items };
         let _ = doc::write_atomic(&meta, serde_json::to_string(&info).unwrap_or_default().as_bytes());
     }
 }
@@ -660,11 +878,15 @@ fn recover(app: AppHandle, st: State<St>, keep: bool) -> R<Option<Out>> {
         return Ok(None);
     }
     let (plan, _) = files.ok_or("No recovered plan was found.")?;
-    let mut d = Doc::open(&plan)?;
-    d.path = info.and_then(|i| i.path).map(PathBuf::from);
-    d.dirty = true;
+    let info = info.unwrap_or(Recovery { name: String::new(), path: None, saved: String::new(), items: vec![] });
+    let items = if info.items.is_empty() { vec![(plan.display().to_string(), info.path.clone())] } else { info.items };
     let mut a = st.lock();
-    a.doc = d;
+    for (f, path) in items {
+        let Ok(mut d) = Doc::open(Path::new(&f)) else { continue };
+        d.path = path.map(PathBuf::from);
+        d.dirty = true;
+        add_tab(&mut a, d);
+    }
     Ok(Some(out(&a)))
 }
 
@@ -771,12 +993,12 @@ fn main() {
                 }));
             }
             let opts = options_file(app.handle()).and_then(|f| std::fs::read_to_string(f).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-            app.manage(St(Mutex::new(App { doc: Doc::new(Project::new("Project1", today())), opts, clip: vec![], table: None })));
+            app.manage(St(Mutex::new(App { doc: Doc::new(Project::new("Project1", today())), others: vec![None], cur: 0, opts, clip: vec![], table: None })));
             Ok(())
         })
         .on_window_event(|w, e| {
             if let WindowEvent::CloseRequested { api, .. } = e {
-                if w.state::<St>().lock().doc.dirty {
+                if docs(&w.state::<St>().lock()).iter().any(|d| d.dirty) {
                     api.prevent_close();
                     let _ = w.emit("close-requested", ());
                 } else {
@@ -786,7 +1008,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, save_all, link_targets, link_states, update_links, linked_example, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

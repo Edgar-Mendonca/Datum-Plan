@@ -89,6 +89,7 @@ fn main() {
         p.sheets.push(SheetData { name: "Vendors".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), ..Default::default() });
         (p, NaiveDate::from_ymd_opt(2026, 10, 24).unwrap())
     };
+    let guide = std::env::args().nth(1).as_deref() == Some("guide");
     let c = Calc::new(&p, "%d-%b-%y", today);
     let q = Query { cols: p.columns.iter().filter(|c| c.1 > 0).map(|c| c.0.clone()).collect(), ..Query::default() };
     let g = c.grid(&q);
@@ -100,12 +101,14 @@ fn main() {
     let mut proj = serde_json::to_value(&p).unwrap();
     proj.as_object_mut().unwrap().remove("tasks");
     println!("{}", serde_json::json!({
-        "state": { "project": proj, "summary": c.summary(), "path": null, "dirty": false, "undo": false, "redo": false, "clip": 0, "rev": 1 },
+        "state": { "tabs": if guide { serde_json::json!([{ "name": p.name, "path": null, "dirty": false }]) } else { serde_json::json!([{ "name": p.name, "path": null, "dirty": false }, { "name": "Engineering", "path": "C:/Plans/Engineering.dplan", "dirty": true }]) }, "tab": 0, "project": proj, "summary": c.summary(), "path": null, "dirty": false, "undo": false, "redo": false, "clip": 0, "rev": 1 },
         "query": g, "query:timeline": tl, "query:tracking": tracking, "scurve": report::scurve(&c, "week", "duration", None), "period_report": report::period_report(&c, "week", None),
         "periods": report::period_ends(&c, "week"), "curve": report::curve(&c, "week"), "usage": report::usage(&c, "resource", "work", "week"), "usage:group": report::usage(&c, "group", "work", "week"),
         "risk_run": risk::simulate(&p, &risk::SimOpts { iterations: 300, ..Default::default() }).unwrap(), "level_preview": level::preview(&p, &[]).unwrap(),
         "manpower": progress::manpower(&c, "week"), "earned_schedule": progress::earned_schedule(&c), "lookahead": progress::lookahead(&c, 3), "credit_library": progress::credit_library(),
         "sheet_view": sheet::sheet_view(&c, 0), "formula_shift": ["=C3*2"], "dash_map": dash_map(&c),
+        "link_targets": [{ "tab": 1, "name": "Engineering", "path": "C:/Plans/Engineering.dplan", "tasks": [[1, "E1000", "Basic engineering", 0, true, c.s.start, c.s.start + 20 * cal::DAY], [2, "E1010", "IFC drawings issued", 1, false, c.s.start + 20 * cal::DAY, c.s.start + 20 * cal::DAY]] }],
+        "link_states": [{ "uid": p.tasks[1].uid, "task": p.tasks[1].name, "k": 0, "link": { "file": "C:/Plans/Engineering.dplan", "uid": 2, "kind": "FS", "lag": 0, "plan": "Engineering", "code": "E1010", "name": "IFC drawings issued", "start": c.s.start, "finish": c.s.start + 10 * cal::DAY }, "now_start": c.s.start, "now_finish": c.s.start + 15 * cal::DAY, "state": "changed" }],
         "sheet_catalog": { "functions": sheet::functions(), "names": sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect::<Vec<_>>(), "tasks": sheet::task_columns(&c).into_iter().map(|x| x.1).collect::<Vec<_>>(), "resources": sheet::RES_COLS.iter().map(|x| x.1).collect::<Vec<_>>() },
         "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "country", "email", "work", "cost"].map(String::from)), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
     }));

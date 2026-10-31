@@ -109,6 +109,8 @@ const App = () => {
     if (dialogs().length) return;
     if ((ctrl && k === "k") || (e.altKey && k === "q")) { e.preventDefault(); palette(); }
     else if (ctrl && k === "s") { e.preventDefault(); C.save(e.shiftKey); }
+    else if (ctrl && e.key === "Tab") { e.preventDefault(); import("./plans").then(m => m.nextTab(e.shiftKey ? -1 : 1)); }
+    else if (ctrl && k === "w") { e.preventDefault(); import("./plans").then(m => m.closeTab(out()!.tab)); }
     else if (ctrl && k === "o") { e.preventDefault(); C.open(); }
     else if (ctrl && k === "n") { e.preventDefault(); setBackstage("home"); }
     else if (ctrl && k === "p") { e.preventDefault(); C.print(); }

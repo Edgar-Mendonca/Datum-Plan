@@ -69,6 +69,29 @@ pub struct Expense { pub name: String, pub category: String, pub vendor: String,
 pub struct DocRef { pub title: String, pub path: String, pub status: String, pub deliverable: bool }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ExtLink {
+    /// The other plan's file, as last saved (resolved next to this plan when the folder moves).
+    pub file: String,
+    /// The task in that plan (unique id).
+    pub uid: u32,
+    pub kind: LinkType,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub lag: i64,
+    /// Last known: the other plan's name, the task's ID and name, and its start and finish (minutes).
+    #[serde(default)]
+    pub plan: String,
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub start: i64,
+    #[serde(default)]
+    pub finish: i64,
+}
+
+/// A link from a task in this plan.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Link {
     pub pred: u32,
     pub kind: LinkType,
@@ -104,6 +127,9 @@ pub struct Task {
     pub unit: Unit,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub preds: Vec<Link>,
+    /// Predecessors in other plans (links between plans), with their last known dates.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ext: Vec<ExtLink>,
     #[serde(skip_serializing_if = "is_zero_u8")]
     pub pct: u8,
     #[serde(skip_serializing_if = "is_asap")]
@@ -695,6 +721,17 @@ impl Project {
         }
         if self.columns.is_empty() {
             self.columns = Project::new("", self.start).columns;
+        }
+        // Links to other plans: a sensible number, lags and dates inside the calendar's range.
+        let (lo, hi) = (crate::cal::at(crate::cal::lo()), crate::cal::at(crate::cal::hi()));
+        for t in &mut self.tasks {
+            t.ext.truncate(200);
+            for x in &mut t.ext {
+                x.lag = x.lag.clamp(-MAX_SPAN, MAX_SPAN);
+                (x.start, x.finish) = (x.start.clamp(0, hi), x.finish.clamp(0, hi));
+                if x.start < lo { x.start = 0 }
+                if x.finish < lo { x.finish = 0 }
+            }
         }
         for r in &mut self.resources {
             if r.cal.as_ref().is_some_and(|c| !cals.contains(c)) {

@@ -790,3 +790,27 @@ a.link { color: var(--blue); cursor: pointer; text-decoration: underline; }
 .dflag span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dflag b { font-variant-numeric: tabular-nums; color: var(--navy); }
 @media print { .dboard { grid-auto-rows: 104px; gap: 8px; } .dtile { break-inside: avoid; } .dboard .dw3 { grid-column: span 3; } .dboard .dw4 { grid-column: span 4; } .dboard .dw8 { grid-column: span 8; } }
+
+/* Plan tabs and links between plans (0.5.5) */
+.plantabs { display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; min-height: 0; border-bottom: 1px solid var(--line); background: var(--panel); overflow-x: auto; scrollbar-width: thin; }
+.plantabs:has(.ptab:only-of-type) { display: none; }
+.ptab { display: flex; align-items: center; gap: 6px; max-width: 240px; padding: 5px 6px 5px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; cursor: pointer; white-space: nowrap; }
+.ptab .nm { overflow: hidden; text-overflow: ellipsis; }
+.ptab .dot { font-style: normal; color: var(--blue); font-weight: 700; }
+.ptab .x { width: 18px; height: 18px; line-height: 16px; border-radius: 4px; color: var(--muted); font-size: 14px; opacity: .6; }
+.ptab .x:hover { background: var(--line); opacity: 1; }
+.ptab:hover { color: var(--text); background: var(--bg2); }
+.ptab.on { color: var(--text); background: var(--bg); border-color: var(--line); margin-bottom: -1px; padding-bottom: 6px; font-weight: 600; }
+.plantabs .padd { padding: 3px 10px; margin: 4px 0 2px; font-size: 15px; color: var(--muted); border-radius: 6px; }
+.plantabs .padd:hover { color: var(--blue); background: var(--bg2); }
+.linkpick { max-height: 230px; overflow: auto; border: 1px solid var(--line); margin: 6px 0 10px; }
+.linkpick button { display: grid; grid-template-columns: 80px 1fr 90px; gap: 10px; width: 100%; text-align: left; padding: 4px 8px; font-size: 12.5px; align-items: baseline; }
+.linkpick button.sum { font-weight: 600; }
+.linklag { display: flex; align-items: center; gap: 8px; }
+.linklag select { width: 80px !important; }
+.linklag input { width: 90px !important; }
+.linkpick button.on { background: var(--sel, #E3EDFC); }
+.linkpick .mono { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+h4.sub { margin: 14px 0 4px; font-size: 12.5px; }
+.linkstates .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; }
+.linkstates .pill.good { background: #DCFCE7; color: #166534; } .linkstates .pill.bad { background: #FEF3C7; color: #92400E; }

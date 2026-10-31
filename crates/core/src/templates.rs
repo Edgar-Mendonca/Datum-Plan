@@ -95,3 +95,79 @@ pub fn build(t: &Template, start: NaiveDate) -> Project {
     p.columns = vec![("mode".into(), 34), ("name".into(), 260), ("dur".into(), 74), ("start".into(), 92), ("finish".into(), 92), ("preds".into(), 90), ("res".into(), 170), ("work".into(), 84), ("cost".into(), 100)];
     p
 }
+
+/// The four plans of the linked example: a main schedule and three subplans, each its own file.
+const LINKED: [(&str, Template); 4] = [
+    ("Main schedule.dplan", Template { id: "x-main", name: "Main schedule", color: "#14325E", desc: "",
+        rows: "0|Project milestones\n1|Contract award|0\n1|Kick-off meeting|1d|2\n1|Site permits granted|0|2FS+30d\n1|Engineering complete|0\n1|Procurement complete|0\n\
+1|Mechanical completion|0\n1|Ready for start-up|0\n1|Performance test and acceptance|5d|8\n1|Handover to operations|0|9\n\
+0|Project controls\n1|Baseline schedule approved|5d|3\n1|HSE plan approved|5d|3\n1|Controls in place|0|12,13",
+        people: "Project Director|Management|150|1|PD\nProject Controls Lead|Controls|95|1|PCL",
+        assign: "3|Project Director,Project Controls Lead\n9|Project Director\n12|Project Controls Lead\n13|Project Director[50%]", costs: "" }),
+    ("Engineering.dplan", Template { id: "x-eng", name: "Engineering", color: "#2F6FCF", desc: "",
+        rows: "0|Basic engineering\n1|Kick-off and design basis|5d\n1|Process simulation and heat and mass balance|15d|2\n1|P&IDs issued for review|10d|3\n1|HAZOP study|5d|4\n1|Design freeze|0|5\n\
+0|Detailed engineering\n1|Compressor package datasheets|10d|4\n1|Mechanical datasheets issued|0|8\n1|Plot plan and layout|10d|6\n1|Civil and structural design|25d|10\n1|Civil drawings IFC|0|11\n\
+1|Piping design and 3D model|35d|10\n1|Piping isometrics IFC|10d|13\n1|Electrical and instrumentation design|30d|6SS+10d\n1|E&I drawings IFC|0|15\n\
+0|Close-out\n1|Vendor document review|20d|9FS+30d\n1|Final documentation issued|10d|14,16,18",
+        people: "Lead Process Engineer|Process|95|1|LPE\nMechanical Engineer|Mechanical|85|2|ME\nPiping Designer|Piping|60|3|PD\nCivil Engineer|Civil|80|1|CE\nE&I Engineer|Electrical|85|2|EIE",
+        assign: "2|Lead Process Engineer,Mechanical Engineer\n3|Lead Process Engineer\n4|Lead Process Engineer,Piping Designer\n5|Lead Process Engineer,Mechanical Engineer,E&I Engineer\n8|Mechanical Engineer[200%]\n\
+10|Piping Designer,Civil Engineer\n11|Civil Engineer\n13|Piping Designer[300%]\n14|Piping Designer[200%]\n15|E&I Engineer[200%]\n18|Mechanical Engineer,E&I Engineer\n19|Lead Process Engineer,Piping Designer", costs: "" }),
+    ("Procurement.dplan", Template { id: "x-proc", name: "Procurement", color: "#C2611F", desc: "",
+        rows: "0|Compressor package (long lead)\n1|Compressor package RFQ|10d\n1|Bid evaluation and technical clarifications|15d|2\n1|Compressor package PO placed|0|3\n\
+1|Manufacture and factory acceptance test|120d|4\n1|Shipping and customs clearance|25d|5\n1|Compressor package delivered to site|0|6\n\
+0|Electrical equipment\n1|Switchgear and transformer purchase|15d\n1|Manufacture and delivery|70d|9\n1|Electrical equipment delivered|0|10\n\
+0|Bulk materials\n1|Piping bulk materials purchase|15d\n1|Bulk materials delivery|40d|13\n1|All equipment on site|0|7,11,14",
+        people: "Procurement Lead|Procurement|80|1|PRL\nBuyer|Procurement|60|2|BUY\nExpediter|Procurement|55|1|EXP",
+        assign: "2|Procurement Lead,Buyer\n3|Procurement Lead,Buyer\n5|Expediter[25%]\n6|Expediter[50%]\n9|Buyer\n10|Expediter[25%]\n13|Buyer\n14|Expediter[25%]",
+        costs: "5|4800000\n6|180000\n10|650000\n14|900000" }),
+    ("Construction.dplan", Template { id: "x-con", name: "Construction", color: "#2E9D6B", desc: "",
+        rows: "0|Site preparation\n1|Site mobilisation|10d\n1|Temporary facilities|5d|2\n\
+0|Civil works\n1|Foundations and civil works|40d|3\n1|Compressor foundation cured|0|5FS+10d\n\
+0|Mechanical installation\n1|Set compressor package on foundation|5d|6\n1|Piping installation|45d|8SS+3d\n1|Hydrotest and reinstatement|10d|9\n\
+0|Electrical and instrumentation\n1|Electrical installation|30d|5\n1|Instrumentation and cabling|25d|12SS+10d\n1|Mechanical completion|0|10,13\n\
+0|Commissioning\n1|Pre-commissioning|15d|14\n1|Commissioning|20d|16\n1|Commissioning complete|0|17",
+        people: "Construction Manager|Management|110|1|CM\nCivil Crew|Civil|45|8|CC\nMechanical Crew|Mechanical|55|10|MC\nE&I Crew|Electrical|55|6|EC\nCommissioning Engineer|Commissioning|95|2|COM",
+        assign: "2|Construction Manager,Civil Crew[400%]\n3|Civil Crew[400%]\n5|Civil Crew[800%]\n8|Mechanical Crew[600%]\n9|Mechanical Crew[1000%]\n10|Mechanical Crew[400%]\n\
+12|E&I Crew[600%]\n13|E&I Crew[400%]\n16|Commissioning Engineer[200%],Mechanical Crew[200%]\n17|Commissioning Engineer[200%],E&I Crew[200%]",
+        costs: "3|85000" }),
+];
+/// Links between the plans: (plan, row, from plan, from row, type, lag in days).
+const LINKS: [(usize, usize, usize, usize, crate::model::LinkType, i64); 13] = {
+    use crate::model::LinkType::*;
+    [(1, 2, 0, 2, FS, 0), (0, 5, 1, 19, FS, 0), (2, 2, 1, 9, FS, 0), (2, 9, 1, 16, FS, 0), (2, 13, 1, 14, FS, 0), (0, 6, 2, 15, FS, 0),
+     (3, 2, 0, 4, FS, 0), (3, 5, 1, 12, FS, 0), (3, 8, 2, 7, FS, 5), (3, 9, 2, 14, FS, 0), (3, 12, 2, 11, FS, 0), (0, 7, 3, 14, FS, 0), (0, 8, 3, 18, FS, 0)]
+};
+
+/// The linked example: a main schedule and three subplans (engineering, procurement,
+/// construction) joined by 13 links between the plans, as (file name, plan). Their links are
+/// already up to date. Engineering and construction use resource calendars: an engineer's
+/// leave, and a six-day site week with a crew holiday.
+pub fn linked_example(start: NaiveDate) -> Vec<(String, Project)> {
+    use crate::model::{Calendar, ExtLink, Exception, STD_HOURS};
+    let mut plans: Vec<(String, Project)> = LINKED.iter().map(|(f, t)| (f.to_string(), build(t, start))).collect();
+    for &(to, row, from, frow, kind, lag) in &LINKS {
+        let uid = plans[from].1.tasks[frow - 1].uid;
+        let file = LINKED[from].0.to_string();
+        plans[to].1.tasks[row - 1].ext.push(ExtLink { file, uid, kind, lag: lag * 480, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
+    }
+    let day = |n: u64| start.checked_add_days(chrono::Days::new(n)).unwrap_or(start);
+    let countries: [&[&str]; 4] = [&["GB", "AE"], &["DE", "DE", "IN", "IN", "GB"], &["AE", "AE", "CN"], &["GB", "IN", "PH", "PK", "DE"]];
+    for ((_, p), cs) in plans.iter_mut().zip(countries) {
+        p.resources.iter_mut().zip(cs).for_each(|(r, c)| r.country = c.to_string());
+        p.columns.insert(6, ("ext".into(), 230));
+    }
+    // Engineering: the lead process engineer is on leave for two weeks during the simulation.
+    let eng = &mut plans[1].1;
+    eng.opts.res_cals = true;
+    eng.resources[0].exceptions.push(Exception { name: "Annual leave".into(), from: day(14), to: day(25), hours: vec![] });
+    // Construction: crews work a six-day week, and the mechanical crew has a four-day holiday break.
+    let con = &mut plans[3].1;
+    con.opts.res_cals = true;
+    let mut six = Calendar::standard("Site 6-day week");
+    six.week[5] = STD_HOURS.to_vec();
+    con.calendars.push(six);
+    for r in con.resources.iter_mut().filter(|r| r.name.ends_with("Crew")) { r.cal = Some("Site 6-day week".into()) }
+    con.resources[2].exceptions.push(Exception { name: "Holiday break".into(), from: day(250), to: day(253), hours: vec![] });
+    let _ = crate::links::update_all(&mut plans);
+    plans
+}

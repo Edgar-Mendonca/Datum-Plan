@@ -74,6 +74,12 @@ export const HELP: Record<string, Topic> = {
   ganttstyle: { t: "Gantt chart style", what: "Ready-made colour sets for the bars. Click one to use it; Bar Styles changes each colour." },
   showhide: { t: "Show and hide", what: "The project summary row (the whole plan as one row), summary tasks, and the labels beside the bars." },
   // Panels, pages and dialogs
+  linkedplans: { t: "Linked plans", what: "Several plans open at once, one per tab, and links from a task in one plan to tasks in others: a main schedule with its subplans, each in its own file.",
+    how: ["Open or create plans: each gets a tab above the ribbon (Ctrl+Tab switches, Ctrl+W closes). ＋ offers the linked-plans example.",
+      "Select a task and choose Project › Link to Plan (or right-click › Link to Plan…): pick the plan and the task, the type (FS, SS, FF, SF) and the lag.",
+      "The task waits for the other plan's task like for a normal link, using its last known dates. When the other plan changes, Update Links brings the dates up to date; plans that are not open are read from their files.",
+      "Linked Plans lists every link with the dates it last saw and marks the ones that have moved."],
+    tip: "Keep the plans of one project in one folder: the links still find each other when the folder is moved or copied." },
   sheets: { t: "Sheets", what: "Spreadsheets inside the plan that work like Excel and read the plan live: your own reports, dashboards, quantities and vendor lists, with nothing copied by hand.",
     how: ["Type = and click or drag over cells to add them to the formula; F4 adds $ anchors. Tab inserts a suggested function or name.",
       "Read the plan by name: Tasks[Finish], Tasks[% Complete] (0–100), Resources[Country], ProjectFinish, PercentComplete, SPI, TasksLate…",

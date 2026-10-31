@@ -590,12 +590,15 @@ export const shortcuts = () => openDialog(() => (
   </Dialog>
 ));
 /** Confirms closing with unsaved changes. */
-export const confirmClose = (then: () => void) => openDialog(() => (
-  <Dialog title="Save changes?" okText="Save" cancel="Cancel" ok={async () => { const o = await call<Out | null>("save", { asNew: false }); if (o) then(); return !!o; }}
-    extra={<button class="btn" onClick={() => { closeDialog(); then(); }}>Don't save</button>}>
-    <p>Do you want to save the changes to “{P().name}”?</p>
-  </Dialog>
-));
+export const confirmClose = (then: () => void) => openDialog(() => {
+  const dirty = (out()?.tabs ?? []).filter(t => t.dirty).map(t => t.name);
+  return (
+    <Dialog title="Save changes?" okText={dirty.length > 1 ? "Save All" : "Save"} cancel="Cancel" ok={async () => { const o = await call<Out | null>("save_all"); if (o) then(); return !!o; }}
+      extra={<button class="btn" onClick={() => { closeDialog(); then(); }}>Don't save</button>}>
+      <p>{dirty.length > 1 ? `These plans have unsaved changes: ${dirty.join(", ")}. Save them?` : `Do you want to save the changes to “${dirty[0] ?? P().name}”?`}</p>
+    </Dialog>
+  );
+});
 export { produce, opts, grid, query };
 
 // ---------- formula columns (Excel style, by column) ----------

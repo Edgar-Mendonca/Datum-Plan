@@ -36,7 +36,8 @@
     "A step-by-step guide with pictures, in English and Simplified Chinese (Help › Guide).",
     "Sheets that work like Excel and read the plan live: click cells into formulas, 490 functions suggested as you type, plan data by name (Tasks[Finish], ProjectFinish, SPI), live task lists, country flags.",
     "Your own dashboards: numbers, progress rings, charts, tables and country flags from the plan and your sheets, laid out as you like, several per plan.",
-    "Resource calendars that drive task dates: each person's own working week and leave decide when their work is done, when you switch it on."
+    "Resource calendars that drive task dates: each person's own working week and leave decide when their work is done, when you switch it on.",
+    "Several plans in tabs with links between them: a main schedule and its subplans, each in its own file, kept up to date together, with a four-plan example."
   ],
   "screenshots": [
     "docs/images/gantt.png",
@@ -62,7 +63,7 @@
       "title": "Portfolio and hardening",
       "when": "Later",
       "items": [
-        "Master plans with subprojects, one resource pool shared by several plans, links between projects, a portfolio dashboard.",
+        "A combined view of linked plans, one resource pool shared by several plans, a portfolio dashboard.",
         "Smooth with 100,000 tasks; a signed installer (no Windows warning); crash reports.",
         "Exchange files checked against real files from other tools; custom fields and codes in exported files."
       ]

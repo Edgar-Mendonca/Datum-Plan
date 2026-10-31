@@ -29,6 +29,7 @@ flowchart LR
     Rep[reports.tsx: dashboard, report gallery, charts]
     Dlg[dialogs.tsx: information, calendars, custom fields,<br/>filters, groups, sorts, baselines, import, compare]
     BS[backstage.tsx + setup.tsx: File, Options, updates,<br/>Project Setup panel]
+    Pl[plans.tsx: plan tabs, Link to Plan,<br/>Linked Plans panel]
   end
   subgraph Shell["src-tauri (Rust)"]
     Cmd[main.rs: state · apply · history · query · resources · field_list<br/>task_info · usage · curve · checks · network · compare · workspace<br/>open · save · import · export · save_file · pick_logo · options · recovery]
@@ -43,6 +44,7 @@ flowchart LR
     Rep2[report.rs · check.rs · network.rs<br/>usage · curves · compare · DCMA · layout]
     Form[formula.rs: MSP formula language]
     Sheet[sheet.rs: GridCraft Excel engine:<br/>formula columns · sheet tabs · Plan sheet]
+    Links[links.rs: links between plans:<br/>states · refresh · update_all]
     Load[load.rs: timephased work and cost]
     IO[io/: mspdi · xer · table · formats pmxml/mpx/ics/html/json]
   end
@@ -51,6 +53,7 @@ flowchart LR
   Doc --> Sched
   Query --> Fields --> Sched & Load & Form & Sheet
   Rep2 --> Fields
+  Cmd --> Links --> Sched
 ```
 
 **Rules:**
@@ -229,6 +232,10 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.5.3 | Tiles read the plan through formulas (`sheet::eval`: one extra workbook sheet per formula; a plain `=Sheet!A1:C9` keeps that sheet's formats, flags included) | One way to get any figure, the same as Sheets; no special data model per tile. |
 | 0.5.2 | Charts stay on Chart.js (not Plotly), restyled like the Chart.js samples: Tailwind-like palette replaces Okabe-Ito, no black axes, `cubicInterpolationMode: monotone` (no overshoot on S-curves), per-period lines straight; every chart registers in `live` and resizes on beforeprint/afterprint and with a ResizeObserver; the canvas is absolutely positioned so it never sizes its box | The user found the old Prism-style charts unattractive and saw charts cropped (printed canvases kept their screen width). Chart.js is small (~200 KB) and prints well; Plotly (~3.5 MB) suits Datum Plot. |
 | 0.5.4 | Resource calendars are a project option, off by default (`opts.res_cals`), plus a per-task `ignore_rc`; with it on, a task's candidate calendars are one per work resource with units > 0 (intersected with the task calendar when it has one) and the one giving the latest finish wins (`pick` in sched.rs, `ci` is a `Cell` during the forward pass); a person's calendar is their base calendar plus `Resource.exceptions` | The user wanted it "as another part" that changes nothing already built. Latest-finish-wins is how both MSP (assignments on their own calendars) and P6 (resource-dependent activities) end a task; one calendar per task keeps float and the backward pass simple. |
+| 0.5.5 | Links between plans are external predecessors on the task (`Task.ext`: file, uid, type, lag, plus the last known plan/code/name/start/finish), scheduled like a link from fixed dates; they change only on Update Links, never silently when another plan changes | Each team keeps its own file and stays in control ("if I have the control of linking or not linking"); a plan opened alone still schedules the same. Same idea as linked external activities elsewhere, kept simple. |
+| 0.5.5 | Tabs live in the shell (`App { doc, others, cur }`): the shown plan is always `doc`, so every existing command works unchanged; `switch_tab` swaps | No change to the ~80 commands; one plan at a time in the engine. |
+| 0.5.5 | Update All iterates passes over all open plans (and files of plans not open) until no date moves, at most 4×plans+4 passes, else an error (a loop) | Plans may link both ways (main → subplan → main); order-free and simple. |
+| 0.5.5 | A combined master view (all linked plans in one Gantt) is left for 0.6 | The user asked for links and tabs first; the master view needs a read-only multi-plan query. |
 | 0.4.4 | Guide text in Markdown in the repo; the Chinese guide keeps English UI names in bold with the Chinese meaning beside them; screenshots stay in English with numbered orange markers | The app is English-only; readers must find the buttons. Easy to keep up to date each release (CLAUDE.md step 3). |
 | 0.4.3 | Windows publisher is "Datum" (`bundle.publisher`; the copyright stays "© 2026 Edgar Mendonca"). `src-tauri/windows/hooks.nsh` (NSIS_HOOK_PREINSTALL) reads the old `Software\Edgar Mendonca\Datum Plan` install-folder key, installs there if it differs, and deletes the old key | Family rule (FAMILY §9 in the hub). Tauri's NSIS remembers the folder under `Software\<publisher>\<product>`; the uninstall entry and the default folder use only the product name, so default installs update in place. |
 | 0.4.2 | Release builds unwind (not abort); `guard()` in the shell turns a panic in apply/open/import/risk/level preview into an error message; a panic hook appends to `crash.log` in the app data folder | Abort closed the app on any panic and made the poisoned-lock recovery useless. |
@@ -306,9 +313,10 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.5.2 | Charts | New Chart.js style (monotone smooth lines, gradient fill, rounded bars, light grid, point-style legend, dark tooltip, status pill); charts resize with their box and before printing (no cropping); equal heights per row; empty-data message | ✅ |
 | 0.5.3 | Custom dashboards | Several per plan (tabs beside Project), templates; tiles: number (formula, format, green/red rule), progress ring, chart (plan chart or sheet range/formula: columns, stacked, bars, line, area, doughnut, pie), table (plan list or range/formula, flag columns), countries, text; drag to reorder, sizes; print | ✅ |
 | 0.5.4 | Resource calendars | Per-person Working Time (base calendar + leave/part days), Schedule Options › Resource calendars (off by default), each assignment on its person's calendar and the task finishing with the last person, task calendar ∩ person calendar, Ignore Resource Calendar, capacity from personal calendars, MSPDI/XER round trip | ✅ |
+| 0.5.5 | Plan tabs and links between plans | Tabs (one `Doc` per tab in the shell), external predecessors with last known dates, Link to Plan, Linked Plans panel (Up to date / Moved / Not found), Update This Plan / All Open Plans (fixpoint, loop refused), four-plan compressor-station example, recovery and Save All for every tab | ✅ |
 | 0.4.3 | Publisher | Windows publisher "Datum"; installer hook keeps a custom install folder | ✅ |
 | 0.4.2 | Hardening, command line & print | Security/robustness pass (hostile values, atomic saves, crash log + unwind, updater, CSP, CSV injection, npm audit), `datum-cli` + MCP server + ops catalogue, exact money (cents), Schedule Risk / Look-ahead / Manpower print, risk run kept | ✅ |
-| 0.6.0 | Portfolio | Portfolio dashboard, master/subprojects, shared resource pool, cross-project links | ⬜ |
+| 0.6.0 | Portfolio | Portfolio dashboard, combined master view of linked plans, shared resource pool (links between plans done in 0.5.5) | ⬜ |
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater, crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
 
@@ -519,7 +527,9 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 ### 2026-10-31: Session 18 (0.5.4 resource calendars, 0.5.5 plan tabs and links)
 - User (after a comparison with other scheduling tools and a public open-source clone): resource calendars only "partial"; wanted them to drive task dates "as another part" that changes nothing existing; and links between plans in tabs (a main schedule with subschedules, with control over linking), with a detailed example. Asked for 0.5.4 and 0.5.5 together.
 - 0.5.4: `Resource.exceptions`, `SchedOpts.res_cals`, `Task.ignore_rc`; `WorkCal::intersect`; sched.rs builds personal calendars (`rcal`) and per-task candidates, `pick` chooses the latest finish; load/level/report use `s.cals[s.rcal[k]]` for capacity. MSPDI writes a non-base calendar per work resource (UID 1000+k) with the person's exceptions and `IgnoreResourceCalendar`; the reader keeps base and resource calendars apart. XER writes CA_Rsrc calendars and TT_Rsrc, reads RSRC clndr_id; TT_Task imports with `ignore_rc`. UI: Resource Information › Working Time, Schedule Options checkbox, `ignore_rc` in details, help topic `rescals`. Tests: `resource_calendars_drive_task_dates`, `resource_calendars_survive_exchange_files`. Guide section (en + zh) with shot `working-time` (real app, Xvfb).
-- The two features were built together and split into two commits for the two releases.
+- 0.5.5: `Task.ext` (`ExtLink`), scheduler treats each as a link from its stored dates; `Op::ExtSet`; field `ext` (External Predecessors); `links.rs` (`states`, `refresh`, `update_all`, `file_name`); `templates::linked_example` (4 plans, 13 links, resource calendars). Shell: tabs (`switch_tab`, `close_tab`, `save_all`), `link_targets`, `link_states`, `update_links`, `linked_example`; open shows an open file's tab; recovery and Save All per tab. UI: `plans.tsx` (tab strip, Link to Plan dialog, Linked Plans panel), Project tab group "Linked Plans", context menu, Tell Me, Ctrl+Tab/Ctrl+W, help `linkedplans`. Tests: `plans_linked_to_each_other_move_together`; 8 UI checks. Real app (Xvfb): example opens 4 tabs; delaying procurement manufacture shows Moved; Update All moved mechanical completion 16 Nov → 14 Dec and the finish to Feb 2028 in 3 passes. Fixed in the real app: the Link to Plan button label wrapped over its group caption (renamed from "Link to Another Plan"); the type/lag row stacked vertically. Guide chapter (en + zh) with shots `link-dialog`, `linked-plans`.
+- The two features were built together and split into two commits for the two releases (0.5.4 without links.rs, plans.tsx and the tab commands).
+- Next: a combined master view of linked plans, then schedule quality (health trend, ghost bars, logic change log, milestone trend).
 
 ## 5. Known limits and next steps
 

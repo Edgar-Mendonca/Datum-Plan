@@ -71,6 +71,8 @@ pub enum Op {
     Style { cells: Vec<(u32, String, String)> },
     /// Sets the text formatting of spreadsheet cells.
     SheetStyle { k: usize, cells: Vec<(String, String)> },
+    /// Sets a task's predecessors in other plans (links between plans).
+    ExtSet { uid: u32, links: Vec<ExtLink> },
     /// Inserts (`count` > 0) or deletes (`count` < 0) whole rows or columns of a spreadsheet tab
     /// at `at` (0-based); formulas on every tab follow, as in Excel.
     SheetInsert { k: usize, cols: bool, at: u32, count: i32 },
@@ -935,6 +937,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             }
             _ => return Err("That sheet does not exist.".into()),
         },
+        Op::ExtSet { uid, links } => {
+            let i = p.idx(uid).ok_or("That task no longer exists.")?;
+            if links.len() > 200 { return Err("A task can have at most 200 links to other plans.".into()) }
+            p.tasks[i].ext = links;
+            p.normalize();
+        }
         Op::SheetInsert { k, cols, at, count } => {
             use gridcraft_formula::adjust::{Axis, Edit};
             let target = p.sheets.get(k).ok_or("That sheet does not exist.")?.name.clone();

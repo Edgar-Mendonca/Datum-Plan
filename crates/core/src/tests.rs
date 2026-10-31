@@ -606,6 +606,41 @@ fn dashboard_tiles_evaluate_formulas_spills_and_sheet_ranges() {
 }
 
 #[test]
+fn plans_linked_to_each_other_move_together() {
+    let mut plans = crate::templates::linked_example(d(2026, 11, 2));
+    assert_eq!(plans.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["Main schedule.dplan", "Engineering.dplan", "Procurement.dplan", "Construction.dplan"]);
+    assert_eq!(plans.iter().map(|x| x.1.tasks.iter().map(|t| t.ext.len()).sum::<usize>()).sum::<usize>(), 13);
+    let date = |plans: &[(String, Project)], k: usize, name: &str| {
+        let p = &plans[k].1;
+        let s = schedule(p).unwrap();
+        let i = p.tasks.iter().position(|t| t.name == name).unwrap_or_else(|| panic!("{name}"));
+        s.ef[i]
+    };
+    // A link carries the other plan's dates: the main schedule's mechanical completion is construction's.
+    assert_eq!(date(&plans, 0, "Mechanical completion"), date(&plans, 3, "Mechanical completion"));
+    assert!(plans.iter().all(|x| x.1.tasks.iter().flat_map(|t| &t.ext).all(|e| e.finish > 0 && !e.name.is_empty())), "every link knows its dates");
+    // Three weeks more for the compressor's manufacture moves the handover by about as much.
+    let before = date(&plans, 0, "Handover to operations");
+    let i = plans[2].1.tasks.iter().position(|t| t.name == "Manufacture and factory acceptance test").unwrap();
+    plans[2].1.tasks[i].dur += 15 * 480;
+    assert_eq!(date(&plans, 0, "Handover to operations"), before, "not until the links are updated");
+    let passes = crate::links::update_all(&mut plans).unwrap();
+    assert!(passes >= 3, "the change travels procurement → construction → main ({passes} passes)");
+    let after = date(&plans, 0, "Handover to operations");
+    assert!(after - before >= 18 * DAY && after - before <= 24 * DAY, "{}", (after - before) / DAY);
+    // A loop between plans is refused.
+    let uid = plans[1].1.tasks[1].uid;
+    let back = plans[0].1.tasks[1].ext.len();
+    plans[0].1.tasks[1].ext.push(crate::model::ExtLink { file: "Engineering.dplan".into(), uid, kind: LinkType::FS, lag: 0, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
+    assert!(crate::links::update_all(&mut plans).is_err(), "contract award ← engineering kick-off ← contract award");
+    plans[0].1.tasks[1].ext.truncate(back);
+    // The links survive saving and opening a plan.
+    let q: Project = serde_json::from_str(&serde_json::to_string(&plans[3].1).unwrap()).unwrap();
+    assert_eq!(q.tasks.iter().map(|t| t.ext.len()).sum::<usize>(), 5);
+    assert_eq!(crate::links::states(&q, &mut |_| Err("closed".into())).len(), 5);
+}
+
+#[test]
 fn text_formatting_on_tasks_and_sheets() {
     let mut doc = Doc::new(plan(&[(2, ""), (3, "1")]));
     let u = doc.p.tasks[0].uid;

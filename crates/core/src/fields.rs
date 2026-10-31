@@ -49,7 +49,7 @@ pub fn task_fields() -> &'static [FieldDef] {
             ("cal", "Task Calendar", Text, true), ("type", "Type", Text, true), ("effort", "Effort Driven", Flag, true), ("priority", "Priority", Int, true),
             ("es", "Early Start", Date, false), ("ef", "Early Finish", Fin, false), ("ls", "Late Start", Date, false), ("lf", "Late Finish", Fin, false),
             ("tf", "Total Slack", Dur, false), ("ff", "Free Slack", Dur, false), ("leveldelay", "Leveling Delay", Dur, true), ("acttype", "Activity Type", Text, true),
-            ("pcttype", "% Complete Type", Text, true), ("lp", "Longest Path", Flag, false), ("fpath", "Float Path", Int, false), ("elapsed", "Elapsed Duration", Flag, false), ("ignore_rc", "Ignore Resource Calendar", Flag, true),
+            ("pcttype", "% Complete Type", Text, true), ("lp", "Longest Path", Flag, false), ("fpath", "Float Path", Int, false), ("elapsed", "Elapsed Duration", Flag, false), ("ignore_rc", "Ignore Resource Calendar", Flag, true), ("ext", "External Predecessors", Text, false),
             ("split", "Split", Flag, false), ("project_finish_var", "Finish Slack", Dur, false),
             ("dmin", "Optimistic Duration", Dur, true), ("dmax", "Pessimistic Duration", Dur, true),
         ] { add(k, n, kd, "Schedule", e) }
@@ -356,6 +356,7 @@ impl<'a> Calc<'a> {
             "fpath" => if s.fpath[i] > 0 { F::Num(s.fpath[i] as f64) } else { F::Null },
             "elapsed" => F::Bool(t.elapsed),
             "ignore_rc" => F::Bool(t.ignore_rc),
+            "ext" => txt(&t.ext.iter().map(|x| format!("{} › {} {:?}{}", x.plan, if x.code.is_empty() { &x.name } else { &x.code }, x.kind, if x.lag != 0 { format!("{}{}", if x.lag > 0 { "+" } else { "" }, crate::parse::fmt_dur(x.lag, crate::model::Unit::D, p.day_min)) } else { String::new() })).collect::<Vec<_>>().join("; ")),
             "split" => F::Bool(!t.splits.is_empty()),
             "project_finish_var" => F::Num(self.dur_between(i, s.ef[i], s.finish) as f64),
             "pct" => F::Num(self.pct[i] as f64),

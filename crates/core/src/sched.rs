@@ -190,6 +190,11 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                 let x = need(&edges[e], &es, &ef);
                 v = v.max(match edges[e].kind { LinkType::FS | LinkType::SS => x, _ => c.sub(x, sp) });
             }
+            // Predecessors in other plans hold the task like links, from their last known dates.
+            for x in t.ext.iter().filter(|x| x.finish > 0) {
+                let y = match x.kind { LinkType::FS | LinkType::FF => c.add(x.finish, x.lag), LinkType::SS | LinkType::SF => c.add(x.start, x.lag) };
+                v = v.max(match x.kind { LinkType::FS | LinkType::SS => y, _ => c.sub(y, sp) });
+            }
         }
         if let Some(cd) = t.cdate {
             match t.constraint {

@@ -38,7 +38,7 @@ export interface Summary {
   bl_finish: string; var_finish: string; pv: string; ev: string; ac: string; spi: number | null; cpi: number | null; tasks: number; done: number; late: number;
   critical: number; milestones: number; error: string | null; week: boolean[]; off_days: number[];
 }
-export interface Out { project: Project; summary: Summary; path: string | null; dirty: boolean; undo: boolean; redo: boolean; clip: number; rev: number }
+export interface Out { tabs: { name: string; path: string | null; dirty: boolean }[]; tab: number; project: Project; summary: Summary; path: string | null; dirty: boolean; undo: boolean; redo: boolean; clip: number; rev: number }
 
 export interface Bar { s: number; f: number; ls: number; lf: number; bs: number | null; bf: number | null; dl: number | null; pct: number; segs: [number, number][]; links: [number, LinkType][] }
 export interface Row {

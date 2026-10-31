@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.5 — 2026-10-31
+
+Several plans at once, in tabs, with links between them: a main schedule and its subplans, each in its own file, moving together.
+
+- **Plan tabs.** Every plan you open or create gets a tab above the ribbon; a dot marks unsaved changes, × closes it (asking to save first), **＋** makes a new plan, opens one or opens the example. Ctrl+Tab goes to the next tab, Ctrl+W closes one. Opening a plan that is already open shows its tab. When you close the window, every plan with unsaved changes is listed and can be saved at once, and recovery covers every open plan.
+- **Links between plans.** Select a task and choose **Project › Link to Plan** (or right-click › **Link to Plan…**): pick another open plan, find its task, and set the type (FS, SS, FF, SF) and lag. The task waits for it like for a normal link. The **External Predecessors** column shows the links.
+- **Linked Plans** (Project tab) lists every link of the plan with the date it last knew and the date now, and marks the ones that have **Moved**. **Update All Open Plans** brings the new dates into every open plan, in the right order, until nothing moves; **Update This Plan** does one. Plans that are not open are read from their files, and links still find each other when the folder is moved. A loop between plans is refused with a message.
+- **A detailed example: File › Linked plans (example).** A compressor station in four plans saved to a folder you choose and opened in tabs: a main schedule with its milestones, engineering, procurement (with long-lead equipment and costs) and construction, joined by thirteen links. Engineering and construction use resource calendars (a lead engineer's leave, a six-day site week with a holiday break). Change the manufacture time in procurement and update the links to see the main schedule move.
+- The guide has a new chapter on tabs and links between plans, in English and Chinese.
+
 ## 0.5.4 — 2026-10-31
 
 Resource calendars that drive task dates: each person's own working week and leave decide when their work gets done.
