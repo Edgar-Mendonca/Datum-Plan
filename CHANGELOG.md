@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.9 — 2026-10-31
+
+The whole project in the master's Gantt.
+
+- **The combined view.** Under the master's own tasks, each subplan has a row (◇) with its duration, dates and the columns shown, in the order and hierarchy of Subplans, and a purple bar on the Gantt. Subplans are read from their files, open or not.
+- **Expand a subplan** (▷) to see its tasks in the master, greyed and read-only.
+- **Double-click a subplan's task** (or right-click › Go to this task in its plan) to open the subplan's tab with that task selected, and change it there.
+- **Format › Show/Hide › Subplans** turns the combined view on and off.
+- The guide explains the combined view, in English and Chinese.
+
 ## 0.5.8 — 2026-10-31
 
 A project made of plans: a master plan and its subplans, kept together.

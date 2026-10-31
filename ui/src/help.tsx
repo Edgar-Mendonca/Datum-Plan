@@ -78,6 +78,7 @@ export const HELP: Record<string, Topic> = {
     how: ["Save the master plan, then Project › Subplans › New Subplan: a name and its place. It is saved next to the master with the same calendars, and opens in its tab.",
       "Add Existing takes a saved plan into the project. ↑ ↓ change the order, Indent puts a subplan under the one above, × takes it out (the file stays).",
       "The project's tabs sit together in one colour: ◆ marks the master, › its subplans. Opening the master offers to open its subplans; a tab's right-click menu has Open All Subplans and Close Project.",
+      "The master shows its subplans under its tasks (Format › Show/Hide › Subplans): ▷ expands one, read-only; double-click a task to open it in its plan.",
       "Link the subplans to the master with Project › Link to Plan, from the task that waits."],
     tip: "A subplan belongs to one master. Keep the project's files in one folder: the master finds its subplans there when the folder is moved or copied." },
   linkedplans: { t: "Linked plans", what: "Several plans open at once, one per tab, and links from a task in one plan to tasks in others: a main schedule with its subplans, each in its own file.",

@@ -95,7 +95,15 @@ pub struct GRow {
     /// A task it waits for in another open plan has moved since (Update Links).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub ext_moved: bool,
+    /// In a master's combined view: the subplan (file) a read-only row comes from, and the
+    /// task's uid in that plan (rows from a subplan have `uid` 0, so nothing edits them here).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub sub: String,
+    #[serde(skip_serializing_if = "is_zero_u32")]
+    pub suid: u32,
 }
+
+fn is_zero_u32(v: &u32) -> bool { *v == 0 }
 
 #[derive(Serialize)]
 pub struct Col { pub key: String, pub name: String, pub kind: Kind, pub edit: bool }
@@ -180,7 +188,7 @@ impl Calc<'_> {
             ms: !s.summary[i] && (t.dur == 0 || matches!(t.act_type, ActType::StartMs | ActType::FinishMs)),
             crit: s.critical(p, i), late: self.val(i, "late").truth(), manual: t.manual, off: s.off[i], lp: s.lp[i],
             kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, name: t.name.clone(), res: self.text(i, "res"), cells, icons, style: t.style.as_object().map(|m| m.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()).unwrap_or_default(), bar: self.bar(i, q.baseline),
-            ext: t.ext.iter().map(|x| crate::links::label(x, p.day_min)).collect(), ext_out: vec![], ext_moved: false,
+            ext: t.ext.iter().map(|x| crate::links::label(x, p.day_min)).collect(), ext_out: vec![], ext_moved: false, sub: String::new(), suid: 0,
         }
     }
 

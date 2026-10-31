@@ -23,7 +23,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__calls = [];
-    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
+    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   }, fix);
   await p.goto(url);
   await p.waitForTimeout(700);
@@ -368,6 +368,17 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.fill(".dlg input", "Civil"); await p.selectOption(".dlg select", { index: 1 }); await p.click(".dlg .btn.pri:text-is('Create')"); await p.waitForTimeout(200);
   check("New Subplan asks for a name and its place (under Engineering)", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "new_subplan").pop())).includes('"name":"Civil","level":1,"at":2'));
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  // The master's combined view: its subplans under its tasks, read-only.
+  await p.evaluate(() => { window.__subsView = true; });
+  await p.click(".tabs .ctxgrp button:text-is('Format')"); await p.waitForTimeout(100);
+  await p.click("label.chk:has-text('Subplans') input"); await p.waitForTimeout(150); await p.click("label.chk:has-text('Subplans') input"); await p.waitForTimeout(300);
+  await p.evaluate(() => document.dispatchEvent(new CustomEvent("grid-scroll", { detail: 100000 }))); await p.waitForTimeout(200);
+  check("the master shows its subplans under its tasks, as read-only rows", !!(await p.$(".row.subp .subico")) && (await p.textContent(".row.subp")).includes("Engineering") && (await p.textContent(".row.subc")).includes("IFC drawings issued"));
+  await p.dblclick(".row.subc .c.nm"); await p.waitForTimeout(250);
+  check("double-clicking a subplan's task goes to it in its plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "goto_link").pop())).includes("Engineering.dplan") && !(await p.$(".dlg")) && !(await p.$("input.ed")));
+  check("the combined view asks the shell for the expanded subplans", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "query").pop())).includes('"subs":{"show":true'));
+  await p.evaluate(() => { window.__subsView = false; });
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
   await p.click(".plantabs .ptab:nth-child(2)"); await p.waitForTimeout(200);
   check("clicking a tab shows that plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "switch_tab").pop())).includes('"k":1'));

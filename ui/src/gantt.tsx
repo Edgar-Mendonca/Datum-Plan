@@ -152,14 +152,14 @@ export const Gantt = () => {
       if (showSlack() && r.kind === "task" && B.lf > B.f) { ctx.fillStyle = "#7FA6DA"; ctx.fillRect(x2, y + 15, X(B.lf) - x2, 2); }
       if (showLate() && r.kind === "task" && B.ls > B.s) { ctx.strokeStyle = K.muted; ctx.setLineDash([2, 2]); ctx.strokeRect(X(B.ls) + 0.5, by + 0.5, X(B.lf) - X(B.ls), bh); ctx.setLineDash([]); }
       let lx = x2 + 6;
-      ctx.globalAlpha = r.off ? 0.35 : 1;
+      ctx.globalAlpha = r.off ? 0.35 : r.sub && r.kind !== "subplan" ? 0.6 : 1;
       if (r.kind === "group") { ctx.fillStyle = K.muted; ctx.fillRect(x1, y + 7, x2 - x1, 5); }
       else if (r.ms) {
         ctx.fillStyle = isCrit ? K.crit : K.ink;
         ctx.beginPath(); ctx.moveTo(x1, by - 1); ctx.lineTo(x1 + 6, by + 5); ctx.lineTo(x1, by + 11); ctx.lineTo(x1 - 6, by + 5); ctx.fill();
         lx = x1 + 10;
-      } else if (r.kind === "summary" || r.kind === "project") {
-        ctx.fillStyle = r.kind === "project" ? K.muted : K.ink;
+      } else if (r.kind === "summary" || r.kind === "project" || r.kind === "subplan") {
+        ctx.fillStyle = r.kind === "project" ? K.muted : r.kind === "subplan" ? K.ext : K.ink;
         ctx.fillRect(x1, y + 6, x2 - x1, 4);
         ctx.beginPath(); ctx.moveTo(x1, y + 6); ctx.lineTo(x1 + 5, y + 6); ctx.lineTo(x1, y + 14); ctx.fill();
         ctx.beginPath(); ctx.moveTo(x2, y + 6); ctx.lineTo(x2 - 5, y + 6); ctx.lineTo(x2, y + 14); ctx.fill();
@@ -217,7 +217,7 @@ export const Gantt = () => {
   const hit = (e: MouseEvent) => {
     const [x, y] = pos(e), i = Math.floor(y / RH), r = grid().rows[i], pd = zoom();
     let part = "";
-    if (r && r.kind === "task") {
+    if (r && r.kind === "task" && r.uid > 0) {
       const x1 = (r.bar.s - d0()) * pd, x2 = (r.bar.f - d0()) * pd, xp = x1 + (x2 - x1) * r.bar.pct / 100, low = y - i * RH > 10;
       part = r.ms ? (Math.abs(x - x1) <= 8 ? "move" : "") : x >= x2 - 5 && x <= x2 + 3 ? "size" : low && x >= x1 - 2 && Math.abs(x - xp) <= 4 ? "pct" : x >= x1 - 2 && x < x2 - 5 ? "move" : "";
     }
@@ -297,7 +297,7 @@ export const Gantt = () => {
       <div class="cwrap">
         <div class="cbody" ref={body} onMouseDown={down} onScroll={() => { draw(); if (!echo) document.dispatchEvent(new CustomEvent("grid-scroll", { detail: body.scrollTop })); echo = false; document.dispatchEvent(new CustomEvent("tl-redraw")); }}
           onWheel={e => { if (e.ctrlKey) { e.preventDefault(); setZ(zoom() * (e.deltaY < 0 ? 1.2 : 1 / 1.2), d0() + (body.scrollLeft + e.offsetX) / zoom()); } }}
-          onDblClick={() => C.info()} onContextMenu={e => { const h = hit(e); if (h.r && !sel().includes(h.r.uid)) { setSel([h.r.uid]); setCur({ row: h.i, col: cur().col }); } openMenu(e, [
+          onDblClick={e => { const h = hit(e); if (h.r?.sub) import("./plans").then(m => m.goToLink(h.r!.sub!, h.r!.suid ?? 0)); else C.info(); }} onContextMenu={e => { const h = hit(e); if (h.r?.sub) { e.preventDefault(); const x = h.r; return void import("./plans").then(m => m.subRowMenu(e, x)); } if (h.r && !sel().includes(h.r.uid)) { setSel([h.r.uid]); setCur({ row: h.i, col: cur().col }); } openMenu(e, [
             { label: "Task Information…", icon: "info", run: C.info }, { label: "Scroll to Task", icon: "scroll", run: C.scrollTo }, { label: "Split Task…", icon: "split", run: C.split }, { label: "Mark on Track", icon: "track", run: C.onTrack }, "-",
             { label: "Show Critical Path", run: () => setShowCrit(!showCrit()), on: showCrit() }, { label: "Show Baseline", run: () => setShowBase(!showBase()), on: showBase() },
             { label: "Show Slack", run: () => setShowSlack(!showSlack()), on: showSlack() }, { label: "Show Late Bars", run: () => setShowLate(!showLate()), on: showLate() },

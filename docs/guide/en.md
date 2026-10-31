@@ -360,6 +360,18 @@ To start a project from scratch: save your master plan, then **Project › Subpl
 
 Opening a master offers to open its subplans. A tab's right-click menu has **Open All Subplans**, **New Subplan…** and **Close Project** (the master and its open subplans).
 
+### The combined view
+
+![The master with its subplans under its tasks: a subplan's row and bar, and its tasks, read-only.](img/combined.png)
+
+The master shows the whole project in one Gantt: under its own tasks, each subplan has a row.
+
+1. **◇ The subplan's row** shows its duration, start, finish and the other columns, worked out from its file (open or not), in the order and hierarchy of **Subplans**. ▷ expands it.
+2. **Its bar** is purple, so the subplans stand out from the master's own tasks.
+3. **Its tasks**, when expanded, are shown greyed and in italics: they are read-only here. Double-click one (or right-click › **Go to this task in its plan**) to open the subplan's tab with that task selected, and change it there.
+
+**Format › Show/Hide › Subplans** turns the combined view on and off.
+
 ### The example
 
 **File › Linked plans (example)** (or **＋ › Example**) asks for a folder, saves a project of four plans for a compressor station there and opens them in tabs: **Main schedule**, **Engineering**, **Procurement** and **Construction**. The main schedule's milestones wait for the subplans, construction waits for the drawings and for the compressor package to arrive, and the engineering and construction plans use resource calendars (a lead engineer's leave, a six-day site week). Every plan's calendar closes for Christmas and New Year (**Project › Change Working Time** shows the holidays). Change a duration in Procurement, then update the links and watch the main schedule move.

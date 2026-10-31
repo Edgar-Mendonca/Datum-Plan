@@ -52,6 +52,10 @@ export const [level, setLevel] = createSignal(0);
 export const [projSum, setProjSum] = createSignal(false);
 export const [hideSum, setHideSum] = createSignal(false);
 export const [baseline, setBaseline] = createSignal(0);
+/** A master's combined view: its subplans shown under its tasks, and which are expanded (files). */
+export const [showSubs, setShowSubs] = createSignal(true);
+export const [openSubs, setOpenSubs] = createSignal<string[]>([]);
+export const toggleSub = (file: string) => setOpenSubs(o => (o.includes(file) ? o.filter(f => f !== file) : [...o, file]));
 export const [grid, setGrid] = createSignal<Grid>({ cols: [], rows: [], shown: 0, total: 0 });
 
 export const query = (): Query => ({
@@ -66,11 +70,11 @@ let pending = 0;
 export const refresh = async () => {
   if (!out()) return;
   const n = ++pending;
-  try { const g = await invoke<Grid>("query", { q: query() }); if (n === pending) setGrid(g); } catch (e) { toast(String(e)); }
+  try { const g = await invoke<Grid>("query", { q: query(), subs: { show: showSubs(), open: openSubs() } }); if (n === pending) setGrid(g); } catch (e) { toast(String(e)); }
 };
 createRoot(() => {
   const colKeys = createMemo(() => cols().map(c => c[0]).join("|"));
-  createEffect(on([tick, colKeys, filter, group, sort, collapsed, level, projSum, hideSum, baseline], () => { refresh(); }));
+  createEffect(on([tick, colKeys, filter, group, sort, collapsed, level, projSum, hideSum, baseline, showSubs, openSubs], () => { refresh(); }));
 });
 
 /** Saves the Entry table's columns into the plan; other tables go to plan settings. */

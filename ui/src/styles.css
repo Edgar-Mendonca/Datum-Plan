@@ -831,3 +831,9 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .ptab.master .nm { font-weight: 600; }
 .tbl.subs tr { cursor: pointer; } .tbl.subs tr.on td { background: var(--sel, #E3EDFC); } .tbl.subs .acts { white-space: nowrap; text-align: right; }
 .subbar { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+
+/* A master's combined view: its subplans under its tasks (0.5.9) */
+.row.subp .c { background: color-mix(in srgb, #6D3FC8 6%, var(--bg)); }
+.row.subp .c.nm { color: #4C2A99; }
+.row.subc .c { color: var(--muted); font-style: italic; }
+.subico { font-style: normal; color: #6D3FC8; margin-right: 4px; }

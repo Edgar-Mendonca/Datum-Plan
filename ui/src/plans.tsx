@@ -1,8 +1,8 @@
 // Several plans at once: a tab per open plan (above the ribbon), links from a task to tasks in
 // other plans, and the Linked Plans panel that shows them and brings their dates up to date.
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
-import { Out, SubPlan, TabInfo, fmtAt } from "./api";
-import { act, call, out, P, setOut, openMenu, openDialog, closeDialog, toast, useTable, table, tick, refresh, grid, setView, view } from "./store";
+import { Out, Row as GRow, SubPlan, TabInfo, fmtAt } from "./api";
+import { act, call, out, P, setOut, openMenu, openDialog, closeDialog, toast, useTable, table, tick, refresh, grid, setView, view, toggleSub, setShowSubs } from "./store";
 import { RH } from "./grid";
 import { selectUid } from "./cmds";
 import { Dialog, Row } from "./ui";
@@ -179,6 +179,12 @@ export const subplans = () => openDialog(() => {
     </Dialog>
   );
 });
+/** Right-click on a subplan's row in the master's combined view. */
+export const subRowMenu = (e: MouseEvent, r: GRow) => openMenu({ x: e.clientX, y: e.clientY }, [
+  { label: r.suid ? `Go to this task in its plan` : `Open “${r.name}” in its tab`, run: () => goToLink(r.sub!, r.suid ?? 0) },
+  ...(r.kind === "subplan" ? [{ label: r.open ? "Collapse" : "Expand (read-only)", run: () => toggleSub(r.sub!) }] : []),
+  "-", { label: "Subplans…", run: subplans }, { label: "Hide Subplans in This View", run: () => setShowSubs(false) },
+]);
 /** A project's colour: the same for its master and subplans. */
 const GC = ["#2F6FCF", "#1E7D46", "#B45309", "#6D3FC8", "#0E7490", "#C0392B"];
 const gcol = (t: TabInfo) => (t.role ? GC[[...t.project].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % GC.length] : "");

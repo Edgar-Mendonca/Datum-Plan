@@ -55,7 +55,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 ### Schedule
 - A critical path engine that works to the minute, with working calendars, holidays, task and resource calendars, all constraint types, deadlines and elapsed durations.
 - **Resource calendars that drive task dates** (optional): each person's own working week and leave decide when their work is done; a task finishes when the last person on it does.
-- **Projects made of plans:** a master plan and its subplans, in order and in a hierarchy, with their tabs grouped in one colour; New Subplan, Open All Subplans and Close Project.
+- **Projects made of plans:** a master plan and its subplans, in order and in a hierarchy, with their tabs grouped in one colour and the whole project in the master's Gantt (subplans as rows you can expand); New Subplan, Open All Subplans and Close Project.
 - **Several plans in tabs, with links between them:** a main schedule and its subplans in their own files; a task can wait for a task in another plan, Linked Plans shows what has moved, and Update Links brings every open plan up to date. File › Linked plans (example) opens a four-plan example.
 - Longest path, float paths, free and total float, retained logic or progress override, scheduling from the finish.
 - Resource levelling (all tasks or a selection), with a preview of which tasks move and the new finish before anything changes, and clearing it again.

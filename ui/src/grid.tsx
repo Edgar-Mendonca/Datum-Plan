@@ -3,7 +3,7 @@
 // AutoFilter buttons and inline header rename.
 import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, untrack, on, JSX } from "solid-js";
 import { Col, Row } from "./api";
-import { grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
+import { toggleSub, grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
 import { C } from "./cmds";
 import * as D from "./dialogs";
 import * as F from "./fmt";
@@ -299,6 +299,7 @@ export const Grid = (p: { width?: number }) => {
 
   const rowMenu = (e: MouseEvent) => {
     const [r, c] = cellAt(e);
+    if (rows()[r]?.sub) { const x = rows()[r]; return void import("./plans").then(m => m.subRowMenu(e, x)); }
     if (!inRange(r, Math.max(0, c))) pick(r, Math.max(0, c));
     const k = cur().row;
     openMenu(e, [
@@ -368,8 +369,8 @@ export const Grid = (p: { width?: number }) => {
     const icon = r.icons?.find(x => x[0] === k)?.[1];
     if (c.key === "name") return <>
       <span style={{ width: `${r.lvl * 16}px`, display: "inline-block" }} />
-      {r.kids ? <b class="tg" onMouseDown={e => { e.stopPropagation(); if (r.uid > 0) C.toggle(r.uid); }}>{r.open ? "◢" : "▷"}</b> : <span class="tg" />}
-      {t}
+      {r.kids ? <b class="tg" onMouseDown={e => { e.stopPropagation(); if (r.uid > 0) C.toggle(r.uid); else if (r.kind === "subplan") toggleSub(r.sub!); }}>{r.open ? "◢" : "▷"}</b> : <span class="tg" />}
+      {r.kind === "subplan" && <i class="subico" title="A subplan of this project (read-only here; double-click to open it)">◇</i>}{t}
     </>;
     if (icon) return <span class="ico" title={t}>{icon}</span>;
     if (c.key === "pct" && r.kind !== "group") return <span class="pctc"><i style={{ width: `${parseFloat(t) || 0}%` }} />{t}</span>;
@@ -387,7 +388,7 @@ export const Grid = (p: { width?: number }) => {
     <div class="grid" style={{ width: p.width ? `${p.width}px` : undefined }}>
       <div class="gscroll" ref={box} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onContextMenu={rowMenu}
         onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste}
-        onDblClick={e => { const [r, c] = cellAt(e); if (c < 0) C.info(); else startEdit(r, c); }}
+        onDblClick={e => { const [r, c] = cellAt(e), x = rows()[r]; if (x?.sub) return void import("./plans").then(m => m.goToLink(x.sub!, x.suid ?? 0)); if (c < 0) C.info(); else startEdit(r, c); }}
         onScroll={() => { setScrollTop(box.scrollTop); if (echo) { echo = false; return; } document.dispatchEvent(new CustomEvent("chart-scroll", { detail: box.scrollTop })); }}>
         <div class="gsheet" style={{ width: `${total() + 160}px`, height: `${(rows().length + 3) * RH + 40}px` }}>
           <div class="ghead" onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.stopPropagation()} onDblClick={e => e.stopPropagation()}>
@@ -412,8 +413,8 @@ export const Grid = (p: { width?: number }) => {
           <div class="gbody">
             <For each={visible()}>{([r, k]) => (
               <div class="row" style={{ top: `${k * RH}px`, width: `${total()}px` }}
-                classList={{ sum: r.kind === "summary" || r.kind === "project", grp: r.kind === "group", sel: selSet().has(r.uid), off: r.off, late: r.late, hl: r.hl, proj: r.kind === "project" }}>
-                <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }} title={r.late ? "Late" : ""}>{r.uid > 0 ? r.id : ""}{r.late && <i class="ind late">!</i>}{r.manual && <i class="ind">✎</i>}{r.ext?.length ? <i class="ind xin" classList={{ moved: r.ext_moved }} title={`Waits for a task in another plan:\n${r.ext.join("\n")}${r.ext_moved ? "\n\nThat plan has moved since: Project › Update Links." : ""}\n(click: go to it, edit or update)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkMenu(e, r.uid)); }}>{r.ext_moved ? "⇠!" : "⇠"}</i> : null}{r.ext_out?.length ? <i class="ind xout" title={`Another plan waits for this task:\n${r.ext_out.join("\n")}\n(click: go to it)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkMenu(e, r.uid)); }}>⇢</i> : null}</div>
+                classList={{ sum: r.kind === "summary" || r.kind === "project" || r.kind === "subplan", subp: r.kind === "subplan", subc: !!r.sub && r.kind !== "subplan", grp: r.kind === "group", sel: selSet().has(r.uid), off: r.off, late: r.late, hl: r.hl, proj: r.kind === "project" }}>
+                <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }} title={r.late ? "Late" : ""}>{r.uid > 0 ? r.id : ""}{r.late && <i class="ind late">!</i>}{r.manual && <i class="ind">✎</i>}{r.uid > 0 && r.ext?.length ? <i class="ind xin" classList={{ moved: r.ext_moved }} title={`Waits for a task in another plan:\n${r.ext.join("\n")}${r.ext_moved ? "\n\nThat plan has moved since: Project › Update Links." : ""}\n(click: go to it, edit or update)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkMenu(e, r.uid)); }}>{r.ext_moved ? "⇠!" : "⇠"}</i> : null}{r.uid > 0 && r.ext_out?.length ? <i class="ind xout" title={`Another plan waits for this task:\n${r.ext_out.join("\n")}\n(click: go to it)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkMenu(e, r.uid)); }}>⇢</i> : null}</div>
                 <For each={grid().cols}>{(c, j) => (
                   <div class="c" classList={{ r: right(c), nm: c.key === "name", ro: !c.edit, in: inRange(k, j()), at: cur().row === k && cur().col === j(), fz: j() === frozen(), fx: !!formulaOf(c.key) }}
                     style={{ width: `${widths()[j()]}px`, ...sticky(j()), ...(r.style ? { ...F.css(r.style["*"]), ...F.css(r.style[c.key]) } : {}), ...(D.cfRules().length ? D.cfStyle(c.key, r.cells[j()] ?? "") : {}) }}>

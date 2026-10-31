@@ -53,6 +53,8 @@ struct App {
     opts: Options,
     clip: Vec<Task>,
     table: Option<(io::table::Table, String)>,
+    /// Subplan files read for the master's combined view, with their modified time.
+    files: HashMap<PathBuf, (std::time::SystemTime, Project)>,
 }
 
 struct St(Mutex<App>);
@@ -538,9 +540,10 @@ fn paste(st: State<St>, at: usize) -> R<Out> {
 
 /// The rows a view shows: filtered, grouped, sorted, with cells and bars.
 #[tauri::command]
-fn query(st: State<St>, q: Query) -> query::Grid {
-    let a = st.lock();
+fn query(st: State<St>, q: Query, subs: Option<SubView>) -> query::Grid {
+    let mut a = st.lock();
     let mut g = calc(&a).grid(&q);
+    if let Some(v) = subs.filter(|v| v.show && !a.doc.p.subplans.is_empty()) { combined(&mut a, &q, &v, &mut g) }
     let by = waited_on(&a);
     let moved = link_status(&a).swap_remove(a.cur);
     for r in &mut g.rows {
@@ -548,6 +551,53 @@ fn query(st: State<St>, q: Query) -> query::Grid {
         r.ext_moved = moved.contains(&r.uid);
     }
     g
+}
+
+/// The master's combined view: which subplans to show and which are expanded (their files).
+#[derive(Deserialize, Default)]
+struct SubView { show: bool, open: Vec<String> }
+
+/// Adds the master's subplans under its own rows: each as a summary row (dates, progress, the
+/// columns shown) and, when expanded, its tasks, read-only and without links drawn.
+fn combined(a: &mut App, q: &Query, v: &SubView, g: &mut query::Grid) {
+    let here = a.doc.path.clone();
+    let list = a.doc.p.subplans.clone();
+    let opened: std::collections::HashSet<String> = v.open.iter().map(|f| links::file_name(f).to_lowercase()).collect();
+    for sp in &list {
+        let key = links::file_name(&sp.file).to_lowercase();
+        let p = match tab_of(a, &sp.file) {
+            Some(k) => Some(docs(a)[k].p.clone()),
+            None => sub_path(here.as_deref(), &sp.file).and_then(|path| read_cached(a, &path)),
+        };
+        let Some(p) = p else {
+            g.rows.push(query::GRow { kind: "subplan", lvl: sp.level, name: format!("{} (file not found)", sp.name), sub: sp.file.clone(), ..Default::default() });
+            continue;
+        };
+        let c = Calc::new(&p, &a.opts.date_fmt, today());
+        let sq = Query { cols: q.cols.clone(), project_summary: true, baseline: q.baseline, ..Query::default() };
+        let mut rows = c.grid(&sq).rows.into_iter();
+        let Some(mut head) = rows.next() else { continue };
+        let open = opened.contains(&key);
+        (head.kind, head.lvl, head.name, head.sub, head.open, head.kids) = ("subplan", sp.level, p.name.clone(), sp.file.clone(), open, true);
+        g.rows.push(head);
+        if !open { continue }
+        for mut r in rows {
+            (r.suid, r.uid, r.sub) = (r.uid, 0, sp.file.clone());
+            r.lvl = r.lvl.saturating_add(sp.level + 1);
+            r.bar.links.clear();
+            r.ext_out.clear();
+            g.rows.push(r);
+        }
+    }
+}
+
+/// A plan file read for the combined view, kept until the file changes.
+fn read_cached(a: &mut App, path: &Path) -> Option<Project> {
+    let when = std::fs::metadata(path).and_then(|m| m.modified()).ok()?;
+    if let Some((t, p)) = a.files.get(path) { if *t == when { return Some(p.clone()) } }
+    let p = Doc::open(path).ok()?.p;
+    a.files.insert(path.to_path_buf(), (when, p.clone()));
+    Some(p)
 }
 
 /// Tasks of the shown plan that tasks in the other open plans wait for: uid → (the other plan's
@@ -1345,7 +1395,7 @@ fn main() {
                 }));
             }
             let opts = options_file(app.handle()).and_then(|f| std::fs::read_to_string(f).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-            app.manage(St(Mutex::new(App { doc: Doc::new(Project::new("Project1", today())), others: vec![None], cur: 0, opts, clip: vec![], table: None })));
+            app.manage(St(Mutex::new(App { doc: Doc::new(Project::new("Project1", today())), others: vec![None], cur: 0, opts, clip: vec![], table: None, files: HashMap::new() })));
             Ok(())
         })
         .on_window_event(|w, e| {
