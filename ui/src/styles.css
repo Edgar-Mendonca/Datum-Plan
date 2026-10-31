@@ -579,7 +579,7 @@ tr.behind td { background: var(--err-bg); }
   html.printing .ppage { break-after: page; page-break-after: always; }
   html.printing .ppage:last-child { break-after: auto; page-break-after: auto; }
 }
-.pset .seg { display: flex; flex-wrap: wrap; } .pset .seg button { flex: 1; padding: 3px 6px; }
+.pset .seg { display: flex; flex-wrap: wrap; } .pset .seg button { flex: auto; padding: 3px 6px; white-space: nowrap; }
 
 /* Columns dialog */
 .coldlg { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; min-width: 760px; }
@@ -837,3 +837,19 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .row.subp .c.nm { color: #4C2A99; }
 .row.subc .c { color: var(--muted); font-style: italic; }
 .subico { font-style: normal; color: #6D3FC8; margin-right: 4px; }
+
+/* Print: buttons, the simple header & footer (0.5.10) */
+.pbtns { display: flex; flex-direction: column; gap: 6px; }
+.phead.simple .ps1 { flex-direction: column; gap: 2px; }
+.phead.simple .ps1 img { margin-bottom: 2px; }
+.ptitles { text-align: center; line-height: 1.2; }
+.ptitle { font-weight: 600; font-size: 15px; color: #1B2733; }
+.psub { font-size: 11.5px; color: #55606E; font-weight: 400; }
+.pimgs { display: grid; gap: 6px; }
+.pimg { display: grid; grid-template-columns: 52px 88px 1fr; gap: 8px; align-items: center; }
+.pimg .lbl { color: var(--muted); }
+.pimg .thumb { height: 34px; border: 1px dashed var(--line); border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 10.5px; background: #fff; }
+.pimg .thumb img { max-height: 30px; max-width: 84px; }
+.pimg .acts { display: flex; flex-wrap: wrap; gap: 4px; }
+.pind { margin-left: 22px; }
+.ptab input.wide { width: 100%; }

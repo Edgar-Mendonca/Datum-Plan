@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.10 — 2026-10-31
+
+Printing you can rely on, with a simple header and footer.
+
+- **Save as PDF** writes exactly the pages in the preview to a file you name, at the paper size and orientation you chose, with nothing added by Windows: no date, window title, web address or page count. **Print…** opens the print window for a printer.
+- **Fixed: blank or split pages and the browser's own header and footer.** The print window read the page setup after the app had already removed it, so a landscape page came out on portrait sheets, split in two (half blank), with the browser's date, title and address. The page setup now stays in place until the print window has finished.
+- **Fixed: the print settings panel was squashed into one line with a sideways scroll bar** (Header, View and every other tab). A style name of the plan tabs clashed with the panel's.
+- **Header & footer, simply:** up to three pictures at the top (left, centre, right; your company logo or any picture) with one height for all, a title (the plan's name unless you type another) and a subtitle, and at the bottom only what you tick: printed date (and time), page number, status date, company name, revision and your own text. Nothing else is printed. **Advanced** keeps the code boxes for exact control; plans that used their own header or footer keep it.
+- **Master plans print their subplans as on screen** (purple rows, their tasks in grey), or one row each, with all their tasks, or not at all (View › Subplans).
+- Page Setup tabs fit on one line; margins read Top, Right, Bottom, Left.
+- The guide explains Save as PDF and the header and footer, in English and Chinese.
+
 ## 0.5.9 — 2026-10-31
 
 The whole project in the master's Gantt.

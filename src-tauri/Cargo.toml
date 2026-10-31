@@ -1,6 +1,6 @@
 [package]
 name = "datum-plan"
-version = "0.5.9"
+version = "0.5.10"
 edition = "2021"
 description = "Datum Plan: project scheduling for Windows."
 license = "MIT"
@@ -17,3 +17,8 @@ serde.workspace = true
 serde_json.workspace = true
 ureq = { version = "2", features = ["json", "native-certs"] }
 sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+# Save as PDF straight from the WebView (no print window, no browser header or footer).
+webview2-com = "0.39"
+windows-core = "0.62"

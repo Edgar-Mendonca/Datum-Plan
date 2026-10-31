@@ -18,7 +18,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
   const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
-  p.on("pageerror", e => errors.push(e.message));
+  p.on("pageerror", e => { errors.push(e.message); if (process.env.DBG) console.log("PAGEERR", e.message, e.stack); });
   await p.addInitScript(f => {
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
@@ -102,9 +102,37 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const nprev = (await p.$$(".pprev .ppage")).length;
   check("Print page shows a page preview", nprev >= 1 && (await p.textContent(".pprev .phead")).includes(fix.state.project.name), String(nprev));
   await p.evaluate(() => { window.print = () => { window.__printed = [document.querySelectorAll("#printroot .ppage").length, [...document.querySelectorAll("style")].map(s => s.textContent).find(t => t.includes("@page")) || ""]; }; });
-  await p.click(".pbtns .btn"); await p.waitForTimeout(400);
+  await p.click(".pbtns button:has-text('Print…')"); await p.waitForTimeout(500);
   const pr = await p.evaluate(() => window.__printed);
   check("Print renders every page with its paper size", pr && pr[0] === nprev && /size: 297mm 210mm/.test(pr[1]), JSON.stringify(pr));
+  check("the page setup stays in place until the print window has finished", await p.evaluate(() => [...document.querySelectorAll("style")].some(s => s.textContent.includes("@page")) && document.documentElement.classList.contains("printing")));
+  // The same engine as the Windows WebView prints the pages to a PDF: one sheet per page, landscape A4.
+  const pdf = (await p.pdf({ preferCSSPageSize: true, printBackground: true })).toString("latin1");
+  const sheets = (pdf.match(/\/Type\s*\/Page[^s]/g) || []).length, box = (pdf.match(/\/MediaBox\s*\[([^\]]+)\]/) || [])[1] || "";
+  check("printed to PDF: one landscape A4 sheet per page, none split or blank", sheets === nprev && /84[12]\.\d+ 59[45]\.\d+/.test(box), `${sheets} sheets, box ${box}`);
+  await p.evaluate(() => window.dispatchEvent(new Event("afterprint"))); await p.waitForTimeout(100);
+  check("…and is removed afterwards", await p.evaluate(() => ![...document.querySelectorAll("style")].some(s => s.textContent.includes("@page")) && !document.documentElement.classList.contains("printing")));
+  // Several pages (200 %): still one sheet per page.
+  await p.click(".pset .seg button:has-text('Page')"); await p.click(".ptab input[type=radio]"); await p.fill(".ptab input[type=number]", "200"); await p.press(".ptab input[type=number]", "Tab"); await p.waitForTimeout(300);
+  const many = (await p.$$(".pprev .ppage")).length;
+  await p.click(".pbtns button:has-text('Print…')"); await p.waitForTimeout(500);
+  const pdf2 = (await p.pdf({ preferCSSPageSize: true, printBackground: true })).toString("latin1");
+  check("several pages print as that many sheets", many > 1 && (pdf2.match(/\/Type\s*\/Page[^s]/g) || []).length === many, `${many} pages`);
+  await p.evaluate(() => window.dispatchEvent(new Event("afterprint"))); await p.waitForTimeout(100);
+  await p.click(".pset button:has-text('Reset to defaults')"); await p.waitForTimeout(200);
+  await p.click(".pbtns button:has-text('Save as PDF')"); await p.waitForTimeout(500);
+  check("Save as PDF writes the pages at the paper size, no margins added", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "save_pdf").pop())).includes('"wMm":297,"hMm":210,"margins":[0,0,0,0]'));
+  // The settings panel lays out in its width (no squashed boxes, no sideways scroll).
+  await p.click(".pset .seg button:has-text('Header & footer')"); await p.waitForTimeout(150);
+  check("the print settings panel never scrolls sideways", await p.evaluate(() => { const s = document.querySelector(".pset"); return s.scrollWidth <= s.clientWidth + 1 && document.querySelector(".ptab").getBoundingClientRect().width > 250; }));
+  const hf = await p.textContent(".ptab");
+  check("Header & footer: pictures, title and footer choices, nothing else printed", ["Pictures at the top", "Title", "Subtitle", "Printed date", "Page number", "Revision"].every(t => hf.includes(t)), hf.slice(0, 200));
+  await p.fill(".ptab input[placeholder^='e.g. Revision']", "Rev B · Issued for review"); await p.waitForTimeout(150);
+  await p.click(".ptab .chk:has-text('Status date') input"); await p.waitForTimeout(150);
+  check("the preview shows the subtitle and the chosen footer", (await p.textContent(".pprev .phead")).includes("Rev B · Issued for review") && (await p.textContent(".pprev .pfoot")).includes("Status date") && !(await p.textContent(".pprev .ppage")).includes("Datum Plan"));
+  await p.click(".ptab button:has-text('Advanced')"); await p.waitForTimeout(150);
+  check("the code boxes are still there for exact control, and wide enough to use", await p.evaluate(() => [...document.querySelectorAll(".pslots textarea")].every(t => t.getBoundingClientRect().width > 150)));
+  await p.click(".ptab button:has-text('Back to the simple')"); await p.waitForTimeout(100);
   await p.click(".bs aside .back"); await p.waitForTimeout(200);
 
   // 0.3.5: nested Insert Column menu, hide/unhide/delete, every column printed, ribbon fits, Setup in the sidebar.

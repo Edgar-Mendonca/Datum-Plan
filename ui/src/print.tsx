@@ -4,7 +4,7 @@
 import { For, Show, Switch, Match, JSX, createMemo, createSignal, createResource, onCleanup, lazy } from "solid-js";
 import { Portal } from "solid-js/web";
 import { createStore } from "solid-js/store";
-import { Row, Net, Usage, SheetOut, fmtDay, iso, dateDay, dayDate } from "./api";
+import { Row, Net, Usage, SheetOut, Grid, fmtDay, iso, dateDay, dayDate, invoke } from "./api";
 import { grid, out, opts, P, act, cols, zoom, call, view, toast, query, tick } from "./store";
 import { NetDraw, netSize, netBox, setNetBox, netSums, netWbs, loadNet, NET_COLS, RES_COLS, fmtB } from "./views";
 import { sheetK } from "./sheets";
@@ -21,17 +21,34 @@ export type PageSetup = {
   range: "all" | "dates"; from: string; to: string; pages: string; colKeys: string[] | null; repeat: boolean; unit: string;
   font: number; rowH: number; fitCols: boolean; wrap: boolean; notes: boolean;
   header: Slots; footer: Slots; legend: "every" | "last" | "none"; legendText: string; clientLogo: string; grid: boolean; idCol: boolean;
+  /** Header & footer: "simple" (pictures, title, footer choices) or "codes" (the three boxes with &[codes]). */
+  hf: "simple" | "codes"; imgs: Slots; imgH: number; titleOn: boolean; title: string; subtitle: string;
+  fPrinted: boolean; fTime: boolean; fPage: boolean; fStatus: boolean; fCompany: boolean; fRev: string; fText: string;
+  /** A master's subplans: as on screen, all collapsed, all expanded, or left out. */
+  subs: "shown" | "collapsed" | "expanded" | "none";
 };
 export const CODES: [string, string][] = [["&[Page]", "Page number"], ["&[Pages]", "Total pages"], ["&[Date]", "Today's date"], ["&[Project]", "Project name"], ["&[Company]", "Company"], ["&[Client]", "Client"],
   ["&[Manager]", "Manager"], ["&[Status]", "Status date"], ["&[Start]", "Project start"], ["&[Finish]", "Project finish"], ["&[Logo]", "Company logo"], ["&[Client Logo]", "Client logo"]];
 const defaults = (): PageSetup => ({
   paper: opts().paper || "A4", landscape: opts().landscape !== false, margins: [12, 10, 12, 10], scale: 100, fit: 1, range: "all", from: "", to: "", pages: "", colKeys: null, repeat: true, unit: "auto", font: 10, rowH: 18, fitCols: false, wrap: false, notes: false,
-  header: ["&[Logo]", "&[Project]", "&[Client Logo]"], footer: ["Printed &[Date]", "Page &[Page] of &[Pages]", "&[Company]"], legend: "every", legendText: "&[Project]\nStatus date: &[Status]", clientLogo: "", grid: true, idCol: true,
+  header: OLD_HEAD, footer: OLD_FOOT, legend: "every", legendText: "&[Project]\nStatus date: &[Status]", clientLogo: "", grid: true, idCol: true,
+  hf: "simple", imgs: ["@company", "", ""], imgH: 36, titleOn: true, title: "", subtitle: "", fPrinted: true, fTime: false, fPage: true, fStatus: false, fCompany: false, fRev: "", fText: "", subs: "shown",
 });
+const OLD_HEAD: Slots = ["&[Logo]", "&[Project]", "&[Client Logo]"], OLD_FOOT: Slots = ["Printed &[Date]", "Page &[Page] of &[Pages]", "&[Company]"];
 const [ps, setPs] = createStore<PageSetup>(defaults());
 let loadedFor = "";
 /** The plan's saved page setup (project.ui.page) over the defaults. */
-const load = () => { const key = `${out()?.path}|${out()?.rev}`; if (key === loadedFor) return; loadedFor = key; const { cols: _old, ...saved } = (P().ui?.page ?? {}) as PageSetup & { cols?: number }; setPs({ ...defaults(), ...saved }); };
+const load = () => {
+  const key = `${out()?.path}|${out()?.rev}`; if (key === loadedFor) return; loadedFor = key;
+  const { cols: _old, ...saved } = (P().ui?.page ?? {}) as Partial<PageSetup> & { cols?: number };
+  // Page setups saved before 0.5.10: own header or footer text keeps the code boxes; the client logo moves to the right picture.
+  if (saved.header && !saved.hf) {
+    const own = JSON.stringify(saved.header) !== JSON.stringify(OLD_HEAD) || JSON.stringify(saved.footer) !== JSON.stringify(OLD_FOOT);
+    Object.assign(saved, { hf: own ? "codes" : "simple", imgs: ["@company", "", saved.clientLogo ? "@client" : ""] });
+  }
+  if (saved.title === "&[Project]") saved.title = "";
+  setPs({ ...defaults(), ...saved });
+};
 const save = () => { if (JSON.stringify(P().ui?.page ?? {}) !== JSON.stringify(ps)) act({ Ui: { key: "page", value: JSON.parse(JSON.stringify(ps)) } }); };
 
 const codes = (t: string, page: number, pages: number) => {
@@ -46,16 +63,60 @@ const Slot = (p: { t: string; page: number; pages: number; h: number }) => (
     : <span style={{ "white-space": "pre-line" }}>{codes(part, p.page, p.pages)}</span>}</For>
 );
 
+/** A header or footer picture: the company logo (File › Options), the client logo, or one chosen here. */
+const pic = (v: string) => (v === "@company" ? out()?.project.logo : v === "@client" ? ps.clientLogo : v) || "";
+const now = () => { const d = new Date(); return `${fmtDay(dateDay(d), "long")}${ps.fTime ? `, ${d.toTimeString().slice(0, 5)}` : ""}`; };
+const footParts = (page: number, pages: number, flow = false): Slots => [
+  [ps.fPrinted ? `Printed ${now()}` : "", ps.fRev.trim() ? `Revision ${ps.fRev.trim()}` : ""].filter(Boolean).join("  ·  "),
+  ps.fPage && !flow ? `Page ${page} of ${pages}` : "",
+  [ps.fStatus ? `Status date: ${out()!.summary.status || "not set"}` : "", ps.fCompany ? P().company : "", ps.fText.trim() ? codes(ps.fText.trim(), page, pages) : ""].filter(Boolean).join("  ·  "),
+];
+/** The title at the top: the plan's name unless another is typed. */
+const titleText = (n: number, pages: number) => (ps.titleOn ? codes(ps.title.trim() || "&[Project]", n, pages) : "");
+/** Height of the header and footer bands (CSS px), 0 when empty. */
+const headH = () => !out() ? 0 : ps.hf === "codes" ? (ps.header.some(x => x.trim()) ? 52 : 0)
+  : (ps.imgs.some(v => pic(v)) || ps.titleOn || ps.subtitle.trim() ? Math.max(ps.imgs.some(v => pic(v)) ? ps.imgH : 0, (ps.titleOn ? 20 : 0) + (ps.subtitle.trim() ? 16 : 0)) + 14 : 0);
+const footH = () => !out() ? 0 : ps.hf === "codes" ? (ps.footer.some(x => x.trim()) ? 30 : 0) : (footParts(1, 1).some(Boolean) ? 28 : 0);
+/** The header band of a page. */
+const Head = (p: { n: number; pages: number; h?: number }) => (
+  <Show when={ps.hf === "simple"} fallback={<div class="phead" style={p.h ? { height: `${p.h - 8}px` } : undefined}><For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={ps.header[i]} page={p.n} pages={p.pages} h={(p.h ?? 52) - 12} /></div>}</For></div>}>
+    <div class="phead simple" style={p.h ? { height: `${p.h - 8}px` } : undefined}>
+      <div class="ps0">{pic(ps.imgs[0]) && <img src={pic(ps.imgs[0])} style={{ "max-height": `${ps.imgH}px` }} />}</div>
+      <div class="ps1">{pic(ps.imgs[1]) && <img src={pic(ps.imgs[1])} style={{ "max-height": `${ps.imgH}px` }} />}
+        <Show when={ps.titleOn || ps.subtitle.trim()}><div class="ptitles"><Show when={ps.titleOn}><div class="ptitle">{titleText(p.n, p.pages)}</div></Show><Show when={ps.subtitle.trim()}><div class="psub">{codes(ps.subtitle, p.n, p.pages)}</div></Show></div></Show></div>
+      <div class="ps2">{pic(ps.imgs[2]) && <img src={pic(ps.imgs[2])} style={{ "max-height": `${ps.imgH}px` }} />}</div>
+    </div>
+  </Show>
+);
+/** The footer band of a page (in reports the page numbers come from the printer). */
+const Foot = (p: { n: number; pages: number; h?: number; flow?: boolean }) => {
+  const noPage = (t: string) => (p.flow ? t.replace(/[^&]*&\[Pages?\][^&]*/g, "").trim() : t);
+  return (
+    <div class="pfoot" style={p.h ? { height: `${p.h - 6}px` } : undefined}>
+      <Show when={ps.hf === "simple"} fallback={<For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={noPage(ps.footer[i])} page={p.n} pages={p.pages} h={(p.h ?? 30) - 8} /></div>}</For>}>
+        <For each={footParts(p.n, p.pages, p.flow)}>{(t, i) => <div class={`ps${i()}`}><span>{t}</span></div>}</For>
+      </Show>
+    </div>
+  );
+};
+/** Reports print their page numbers at the bottom when the footer asks for them. */
+const flowPageNo = () => (ps.hf === "simple" ? ps.fPage : ps.footer.some(t => /&\[Pages?\]/.test(t)));
+
 type Page = { rows: [number, number]; x: [number, number]; n: number; notes?: [string, string, string][] };
 /** The table and the chart form one long strip; pages are windows on it (across, then down), like
  *  MS Project. Columns are never cut at a page edge; the ID and Task Name can repeat on every page. */
+/** A master printed with its subplans collapsed, expanded or left out (otherwise as on screen). */
+const subMode = () => (out()?.project.subplans?.length && ps.subs !== "shown" ? ps.subs : null);
+const [subGrid] = createResource(() => { const m = subMode(); return m ? [m, tick(), JSON.stringify(query())] as const : null; },
+  ([m]) => call<Grid>("query", { q: query(), subs: { show: m !== "none", open: m === "expanded" ? (P().subplans ?? []).map(x => x.file) : [] } }));
+const printGrid = () => (subMode() ? subGrid() ?? grid() : grid());
 const layout = createMemo(() => {
-  const s = out()?.summary, g = grid();
+  const s = out()?.summary, g = printGrid();
   if (!s) return null;
   const [pw, ph] = (() => { const p = PAPERS.find(x => x[0] === ps.paper) ?? PAPERS[0]; return ps.landscape ? [p[2], p[1]] : [p[1], p[2]]; })();
   const W0 = (pw - ps.margins[1] - ps.margins[3]) * MM, H0 = (ph - ps.margins[0] - ps.margins[2]) * MM;
   let k = ps.fit > 0 ? 1 : ps.scale / 100, W = W0 / k, H = H0 / k;
-  const headH = ps.header.some(x => x.trim()) ? 52 : 0, footH = ps.footer.some(x => x.trim()) ? 30 : 0, legH = ps.legend === "none" ? 0 : 58;
+  const hH = headH(), fH = footH(), legH = ps.legend === "none" ? 0 : 58;
   const byKey = new Map(g.cols.map((c, j) => [c.key, { c, j }])), idw = ps.idCol ? IDW : 0;
   const keys = ps.colKeys ?? g.cols.map(c => c.key).filter(x => x !== "mode");
   let colsP = keys.flatMap(key => { const x = byKey.get(key); return x ? [{ ...x, w: cols().find(c => c[0] === key)?.[1] ?? 90 }] : []; });
@@ -78,13 +139,13 @@ const layout = createMemo(() => {
   }
   const RH = ps.rowH, ni = nameAt >= 0 ? colsP[nameAt] : null;
   const rowsH = g.rows.map(r => (ps.wrap && ni && r.name.length * fs * 0.55 + r.lvl * 10 > ni.w - 8 ? Math.round(RH * 1.75) : RH));
-  const room = H - headH - footH - (ps.legend === "every" ? legH : 0) - SCALE_H - 6, pages: Page[] = [];
+  const room = H - hH - fH - (ps.legend === "every" ? legH : 0) - SCALE_H - 6, pages: Page[] = [];
   for (let r = 0; r < Math.max(1, g.rows.length);) {
     let e = r, h = 0; while (e < g.rows.length && (h + rowsH[e] <= room || e === r)) h += rowsH[e++];
     for (const x of across) pages.push({ rows: [r, Math.max(e, r + 1)], x, n: pages.length + 1 });
     r = Math.max(e, r + 1);
   }
-  return { pw, ph, k, W, H, headH, footH, legH, colsP, lefts, TW, RW, CW, pd, d0, d1, pages, rows: g.rows, rowsH, fs, RH, idw };
+  return { pw, ph, k, W, H, headH: hH, footH: fH, legH, colsP, lefts, TW, RW, CW, pd, d0, d1, pages, rows: g.rows, rowsH, fs, RH, idw };
 });
 /** Task notes for the last pages, when "Print notes" is on. */
 const [notes, setNotes] = createSignal<[string, string, string][]>([]);
@@ -115,10 +176,11 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
   const Bar = (q: { r: Row; y: number; h: number }) => {
     const B = q.r.bar, y = q.y + (q.h - 18) / 2, crit = q.r.crit, x1 = C(B.s), x2 = C(B.f);
     if (B.f < t0 - 2 || B.s > t1 + 2) return null;
-    if (q.r.ms) return <g><path d={`M${x1} ${y + 3}l6 6l-6 6l-6-6z`} fill={crit ? st.crit : st.sum} /><text x={x1 + 9} y={y + 13} font-size="9" fill="#333">{fmtDay(B.s)}</text></g>;
-    if (q.r.kind === "summary" || q.r.kind === "project") return <g fill={st.sum}><rect x={x1} y={y + 5} width={Math.max(1, x2 - x1)} height={4} /><path d={`M${x1} ${y + 5}h5l-5 8z`} /><path d={`M${x2} ${y + 5}h-5l5 8z`} /></g>;
+    if (q.r.ms) return <g opacity={q.r.sub ? 0.6 : 1}><path d={`M${x1} ${y + 3}l6 6l-6 6l-6-6z`} fill={crit ? st.crit : st.sum} /><text x={x1 + 9} y={y + 13} font-size="9" fill="#333">{fmtDay(B.s)}</text></g>;
+    if (q.r.kind === "subplan") return <g fill="#6D3FC8"><rect x={x1} y={y + 5} width={Math.max(1, x2 - x1)} height={4} /><path d={`M${x1} ${y + 5}h5l-5 8z`} /><path d={`M${x2} ${y + 5}h-5l5 8z`} /></g>;
+    if (q.r.kind === "summary" || q.r.kind === "project") return <g fill={st.sum} opacity={q.r.sub ? 0.6 : 1}><rect x={x1} y={y + 5} width={Math.max(1, x2 - x1)} height={4} /><path d={`M${x1} ${y + 5}h5l-5 8z`} /><path d={`M${x2} ${y + 5}h-5l5 8z`} /></g>;
     const done = C(B.s + (B.f - B.s) * B.pct / 100);
-    return <g><rect x={x1} y={y + 4} width={Math.max(1.5, x2 - x1)} height={10} fill={crit ? st.cfill : st.fill} stroke={crit ? st.crit : st.edge} stroke-width=".8" />
+    return <g opacity={q.r.sub ? 0.6 : 1}><rect x={x1} y={y + 4} width={Math.max(1.5, x2 - x1)} height={10} fill={crit ? st.cfill : st.fill} stroke={crit ? st.crit : st.edge} stroke-width=".8" />
       {B.pct > 0 && <rect x={x1} y={y + 7} width={Math.max(0, done - x1)} height={4} fill={crit ? st.crit : st.edge} />}
       {q.r.res && <text x={x2 + 4} y={y + 13} font-size="9" fill="#333">{q.r.res}</text>}</g>;
   };
@@ -135,8 +197,8 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
               const al = f.a || (RIGHT.includes(c.c.kind) ? "r" : ""), y = p.ys[i()], h = p.hs[i()], two = h > L.RH && c.c.key === "name";
               const lines = two ? (() => { const n = Math.max(8, Math.floor((c.w - 8 - ind) / (z * 0.55))), cut = t.lastIndexOf(" ", n); const k = cut > 4 ? cut : n; return [t.slice(0, k), t.slice(k).trim()]; })() : [t];
               return <g>{f.f && <rect x={0} y={y} width={c.w} height={h} fill={f.f} />}
-                <text x={al === "r" ? c.w - 4 : al === "c" ? c.w / 2 : 4 + ind} y={y + (two ? 0 : h / 2 + 3.5)} font-size={String(z)} text-anchor={al === "r" ? "end" : al === "c" ? "middle" : "start"} fill={f.c || (r.off ? "#9AA3AE" : "#1B2733")}
-                  style={{ ...(f.n ? { "font-family": `'${f.n}', sans-serif` } : {}), "font-weight": f.b || r.kind !== "task" ? 600 : 400, "font-style": f.i ? "italic" : "normal", "text-decoration": [f.u && "underline", f.s && "line-through"].filter(Boolean).join(" ") || "none" }}>
+                <text x={al === "r" ? c.w - 4 : al === "c" ? c.w / 2 : 4 + ind} y={y + (two ? 0 : h / 2 + 3.5)} font-size={String(z)} text-anchor={al === "r" ? "end" : al === "c" ? "middle" : "start"} fill={f.c || (r.kind === "subplan" ? "#4C2A99" : r.off || r.sub ? "#7A8594" : "#1B2733")}
+                  style={{ ...(f.n ? { "font-family": `'${f.n}', sans-serif` } : {}), "font-weight": f.b || r.kind !== "task" ? 600 : 400, "font-style": f.i || (r.sub && r.kind !== "subplan") ? "italic" : "normal", "text-decoration": [f.u && "underline", f.s && "line-through"].filter(Boolean).join(" ") || "none" }}>
                   {two ? <For each={lines}>{(l, n) => <tspan x={4 + ind} dy={n() ? z + 2 : z + 3}>{l}</tspan>}</For> : t}</text></g>;
             }}</For>
           </svg>
@@ -173,10 +235,10 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
 const Frame = (p: { pw: number; ph: number; k: number; W: number; H: number; headH: number; footH: number; legH: number; n: number; pages: number; legend?: JSX.Element | false; children: JSX.Element }) => (
   <div class="ppage" style={{ width: `${p.pw * MM}px`, height: `${p.ph * MM}px` }}>
     <div class="pin" style={{ left: `${ps.margins[3] * MM}px`, top: `${ps.margins[0] * MM}px`, width: `${p.W}px`, height: `${p.H}px`, transform: `scale(${p.k})` }}>
-      <Show when={p.headH}><div class="phead" style={{ height: `${p.headH - 8}px` }}><For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={ps.header[i]} page={p.n} pages={p.pages} h={p.headH - 12} /></div>}</For></div></Show>
+      <Show when={p.headH}><Head n={p.n} pages={p.pages} h={p.headH} /></Show>
       {p.children}
       <Show when={p.legend}><div class="plegend" style={{ height: `${p.legH - 8}px` }}><div class="plt"><Slot t={ps.legendText} page={p.n} pages={p.pages} h={40} /></div>{p.legend}</div></Show>
-      <Show when={p.footH}><div class="pfoot" style={{ height: `${p.footH - 6}px` }}><For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={ps.footer[i]} page={p.n} pages={p.pages} h={p.footH - 8} /></div>}</For></div></Show>
+      <Show when={p.footH}><Foot n={p.n} pages={p.pages} h={p.footH} /></Show>
     </div>
   </div>
 );
@@ -220,7 +282,7 @@ const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calenda
 const geom = createMemo(() => {
   const p = PAPERS.find(x => x[0] === ps.paper) ?? PAPERS[0], [pw, ph] = ps.landscape ? [p[2], p[1]] : [p[1], p[2]];
   const k = ps.scale / 100, W = (pw - ps.margins[1] - ps.margins[3]) * MM / k, H = (ph - ps.margins[0] - ps.margins[2]) * MM / k;
-  return { pw, ph, k, W, H, headH: ps.header.some(x => x.trim()) ? 52 : 0, footH: ps.footer.some(x => x.trim()) ? 30 : 0, legH: ps.legend === "none" ? 0 : 58 };
+  return { pw, ph, k, W, H, headH: headH(), footH: footH(), legH: ps.legend === "none" ? 0 : 58 };
 });
 type PT = { head: string[]; w: number[]; right: boolean[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
@@ -349,12 +411,12 @@ const FLOWS: Record<string, () => Promise<{ default: () => JSX.Element }>> = {
 };
 const Flow = () => { const C2 = lazy(FLOWS[view()] ?? FLOWS.dashboard); return <C2 />; };
 const FlowDoc = (p: { preview?: boolean }) => {
-  const G = geom(), noPage = (t: string) => t.replace(/[^&]*&\[Pages?\][^&]*/g, "").trim();
+  const G = geom();
   return (
     <table class="pflow" style={{ width: `${G.W}px` }}>
-      <thead><tr><td><div class="phead">{[0, 1, 2].map(i => <div class={`ps${i}`}><Slot t={ps.header[i]} page={1} pages={1} h={40} /></div>)}</div></td></tr></thead>
+      <thead><tr><td><Show when={G.headH}><Head n={1} pages={1} /></Show></td></tr></thead>
       <tbody><tr><td class="pflowbody"><Flow /></td></tr></tbody>
-      <tfoot><tr><td><div class="pfoot">{[0, 1, 2].map(i => <div class={`ps${i}`}><Slot t={noPage(ps.footer[i])} page={1} pages={1} h={20} /></div>)}</div>{p.preview && <small class="muted">Page numbers are added when printed.</small>}</td></tr></tfoot>
+      <tfoot><tr><td><Show when={G.footH}><Foot n={1} pages={1} flow /></Show>{p.preview && flowPageNo() && <small class="muted">Page numbers are added when printed.</small>}</td></tr></tfoot>
     </table>
   );
 };
@@ -363,15 +425,44 @@ const FlowDoc = (p: { preview?: boolean }) => {
 export const printable = () => true;
 const pagesNow = () => (pkind() === "gantt" ? allPages().length : vpages().length);
 const [printing, setPrinting] = createSignal(false);
-export const printNow = () => {
+let endJob: (() => void) | null = null;
+/** Lays the pages out for the printer and keeps the page setup (paper, orientation, margins) in
+ *  place until the job has finished: the print window reads it after `window.print()` returns. */
+const startJob = () => {
+  endJob?.();
   save();
-  const G = pkind() === "gantt" ? layout() : geom(); if (!G) return;
+  const G = pkind() === "gantt" ? layout() : geom(); if (!G) return null;
   setPrinting(true);
-  const css = document.createElement("style"), flow = pkind() === "flow";
-  css.textContent = flow ? `@page { size: ${G.pw}mm ${G.ph}mm; margin: ${ps.margins[0]}mm ${ps.margins[1]}mm ${ps.margins[2]}mm ${ps.margins[3]}mm; @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 9pt 'IBM Plex Sans', sans-serif; color: #55606E; } }` : `@page { size: ${G.pw}mm ${G.ph}mm; margin: 0 }`;
+  const css = document.createElement("style"), flow = pkind() === "flow", m = ps.margins;
+  css.textContent = flow ? `@page { size: ${G.pw}mm ${G.ph}mm; margin: ${m[0]}mm ${m[1]}mm ${m[2]}mm ${m[3]}mm;${flowPageNo() ? ` @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 9pt 'IBM Plex Sans', sans-serif; color: #55606E; }` : ""} }` : `@page { size: ${G.pw}mm ${G.ph}mm; margin: 0 }`;
   document.head.append(css);
   document.documentElement.classList.add("printing");
-  setTimeout(() => { window.print(); document.documentElement.classList.remove("printing"); css.remove(); setPrinting(false); }, flow ? 900 : 150);
+  const end = () => { document.documentElement.classList.remove("printing"); css.remove(); setPrinting(false); window.removeEventListener("afterprint", end); if (endJob === end) endJob = null; };
+  endJob = end;
+  return { G, flow, end };
+};
+const settle = (flow: boolean) => new Promise(r => setTimeout(r, flow ? 900 : 250));
+/** Print…: the print window, for a printer (or its own Save as PDF). */
+export const printNow = async () => {
+  const job = startJob(); if (!job) return;
+  await settle(job.flow);
+  window.addEventListener("afterprint", job.end);
+  window.print();
+};
+/** Save as PDF: the pages written straight to a file at the paper size, no browser header or footer
+ *  (Windows); where that is not available, the print window opens instead. */
+export const savePdf = async () => {
+  const job = startJob(); if (!job) return;
+  await settle(job.flow);
+  const margins = job.flow ? [...ps.margins] : [0, 0, 0, 0];
+  try {
+    const path = await invoke<string | null>("save_pdf", { name: P().name || "Plan", wMm: job.G.pw, hMm: job.G.ph, margins });
+    job.end();
+    if (path) toast(`Saved ${path}`, true);
+  } catch (e) {
+    if (String(e).includes("native-pdf-unavailable")) { window.addEventListener("afterprint", job.end); window.print(); return; }
+    job.end(); toast(`The PDF could not be saved: ${e}`);
+  }
 };
 
 const Slots = (p: { k: "header" | "footer"; label: string }) => (
@@ -380,6 +471,40 @@ const Slots = (p: { k: "header" | "footer"; label: string }) => (
   </div>
 );
 const Codes = () => <p class="muted pcodes">Codes: <For each={CODES}>{([c, l]) => <code title={l} onClick={() => navigator.clipboard?.writeText(c).then(() => toast(`${c} copied: paste it into a box.`, true))}>{c}</code>}</For></p>;
+
+/** Header & footer: pictures, a title and the footer, simply; the code boxes for exact control. */
+const HeaderFooter = (p: { pickClient: () => void }) => {
+  const choose = async (i: number) => { const l = await call<string | null>("pick_logo"); if (l) setPs("imgs", i, l); };
+  const name = (v: string) => (v === "@company" ? "Company logo" : v === "@client" ? "Client logo" : v ? "Picture" : "None");
+  return (
+    <Show when={ps.hf === "simple"} fallback={<>
+      <Slots k="header" label="Header" /><Slots k="footer" label="Footer" /><Codes />
+      <div class="prow"><button class="btn sm" onClick={p.pickClient}>Client logo…</button>{ps.clientLogo && <><img src={ps.clientLogo} class="logoprev" /><button class="btn sm" onClick={() => setPs("clientLogo", "")}>Remove</button></>}</div>
+      <p><button class="btn sm" onClick={() => setPs("hf", "simple")}>Back to the simple header & footer</button></p></>}>
+      <label class="pl">Pictures at the top</label>
+      <div class="pimgs"><For each={["Left", "Centre", "Right"]}>{(l, i) => (
+        <div class="pimg"><span class="lbl">{l}</span>
+          <div class="thumb">{pic(ps.imgs[i()]) ? <img src={pic(ps.imgs[i()])} /> : <span class="muted" title={ps.imgs[i()] === "@company" ? "Add the company logo in File › Options, or choose a picture" : undefined}>{ps.imgs[i()] === "@company" ? "Company logo (not set)" : "None"}</span>}</div>
+          <div class="acts"><button class="btn sm" onClick={() => choose(i())}>Choose…</button>
+            <Show when={P().logo && ps.imgs[i()] !== "@company"}><button class="btn sm" title="The company logo from File › Options" onClick={() => setPs("imgs", i(), "@company")}>Company logo</button></Show>
+            <Show when={ps.imgs[i()]}><button class="btn sm" title={`Remove the ${name(ps.imgs[i()]).toLowerCase()}`} onClick={() => setPs("imgs", i(), "")}>Remove</button></Show></div>
+        </div>)}</For></div>
+      <div class="prow"><label>Picture height<input type="range" min="16" max="90" value={ps.imgH} onInput={e => setPs("imgH", +e.currentTarget.value)} /></label></div>
+      <Check label="Title" value={ps.titleOn} set={v => setPs("titleOn", v)} />
+      <Show when={ps.titleOn}><input class="wide" value={ps.title} placeholder={`${P().name} (the plan's name)`} onInput={e => setPs("title", e.currentTarget.value)} /></Show>
+      <label class="pl">Subtitle</label><input class="wide" value={ps.subtitle} placeholder="e.g. Revision B · Issued for review" onInput={e => setPs("subtitle", e.currentTarget.value)} />
+      <label class="pl">At the bottom of each page</label>
+      <Check label="Printed date" value={ps.fPrinted} set={v => setPs("fPrinted", v)} />
+      <Show when={ps.fPrinted}><div class="pind"><Check label="With the time" value={ps.fTime} set={v => setPs("fTime", v)} /></div></Show>
+      <Check label="Page number (Page 1 of 3)" value={ps.fPage} set={v => setPs("fPage", v)} />
+      <Check label="Status date" value={ps.fStatus} set={v => setPs("fStatus", v)} />
+      <Check label={`Company name${P().company ? ` (${P().company})` : ""}`} value={ps.fCompany} set={v => setPs("fCompany", v)} />
+      <div class="prow"><label>Revision<input value={ps.fRev} placeholder="e.g. B" onInput={e => setPs("fRev", e.currentTarget.value)} /></label><label>Your text<input value={ps.fText} placeholder="e.g. Confidential" onInput={e => setPs("fText", e.currentTarget.value)} /></label></div>
+      <p class="muted">Nothing else is printed: no program name and no web address.</p>
+      <p><button class="btn sm" onClick={() => setPs("hf", "codes")}>Advanced: write them with codes…</button></p>
+    </Show>
+  );
+};
 
 /** File › Print: settings on the left, the pages on the right. */
 export const PrintPage = () => {
@@ -395,15 +520,15 @@ export const PrintPage = () => {
         <h1>Print</h1>
         <p class="pwhat">Printing: <b>{pkind() === "gantt" ? (view() === "tracking" ? "Tracking Gantt" : "Gantt Chart") : VIEW_NAMES[view()] ?? (document.querySelector(".content h1")?.textContent || "This page")}</b><br /><span class="muted">Open another view first to print it.</span></p>
         <Show when={printable()}>
-          <div class="pbtns"><button class="btn pri big" onClick={printNow}><svg class="ic"><use href="#i-print" /></svg> Print / Save as PDF</button></div>
-          <p class="muted">In the print window choose your printer, or <b>Save as PDF</b>. {pkind() === "flow" ? "As many pages as needed" : `${pagesNow()} ${pagesNow() === 1 ? "page" : "pages"}`} · {ps.paper} {ps.landscape ? "landscape" : "portrait"}.</p>
+          <div class="pbtns"><button class="btn pri big" onClick={savePdf}><svg class="ic"><use href="#i-pdf" /></svg> Save as PDF</button><button class="btn big" onClick={printNow}><svg class="ic"><use href="#i-print" /></svg> Print…</button></div>
+          <p class="muted">{pkind() === "flow" ? "As many pages as needed" : `${pagesNow()} ${pagesNow() === 1 ? "page" : "pages"}`} · {ps.paper} {ps.landscape ? "landscape" : "portrait"}. <b>Save as PDF</b> writes exactly these pages to a file; <b>Print…</b> opens the print window to choose a printer.</p>
           <h4>Settings</h4>
           <label class="pl">What to print</label><Pick value={ps.range} set={v => setPs("range", v as "all")} options={[["all", "Entire project"], ["dates", "Specific dates"]]} />
           <Show when={ps.range === "dates"}><div class="prow"><label>From<input type="date" value={ps.from || iso(out()!.summary.s)} onChange={e => setPs("from", e.currentTarget.value)} /></label><label>To<input type="date" value={ps.to || iso(out()!.summary.f)} onChange={e => setPs("to", e.currentTarget.value)} /></label></div></Show>
           <label class="pl">Pages <span class="muted">(e.g. 1-3, 5; empty = all)</span></label><input value={ps.pages} placeholder={`1-${pagesNow() || 1}`} onInput={e => setPs("pages", e.currentTarget.value)} />
           <div class="prow"><label>Paper<Pick value={ps.paper} set={v => setPs("paper", v)} options={PAPERS.map(p => p[0])} /></label><label>Orientation<Pick value={ps.landscape ? "1" : "0"} set={v => setPs("landscape", v === "1")} options={[["1", "Landscape"], ["0", "Portrait"]]} /></label></div>
           <h4>Page Setup</h4>
-          <Seg value={tab()} set={setTab} options={[["page", "Page"], ["margins", "Margins"], ["header", "Header"], ["footer", "Footer"], ["legend", "Legend"], ["view", "View"]]} />
+          <Seg value={tab()} set={setTab} options={[["page", "Page"], ["margins", "Margins"], ["hf", "Header & footer"], ["legend", "Legend"], ["view", "View"]]} />
           <div class="ptab">
             <Show when={tab() === "page"}>
               <label class="pl">Scaling</label>
@@ -412,10 +537,10 @@ export const PrintPage = () => {
               <p class="muted">{pkind() === "gantt" ? "Adjust prints at that size with the Gantt chart's current zoom. Fit sizes the dates (and shrinks the page if needed) so table and chart fill that many pages wide." : pkind() === "net" ? "Fit sizes the diagram to that many pages wide; it never goes below half size so the boxes stay readable, and continues on more pages instead." : "Adjust scales the whole page."}</p>
             </Show>
             <Show when={tab() === "margins"}>
-              <div class="prow">{(["Top", "Right", "Bottom", "Left"] as const).map((l, i) => <label>{l} (mm)<input type="number" min="0" max="60" value={ps.margins[i]} onChange={e => setPs("margins", i, +e.currentTarget.value)} /></label>)}</div>
+              <label class="pl">Margins (mm)</label>
+              <div class="prow">{(["Top", "Right", "Bottom", "Left"] as const).map((l, i) => <label>{l}<input type="number" min="0" max="60" value={ps.margins[i]} onChange={e => setPs("margins", i, +e.currentTarget.value)} /></label>)}</div>
             </Show>
-            <Show when={tab() === "header"}><Slots k="header" label="Header" /><Codes /><div class="prow"><button class="btn sm" onClick={pickClient}>Client logo…</button>{ps.clientLogo && <><img src={ps.clientLogo} class="logoprev" /><button class="btn sm" onClick={() => setPs("clientLogo", "")}>Remove</button></>}<span class="muted">Company logo: File › Options.</span></div></Show>
-            <Show when={tab() === "footer"}><Slots k="footer" label="Footer" /><Codes /></Show>
+            <Show when={tab() === "hf"}><HeaderFooter pickClient={pickClient} /></Show>
             <Show when={tab() === "legend"}>
               <label class="pl">Legend on</label><Seg value={ps.legend} set={v => setPs("legend", v as "every")} options={[["every", "Every page"], ["last", "Last page"], ["none", "None"]]} />
               <label class="pl">Legend text</label><textarea rows="3" value={ps.legendText} onInput={e => setPs("legendText", e.currentTarget.value)} /><Codes />
@@ -433,6 +558,7 @@ export const PrintPage = () => {
               <Show when={ps.colKeys}><div class="pcols"><For each={tableKeys()}>{k => { const on = () => ps.colKeys!.includes(k), i = () => ps.colKeys!.indexOf(k);
                 return <div><Check label={grid().cols.find(c => c.key === k)?.name ?? k} value={on()} set={v => setPs("colKeys", v ? tableKeys().filter(x => x === k || ps.colKeys!.includes(x)) : ps.colKeys!.filter(x => x !== k))} />
                   <Show when={on()}><button class="x" title="Move up" onClick={() => { const v = [...ps.colKeys!], j = i(); if (j > 0) { [v[j - 1], v[j]] = [v[j], v[j - 1]]; setPs("colKeys", v); } }}>↑</button></Show></div>; }}</For></div></Show>
+              <Show when={P().subplans?.length}><label class="pl">Subplans</label><Pick value={ps.subs} set={v => setPs("subs", v as "shown")} options={[["shown", "As shown on screen"], ["collapsed", "One row each"], ["expanded", "All their tasks"], ["none", "Leave them out"]]} /></Show>
               <Check label="Repeat ID and Task Name on every page" value={ps.repeat} set={v => setPs("repeat", v)} />
               <Check label="Shrink the columns to fit the page" value={ps.fitCols} set={v => setPs("fitCols", v)} />
               <Check label="Wrap long task names" value={ps.wrap} set={v => setPs("wrap", v)} />

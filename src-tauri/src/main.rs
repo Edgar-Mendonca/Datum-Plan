@@ -1,5 +1,6 @@
 //! Datum Plan desktop shell: owns the open plan, files, options and recovery, and talks to the window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod pdf;
 mod update;
 
 use datum_core::{check, doc::{self, Doc, Op}, fields::{self, Calc}, io, links, network, query::{self, Query}, report, templates, Project, Task};
@@ -1060,6 +1061,17 @@ fn link_go(st: State<St>, uid: u32) -> Vec<LinkGo> {
     v
 }
 
+/// File › Print › Save as PDF: asks where, then writes the pages the window has laid out for
+/// printing straight to that file (Windows); returns the path, None when cancelled.
+#[tauri::command]
+async fn save_pdf(app: AppHandle, window: tauri::WebviewWindow, name: String, w_mm: f64, h_mm: f64, margins: [f64; 4]) -> R<Option<String>> {
+    if cfg!(not(windows)) { return Err("native-pdf-unavailable".into()) }
+    let name: String = name.chars().filter(|c| !"\\/:*?\"<>|".contains(*c)).collect();
+    let Some(path) = app.dialog().file().add_filter("PDF", &["pdf"]).set_file_name(format!("{}.pdf", name.trim())).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    pdf::write(&window, &path, w_mm, h_mm, margins.map(|m| m.clamp(0.0, 60.0))).await?;
+    Ok(Some(path.display().to_string()))
+}
+
 /// Shows the plan a link points at (its tab, or opened from its file next to this plan); the
 /// window then selects the task.
 #[tauri::command]
@@ -1410,7 +1422,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

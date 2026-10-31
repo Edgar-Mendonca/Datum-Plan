@@ -252,9 +252,19 @@ The S-curve shows cumulative progress: grey dashes are the baseline (planned), t
 
 ![File › Print.](img/print.png)
 
-1. **Print / Save as PDF.** Opens the Windows print window; choose your printer or **Microsoft Print to PDF** / **Save as PDF**.
-2. **Settings.** What to print, page range, paper and orientation, and **Page Setup**: scaling (or **Fit to** pages wide), margins, header and footer (with your logo, page numbers and the date), legend and view options.
+1. **Save as PDF** writes exactly the pages you see to a file you name, at the paper size and orientation you chose, with nothing added by Windows (no date, window title or web address). **Print…** opens the print window to choose a printer.
+2. **Settings.** What to print, page range, paper and orientation, and **Page Setup**: scaling (or **Fit to** pages wide), margins, **Header & footer**, legend and view options.
 3. **Preview.** Exactly the pages that will print. It prints the view you had open: Gantt chart, Tracking Gantt, Network Diagram, Calendar, the resource views, Dashboard, reports, Schedule Risk, Look-ahead or Manpower.
+
+**Header & footer** keeps it simple:
+
+- **Pictures at the top:** a picture on the left, in the centre and on the right (**Choose…** a logo or any picture; **Company logo** uses the one in **File › Options**), and one height for all of them.
+- **Title** (the plan's name unless you type another) and a **Subtitle**, for example "Revision B · Issued for review".
+- **At the bottom of each page**, only what you tick: the printed date (and time), the page number, the status date, the company name, a revision and your own text, such as "Confidential".
+
+Nothing else is printed: no program name and no web address. **Advanced** gives the three boxes with codes such as &[Page] for exact control.
+
+A master plan prints its subplans as on screen; **View › Subplans** can print them one row each, with all their tasks, or leave them out.
 
 ### The Network Diagram
 
