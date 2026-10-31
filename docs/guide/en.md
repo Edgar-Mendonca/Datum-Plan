@@ -258,13 +258,15 @@ The S-curve shows cumulative progress: grey dashes are the baseline (planned), t
 
 **Header & footer** keeps it simple:
 
-- **Pictures at the top:** a picture on the left, in the centre and on the right (**Choose…** a logo or any picture; **Company logo** uses the one in **File › Options**), and one height for all of them.
-- **Title** (the plan's name unless you type another) and a **Subtitle**, for example "Revision B · Issued for review".
+- **Pictures at the top, on every page:** on the left, in the centre and on the right, as many as you like side by side (**+ Picture…** a logo or any picture; **+ Company logo** uses the one in **File › Options**). Each picture has its own size slider; ← and → move it along the row or to the next place, and × takes it out. The header grows to fit the tallest picture.
+- **Title** (the plan's name unless you type another), a **Subtitle**, for example "Revision B · Issued for review", and the **Title size**. With pictures in the centre, the title and subtitle sit under them.
 - **At the bottom of each page**, only what you tick: the printed date (and time), the page number, the status date, the company name, a revision and your own text, such as "Confidential".
 
 Nothing else is printed: no program name and no web address. **Advanced** gives the three boxes with codes such as &[Page] for exact control.
 
-A master plan prints its subplans as on screen; **View › Subplans** can print them one row each, with all their tasks, or leave them out.
+The **legend** lists only what the pages show: tasks, critical tasks, progress, milestones, summaries, subplans, baselines, deadlines, links and the status date, with the project's name, start, finish and status date beside them. Bars print with their baseline and deadline, as on screen.
+
+A master plan prints its subplans as on screen: expand a subplan in the Gantt and it prints expanded. **Subplans** (under What to print) can instead print them one row each, with all their tasks, or leave them out.
 
 ### The Network Diagram
 

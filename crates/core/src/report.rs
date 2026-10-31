@@ -151,7 +151,7 @@ pub fn curve(c: &Calc, unit: &str) -> Curve {
         if let Some(bl) = t.bls.get(&0) {
             let tot = cal.between(bl.start, bl.finish).max(1) as f64;
             let mut d = bl.start.div_euclid(DAY);
-            let done = t.pct as f64 / 100.0;
+            let done = (if t.pct_type == crate::model::PctType::Physical { t.phys } else { t.pct }) as f64 / 100.0;
             if bl.finish <= bl.start {
                 if let Some(j) = bucket_of(&b, d) {
                     planned[j] += bl.cost;
@@ -161,11 +161,24 @@ pub fn curve(c: &Calc, unit: &str) -> Curve {
                 let share = cal.between(bl.start.max(d * DAY), bl.finish.min((d + 1) * DAY)) as f64 / tot;
                 if let Some(j) = bucket_of(&b, d) {
                     planned[j] += bl.cost * share;
-                    if d < dd {
-                        earned[j] += bl.cost * share * done;
-                    }
                 }
                 d += 1;
+            }
+            // Earned value (budget × % complete) where the work was done: over the task's dates up to
+            // the data date, or on the data date when none of its dates fall before it.
+            let ev = bl.cost * done;
+            if ev > 0.0 {
+                let (a, z) = (s.es[i], s.ef[i].min(dd * DAY));
+                let worked = if z > a { cal.between(a, z) as f64 } else { 0.0 };
+                if worked > 0.0 {
+                    let mut d = a.div_euclid(DAY);
+                    while d * DAY < z {
+                        if let Some(j) = bucket_of(&b, d) { earned[j] += ev * cal.between(a.max(d * DAY), z.min((d + 1) * DAY)) as f64 / worked }
+                        d += 1;
+                    }
+                } else if let Some(j) = bucket_of(&b, (dd - 1).max(a.div_euclid(DAY))) {
+                    earned[j] += ev;
+                }
             }
         }
         let mut before = 0.0;

@@ -16,13 +16,15 @@ import { Pick, Check, Seg } from "./ui";
 export const PAPERS: [string, number, number][] = [["A4", 210, 297], ["A3", 297, 420], ["A2", 420, 594], ["A1", 594, 841], ["Letter", 215.9, 279.4], ["Legal", 215.9, 355.6], ["Tabloid", 279.4, 431.8]];
 const MM = 96 / 25.4, SCALE_H = 34, IDW = 30;
 type Slots = [string, string, string];
+/** A picture in the header: the company logo ("@company"), the client logo ("@client") or a picture, at a height in px. */
+type Pic = { v: string; h: number };
 export type PageSetup = {
   paper: string; landscape: boolean; margins: [number, number, number, number]; scale: number; fit: number;
   range: "all" | "dates"; from: string; to: string; pages: string; colKeys: string[] | null; repeat: boolean; unit: string;
   font: number; rowH: number; fitCols: boolean; wrap: boolean; notes: boolean;
   header: Slots; footer: Slots; legend: "every" | "last" | "none"; legendText: string; clientLogo: string; grid: boolean; idCol: boolean;
   /** Header & footer: "simple" (pictures, title, footer choices) or "codes" (the three boxes with &[codes]). */
-  hf: "simple" | "codes"; imgs: Slots; imgH: number; titleOn: boolean; title: string; subtitle: string;
+  hf: "simple" | "codes"; pics: [Pic[], Pic[], Pic[]]; titleOn: boolean; title: string; titleSize: number; subtitle: string;
   fPrinted: boolean; fTime: boolean; fPage: boolean; fStatus: boolean; fCompany: boolean; fRev: string; fText: string;
   /** A master's subplans: as on screen, all collapsed, all expanded, or left out. */
   subs: "shown" | "collapsed" | "expanded" | "none";
@@ -31,8 +33,8 @@ export const CODES: [string, string][] = [["&[Page]", "Page number"], ["&[Pages]
   ["&[Manager]", "Manager"], ["&[Status]", "Status date"], ["&[Start]", "Project start"], ["&[Finish]", "Project finish"], ["&[Logo]", "Company logo"], ["&[Client Logo]", "Client logo"]];
 const defaults = (): PageSetup => ({
   paper: opts().paper || "A4", landscape: opts().landscape !== false, margins: [12, 10, 12, 10], scale: 100, fit: 1, range: "all", from: "", to: "", pages: "", colKeys: null, repeat: true, unit: "auto", font: 10, rowH: 18, fitCols: false, wrap: false, notes: false,
-  header: OLD_HEAD, footer: OLD_FOOT, legend: "every", legendText: "&[Project]\nStatus date: &[Status]", clientLogo: "", grid: true, idCol: true,
-  hf: "simple", imgs: ["@company", "", ""], imgH: 36, titleOn: true, title: "", subtitle: "", fPrinted: true, fTime: false, fPage: true, fStatus: false, fCompany: false, fRev: "", fText: "", subs: "shown",
+  header: OLD_HEAD, footer: OLD_FOOT, legend: "every", legendText: "&[Project]\nStart &[Start] · Finish &[Finish]\nStatus date: &[Status]", clientLogo: "", grid: true, idCol: true,
+  hf: "simple", pics: [[{ v: "@company", h: 40 }], [], []], titleOn: true, title: "", titleSize: 16, subtitle: "", fPrinted: true, fTime: false, fPage: true, fStatus: false, fCompany: false, fRev: "", fText: "", subs: "shown",
 });
 const OLD_HEAD: Slots = ["&[Logo]", "&[Project]", "&[Client Logo]"], OLD_FOOT: Slots = ["Printed &[Date]", "Page &[Page] of &[Pages]", "&[Company]"];
 const [ps, setPs] = createStore<PageSetup>(defaults());
@@ -44,9 +46,13 @@ const load = () => {
   // Page setups saved before 0.5.10: own header or footer text keeps the code boxes; the client logo moves to the right picture.
   if (saved.header && !saved.hf) {
     const own = JSON.stringify(saved.header) !== JSON.stringify(OLD_HEAD) || JSON.stringify(saved.footer) !== JSON.stringify(OLD_FOOT);
-    Object.assign(saved, { hf: own ? "codes" : "simple", imgs: ["@company", "", saved.clientLogo ? "@client" : ""] });
+    Object.assign(saved, { hf: own ? "codes" : "simple", pics: [[{ v: "@company", h: 40 }], [], saved.clientLogo ? [{ v: "@client", h: 40 }] : []] });
   }
+  // 0.5.10 kept one picture per place, all one height.
+  const old = saved as { imgs?: Slots; imgH?: number };
+  if (old.imgs && !saved.pics) saved.pics = old.imgs.map(v => (v ? [{ v, h: old.imgH ?? 40 }] : [])) as PageSetup["pics"];
   if (saved.title === "&[Project]") saved.title = "";
+  if (saved.legendText === "&[Project]\nStatus date: &[Status]") delete saved.legendText;
   setPs({ ...defaults(), ...saved });
 };
 const save = () => { if (JSON.stringify(P().ui?.page ?? {}) !== JSON.stringify(ps)) act({ Ui: { key: "page", value: JSON.parse(JSON.stringify(ps)) } }); };
@@ -74,17 +80,26 @@ const footParts = (page: number, pages: number, flow = false): Slots => [
 /** The title at the top: the plan's name unless another is typed. */
 const titleText = (n: number, pages: number) => (ps.titleOn ? codes(ps.title.trim() || "&[Project]", n, pages) : "");
 /** Height of the header and footer bands (CSS px), 0 when empty. */
-const headH = () => !out() ? 0 : ps.hf === "codes" ? (ps.header.some(x => x.trim()) ? 52 : 0)
-  : (ps.imgs.some(v => pic(v)) || ps.titleOn || ps.subtitle.trim() ? Math.max(ps.imgs.some(v => pic(v)) ? ps.imgH : 0, (ps.titleOn ? 20 : 0) + (ps.subtitle.trim() ? 16 : 0)) + 14 : 0);
+const shown = (i: number) => ps.pics[i].filter(x => pic(x.v));
+const tallest = (i: number) => Math.max(0, ...shown(i).map(x => x.h));
+const titleH = () => (ps.titleOn ? Math.round(ps.titleSize * 1.3) : 0) + (ps.subtitle.trim() ? 16 : 0);
+const headH = () => {
+  if (!out()) return 0;
+  if (ps.hf === "codes") return ps.header.some(x => x.trim()) ? 52 : 0;
+  const centre = (tallest(1) ? tallest(1) + 4 : 0) + titleH(), h = Math.max(tallest(0), tallest(2), centre);
+  return h ? h + 14 : 0;
+};
 const footH = () => !out() ? 0 : ps.hf === "codes" ? (ps.footer.some(x => x.trim()) ? 30 : 0) : (footParts(1, 1).some(Boolean) ? 28 : 0);
+/** The pictures of one place (left, centre, right), side by side, each at its own height. */
+const Pics = (p: { i: number }) => <For each={shown(p.i)}>{x => <img src={pic(x.v)} style={{ height: `${x.h}px` }} />}</For>;
 /** The header band of a page. */
 const Head = (p: { n: number; pages: number; h?: number }) => (
   <Show when={ps.hf === "simple"} fallback={<div class="phead" style={p.h ? { height: `${p.h - 8}px` } : undefined}><For each={[0, 1, 2]}>{i => <div class={`ps${i}`}><Slot t={ps.header[i]} page={p.n} pages={p.pages} h={(p.h ?? 52) - 12} /></div>}</For></div>}>
     <div class="phead simple" style={p.h ? { height: `${p.h - 8}px` } : undefined}>
-      <div class="ps0">{pic(ps.imgs[0]) && <img src={pic(ps.imgs[0])} style={{ "max-height": `${ps.imgH}px` }} />}</div>
-      <div class="ps1">{pic(ps.imgs[1]) && <img src={pic(ps.imgs[1])} style={{ "max-height": `${ps.imgH}px` }} />}
-        <Show when={ps.titleOn || ps.subtitle.trim()}><div class="ptitles"><Show when={ps.titleOn}><div class="ptitle">{titleText(p.n, p.pages)}</div></Show><Show when={ps.subtitle.trim()}><div class="psub">{codes(ps.subtitle, p.n, p.pages)}</div></Show></div></Show></div>
-      <div class="ps2">{pic(ps.imgs[2]) && <img src={pic(ps.imgs[2])} style={{ "max-height": `${ps.imgH}px` }} />}</div>
+      <div class="ps0"><Pics i={0} /></div>
+      <div class="ps1"><Show when={shown(1).length}><div class="ppics"><Pics i={1} /></div></Show>
+        <Show when={ps.titleOn || ps.subtitle.trim()}><div class="ptitles"><Show when={ps.titleOn}><div class="ptitle" style={{ "font-size": `${ps.titleSize}px` }}>{titleText(p.n, p.pages)}</div></Show><Show when={ps.subtitle.trim()}><div class="psub">{codes(ps.subtitle, p.n, p.pages)}</div></Show></div></Show></div>
+      <div class="ps2"><Pics i={2} /></div>
     </div>
   </Show>
 );
@@ -180,7 +195,9 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
     if (q.r.kind === "subplan") return <g fill="#6D3FC8"><rect x={x1} y={y + 5} width={Math.max(1, x2 - x1)} height={4} /><path d={`M${x1} ${y + 5}h5l-5 8z`} /><path d={`M${x2} ${y + 5}h-5l5 8z`} /></g>;
     if (q.r.kind === "summary" || q.r.kind === "project") return <g fill={st.sum} opacity={q.r.sub ? 0.6 : 1}><rect x={x1} y={y + 5} width={Math.max(1, x2 - x1)} height={4} /><path d={`M${x1} ${y + 5}h5l-5 8z`} /><path d={`M${x2} ${y + 5}h-5l5 8z`} /></g>;
     const done = C(B.s + (B.f - B.s) * B.pct / 100);
-    return <g opacity={q.r.sub ? 0.6 : 1}><rect x={x1} y={y + 4} width={Math.max(1.5, x2 - x1)} height={10} fill={crit ? st.cfill : st.fill} stroke={crit ? st.crit : st.edge} stroke-width=".8" />
+    return <g opacity={q.r.sub ? 0.6 : 1}>{B.bs !== null && B.bs !== undefined && B.bf !== null && B.bf !== undefined && <rect x={C(B.bs)} y={y + 15} width={Math.max(1.5, C(B.bf) - C(B.bs))} height={3} fill="#AEB7C4" />}
+      {B.dl !== null && B.dl !== undefined && <g fill="#2E9D57"><path d={`M${C(B.dl) - 4} ${y}h8l-4 6z`} /><rect x={C(B.dl) - 0.5} y={y + 4} width={1} height={12} /></g>}
+      <rect x={x1} y={y + 4} width={Math.max(1.5, x2 - x1)} height={10} fill={crit ? st.cfill : st.fill} stroke={crit ? st.crit : st.edge} stroke-width=".8" />
       {B.pct > 0 && <rect x={x1} y={y + 7} width={Math.max(0, done - x1)} height={4} fill={crit ? st.crit : st.edge} />}
       {q.r.res && <text x={x2 + 4} y={y + 13} font-size="9" fill="#333">{q.r.res}</text>}</g>;
   };
@@ -243,15 +260,29 @@ const Frame = (p: { pw: number; ph: number; k: number; W: number; H: number; hea
   </div>
 );
 const legendOn = (n: number, pages: number) => ps.legend === "every" || (ps.legend === "last" && n === pages);
-const GanttLegend = () => { const st = gstyle(); return (
-  <svg width="430" height="44" font-size="9.5" fill="#1B2733" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
-    <rect x="4" y="6" width="30" height="9" fill={st.fill} stroke={st.edge} stroke-width=".8" /><text x="40" y="14">Task</text>
-    <rect x="4" y="26" width="30" height="9" fill={st.cfill} stroke={st.crit} stroke-width=".8" /><text x="40" y="34">Critical</text>
-    <rect x="110" y="6" width="30" height="9" fill={st.fill} stroke={st.edge} stroke-width=".8" /><rect x="110" y="8.5" width="16" height="4" fill={st.edge} /><text x="146" y="14">Progress</text>
-    <path d="M125 24l6 6l-6 6l-6-6z" fill={st.sum} /><text x="146" y="34">Milestone</text>
-    <g fill={st.sum}><rect x="220" y="7" width="30" height="4" /><path d="M220 7h5l-5 8z" /><path d="M250 7h-5l5 8z" /></g><text x="256" y="14">Summary</text>
-    <line x1="220" x2="250" y1="31" y2="31" stroke="#2E9D57" stroke-dasharray="4 3" /><text x="256" y="34">Status date</text>
-  </svg>); };
+/** The legend: every kind of mark that appears on the printed pages, drawn as it is drawn there. */
+const GanttLegend = () => {
+  const st = gstyle(), rows = layout()?.rows ?? [], task = (r: Row) => r.kind === "task" && !r.ms;
+  type It = [string, JSX.Element];
+  const items: It[] = [
+    ["Task", <rect x="0" y="2" width="26" height="9" fill={st.fill} stroke={st.edge} stroke-width=".8" />],
+    ...(rows.some(r => task(r) && r.crit) ? [["Critical task", <rect x="0" y="2" width="26" height="9" fill={st.cfill} stroke={st.crit} stroke-width=".8" />] as It] : []),
+    ...(rows.some(r => task(r) && r.bar.pct > 0) ? [["Progress (% complete)", <g><rect x="0" y="2" width="26" height="9" fill={st.fill} stroke={st.edge} stroke-width=".8" /><rect x="0" y="4.5" width="15" height="4" fill={st.edge} /></g>] as It] : []),
+    ...(rows.some(r => r.ms && !r.crit) ? [["Milestone", <path d="M13 0l6 6.5l-6 6.5l-6-6.5z" fill={st.sum} />] as It] : []),
+    ...(rows.some(r => r.ms && r.crit) ? [["Critical milestone", <path d="M13 0l6 6.5l-6 6.5l-6-6.5z" fill={st.crit} />] as It] : []),
+    ...(rows.some(r => r.kind === "summary" || r.kind === "project") ? [["Summary", <g fill={st.sum}><rect x="0" y="2" width="26" height="4" /><path d="M0 2h5l-5 8z" /><path d="M26 2h-5l5 8z" /></g>] as It] : []),
+    ...(rows.some(r => r.kind === "subplan") ? [["Subplan", <g fill="#6D3FC8"><rect x="0" y="2" width="26" height="4" /><path d="M0 2h5l-5 8z" /><path d="M26 2h-5l5 8z" /></g>] as It] : []),
+    ...(rows.some(r => r.bar.bs !== null && r.bar.bs !== undefined) ? [["Baseline", <rect x="0" y="5" width="26" height="4" fill="#AEB7C4" />] as It] : []),
+    ...(rows.some(r => r.bar.dl !== null && r.bar.dl !== undefined) ? [["Deadline", <g fill="#2E9D57"><path d="M9 0h8l-4 6z" /><rect x="12.5" y="4" width="1" height="9" /></g>] as It] : []),
+    ...(rows.some(r => r.bar.links?.length) ? [["Link (task to task)", <g stroke="#7A8BA6" fill="#7A8BA6" stroke-width=".8"><path d="M0 4h14v6h8" fill="none" /><path d="M26 10l-4.5-3v6z" stroke="none" /></g>] as It] : []),
+    ...(out()?.summary.status_day ? [["Status date", <line x1="13" x2="13" y1="0" y2="13" stroke="#2E9D57" stroke-dasharray="3 2" />] as It] : []),
+  ];
+  const per = Math.ceil(items.length / 2), W = 132;
+  return (
+    <svg width={per * W} height="44" font-size="9.5" fill="#1B2733" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
+      <For each={items}>{([t, mark], k) => <g transform={`translate(${Math.floor(k() / 2) * W + 4},${(k() % 2) * 20 + 5})`}>{mark}<text x="32" y="10">{t}</text></g>}</For>
+    </svg>);
+};
 
 /** One Gantt page. */
 const Sheet = (p: { pg: Page; pages: number }) => {
@@ -474,24 +505,36 @@ const Codes = () => <p class="muted pcodes">Codes: <For each={CODES}>{([c, l]) =
 
 /** Header & footer: pictures, a title and the footer, simply; the code boxes for exact control. */
 const HeaderFooter = (p: { pickClient: () => void }) => {
-  const choose = async (i: number) => { const l = await call<string | null>("pick_logo"); if (l) setPs("imgs", i, l); };
-  const name = (v: string) => (v === "@company" ? "Company logo" : v === "@client" ? "Client logo" : v ? "Picture" : "None");
+  const add = async (i: number) => { const l = await call<string | null>("pick_logo"); if (l) setPs("pics", i, list => [...list, { v: l, h: 40 }]); };
+  const move = (i: number, k: number, d: number) => {
+    const list = [...ps.pics[i]], j = k + d;
+    if (j >= 0 && j < list.length) { [list[k], list[j]] = [list[j], list[k]]; setPs("pics", i, list); return; }
+    // Past the end of a place: on to the next place (left ↔ centre ↔ right).
+    const to = i + d; if (to < 0 || to > 2) return;
+    const [x] = list.splice(k, 1); setPs("pics", i, list); setPs("pics", to, l => (d > 0 ? [x, ...l] : [...l, x]));
+  };
   return (
     <Show when={ps.hf === "simple"} fallback={<>
       <Slots k="header" label="Header" /><Slots k="footer" label="Footer" /><Codes />
       <div class="prow"><button class="btn sm" onClick={p.pickClient}>Client logo…</button>{ps.clientLogo && <><img src={ps.clientLogo} class="logoprev" /><button class="btn sm" onClick={() => setPs("clientLogo", "")}>Remove</button></>}</div>
       <p><button class="btn sm" onClick={() => setPs("hf", "simple")}>Back to the simple header & footer</button></p></>}>
       <label class="pl">Pictures at the top</label>
-      <div class="pimgs"><For each={["Left", "Centre", "Right"]}>{(l, i) => (
-        <div class="pimg"><span class="lbl">{l}</span>
-          <div class="thumb">{pic(ps.imgs[i()]) ? <img src={pic(ps.imgs[i()])} /> : <span class="muted" title={ps.imgs[i()] === "@company" ? "Add the company logo in File › Options, or choose a picture" : undefined}>{ps.imgs[i()] === "@company" ? "Company logo (not set)" : "None"}</span>}</div>
-          <div class="acts"><button class="btn sm" onClick={() => choose(i())}>Choose…</button>
-            <Show when={P().logo && ps.imgs[i()] !== "@company"}><button class="btn sm" title="The company logo from File › Options" onClick={() => setPs("imgs", i(), "@company")}>Company logo</button></Show>
-            <Show when={ps.imgs[i()]}><button class="btn sm" title={`Remove the ${name(ps.imgs[i()]).toLowerCase()}`} onClick={() => setPs("imgs", i(), "")}>Remove</button></Show></div>
-        </div>)}</For></div>
-      <div class="prow"><label>Picture height<input type="range" min="16" max="90" value={ps.imgH} onInput={e => setPs("imgH", +e.currentTarget.value)} /></label></div>
+      <p class="muted">As many as you like in each place, side by side; they repeat on every page.</p>
+      <For each={["Left", "Centre", "Right"]}>{(l, i) => (
+        <div class="pplace"><div class="pph"><b>{l}</b>
+          <button class="btn sm" onClick={() => add(i())}>+ Picture…</button>
+          <Show when={P().logo && !ps.pics[i()].some(x => x.v === "@company")}><button class="btn sm" title="The company logo from File › Options" onClick={() => setPs("pics", i(), list => [...list, { v: "@company", h: 40 }])}>+ Company logo</button></Show></div>
+          <For each={ps.pics[i()]} fallback={<span class="muted">No picture</span>}>{(x, k) => (
+            <div class="pimg2">
+              <div class="thumb">{pic(x.v) ? <img src={pic(x.v)} /> : <span class="muted" title="Add the company logo in File › Options">Company logo (not set)</span>}</div>
+              <label title="Height of this picture">Size<input type="range" min="14" max="110" value={x.h} onInput={e => setPs("pics", i(), k(), "h", +e.currentTarget.value)} /></label>
+              <span class="acts"><button class="x" title="Move left" onClick={() => move(i(), k(), -1)}>←</button><button class="x" title="Move right" onClick={() => move(i(), k(), 1)}>→</button>
+                <button class="x" title="Remove this picture" onClick={() => setPs("pics", i(), list => list.filter((_, j) => j !== k()))}>×</button></span>
+            </div>)}</For>
+        </div>)}</For>
       <Check label="Title" value={ps.titleOn} set={v => setPs("titleOn", v)} />
-      <Show when={ps.titleOn}><input class="wide" value={ps.title} placeholder={`${P().name} (the plan's name)`} onInput={e => setPs("title", e.currentTarget.value)} /></Show>
+      <Show when={ps.titleOn}><input class="wide" value={ps.title} placeholder={`${P().name} (the plan's name)`} onInput={e => setPs("title", e.currentTarget.value)} />
+        <div class="prow"><label>Title size<Seg value={String(ps.titleSize)} set={v => setPs("titleSize", +v)} options={[["13", "Small"], ["16", "Medium"], ["22", "Large"], ["30", "Very large"]]} /></label></div></Show>
       <label class="pl">Subtitle</label><input class="wide" value={ps.subtitle} placeholder="e.g. Revision B · Issued for review" onInput={e => setPs("subtitle", e.currentTarget.value)} />
       <label class="pl">At the bottom of each page</label>
       <Check label="Printed date" value={ps.fPrinted} set={v => setPs("fPrinted", v)} />
@@ -525,6 +568,7 @@ export const PrintPage = () => {
           <h4>Settings</h4>
           <label class="pl">What to print</label><Pick value={ps.range} set={v => setPs("range", v as "all")} options={[["all", "Entire project"], ["dates", "Specific dates"]]} />
           <Show when={ps.range === "dates"}><div class="prow"><label>From<input type="date" value={ps.from || iso(out()!.summary.s)} onChange={e => setPs("from", e.currentTarget.value)} /></label><label>To<input type="date" value={ps.to || iso(out()!.summary.f)} onChange={e => setPs("to", e.currentTarget.value)} /></label></div></Show>
+          <Show when={pkind() === "gantt" && P().subplans?.length}><label class="pl">Subplans of this master</label><Pick value={ps.subs} set={v => setPs("subs", v as "shown")} options={[["shown", "As shown on screen (expanded ones with their tasks)"], ["collapsed", "One row each"], ["expanded", "Every subplan with all its tasks"], ["none", "Leave them out"]]} /></Show>
           <label class="pl">Pages <span class="muted">(e.g. 1-3, 5; empty = all)</span></label><input value={ps.pages} placeholder={`1-${pagesNow() || 1}`} onInput={e => setPs("pages", e.currentTarget.value)} />
           <div class="prow"><label>Paper<Pick value={ps.paper} set={v => setPs("paper", v)} options={PAPERS.map(p => p[0])} /></label><label>Orientation<Pick value={ps.landscape ? "1" : "0"} set={v => setPs("landscape", v === "1")} options={[["1", "Landscape"], ["0", "Portrait"]]} /></label></div>
           <h4>Page Setup</h4>
@@ -558,7 +602,6 @@ export const PrintPage = () => {
               <Show when={ps.colKeys}><div class="pcols"><For each={tableKeys()}>{k => { const on = () => ps.colKeys!.includes(k), i = () => ps.colKeys!.indexOf(k);
                 return <div><Check label={grid().cols.find(c => c.key === k)?.name ?? k} value={on()} set={v => setPs("colKeys", v ? tableKeys().filter(x => x === k || ps.colKeys!.includes(x)) : ps.colKeys!.filter(x => x !== k))} />
                   <Show when={on()}><button class="x" title="Move up" onClick={() => { const v = [...ps.colKeys!], j = i(); if (j > 0) { [v[j - 1], v[j]] = [v[j], v[j - 1]]; setPs("colKeys", v); } }}>↑</button></Show></div>; }}</For></div></Show>
-              <Show when={P().subplans?.length}><label class="pl">Subplans</label><Pick value={ps.subs} set={v => setPs("subs", v as "shown")} options={[["shown", "As shown on screen"], ["collapsed", "One row each"], ["expanded", "All their tasks"], ["none", "Leave them out"]]} /></Show>
               <Check label="Repeat ID and Task Name on every page" value={ps.repeat} set={v => setPs("repeat", v)} />
               <Check label="Shrink the columns to fit the page" value={ps.fitCols} set={v => setPs("fitCols", v)} />
               <Check label="Wrap long task names" value={ps.wrap} set={v => setPs("wrap", v)} />

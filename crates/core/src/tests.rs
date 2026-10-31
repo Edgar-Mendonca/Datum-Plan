@@ -968,3 +968,24 @@ fn money_is_exact_to_the_cent() {
     op(&mut doc, Op::Set { uid, field: "fixedcost".into(), value: "$1,234.5678".into() }).unwrap();
     assert_eq!(doc.p.tasks[1].fixed_cost, 1234.57);
 }
+
+#[test]
+fn a_long_hand_back_chain_between_two_plans_settles() {
+    // Two plans hand work back and forth 15 times (a0 → b0 → a1 → … → b7): no loop, so it must settle.
+    let mut a = Project::new("A", d(2026, 11, 2));
+    let mut b = Project::new("B", d(2026, 11, 2));
+    for k in 0..8 {
+        let t = a.new_task(&format!("a{k}"), 0, 480); a.tasks.push(t);
+        let t = b.new_task(&format!("b{k}"), 0, 480); b.tasks.push(t);
+    }
+    let x = |file: &str, uid: u32| crate::model::ExtLink { file: file.into(), uid, kind: LinkType::FS, lag: 0, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 };
+    for k in 0..8 {
+        let (ua, ub) = (a.tasks[k].uid, b.tasks[k].uid);
+        b.tasks[k].ext.push(x("A.dplan", ua));
+        if k + 1 < 8 { a.tasks[k + 1].ext.push(x("B.dplan", ub)); }
+    }
+    let mut plans = vec![("A.dplan".to_string(), a), ("B.dplan".to_string(), b)];
+    crate::links::update_all(&mut plans).expect("no loop");
+    let s = schedule(&plans[1].1).unwrap();
+    assert_eq!(crate::cal::date_of(s.ef[7] - 1), d(2026, 11, 23), "b7 is the 16th one-day task in a row");
+}

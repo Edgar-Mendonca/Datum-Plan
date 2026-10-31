@@ -290,3 +290,121 @@ fn resource_calendars_survive_exchange_files() {
         }
     }
 }
+
+// ---------- found by the engine audit (0.5.11) ----------
+
+/// A one-row plan with custom fields defined by formulas; the text of each field on that row.
+fn formula_texts(defs: &[(&str, &str)]) -> Vec<String> {
+    let mut doc = crate::doc::Doc::new(build(&["1d"], |_| {}));
+    for (k, f) in defs {
+        doc.apply(crate::doc::Op::FieldDef { def: crate::model::CustomDef { key: k.to_string(), formula: f.to_string(), ..Default::default() } }, "%d-%b-%y").unwrap();
+    }
+    let c = crate::fields::Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2));
+    defs.iter().map(|(k, _)| c.text(0, &format!("c:{k}"))).collect()
+}
+
+#[test]
+fn formulas_count_months_and_years_like_vba() {
+    assert_eq!(formula_texts(&[("date1", "DateAdd(\"m\", 1, #2027-01-01#)"), ("number1", "DateDiff(\"m\", #2026-11-30#, #2026-12-01#)"), ("number2", "DateDiff(\"yyyy\", #2026-12-31#, #2027-01-01#)"), ("date2", "DateAdd(\"m\", 1, #2027-01-31#)"), ("number3", "DateDiff(\"d\", #2026-11-30#, #2026-12-01#)")]),
+        ["01-Feb-27", "1", "1", "28-Feb-27", "1"]);
+}
+
+#[test]
+fn a_finish_field_from_a_formula_shows_its_own_day() {
+    assert_eq!(formula_texts(&[("finish1", "=DATE(2026,11,10)"), ("finish2", "#2026-11-10#"), ("date1", "=DATE(2026,11,10)")]), ["10-Nov-26", "10-Nov-26", "10-Nov-26"]);
+}
+
+#[test]
+fn a_plan_of_milestones_only_reports_its_progress() {
+    let mut p = build(&["0d", "0d", "0d"], |_| {});
+    p.tasks[1].level = 1; p.tasks[2].level = 1;
+    for k in 1..3 { p.tasks[k].pct = 100; p.tasks[k].act_start = Some(d(2026, 11, 2)); p.tasks[k].act_finish = Some(d(2026, 11, 2)); }
+    let c = crate::fields::Calc::new(&p, "%d-%b-%y", d(2026, 11, 9));
+    assert_eq!(c.summary().pct, 100.0);
+}
+
+/// A 10-day task with a 1,000 budget, baselined, at a % complete on Friday of its first week.
+fn progressed(pct: u8, physical: Option<u8>) -> crate::fields::Calc<'static> {
+    let mut doc = Doc::new(build(&["10d"], |_| {}));
+    let u = doc.p.tasks[0].uid;
+    doc.apply(Op::Set { uid: u, field: "fixedcost".into(), value: "1000".into() }, "%d-%b-%y").unwrap();
+    doc.apply(Op::Baseline { uids: vec![], clear: false, n: 0 }, "%d-%b-%y").unwrap();
+    doc.apply(Op::Set { uid: u, field: "pct".into(), value: pct.to_string() }, "%d-%b-%y").unwrap();
+    doc.apply(Op::ProjectSet { field: "status".into(), value: serde_json::json!("2026-11-06") }, "%d-%b-%y").unwrap();
+    if let Some(ph) = physical { doc.p.tasks[0].pct_type = PctType::Physical; doc.p.tasks[0].phys = ph; }
+    let p: &'static Project = Box::leak(Box::new(doc.p));
+    crate::fields::Calc::new(p, "%d-%b-%y", d(2026, 11, 6))
+}
+
+#[test]
+fn the_earned_line_of_the_cost_curve_adds_up_to_earned_value() {
+    for (pct, phys, ev) in [(50, None, 500.0), (50, Some(80), 800.0)] {
+        let c = progressed(pct, phys);
+        let total: f64 = crate::report::curve(&c, "day").earned.iter().sum();
+        assert!((total - ev).abs() < 0.01 && (c.val(0, "bcwp").num() - ev).abs() < 0.01, "{pct}% {phys:?}: curve {total}, EV {}", c.val(0, "bcwp").num());
+    }
+}
+
+#[test]
+fn earned_schedule_counts_working_time_within_a_day() {
+    for pct in [30u8, 25, 22] {
+        let e = crate::progress::earned_schedule(&progressed(pct, None)).unwrap();
+        assert!((e.es - pct as f64 / 10.0).abs() < 0.01, "{pct}%: ES {}", e.es);
+    }
+}
+
+#[test]
+fn a_level_of_effort_ends_the_day_before_its_successor_starts() {
+    // A 2d; LOE from A's start; C after A and the LOE: the LOE spans Mon–Tue (2 days).
+    let mut p = build(&["2d", "1d|1SS", "3d|1,2"], |_| {});
+    p.tasks[1].act_type = ActType::Loe;
+    let s = schedule(&p).unwrap();
+    assert_eq!((at(s.es[1]), at(s.ef[1])), ("Nov02 08:00".into(), "Nov03 17:00".into()));
+    let c = crate::fields::Calc::new(&p, "%d-%b-%y", d(2026, 11, 2));
+    assert_eq!(c.text(1, "dur"), "2 days");
+}
+
+#[test]
+fn a_start_link_from_a_summary_follows_the_summary_start() {
+    // Summary {A 2d, B 3d after A}; C starts with the summary (SS), on Monday.
+    let mut p = build(&["0d", "2d", "3d|2", "1d"], |_| {});
+    p.tasks[1].level = 1; p.tasks[2].level = 1;
+    let ids: Vec<u32> = p.tasks.iter().map(|t| t.uid).collect();
+    p.tasks[3].preds = crate::parse::preds("1SS", &ids, 480).unwrap();
+    let s = schedule(&p).unwrap();
+    assert_eq!(at(s.es[3]), "Nov02 08:00");
+}
+
+#[test]
+fn actual_dates_on_a_day_off_stand_as_recorded() {
+    let p = build(&["1d||astart=2026-11-07;afinish=2026-11-07;pct=100"], |p| p.status = Some(d(2026, 11, 9)));
+    let s = schedule(&p).unwrap();
+    assert_eq!((date_of(s.es[0]), date_of(s.ef[0] - 1)), (d(2026, 11, 7), d(2026, 11, 7)));
+}
+
+#[test]
+fn a_link_to_another_plan_on_a_summary_holds_the_tasks_under_it() {
+    let mut p = build(&["0d", "2d"], |_| {});
+    p.tasks[1].level = 1;
+    let fin = crate::cal::at(d(2026, 11, 13)) + 17 * 60;
+    p.tasks[0].ext.push(ExtLink { file: "X.dplan".into(), uid: 5, kind: LinkType::FS, lag: 0, plan: "X".into(), code: String::new(), name: "x".into(), start: fin - 5 * crate::cal::DAY, finish: fin });
+    let s = schedule(&p).unwrap();
+    assert_eq!(at(s.es[1]), "Nov16 08:00");
+}
+
+#[test]
+fn a_row_that_mirrors_a_task_in_another_plan_takes_its_length() {
+    // SS and FF to the same task of another plan: the row runs Mon 2 – Fri 13 Nov (10 days), whatever its own duration says.
+    let mut p = build(&["3d"], |_| {});
+    let (a, b) = (crate::cal::at(d(2026, 11, 2)) + 8 * 60, crate::cal::at(d(2026, 11, 13)) + 17 * 60);
+    for kind in [LinkType::SS, LinkType::FF] {
+        p.tasks[0].ext.push(ExtLink { file: "Eng.dplan".into(), uid: 7, kind, lag: 0, plan: "Eng".into(), code: String::new(), name: "Engineering".into(), start: a, finish: b });
+    }
+    let s = schedule(&p).unwrap();
+    assert_eq!((at(s.es[0]), at(s.ef[0])), ("Nov02 08:00".into(), "Nov13 17:00".into()));
+    assert_eq!(crate::fields::Calc::new(&p, "%d-%b-%y", d(2026, 11, 2)).text(0, "dur"), "10 days");
+    // The other task grows by a week: so does the row, from the same start.
+    for x in &mut p.tasks[0].ext { x.finish = b + 7 * crate::cal::DAY }
+    let s = schedule(&p).unwrap();
+    assert_eq!((at(s.es[0]), at(s.ef[0])), ("Nov02 08:00".into(), "Nov20 17:00".into()));
+}

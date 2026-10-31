@@ -75,7 +75,10 @@ type Seen = (u32, String, String, i64, i64);
 /// pass until no date moves. Plans may link both ways (main → subplan → main); returns the passes
 /// needed, or an error when the dates never settle (links that loop through the plans).
 pub fn update_all(plans: &mut [(String, Project)]) -> Result<usize, String> {
-    for pass in 1..=(plans.len() * 4 + 4) {
+    // A pass moves a date across one link between plans; a chain without a loop crosses each link
+    // at most once, so more passes than links means the dates loop.
+    let links: usize = plans.iter().map(|(_, p)| p.tasks.iter().map(|t| t.ext.len()).sum::<usize>()).sum();
+    for pass in 1..=links + 2 {
         let found: Vec<(String, String, Vec<Seen>)> = plans.iter().map(|(f, p)| {
             let s = crate::sched::schedule(p).ok();
             (file_name(f).to_lowercase(), p.name.clone(), p.tasks.iter().enumerate().map(|(i, t)| (t.uid, t.code.clone(), t.name.clone(), s.as_ref().map_or(0, |s| s.es[i]), s.as_ref().map_or(0, |s| s.ef[i]))).collect())

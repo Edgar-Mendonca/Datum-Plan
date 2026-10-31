@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.11 — 2026-10-31
+
+Pictures and a full legend in print, subplans that print as you see them, and a checked engine.
+
+- **Pictures in the header, as many as you like:** on the left, in the centre and on the right, side by side, on every page. Each picture has its own size; ← and → move it along the row or to the next place; × takes it out. The header grows to fit them.
+- **Fixed: a picture in the centre covered the title and subtitle.** They now sit under the centre pictures. **Title size** sets how large the title prints.
+- **A complete legend.** It lists only what the pages show (task, critical task, progress, milestone, critical milestone, summary, subplan, baseline, deadline, link, status date) beside the project's name, start, finish and status date. Print bars show the baseline and the deadline, as on screen.
+- **Fixed: expanded subplans printed collapsed.** The **Subplans** choice now sits under What to print; "As shown on screen" prints the subplans you expanded with their tasks.
+- **Engine fixes from a full check of formulas, links and progress:**
+  - `DateDiff` and `DateAdd` count months and years by the calendar, as in VBA: 30 Nov to 1 Dec is one month, and adding a month keeps the time.
+  - A finish date from a formula shows its own day, not the day before.
+  - A plan of milestones only reports its % complete.
+  - The cost curve's earned line adds up to the earned value, and follows physical % complete when the task uses it.
+  - Earned schedule counts working time within a day.
+  - A level-of-effort task ends the working day before its successor starts.
+  - A start-to-start link from a summary follows the summary's start.
+  - Actual dates on a day off stand as recorded.
+  - A link to another plan on a summary holds back every task under it.
+  - A row that mirrors a task in another plan (start-to-start and finish-to-finish to the same task) takes its length.
+  - Update Links settles long hand-back chains between plans.
+- The guide explains the header pictures, the legend and printing subplans, in English and Chinese.
+
 ## 0.5.10 — 2026-10-31
 
 Printing you can rely on, with a simple header and footer.

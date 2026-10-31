@@ -301,7 +301,7 @@ impl<'a> Calc<'a> {
         let opt = |x: Option<NaiveDate>| x.map_or(F::Null, |d| F::Date(at(d)));
         let optf = |x: Option<NaiveDate>| x.map_or(F::Null, |d| F::Date(at(d) + 17 * 60));
         let txt = |x: &str| F::Str(x.into());
-        let dur = if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur };
+        let dur = if s.summary[i] || s.loe[i] || s.mirror[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur };
         if let Some(k) = key.strip_prefix("c:") {
             return self.custom(i, k);
         }
@@ -442,12 +442,14 @@ impl<'a> Calc<'a> {
             };
             return if matches!(kind, Kind::Date | Kind::Fin) { F::Date(x as i64 * 1440) } else { F::Num(x) };
         }
+        // A finish field holds the end of its day; a formula giving a date only means that day.
+        let fin = |v: F| match v { F::Date(d) if kind == Kind::Fin && d.rem_euclid(crate::cal::DAY) == 0 => F::Date(d + 17 * 60), v => v };
         if let Some(v) = self.xl.get(key) {
-            return v.get(i).cloned().unwrap_or(F::Null);
+            return fin(v.get(i).cloned().unwrap_or(F::Null));
         }
         if let Some((_, Some(ex))) = def {
             // Summary rows use the formula too unless a rollup is chosen (handled above).
-            return formula::eval(ex, &Row { c: self, i }).unwrap_or_else(|e| F::Str(format!("#ERROR: {e}")));
+            return fin(formula::eval(ex, &Row { c: self, i }).unwrap_or_else(|e| F::Str(format!("#ERROR: {e}"))));
         }
         match t.custom.get(key) {
             None | Some(serde_json::Value::Null) => def.filter(|(d, _)| !d.default.is_empty()).map_or(F::Null, |(d, _)| F::Str(d.default.clone())),

@@ -124,12 +124,22 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Save as PDF writes the pages at the paper size, no margins added", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "save_pdf").pop())).includes('"wMm":297,"hMm":210,"margins":[0,0,0,0]'));
   // The settings panel lays out in its width (no squashed boxes, no sideways scroll).
   await p.click(".pset .seg button:has-text('Header & footer')"); await p.waitForTimeout(150);
-  check("the print settings panel never scrolls sideways", await p.evaluate(() => { const s = document.querySelector(".pset"); return s.scrollWidth <= s.clientWidth + 1 && document.querySelector(".ptab").getBoundingClientRect().width > 250; }));
+  check("the print settings panel never scrolls sideways", await p.evaluate(() => { const s = document.querySelector(".pset"); return s.scrollWidth <= s.clientWidth + 1 && document.querySelector(".ptab").getBoundingClientRect().width > 250; }),
+    await p.evaluate(() => { const s = document.querySelector(".pset"), w = s.getBoundingClientRect().right; return `${s.scrollWidth}/${s.clientWidth} ` + [...s.querySelectorAll("*")].filter(e => e.getBoundingClientRect().right > w + 1).slice(0, 4).map(e => e.tagName + "." + e.className + ":" + Math.round(e.getBoundingClientRect().width)).join(" "); }));
   const hf = await p.textContent(".ptab");
   check("Header & footer: pictures, title and footer choices, nothing else printed", ["Pictures at the top", "Title", "Subtitle", "Printed date", "Page number", "Revision"].every(t => hf.includes(t)), hf.slice(0, 200));
   await p.fill(".ptab input[placeholder^='e.g. Revision']", "Rev B · Issued for review"); await p.waitForTimeout(150);
   await p.click(".ptab .chk:has-text('Status date') input"); await p.waitForTimeout(150);
   check("the preview shows the subtitle and the chosen footer", (await p.textContent(".pprev .phead")).includes("Rev B · Issued for review") && (await p.textContent(".pprev .pfoot")).includes("Status date") && !(await p.textContent(".pprev .ppage")).includes("Datum Plan"));
+  // Several pictures in one place, side by side, each its own size; they come with every page.
+  await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => c === "pick_logo" ? "data:image/svg+xml;base64," + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="30"><rect width="80" height="30" fill="#0B5CAD"/></svg>') : inv(c, a); });
+  const plus = await p.$$(".pplace button:has-text('+ Picture')"); await plus[2].click(); await p.waitForTimeout(100); await plus[2].click(); await p.waitForTimeout(200);
+  check("two pictures on the right, side by side in the header", (await p.$$(".pprev .ppage .phead .ps2 img")).length === 2);
+  const sz = await p.$$(".pplace:nth-of-type(3) .pimg2 input[type=range]");
+  await sz[0].evaluate(e => { e.value = "80"; e.dispatchEvent(new Event("input", { bubbles: true })); }); await p.waitForTimeout(200);
+  check("each picture has its own size, and the header grows to fit it", await p.evaluate(() => { const im = document.querySelectorAll(".pprev .ppage .phead .ps2 img"); return im[0].getBoundingClientRect().height > im[1].getBoundingClientRect().height * 1.8; }));
+  const lg = await p.textContent(".pprev .plegend");
+  check("the legend explains every mark on the page", ["Task", "Critical task", "Milestone", "Summary", "Link"].every(t => lg.includes(t)) && lg.includes("Start "), lg.slice(0, 160));
   await p.click(".ptab button:has-text('Advanced')"); await p.waitForTimeout(150);
   check("the code boxes are still there for exact control, and wide enough to use", await p.evaluate(() => [...document.querySelectorAll(".pslots textarea")].every(t => t.getBoundingClientRect().width > 150)));
   await p.click(".ptab button:has-text('Back to the simple')"); await p.waitForTimeout(100);

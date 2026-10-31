@@ -2,7 +2,8 @@
 //! 24-hour clock, resource-dependent tasks on their resource's calendar). Lags use the calendar
 //! chosen in Schedule Options. Summaries roll up; a link to or from a summary applies to every task
 //! in it. Level-of-effort tasks stretch between their neighbours and never drive them.
-use crate::cal::{at, WorkCal, DAY};
+use crate::cal::{at, date_of, WorkCal, DAY};
+use chrono::NaiveDate;
 use crate::model::{ActType, Calendar, Constraint as C, LagCal, LinkType, Project};
 use std::collections::HashMap;
 
@@ -19,6 +20,8 @@ pub struct Sched {
     pub off: Vec<bool>,
     /// Level of effort or WBS summary activity.
     pub loe: Vec<bool>,
+    /// Tasks whose length follows a task in another plan (`mirrored`).
+    pub mirror: Vec<bool>,
     /// On the longest path.
     pub lp: Vec<bool>,
     /// Float path number (1 = most critical; 0 = not calculated).
@@ -38,6 +41,12 @@ pub struct Sched {
 
 #[derive(Clone, Copy)]
 pub struct Edge { pub p: usize, pub s: usize, pub kind: LinkType, pub lag: i64 }
+
+/// The other plan's task a task mirrors (SS and FF to it, no lag), as its last known start and finish.
+pub fn mirrored(t: &crate::model::Task) -> Option<(i64, i64)> {
+    let ss = t.ext.iter().find(|x| x.kind == LinkType::SS && x.lag == 0 && x.finish > x.start)?;
+    t.ext.iter().any(|x| x.kind == LinkType::FF && x.lag == 0 && x.uid == ss.uid && x.file == ss.file).then_some((ss.start, ss.finish))
+}
 
 pub fn schedule(p: &Project) -> Result<Sched, String> {
     let n = p.tasks.len();
@@ -90,11 +99,16 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     }).collect();
     let ix: HashMap<u32, usize> = p.tasks.iter().enumerate().map(|(i, t)| (t.uid, i)).collect();
     let ms_type = |i: usize| matches!(p.tasks[i].act_type, ActType::StartMs | ActType::FinishMs);
-    let dur: Vec<i64> = p.tasks.iter().enumerate().map(|(i, t)| if ms_type(i) { 0 } else { t.dur }).collect();
+    // A task that starts and finishes with one task of another plan (SS and FF, no lag) mirrors it:
+    // it lasts as long as that task does, as last known.
+    let mirror: Vec<bool> = p.tasks.iter().map(|t| mirrored(t).is_some()).collect();
+    let dur: Vec<i64> = p.tasks.iter().enumerate().map(|(i, t)| if ms_type(i) { 0 } else if let Some((a, b)) = mirrored(t) { cals[ci[i].get()].between(a, b) } else { t.dur }).collect();
     // Splits add pauses inside the work.
     let span: Vec<i64> = p.tasks.iter().enumerate().map(|(i, t)| dur[i] + t.splits.iter().filter(|(a, _)| *a < dur[i]).map(|(_, g)| g.max(&0)).sum::<i64>()).collect();
     let loe: Vec<bool> = p.tasks.iter().map(|t| matches!(t.act_type, ActType::Loe | ActType::WbsSummary)).collect();
     let leaf = |i: usize| !summary[i] && !off[i];
+    // Each task's summary (the row above it at a lower outline level).
+    let parent: Vec<Option<usize>> = (0..n).map(|i| (0..i).rev().find(|&j| p.tasks[j].level < p.tasks[i].level)).collect();
     let leaves_of = |i: usize| -> Vec<usize> { if summary[i] { p.subtree(i).filter(|&j| leaf(j)).collect() } else { vec![i] } };
 
     let mut edges: Vec<Edge> = vec![];
@@ -108,7 +122,15 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             if (summary[q] && p.subtree(q).contains(&s)) || (summary[s] && p.subtree(s).contains(&q)) {
                 return Err(format!("Task {} is linked to its own summary task. Link tasks inside the summary instead.", s + 1));
             }
-            for &a in &leaves_of(q) {
+            // A start link (SS, SF) from a summary starts with the summary: from the tasks that open it
+            // (those with no predecessor inside it), not from its last task to start.
+            let mut from = leaves_of(q);
+            if summary[q] && matches!(l.kind, LinkType::SS | LinkType::SF) {
+                let inside = p.subtree(q);
+                let open: Vec<usize> = from.iter().copied().filter(|&a| !p.tasks[a].preds.iter().any(|x| ix.get(&x.pred).is_some_and(|j| inside.contains(j)))).collect();
+                if !open.is_empty() { from = open }
+            }
+            for &a in &from {
                 for &b in &leaves_of(s) {
                     let lag = if l.pct { dur[a] * l.lag / 100 } else { l.lag };
                     inc[b].push(edges.len());
@@ -162,11 +184,13 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         if let Some(a) = t.act_start { pick(i, at(a), sp) }
         let c = &cals[ci[i].get()];
         if let Some(a) = t.act_start {
-            es[i] = c.next_start(at(a));
+            // Actual dates stand as recorded, also on a day off (at the usual shift times then).
+            let usual = |d: NaiveDate| { let w = c.day(date_of(c.next_start(at(d)))); (w.first().map_or(480, |x| x.0), w.last().map_or(1020, |x| x.1)) };
+            es[i] = if c.is_work_day(a) { c.next_start(at(a)) } else { at(a) + usual(a).0 };
             ef[i] = match (t.act_finish, data) {
                 (Some(f), _) => {
                     fixed[i] = true;
-                    c.end_of(f).max(es[i])
+                    (if c.is_work_day(f) { c.end_of(f) } else { at(f) + usual(f).1 }).max(es[i])
                 }
                 (None, Some(dd)) if t.pct < 100 => {
                     let rem = sp * (100 - t.pct as i64) / 100;
@@ -190,8 +214,9 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                 let x = need(&edges[e], &es, &ef);
                 v = v.max(match edges[e].kind { LinkType::FS | LinkType::SS => x, _ => c.sub(x, sp) });
             }
-            // Predecessors in other plans hold the task like links, from their last known dates.
-            for x in t.ext.iter().filter(|x| x.finish > 0) {
+            // Predecessors in other plans hold the task like links, from their last known dates; links
+            // on a summary hold every task under it.
+            for x in std::iter::successors(Some(i), |&j| parent[j]).flat_map(|j| p.tasks[j].ext.iter()).filter(|x| x.finish > 0) {
                 let y = match x.kind { LinkType::FS | LinkType::FF => c.add(x.finish, x.lag), LinkType::SS | LinkType::SF => c.add(x.start, x.lag) };
                 v = v.max(match x.kind { LinkType::FS | LinkType::SS => y, _ => c.sub(y, sp) });
             }
@@ -221,7 +246,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         let reach = out[i].iter().map(|&e| {
             let Edge { s, kind, lag, .. } = edges[e];
             let lc = &cals[lag_cal(&edges[e])];
-            match kind { LinkType::FS => lc.sub(es[s], lag), LinkType::SS => es[s], LinkType::FF | LinkType::SF => lc.sub(ef[s], lag) }
+            // A start the successor needs means the effort ends at the end of the working time before it.
+            match kind { LinkType::FS => cals[ci[i].get()].prev_end(lc.sub(es[s], lag)), LinkType::SS => cals[ci[i].get()].prev_end(es[s]), LinkType::FF | LinkType::SF => lc.sub(ef[s], lag) }
         }).max();
         if let Some(r) = reach {
             ef[i] = r.max(es[i]);
@@ -367,7 +393,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         fpath[i] = kids.iter().map(|&j| fpath[j]).filter(|&f| f > 0).min().unwrap_or(0);
     }
     let ci = ci.iter().map(std::cell::Cell::get).collect();
-    Ok(Sched { es, ef, ls, lf, tf, ff, summary, off, loe, lp, fpath, ci, rcal, cals, edges, drive, start, finish })
+    Ok(Sched { es, ef, ls, lf, tf, ff, summary, off, loe, mirror, lp, fpath, ci, rcal, cals, edges, drive, start, finish })
 }
 
 impl Sched {

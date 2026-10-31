@@ -428,7 +428,9 @@ impl Calc<'_> {
             status_day: p.status.map(|d| day(at(d) + DAY)),
             measured_at: if p.status.is_some() { String::new() } else { self.progress_date().format(&self.fmt).to_string() },
             dur: crate::parse::fmt_dur(s.cals[pc].between(s.start, s.finish), Unit::D, p.day_min),
-            pct: if dur > 0.0 { leaves.iter().map(|&i| p.tasks[i].pct as f64 * p.tasks[i].dur as f64).sum::<f64>() / dur } else { 0.0 },
+            // Weighted by duration; a plan of milestones only takes the plain average (as summary rows do).
+            pct: if dur > 0.0 { leaves.iter().map(|&i| p.tasks[i].pct as f64 * p.tasks[i].dur as f64).sum::<f64>() / dur }
+                else if leaves.is_empty() { 0.0 } else { leaves.iter().map(|&i| p.tasks[i].pct as f64).sum::<f64>() / leaves.len() as f64 },
             work: format!("{} hrs", (tot(&self.l.work) / 60.0).round() + 0.0), cost: fields::money(tot(&self.l.cost), cur),
             bl_finish: bl_end.map(|b| df(b - 1)).unwrap_or_default(),
             var_finish: bl_end.map(|b| crate::parse::fmt_dur(between(b, s.finish), Unit::D, p.day_min)).unwrap_or_default(),

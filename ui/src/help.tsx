@@ -54,7 +54,7 @@ export const HELP: Record<string, Topic> = {
   portfolio: { t: "Portfolio", what: "Every plan in a folder side by side, with progress, cost, schedule and cost indices and late tasks. Subfolders group plans into levels.",
     how: ["Choose a folder that holds your plans.", "Click a plan to open it.", "Compare Projects shows what changed between this plan and another file."] },
   export: { t: "Print and export", what: "Print or save as PDF any view, set up the page, or save the plan in other file formats.",
-    how: ["Print / PDF (Ctrl+P) shows the pages first. Save as PDF writes exactly those pages to a file; Print… opens the print window.", "Page Setup: paper, scaling, margins, Header & footer (pictures, a title and subtitle, and only the footer items you tick), legend, columns.", "Export ▾ saves Excel, CSV, XML and other formats."],
+    how: ["Print / PDF (Ctrl+P) shows the pages first. Save as PDF writes exactly those pages to a file; Print… opens the print window.", "Page Setup: paper, scaling, margins, Header & footer (any number of pictures left, centre or right on every page, each with its own size; a title and subtitle; only the footer items you tick), legend, columns.", "Export ▾ saves Excel, CSV, XML and other formats."],
     tip: "Nothing is added to the page that you did not choose: no program name, no web address." },
   // Project tab
   project: { t: "Project properties", what: "Settings for the whole plan: name, start date, status date, calendars, custom fields, activity codes and schedule options.",

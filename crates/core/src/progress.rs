@@ -111,14 +111,18 @@ pub fn earned_schedule(c: &Calc) -> Option<EarnedSchedule> {
     let bl = |i: usize| p.tasks[i].bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
     let (start, fin) = (tasks.iter().map(|&i| bl(i).0).min()?, tasks.iter().map(|&i| bl(i).1).max()?);
     if ev <= 0.0 || dd <= start { return None }
-    // The day the planned curve reaches the progress made, interpolated within the day.
+    let pc = &s.cals[p.calendars.iter().position(|x| x.name == p.calendar).unwrap_or(0)];
+    // The day the planned curve reaches the progress made, interpolated over that day's working time.
     let (mut d, mut prev) = (start.div_euclid(DAY), 0.0);
     let es_t = loop {
         let v = pct((d + 1) * DAY, 0);
-        if v >= ev - 1e-9 || (d + 1) * DAY >= fin { break d * DAY + (((ev - prev) / (v - prev).max(1e-12)).clamp(0.0, 1.0) * DAY as f64) as i64 }
+        if v >= ev - 1e-9 || (d + 1) * DAY >= fin {
+            let frac = ((ev - prev) / (v - prev).max(1e-12)).clamp(0.0, 1.0);
+            let work = pc.between(d * DAY, (d + 1) * DAY);
+            break if work > 0 { pc.add(pc.next_start(d * DAY), (frac * work as f64) as i64) } else { d * DAY + (frac * DAY as f64) as i64 };
+        }
         (prev, d) = (v, d + 1);
     };
-    let pc = &s.cals[p.calendars.iter().position(|x| x.name == p.calendar).unwrap_or(0)];
     let days = |a: i64, b: i64| pc.between(a, b) as f64 / p.day_min.max(1) as f64;
     let (es, at, pd) = (days(start, es_t.max(start)), days(start, dd), days(start, fin));
     if at <= 0.0 { return None }

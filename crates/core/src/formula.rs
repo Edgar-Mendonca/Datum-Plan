@@ -250,13 +250,32 @@ pub fn eval(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                 "projdateadd" => F::Date(c.work_add(date(0)?, n(1)? as i64)),
                 "projdatesub" => F::Date(c.work_add(date(0)?, -(n(1)? as i64))),
                 "datediff" => {
+                    // Like VBA: days, months and years count the calendar boundaries crossed, not lengths of time.
+                    use chrono::Datelike;
                     let (u, x, y) = (s(0)?.to_lowercase(), date(1)?, date(2)?);
-                    let mins = (y - x) as f64;
-                    F::Num((mins / match u.as_str() { "n" => 1.0, "h" => 60.0, "ww" | "w" => 10080.0, "m" => 43830.0, "yyyy" => 525960.0, _ => 1440.0 }).trunc())
+                    let (dx, dy) = (crate::cal::date_of(x), crate::cal::date_of(y));
+                    F::Num(match u.as_str() {
+                        "yyyy" => (dy.year() - dx.year()) as f64,
+                        "m" => ((dy.year() - dx.year()) * 12 + dy.month() as i32 - dx.month() as i32) as f64,
+                        "n" => ((y - x) as f64).trunc(),
+                        "h" => ((y - x) as f64 / 60.0).trunc(),
+                        "ww" | "w" => ((dy - dx).num_days() as f64 / 7.0).trunc(),
+                        _ => (dy - dx).num_days() as f64,
+                    })
                 }
                 "dateadd" => {
+                    // Months and years keep the day of the month (the last day when the month is shorter) and the time.
                     let (u, k, d) = (s(0)?.to_lowercase(), n(1)?, date(2)?);
-                    F::Date(d + (k * match u.as_str() { "n" => 1.0, "h" => 60.0, "ww" | "w" => 10080.0, "m" => 43830.0, "yyyy" => 525960.0, _ => 1440.0 }) as i64)
+                    let months = |m: i64| {
+                        let day = crate::cal::date_of(d);
+                        let to = if m >= 0 { day.checked_add_months(chrono::Months::new(m as u32)) } else { day.checked_sub_months(chrono::Months::new((-m) as u32)) };
+                        to.map(|t| crate::cal::at(t) + d.rem_euclid(crate::cal::DAY)).ok_or_else(|| "the date is out of range".to_string())
+                    };
+                    match u.as_str() {
+                        "m" => F::Date(months(k.trunc() as i64)?),
+                        "yyyy" => F::Date(months(k.trunc() as i64 * 12)?),
+                        _ => F::Date(d + (k * match u.as_str() { "n" => 1.0, "h" => 60.0, "ww" | "w" => 10080.0, _ => 1440.0 }) as i64),
+                    }
                 }
                 "year" | "month" | "day" | "weekday" => {
                     use chrono::Datelike;
