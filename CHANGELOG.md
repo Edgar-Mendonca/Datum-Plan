@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.7 — 2026-10-31
+
+Clearer links between plans, and fixes.
+
+- **Go to the linked task.** Click the ⇠ or ⇢ mark by a task's ID (or right-click › **Linked Tasks…**): the menu lists the tasks it is linked to, and **Go to** shows the other plan's tab with that task selected, opening the plan from its file when it is not open.
+- **See when a link needs updating.** When the other plan has moved, the mark turns amber (⇠!), the label on the Gantt says so, and the plan's tab shows ⟳ with how many tasks wait for new dates. **Update Links** is on the mark's menu and the tab's right-click menu.
+- **File › Close and Close All**, and Close / Close All Plans on a tab's right-click menu. New and Open add a tab and leave the others open; now they are easy to close.
+- **Link to a plan that is not open:** **Browse…** in Link to Plan picks a saved plan file.
+- Fixed: saving one plan deleted the recovery copies of the other open plans with unsaved changes. Each unsaved plan now keeps its copy until it is saved or closed.
+- Fixed: Escape did not close menus.
+- The guide explains Go to, the update warnings and closing plans, in English and Chinese.
+
 ## 0.5.6 — 2026-10-31
 
 See at a glance what is linked to what between plans.

@@ -342,7 +342,7 @@ A large job is often several plans: a main schedule and the plans of engineering
 
 ### Tabs
 
-Every plan you open or create gets a tab above the ribbon. Click a tab to show that plan; a dot means it has unsaved changes, and × closes it (it asks to save first). **＋** makes a new plan, opens one, or opens the example. [[Ctrl+Tab]] goes to the next tab and [[Ctrl+W]] closes the one shown. When you close the window, Datum Plan lists every plan with unsaved changes and can save them all.
+Every plan you open or create gets a tab above the ribbon. Click a tab to show that plan; a dot means it has unsaved changes, and × closes it (it asks to save first). **＋** makes a new plan, opens one, or opens the example. [[Ctrl+Tab]] goes to the next tab and [[Ctrl+W]] closes the one shown. **File › Close** closes the plan shown and **File › Close All** closes every plan (also on a tab's right-click menu); New and Open add a tab and leave the others open. When you close the window, Datum Plan lists every plan with unsaved changes and can save them all.
 
 ### The example
 
@@ -352,7 +352,7 @@ Every plan you open or create gets a tab above the ribbon. Click a tab to show t
 
 ![Link to Plan: the links this task already has, the other plan, its tasks, the type and the lag.](img/link-dialog.png)
 
-Save the other plan first, so the link knows its file. Then select the task that has to wait and choose **Project › Link to Plan** (or right-click › **Link to Plan…**).
+Save the other plan first, so the link knows its file. Then select the task that has to wait and choose **Project › Link to Plan** (or right-click › **Link to Plan…**). The other plan can be open in a tab, or a saved file you pick with **Browse…**.
 
 1. The links this task already has, with the date it last knew. × removes one.
 2. **Plan** is any other open plan; **Find** narrows its tasks by name or ID.
@@ -371,6 +371,10 @@ A main schedule is usually milestones (0 days): each one is the moment a subplan
 1. **By the ID:** ⇠ (purple) means the task waits for a task in another plan; click it to see or change the link. ⇢ (green) means a task in another open plan waits for this one. Point at either mark to read the tasks.
 2. **Before the bar (purple):** what the task waits for, with a dashed arrow into it: "Construction › A1130 Mechanical completion ⇢ ◆ 26 Nov".
 3. **After the bar (green):** which other plan waits for this task: "→ Construction › A1010 Site mobilisation".
+
+**Click a mark to go there:** the menu lists the linked tasks; **Go to** shows the other plan's tab (opening the file if it is not open) with that task selected. The same menu is on the task's right-click menu as **Linked Tasks…**.
+
+**When the other plan moves,** the mark turns amber (⇠!), the label on the Gantt says "moved, update links", and the plan's tab shows ⟳ with the number of tasks to update. **Project › Update Links** (or the mark's menu) brings the new dates in.
 
 The **External Predecessors** column lists every link in words, and **Project › Linked Plans** lists them all in both directions.
 

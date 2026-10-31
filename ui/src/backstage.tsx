@@ -176,9 +176,11 @@ export const Backstage = () => (
   <div class="bs">
     <aside>
       <button class="back" onClick={() => out() && setBackstage(null)} title="Back">←</button>
-      <For each={[["home", "home", "Home"], ["new", "new", "New"], ["open", "open", "Open"], ["import", "import", "Import"], ["save", "save", "Save"], ["saveas", "save", "Save As"], ["export", "export", "Export"], ["print", "print", "Print"], ["roadmap", "list", "Roadmap"]]}>{([k, i, l]) =>
+      <For each={[["home", "home", "Home"], ["new", "new", "New"], ["open", "open", "Open"], ["import", "import", "Import"], ["save", "save", "Save"], ["saveas", "save", "Save As"], ["export", "export", "Export"], ["print", "print", "Print"], ["close", "clear", "Close"], ["closeall", "clear", "Close All"], ["roadmap", "list", "Roadmap"]]}>{([k, i, l]) =>
         <button classList={{ on: backstage() === k }} onClick={() => {
           if (k === "open") C.open(); else if (k === "import") C.importFile(); else if (k === "save") C.save(); else if (k === "saveas") C.save(true);
+          else if (k === "close") import("./plans").then(m => { setBackstage(null); m.closeTab(out()!.tab); });
+          else if (k === "closeall") import("./plans").then(m => { setBackstage(null); m.closeAll(); });
           else setBackstage(k === "new" ? "home" : k);
         }}><Icon n={i} size={22} />{l}</button>}</For>
       <span class="grow" />

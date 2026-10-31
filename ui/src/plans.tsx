@@ -2,11 +2,14 @@
 // other plans, and the Linked Plans panel that shows them and brings their dates up to date.
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 import { Out, fmtAt } from "./api";
-import { act, call, out, P, setOut, openMenu, openDialog, closeDialog, toast, useTable, table, tick } from "./store";
+import { act, call, out, P, setOut, openMenu, openDialog, closeDialog, toast, useTable, table, tick, refresh, grid, setView, view } from "./store";
+import { RH } from "./grid";
+import { selectUid } from "./cmds";
 import { Dialog, Row } from "./ui";
 import { C } from "./cmds";
 
 type ExtLink = { file: string; uid: number; kind: string; lag: number; plan: string; code: string; name: string; start: number; finish: number };
+type LinkGo = { dir: "in" | "out"; label: string; file: string; uid: number; moved: boolean };
 type Target = { tab: number; name: string; path: string | null; tasks: [number, string, string, number, boolean, number, number][] };
 type LinkState = { uid: number; task: string; k: number; link: ExtLink; now_start: number | null; now_finish: number | null; state: string };
 
@@ -25,6 +28,46 @@ export const closeTab = async (k: number) => {
     </Dialog>
   ));
 };
+/** File › Close All: every plan, offering to save the ones with unsaved changes first. */
+export const closeAll = () => {
+  const close = async () => { const o = await call<Out>("close_all"); if (o) { setOut(o); useTable(table()); } };
+  const dirty = (out()?.tabs ?? []).filter(t => t.dirty).map(t => t.name);
+  if (!dirty.length) return close();
+  openDialog(() => (
+    <Dialog title="Save changes?" okText="Save All" ok={async () => { const o = await call<Out | null>("save_all"); if (o) await close(); return !!o; }}
+      extra={<button class="btn" onClick={() => { closeDialog(); close(); }}>Don't save</button>}>
+      <p>These plans have unsaved changes: {dirty.join(", ")}. Save them before closing?</p>
+    </Dialog>
+  ));
+};
+/** Shows the plan a link points at (opening it if needed) and selects the task. */
+export const goToLink = async (file: string, uid: number) => {
+  const o = await call<Out>("goto_link", { file });
+  if (!o) return;
+  setOut(o); useTable(table());
+  if (view() !== "gantt" && view() !== "tracking") setView("gantt");
+  await refresh();
+  selectUid(uid);
+  const k = grid().rows.findIndex(r => r.uid === uid);
+  if (k >= 0) { document.dispatchEvent(new CustomEvent("grid-scroll", { detail: Math.max(0, k * RH - 60) })); document.dispatchEvent(new CustomEvent("gantt-scroll", { detail: grid().rows[k].bar.s })); }
+};
+/** The menu of a task's links: go to the other plan's task, edit, update. */
+export const linkMenu = async (e: MouseEvent, uid: number) => {
+  const pos = { x: e.clientX, y: e.clientY };
+  const go = (await call<LinkGo[]>("link_go", { uid })) ?? [];
+  const moved = go.some(g => g.moved);
+  openMenu(pos, [
+    ...go.map(g => ({ label: `${g.dir === "in" ? "Go to (waits for)" : "Go to (waits for this)"}: ${g.label}`, run: () => goToLink(g.file, g.uid) })),
+    ...(go.length ? ["-" as const] : []),
+    ...(moved ? [{ label: "Update Links (the other plan has moved)", run: () => updateLinks(true) }] : []),
+    { label: "Link to Plan…", run: () => linkDialog(uid) }, { label: "Linked Plans…", run: linkedPlans },
+  ]);
+};
+/** Right-click on a tab. */
+const tabMenu = (e: MouseEvent, k: number) => openMenu(e, [
+  { label: "Close", run: () => closeTab(k) }, { label: "Close All Plans", run: closeAll },
+  ...(out()!.tabs[k].moved ? ["-" as const, { label: "Update Links", run: () => showTab(k).then(() => updateLinks(true)) }] : []),
+]);
 /** Ctrl+Tab / Ctrl+Shift+Tab. */
 export const nextTab = (d: number) => { const n = out()?.tabs.length ?? 1; if (n > 1) showTab((out()!.tab + d + n) % n); };
 const plusMenu = (e: MouseEvent) => openMenu(e, [
@@ -42,8 +85,9 @@ export const example = async () => {
 export const PlanTabs = () => (
   <div class="plantabs">
     <For each={out()?.tabs ?? []}>{(t, k) => (
-      <div class="ptab" classList={{ on: k() === out()!.tab }} title={t.path ?? "Not saved yet"} onClick={() => k() !== out()!.tab && showTab(k())} onAuxClick={e => { if (e.button === 1) closeTab(k()); }}>
+      <div class="ptab" classList={{ on: k() === out()!.tab }} title={t.path ?? "Not saved yet"} onClick={() => k() !== out()!.tab && showTab(k())} onAuxClick={e => { if (e.button === 1) closeTab(k()); }} onContextMenu={e => { e.preventDefault(); tabMenu(e, k()); }}>
         <span class="nm">{t.name || "Untitled"}</span><Show when={t.dirty}><i class="dot" title="Unsaved changes">•</i></Show>
+        <Show when={t.moved}><i class="mv" title={`${t.moved} ${t.moved === 1 ? "task waits" : "tasks wait"} for another plan that has moved. Project › Update Links brings the dates in.`}>⟳ {t.moved}</i></Show>
         <button class="x" title="Close (Ctrl+W)" onClick={e => { e.stopPropagation(); closeTab(k()); }}>×</button>
       </div>
     )}</For>
@@ -57,12 +101,15 @@ const linkText = (x: ExtLink) => `${x.plan} › ${x.code ? `${x.code} ` : ""}${x
 
 /** Link the task `uid` to tasks in other open plans: pick a plan, a task, the type and the lag. */
 export const linkDialog = (uid: number) => openDialog(() => {
-  const [targets] = createResource(() => call<Target[]>("link_targets"));
+  const [open] = createResource(() => call<Target[]>("link_targets"));
+  const [files, setFiles] = createSignal<Target[]>([]);
+  const targets = () => [...(open() ?? []), ...files()];
+  const browse = async () => { const t = await call<Target | null>("link_target_file"); if (t) { t.tab = -1 - files().length; setFiles([...files(), t]); setTab(t.tab); setPick(0); } };
   const [info] = createResource(() => [tick(), uid], () => call<{ task: { name: string; ext?: ExtLink[] } }>("task_info", { uid }));
   const [links, setLinks] = createSignal<ExtLink[] | null>(null);
   const cur = () => links() ?? info()?.task.ext ?? [];
   const [tab, setTab] = createSignal(-1), [pick, setPick] = createSignal(0), [kind, setKind] = createSignal("FS"), [lag, setLag] = createSignal("0"), [q, setQ] = createSignal("");
-  const target = () => targets()?.find(t => t.tab === tab()) ?? targets()?.[0];
+  const target = () => targets().find(t => t.tab === tab()) ?? targets()[0];
   const rows = createMemo(() => (target()?.tasks ?? []).filter(t => !q() || `${t[1]} ${t[2]}`.toLowerCase().includes(q().toLowerCase())));
   const add = () => {
     const t = target(), x = t?.tasks.find(r => r[0] === pick());
@@ -78,10 +125,11 @@ export const linkDialog = (uid: number) => openDialog(() => {
         <For each={cur()} fallback={<tr><td colspan="4" class="muted">No links to other plans yet.</td></tr>}>{(x, k) => <tr><td>{linkText(x)}</td><td>{x.kind}{lagText(x.lag)}</td><td>{x.finish ? fmtAt(x.finish - 1) : "—"}</td>
           <td><button class="x" title="Remove this link" onClick={() => setLinks(cur().filter((_, j) => j !== k()))}>×</button></td></tr>}</For>
       </tbody></table>
-      <Show when={targets()?.length} fallback={<p class="muted">Open the other plan in a tab first (File › Open, or ＋ beside the tabs), then come back here.</p>}>
+      <Show when={targets().length} fallback={<p class="muted">Open the other plan in a tab (File › Open, or ＋ beside the tabs), or <a class="link" onClick={browse}>browse for its file</a>.</p>}>
         <h4 class="sub">Add a link</h4>
         <div class="form">
-          <Row label="Plan"><select onChange={e => { setTab(+e.currentTarget.value); setPick(0); }}><For each={targets()}>{t => <option value={t.tab} selected={t.tab === target()?.tab}>{t.name}{t.path ? "" : " (not saved yet)"}</option>}</For></select></Row>
+          <Row label="Plan"><span class="linklag"><select style={{ flex: "1" }} onChange={e => { setTab(+e.currentTarget.value); setPick(0); }}><For each={targets()}>{t => <option value={t.tab} selected={t.tab === target()?.tab}>{t.name}{t.path ? "" : " (not saved yet)"}{t.tab < 0 ? " (file, not open)" : ""}</option>}</For></select>
+            <button class="btn sm" title="Link to a saved plan that is not open" onClick={browse}>Browse…</button></span></Row>
           <Row label="Find"><input value={q()} placeholder="Part of the task's name or ID" onInput={e => setQ(e.currentTarget.value)} /></Row>
         </div>
         <div class="linkpick"><For each={rows()}>{t => <button classList={{ on: t[0] === pick(), sum: t[4] }} style={{ "padding-left": `${8 + t[3] * 14}px` }} onClick={() => setPick(t[0])} onDblClick={add}>

@@ -38,11 +38,11 @@ export interface Summary {
   bl_finish: string; var_finish: string; pv: string; ev: string; ac: string; spi: number | null; cpi: number | null; tasks: number; done: number; late: number;
   critical: number; milestones: number; error: string | null; week: boolean[]; off_days: number[];
 }
-export interface Out { tabs: { name: string; path: string | null; dirty: boolean }[]; tab: number; project: Project; summary: Summary; path: string | null; dirty: boolean; undo: boolean; redo: boolean; clip: number; rev: number }
+export interface Out { tabs: { name: string; path: string | null; dirty: boolean; moved: number }[]; tab: number; project: Project; summary: Summary; path: string | null; dirty: boolean; undo: boolean; redo: boolean; clip: number; rev: number }
 
 export interface Bar { s: number; f: number; ls: number; lf: number; bs: number | null; bf: number | null; dl: number | null; pct: number; segs: [number, number][]; links: [number, LinkType][] }
 export interface Row {
-  uid: number; id: number; lvl: number; kind: "task" | "summary" | "group" | "project"; ms: boolean; crit: boolean; late: boolean; manual: boolean; off: boolean; lp: boolean; ext?: string[]; ext_out?: string[];
+  uid: number; id: number; lvl: number; kind: "task" | "summary" | "group" | "project"; ms: boolean; crit: boolean; late: boolean; manual: boolean; off: boolean; lp: boolean; ext?: string[]; ext_out?: string[]; ext_moved?: boolean;
   kids: boolean; open: boolean; hl: boolean; name: string; res: string; cells: string[]; icons?: [number, string][]; style?: Record<string, string>; bar: Bar;
 }
 export interface Col { key: string; name: string; kind: Kind; edit: boolean }

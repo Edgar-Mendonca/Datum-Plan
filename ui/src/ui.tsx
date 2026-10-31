@@ -33,8 +33,9 @@ export const Menu = () => {
     );
   };
   const down = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.(".menu")) close(); };
-  onMount(() => document.addEventListener("mousedown", down));
-  onCleanup(() => document.removeEventListener("mousedown", down));
+  const key = (e: KeyboardEvent) => { if (e.key === "Escape" && menu()) { e.stopPropagation(); close(); } };
+  onMount(() => { document.addEventListener("mousedown", down); document.addEventListener("keydown", key, true); });
+  onCleanup(() => { document.removeEventListener("mousedown", down); document.removeEventListener("keydown", key, true); });
   return (
     <Show when={menu()}>{m => <>{list(m().items, m().x, m().y, 0)}<For each={subs()}>{(s, i) => list(s.items, s.x, s.y, i() + 1, s.px)}</For></>}</Show>
   );

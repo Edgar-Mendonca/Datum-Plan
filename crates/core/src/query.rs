@@ -92,6 +92,9 @@ pub struct GRow {
     pub ext: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ext_out: Vec<String>,
+    /// A task it waits for in another open plan has moved since (Update Links).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ext_moved: bool,
 }
 
 #[derive(Serialize)]
@@ -177,7 +180,7 @@ impl Calc<'_> {
             ms: !s.summary[i] && (t.dur == 0 || matches!(t.act_type, ActType::StartMs | ActType::FinishMs)),
             crit: s.critical(p, i), late: self.val(i, "late").truth(), manual: t.manual, off: s.off[i], lp: s.lp[i],
             kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, name: t.name.clone(), res: self.text(i, "res"), cells, icons, style: t.style.as_object().map(|m| m.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()).unwrap_or_default(), bar: self.bar(i, q.baseline),
-            ext: t.ext.iter().map(|x| crate::links::label(x, p.day_min)).collect(), ext_out: vec![],
+            ext: t.ext.iter().map(|x| crate::links::label(x, p.day_min)).collect(), ext_out: vec![], ext_moved: false,
         }
     }
 

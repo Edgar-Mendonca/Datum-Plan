@@ -66,7 +66,7 @@ const pal = () => {
   const v = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const dark = document.documentElement.dataset.theme === "dark";
   K = { ink: dark ? "#9CC2F7" : "#0C1A2B", line: v("--line"), text: v("--text2"), bg: v("--bg2"), panel: v("--panel"), off: dark ? "#141E2A" : "#F2F4F2", pale: v("--pale"), muted: v("--muted"),
-    base: dark ? "#5B6878" : "#AEB7C4", link: dark ? "#6B7F99" : "#7A8BA6", fill: dark ? "#24476E" : "#A9CAF6", blue: v("--blue"), cfill: dark ? "#5A2522" : "#F2B0B0", crit: v("--crit"), ext: dark ? "#B79CF5" : "#6D3FC8", extOut: dark ? "#6FCF97" : "#1E7D46" };
+    base: dark ? "#5B6878" : "#AEB7C4", link: dark ? "#6B7F99" : "#7A8BA6", fill: dark ? "#24476E" : "#A9CAF6", blue: v("--blue"), cfill: dark ? "#5A2522" : "#F2B0B0", crit: v("--crit"), ext: dark ? "#B79CF5" : "#6D3FC8", extOut: dark ? "#6FCF97" : "#1E7D46", moved: dark ? "#F5B451" : "#B45309" };
   const g = gstyle();
   if (!dark || g.name !== STYLES[0].name) Object.assign(K, { fill: g.fill, blue: g.edge, cfill: g.cfill, crit: g.crit, ...(dark ? {} : { ink: g.sum }) });
   K.grid = g.grid ? (dark ? "#1E2A38" : "#E8EBEF") : "";
@@ -190,8 +190,8 @@ export const Gantt = () => {
       // Links between plans: what this task waits for, left of the bar (blue, dashed arrow in);
       // which other plans wait for it, after its label (green arrow out).
       if (r.ext?.length) {
-        const t = `${short(r.ext[0])}${r.ext.length > 1 ? ` +${r.ext.length - 1}` : ""}`, ex = (r.ms ? x1 - 7 : x1) - 2, tw = ctx.measureText(t).width;
-        ctx.fillStyle = ctx.strokeStyle = K.ext; ctx.setLineDash([3, 2]); ctx.beginPath(); ctx.moveTo(ex - 16, y + RH / 2); ctx.lineTo(ex - 3, y + RH / 2); ctx.stroke(); ctx.setLineDash([]);
+        const t = `${short(r.ext[0])}${r.ext.length > 1 ? ` +${r.ext.length - 1}` : ""}${r.ext_moved ? " – moved, update links" : ""}`, ex = (r.ms ? x1 - 7 : x1) - 2, tw = ctx.measureText(t).width;
+        ctx.fillStyle = ctx.strokeStyle = r.ext_moved ? K.moved : K.ext; ctx.setLineDash([3, 2]); ctx.beginPath(); ctx.moveTo(ex - 16, y + RH / 2); ctx.lineTo(ex - 3, y + RH / 2); ctx.stroke(); ctx.setLineDash([]);
         ctx.beginPath(); ctx.moveTo(ex, y + RH / 2); ctx.lineTo(ex - 5, y + RH / 2 - 3); ctx.lineTo(ex - 5, y + RH / 2 + 3); ctx.fill();
         // Too close to the left edge: say it after the bar instead.
         if (ex - 20 - tw > 4) ctx.fillText(t, ex - 20 - tw, y + RH / 2);

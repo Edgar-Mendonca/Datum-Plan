@@ -90,7 +90,7 @@ struct Out {
 }
 
 #[derive(Serialize)]
-struct TabInfo { name: String, path: Option<String>, dirty: bool }
+struct TabInfo { name: String, path: Option<String>, dirty: bool, moved: usize }
 
 /// Every open plan in tab order (the shown one is `a.doc`).
 fn docs(a: &App) -> Vec<&Doc> {
@@ -98,7 +98,29 @@ fn docs(a: &App) -> Vec<&Doc> {
 }
 
 fn tab_list(a: &App) -> Vec<TabInfo> {
-    docs(a).iter().map(|d| TabInfo { name: d.p.name.clone(), path: d.path.as_ref().map(|p| p.display().to_string()), dirty: d.dirty }).collect()
+    let moved = link_status(a);
+    docs(a).iter().zip(moved).map(|(d, moved)| TabInfo { name: d.p.name.clone(), path: d.path.as_ref().map(|p| p.display().to_string()), dirty: d.dirty, moved: moved.len() }).collect()
+}
+
+/// For each open plan, its tasks whose links point at a task in another open plan that has
+/// moved since the link last saw it (they need Update Links). Only open plans are scheduled.
+fn link_status(a: &App) -> Vec<std::collections::HashSet<u32>> {
+    let ds = docs(a);
+    let key = |d: &Doc| d.path.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().to_lowercase());
+    let keys: Vec<Option<String>> = ds.iter().map(|d| key(d)).collect();
+    let mut now: HashMap<usize, HashMap<u32, (i64, i64)>> = HashMap::new();
+    let mut out = vec![std::collections::HashSet::new(); ds.len()];
+    for (k, d) in ds.iter().enumerate() {
+        for t in &d.p.tasks {
+            for x in &t.ext {
+                let f = links::file_name(&x.file).to_lowercase();
+                let Some(j) = keys.iter().position(|k2| k2.as_deref() == Some(f.as_str())) else { continue };
+                let dates = now.entry(j).or_insert_with(|| datum_core::sched::schedule(&ds[j].p).map(|s| ds[j].p.tasks.iter().enumerate().map(|(i, t)| (t.uid, (s.es[i], s.ef[i]))).collect()).unwrap_or_default());
+                if dates.get(&x.uid).is_some_and(|&d2| d2 != (x.start, x.finish)) { out[k].insert(t.uid); }
+            }
+        }
+    }
+    out
 }
 
 /// Shows a plan in a new tab, or in place of an empty untouched one.
@@ -130,11 +152,12 @@ fn switch_tab(st: State<St>, k: usize) -> Out {
 
 /// Closes a tab (the window asks about unsaved changes first). The last tab becomes a new plan.
 #[tauri::command]
-fn close_tab(st: State<St>, k: usize) -> Out {
+fn close_tab(app: AppHandle, st: State<St>, k: usize) -> Out {
     let mut a = st.lock();
     if k >= a.others.len() { return out(&a) }
     if a.others.len() == 1 {
         a.doc = Doc::new(Project::new("Project1", today()));
+        write_recovery(&app, &a);
         return out(&a);
     }
     if k == a.cur {
@@ -143,6 +166,18 @@ fn close_tab(st: State<St>, k: usize) -> Out {
     }
     a.others.remove(k);
     if a.cur > k { a.cur -= 1 }
+    write_recovery(&app, &a);
+    out(&a)
+}
+
+/// Closes every plan (the window asks about unsaved changes first) and leaves one new plan.
+#[tauri::command]
+fn close_all(app: AppHandle, st: State<St>) -> Out {
+    let mut a = st.lock();
+    a.doc = Doc::new(Project::new("Project1", today()));
+    a.others = vec![None];
+    a.cur = 0;
+    write_recovery(&app, &a);
     out(&a)
 }
 
@@ -312,7 +347,7 @@ async fn save(app: AppHandle, st: State<'_, St>, as_new: bool) -> R<Option<Out>>
     let mut a = st.lock();
     a.doc.save(&path)?;
     remember(&app, &path);
-    clear_recovery(&app);
+    write_recovery(&app, &a);
     Ok(Some(out(&a)))
 }
 
@@ -454,22 +489,24 @@ fn query(st: State<St>, q: Query) -> query::Grid {
     let a = st.lock();
     let mut g = calc(&a).grid(&q);
     let by = waited_on(&a);
-    if !by.is_empty() {
-        for r in &mut g.rows { if let Some(v) = by.get(&r.uid) { r.ext_out = v.iter().map(|x| x.1.clone()).collect() } }
+    let moved = link_status(&a).swap_remove(a.cur);
+    for r in &mut g.rows {
+        if let Some(v) = by.get(&r.uid) { r.ext_out = v.iter().map(|x| x.1.clone()).collect() }
+        r.ext_moved = moved.contains(&r.uid);
     }
     g
 }
 
 /// Tasks of the shown plan that tasks in the other open plans wait for: uid → (the other plan's
 /// tab, "Main schedule › A1040 Engineering complete (FS)").
-fn waited_on(a: &App) -> HashMap<u32, Vec<(usize, String)>> {
-    let mut by: HashMap<u32, Vec<(usize, String)>> = HashMap::new();
+fn waited_on(a: &App) -> HashMap<u32, Vec<(usize, String, u32)>> {
+    let mut by: HashMap<u32, Vec<(usize, String, u32)>> = HashMap::new();
     let Some(me) = a.doc.path.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().to_lowercase()) else { return by };
     for (k, d) in docs(a).into_iter().enumerate().filter(|&(k, _)| k != a.cur) {
         for t in &d.p.tasks {
             for x in t.ext.iter().filter(|x| links::file_name(&x.file).to_lowercase() == me) {
                 let code = if t.code.is_empty() { String::new() } else { format!("{} ", t.code) };
-                by.entry(x.uid).or_default().push((k, format!("{} › {code}{} ({:?})", d.p.name, t.name, x.kind)));
+                by.entry(x.uid).or_default().push((k, format!("{} › {code}{} ({:?})", d.p.name, t.name, x.kind), t.uid));
             }
         }
     }
@@ -485,7 +522,7 @@ fn link_users(st: State<St>) -> Vec<LinkUser> {
     let a = st.lock();
     let mut v: Vec<LinkUser> = waited_on(&a).into_iter().flat_map(|(uid, xs)| {
         let task = a.doc.p.idx(uid).map(|i| { let t = &a.doc.p.tasks[i]; if t.code.is_empty() { t.name.clone() } else { format!("{} {}", t.code, t.name) } }).unwrap_or_default();
-        xs.into_iter().map(move |(tab, by)| LinkUser { uid, task: task.clone(), tab, by })
+        xs.into_iter().map(move |(tab, by, _)| LinkUser { uid, task: task.clone(), tab, by })
     }).collect();
     v.sort_by_key(|x| (a.doc.p.idx(x.uid), x.tab));
     v
@@ -714,8 +751,9 @@ async fn save_all(app: AppHandle, st: State<'_, St>) -> R<Option<Out>> {
         st.lock().doc.save(&path)?;
         remember(&app, &path);
     }
-    clear_recovery(&app);
-    Ok(Some(out(&st.lock())))
+    let a = st.lock();
+    write_recovery(&app, &a);
+    Ok(Some(out(&a)))
 }
 
 /// A plan another plan links to: an open tab with that file, or the file read from disk
@@ -730,18 +768,66 @@ fn linked_plan(a: &App, file: &str, here: Option<&Path>) -> Option<(String, Proj
     [Some(PathBuf::from(file)), near].into_iter().flatten().find(|p| p.is_file()).and_then(|p| Doc::open(&p).ok()).map(|d| (name, d.p))
 }
 
+/// Where a task's links lead: the tasks it waits for in other plans ("in") and the tasks in other
+/// open plans that wait for it ("out"), for "Go to" in the window.
+#[derive(Serialize)]
+struct LinkGo { dir: &'static str, label: String, file: String, uid: u32, moved: bool }
+
+#[tauri::command]
+fn link_go(st: State<St>, uid: u32) -> Vec<LinkGo> {
+    let a = st.lock();
+    let Some(i) = a.doc.p.idx(uid) else { return vec![] };
+    let moved = link_status(&a).swap_remove(a.cur).contains(&uid);
+    let mut v: Vec<LinkGo> = a.doc.p.tasks[i].ext.iter().map(|x| LinkGo { dir: "in", label: links::label(x, a.doc.p.day_min), file: x.file.clone(), uid: x.uid, moved }).collect();
+    let ds = docs(&a);
+    for (k, label, other) in waited_on(&a).remove(&uid).unwrap_or_default() {
+        let file = ds[k].path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+        v.push(LinkGo { dir: "out", label, file, uid: other, moved: false });
+    }
+    v
+}
+
+/// Shows the plan a link points at (its tab, or opened from its file next to this plan); the
+/// window then selects the task.
+#[tauri::command]
+fn goto_link(app: AppHandle, st: State<St>, file: String) -> R<Out> {
+    let mut a = st.lock();
+    let name = links::file_name(&file).to_lowercase();
+    let same = |d: &Doc| d.path.as_ref().is_some_and(|p| p.file_name().is_some_and(|f| f.to_string_lossy().to_lowercase() == name));
+    if let Some(k) = docs(&a).iter().position(|d| same(d)) {
+        show_tab(&mut a, k);
+        return Ok(out(&a));
+    }
+    let near = a.doc.path.as_deref().and_then(Path::parent).map(|d| d.join(links::file_name(&file)));
+    let path = [Some(PathBuf::from(&file)), near].into_iter().flatten().find(|p| p.is_file()).ok_or_else(|| format!("“{}” was not found, where it was or next to this plan.", links::file_name(&file)))?;
+    let d = Doc::open(&path)?;
+    remember(&app, &path);
+    add_tab(&mut a, d);
+    Ok(out(&a))
+}
+
+/// Link to Plan › Browse: a saved plan that is not open, read (not opened) to pick a task.
+#[tauri::command]
+async fn link_target_file(app: AppHandle) -> R<Option<Target>> {
+    let Some(path) = pick(&app, "Datum Plan", &["dplan"]) else { return Ok(None) };
+    let d = Doc::open(&path)?;
+    Ok(Some(target(-1, &d)))
+}
+
+fn target(tab: i64, d: &Doc) -> Target {
+    let s = datum_core::sched::schedule(&d.p).ok();
+    let tasks = d.p.tasks.iter().enumerate().map(|(i, t)| (t.uid, t.code.clone(), t.name.clone(), t.level, s.as_ref().is_some_and(|s| s.summary[i]), s.as_ref().map_or(0, |s| s.es[i]), s.as_ref().map_or(0, |s| s.ef[i]))).collect();
+    Target { tab, name: d.p.name.clone(), path: d.path.as_ref().map(|p| p.display().to_string()), tasks }
+}
+
 /// The other open plans and their tasks, to link to (plans must be saved, so the link knows the file).
 #[derive(Serialize)]
-struct Target { tab: usize, name: String, path: Option<String>, tasks: Vec<(u32, String, String, u8, bool, i64, i64)> }
+struct Target { tab: i64, name: String, path: Option<String>, tasks: Vec<(u32, String, String, u8, bool, i64, i64)> }
 
 #[tauri::command]
 fn link_targets(st: State<St>) -> Vec<Target> {
     let a = st.lock();
-    docs(&a).into_iter().enumerate().filter(|(k, _)| *k != a.cur).map(|(tab, d)| {
-        let s = datum_core::sched::schedule(&d.p).ok();
-        let tasks = d.p.tasks.iter().enumerate().map(|(i, t)| (t.uid, t.code.clone(), t.name.clone(), t.level, s.as_ref().is_some_and(|s| s.summary[i]), s.as_ref().map_or(0, |s| s.es[i]), s.as_ref().map_or(0, |s| s.ef[i]))).collect();
-        Target { tab, name: d.p.name.clone(), path: d.path.as_ref().map(|p| p.display().to_string()), tasks }
-    }).collect()
+    docs(&a).into_iter().enumerate().filter(|(k, _)| *k != a.cur).map(|(tab, d)| target(tab as i64, d)).collect()
 }
 
 /// Every link of the shown plan to other plans, and whether the other plan has moved since.
@@ -884,10 +970,16 @@ fn clear_recovery(app: &AppHandle) {
 
 #[tauri::command]
 fn autosave(app: AppHandle, st: State<St>) {
-    let a = st.lock();
+    write_recovery(&app, &st.lock());
+}
+
+/// Keeps the recovery copies true to the open plans: one per tab with unsaved changes (so saving
+/// one tab never drops the others' copies), none when everything is saved.
+fn write_recovery(app: &AppHandle, a: &App) {
+    clear_recovery(app);
     // Every unsaved tab: recovery.dplan, recovery-1.dplan, …
-    let dirty: Vec<&Doc> = docs(&a).into_iter().filter(|d| d.dirty).collect();
-    if let (false, Some((plan, meta))) = (dirty.is_empty(), recovery_files(&app)) {
+    let dirty: Vec<&Doc> = docs(a).into_iter().filter(|d| d.dirty).collect();
+    if let (false, Some((plan, meta))) = (dirty.is_empty(), recovery_files(app)) {
         let mut items = vec![];
         for (k, d) in dirty.iter().enumerate().take(63) {
             let f = if k == 0 { plan.clone() } else { plan.with_file_name(format!("recovery-{k}.dplan")) };
@@ -1045,7 +1137,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, save_all, link_targets, link_states, link_users, update_links, linked_example, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

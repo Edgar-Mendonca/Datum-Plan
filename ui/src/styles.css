@@ -118,7 +118,9 @@ kbd { font: 10.5px "Segoe UI", sans-serif; color: var(--muted); border: 1px soli
 .ind { font-style: normal; margin-left: 3px; color: var(--muted); font-size: 10px; }
 .ind.late { color: var(--crit); font-weight: 700; }
 .ind.xin { color: #6D3FC8; font-weight: 700; font-size: 12px; cursor: pointer; }
-.ind.xout { color: #1E7D46; font-weight: 700; font-size: 12px; }
+.ind.xout { color: #1E7D46; font-weight: 700; font-size: 12px; cursor: pointer; }
+.ind.xin.moved { color: #B45309; }
+.ptab .mv { font-style: normal; font-size: 10.5px; font-weight: 700; color: #92400E; background: #FEF3C7; border-radius: 8px; padding: 0 5px; }
 .mode svg { width: 14px; height: 14px; vertical-align: middle; }
 .ico { font-size: 12px; }
 .pctc { position: relative; display: block; }
@@ -252,7 +254,7 @@ tr.link:hover td { background: var(--pale); }
 
 /* Backstage */
 .bs { position: fixed; inset: 0; display: flex; background: var(--panel); z-index: 10; }
-.bs aside { width: 140px; background: var(--blue); display: flex; flex-direction: column; padding-bottom: 10px; color: var(--bg2); }
+.bs aside { width: 140px; background: var(--blue); display: flex; flex-direction: column; padding-bottom: 10px; color: var(--bg2); overflow-y: auto; scrollbar-width: none; }
 .bs aside button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 0; color: #E6EFFC; }
 .bs aside button:hover { background: rgba(255,255,255,.12); }
 .bs aside button.on { background: rgba(255,255,255,.2); color: var(--bg2); box-shadow: inset 3px 0 var(--amber); }

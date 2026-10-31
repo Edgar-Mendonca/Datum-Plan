@@ -97,6 +97,7 @@ fn main() {
         // One task waits for a task in another plan, and another plan waits for one.
         let k = g.rows.iter().position(|r| r.kind == "task").unwrap_or(0);
         g.rows[k].ext = vec!["Engineering › E1010 IFC drawings issued (FS+5d)".into()];
+        g.rows[k].ext_moved = true;
         g.rows[k + 1].ext_out = vec!["Main schedule › A1040 Engineering complete (FS)".into()];
     }
     let rows: Vec<usize> = g.rows.iter().filter(|r| r.kind == "task").filter_map(|r| p.idx(r.uid)).collect();
@@ -107,13 +108,14 @@ fn main() {
     let mut proj = serde_json::to_value(&p).unwrap();
     proj.as_object_mut().unwrap().remove("tasks");
     println!("{}", serde_json::json!({
-        "state": { "tabs": if guide { serde_json::json!([{ "name": p.name, "path": null, "dirty": false }]) } else { serde_json::json!([{ "name": p.name, "path": null, "dirty": false }, { "name": "Engineering", "path": "C:/Plans/Engineering.dplan", "dirty": true }]) }, "tab": 0, "project": proj, "summary": c.summary(), "path": null, "dirty": false, "undo": false, "redo": false, "clip": 0, "rev": 1 },
+        "state": { "tabs": if guide { serde_json::json!([{ "name": p.name, "path": null, "dirty": false, "moved": 0 }]) } else { serde_json::json!([{ "name": p.name, "path": null, "dirty": false, "moved": 0 }, { "name": "Engineering", "path": "C:/Plans/Engineering.dplan", "dirty": true, "moved": 2 }]) }, "tab": 0, "project": proj, "summary": c.summary(), "path": null, "dirty": false, "undo": false, "redo": false, "clip": 0, "rev": 1 },
         "query": g, "query:timeline": tl, "query:tracking": tracking, "scurve": report::scurve(&c, "week", "duration", None), "period_report": report::period_report(&c, "week", None),
         "periods": report::period_ends(&c, "week"), "curve": report::curve(&c, "week"), "usage": report::usage(&c, "resource", "work", "week"), "usage:group": report::usage(&c, "group", "work", "week"),
         "risk_run": risk::simulate(&p, &risk::SimOpts { iterations: 300, ..Default::default() }).unwrap(), "level_preview": level::preview(&p, &[]).unwrap(),
         "manpower": progress::manpower(&c, "week"), "earned_schedule": progress::earned_schedule(&c), "lookahead": progress::lookahead(&c, 3), "credit_library": progress::credit_library(),
         "sheet_view": sheet::sheet_view(&c, 0), "formula_shift": ["=C3*2"], "dash_map": dash_map(&c),
         "link_targets": [{ "tab": 1, "name": "Engineering", "path": "C:/Plans/Engineering.dplan", "tasks": [[1, "E1000", "Basic engineering", 0, true, c.s.start, c.s.start + 20 * cal::DAY], [2, "E1010", "IFC drawings issued", 1, false, c.s.start + 20 * cal::DAY, c.s.start + 20 * cal::DAY]] }],
+        "link_go": [{ "dir": "in", "label": "Engineering › E1010 IFC drawings issued (FS+5d)", "file": "C:/Plans/Engineering.dplan", "uid": 2, "moved": true }, { "dir": "out", "label": "Main schedule › A1040 Engineering complete (FS)", "file": "C:/Plans/Main schedule.dplan", "uid": 5, "moved": false }],
         "link_users": [{ "uid": p.tasks[2].uid, "task": p.tasks[2].name, "tab": 1, "by": "Main schedule › A1040 Engineering complete (FS)" }],
         "link_states": [{ "uid": p.tasks[1].uid, "task": p.tasks[1].name, "k": 0, "link": { "file": "C:/Plans/Engineering.dplan", "uid": 2, "kind": "FS", "lag": 0, "plan": "Engineering", "code": "E1010", "name": "IFC drawings issued", "start": c.s.start, "finish": c.s.start + 10 * cal::DAY }, "now_start": c.s.start, "now_finish": c.s.start + 15 * cal::DAY, "state": "changed" }],
         "sheet_catalog": { "functions": sheet::functions(), "names": sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect::<Vec<_>>(), "tasks": sheet::task_columns(&c).into_iter().map(|x| x.1).collect::<Vec<_>>(), "resources": sheet::RES_COLS.iter().map(|x| x.1).collect::<Vec<_>>() },
