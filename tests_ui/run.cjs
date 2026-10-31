@@ -340,20 +340,20 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 0.5.5: plans in tabs, links to tasks in other plans, the Linked Plans panel.
-  check("each open plan has a tab, unsaved ones marked", (await p.$$(".plantabs .ptab")).length === 2 && !!(await p.$(".plantabs .ptab:nth-child(2) .dot")));
+  check("each open plan has a tab, unsaved ones marked", (await p.$$(".plantabs .plantab")).length === 2 && !!(await p.$(".plantabs .plantab:nth-child(2) .dot")));
   check("a task linked to another plan is marked, and says what it waits for", (await p.getAttribute(".row .ind.xin", "title") ?? "").includes("Engineering › E1010"));
   check("a task another plan waits for is marked too", (await p.getAttribute(".row .ind.xout", "title") ?? "").includes("Main schedule › A1040"));
-  check("a link whose plan has moved is marked on the row and on that plan's tab", !!(await p.$(".row .ind.xin.moved")) && (await p.textContent(".plantabs .ptab:nth-child(2) .mv")).includes("2"));
+  check("a link whose plan has moved is marked on the row and on that plan's tab", !!(await p.$(".row .ind.xin.moved")) && (await p.textContent(".plantabs .plantab:nth-child(2) .mv")).includes("2"));
   await p.click(".row .ind.xin"); await p.waitForTimeout(300);
   check("clicking the mark offers to go to the linked tasks, both ways", (await p.textContent(".menu")).includes("Go to (waits for): Engineering › E1010") && (await p.textContent(".menu")).includes("Go to (waits for this): Main schedule › A1040") && (await p.textContent(".menu")).includes("Update Links"));
   await p.click(".menu button:has-text('Go to (waits for): Engineering')"); await p.waitForTimeout(200);
   check("Go to shows the other plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "goto_link").pop())).includes("Engineering.dplan"));
-  await p.click(".plantabs .ptab:nth-child(2)", { button: "right" }); await p.waitForTimeout(200);
+  await p.click(".plantabs .plantab:nth-child(2)", { button: "right" }); await p.waitForTimeout(200);
   const tm = await p.textContent(".menu");
   check("right-clicking a tab offers Close, Close All Plans and Update Links", ["Close", "Close All Plans", "Update Links"].every(t => tm.includes(t)), tm);
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
-  check("a project's tabs are grouped: the master marked ◆, its subplan ›, in one colour", !!(await p.$(".plantabs .ptab.master .pm")) && !!(await p.$(".plantabs .ptab:nth-child(2) .ps")) && await p.evaluate(() => { const t = document.querySelectorAll(".plantabs .ptab"); return getComputedStyle(t[0]).borderTopColor === getComputedStyle(t[1]).borderTopColor && getComputedStyle(t[0]).borderTopWidth === "3px"; }));
-  await p.click(".plantabs .ptab:nth-child(1)", { button: "right" }); await p.waitForTimeout(200);
+  check("a project's tabs are grouped: the master marked ◆, its subplan ›, in one colour", !!(await p.$(".plantabs .plantab.master .pm")) && !!(await p.$(".plantabs .plantab:nth-child(2) .ps")) && await p.evaluate(() => { const t = document.querySelectorAll(".plantabs .plantab"); return getComputedStyle(t[0]).borderTopColor === getComputedStyle(t[1]).borderTopColor && getComputedStyle(t[0]).borderTopWidth === "3px"; }));
+  await p.click(".plantabs .plantab:nth-child(1)", { button: "right" }); await p.waitForTimeout(200);
   const pm = await p.textContent(".menu");
   check("a master's tab menu offers Open All Subplans, New Subplan and Close Project", ["Open All Subplans", "New Subplan", "Close Project"].every(t => pm.includes(t)), pm);
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
@@ -380,7 +380,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("the combined view asks the shell for the expanded subplans", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "query").pop())).includes('"subs":{"show":true'));
   await p.evaluate(() => { window.__subsView = false; });
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
-  await p.click(".plantabs .ptab:nth-child(2)"); await p.waitForTimeout(200);
+  await p.click(".plantabs .plantab:nth-child(2)"); await p.waitForTimeout(200);
   check("clicking a tab shows that plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "switch_tab").pop())).includes('"k":1'));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   q = await cellBox(2, 2); await p.mouse.click(q.x, q.y); await p.waitForTimeout(100);

@@ -208,7 +208,7 @@ export const example = async () => {
 export const PlanTabs = () => (
   <div class="plantabs" classList={{ solo: (out()?.tabs.length ?? 1) === 1 && !out()?.tabs[0]?.role }}>
     <For each={out()?.tabs ?? []}>{(t, k) => (
-      <div class="ptab" classList={{ on: k() === out()!.tab, proj: !!t.role, master: t.role === "master", gstart: k() > 0 && (!!t.role || !!out()!.tabs[k() - 1].role) && gcol(t) + t.project !== gcol(out()!.tabs[k() - 1]) + out()!.tabs[k() - 1].project }} style={t.role ? { "--g": gcol(t) } : undefined} title={tabTitle(t)} onClick={() => k() !== out()!.tab && showTab(k())} onAuxClick={e => { if (e.button === 1) closeTab(k()); }} onContextMenu={e => { e.preventDefault(); tabMenu(e, k()); }}>
+      <div class="plantab" classList={{ on: k() === out()!.tab, proj: !!t.role, master: t.role === "master", gstart: k() > 0 && (!!t.role || !!out()!.tabs[k() - 1].role) && gcol(t) + t.project !== gcol(out()!.tabs[k() - 1]) + out()!.tabs[k() - 1].project }} style={t.role ? { "--g": gcol(t) } : undefined} title={tabTitle(t)} onClick={() => k() !== out()!.tab && showTab(k())} onAuxClick={e => { if (e.button === 1) closeTab(k()); }} onContextMenu={e => { e.preventDefault(); tabMenu(e, k()); }}>
         <Show when={t.role === "master"}><i class="pm">◆</i></Show><Show when={t.role === "sub"}><i class="ps">{"›".repeat(t.level + 1)}</i></Show>
         <span class="nm">{t.name || "Untitled"}</span><Show when={t.dirty}><i class="dot" title="Unsaved changes">•</i></Show>
         <Show when={t.moved}><i class="mv" title={`${t.moved} ${t.moved === 1 ? "task waits" : "tasks wait"} for another plan that has moved. Project › Update Links brings the dates in.`}>⟳ {t.moved}</i></Show>
