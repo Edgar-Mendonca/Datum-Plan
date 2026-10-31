@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.8 — 2026-10-31
+
+A project made of plans: a master plan and its subplans, kept together.
+
+- **The master keeps the project's list** of subplans, in order, with a hierarchy: a subplan can sit under another (two engineering plans under Engineering). Dates still come from the links between the plans; the list arranges them.
+- **Project › Subplans:** each subplan with its dates, % complete, number of tasks and whether it is open; ↑ ↓ to reorder, Indent and Outdent for the hierarchy, Show or Open, and × to take a plan out of the project (its file is kept).
+- **New Subplan…** makes a plan of the project: a name and its place, saved next to the master with the same calendars and currency, and opened in its tab. **Add Existing…** takes a saved plan into the project. The master is saved straight away when it had no other changes, so the list is not lost.
+- **The project's tabs sit together, in one colour:** ◆ marks the master and › its subplans, in the master's order; other plans keep plain tabs. A subplan open without its master shows **Open master** beside the tabs.
+- **Opening a master offers to open its subplans.** A tab's right-click menu has Open All Subplans, New Subplan… and **Close Project** (the master and its open subplans, asking to save changes first).
+- The linked-plans example is now one project: the main schedule is the master of engineering, procurement and construction.
+- The browser's own right-click menu (Back, Reload…) no longer appears in the window, outside text fields.
+- The guide explains projects, the master and subplans, in English and Chinese.
+
 ## 0.5.7 — 2026-10-31
 
 Clearer links between plans, and fixes.

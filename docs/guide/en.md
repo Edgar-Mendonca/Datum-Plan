@@ -344,9 +344,25 @@ A large job is often several plans: a main schedule and the plans of engineering
 
 Every plan you open or create gets a tab above the ribbon. Click a tab to show that plan; a dot means it has unsaved changes, and × closes it (it asks to save first). **＋** makes a new plan, opens one, or opens the example. [[Ctrl+Tab]] goes to the next tab and [[Ctrl+W]] closes the one shown. **File › Close** closes the plan shown and **File › Close All** closes every plan (also on a tab's right-click menu); New and Open add a tab and leave the others open. When you close the window, Datum Plan lists every plan with unsaved changes and can save them all.
 
+### A project: the master and its subplans
+
+![A project in tabs, and Project › Subplans: the plans of the project, their order and hierarchy.](img/subplans.png)
+
+A large job is one **project** made of plans: a **master plan** (often milestones) and its **subplans**, each in its own file, kept next to the master. The master keeps the list.
+
+1. **The project's tabs sit together, in one colour.** ◆ marks the master, › its subplans (» a subplan under another). A plan outside the project keeps a plain tab. When a subplan is open without its master, **Open master** appears beside the tabs.
+2. **Project › Subplans** shows the project's plans.
+3. Each subplan with its dates, % complete, number of tasks and whether it is open. **Show** or **Open** goes to it; × takes it out of the project (its file is kept).
+4. **↑ ↓** change the order; **Indent** puts a subplan under the one above (for example two engineering plans under Engineering), **Outdent** moves it back up.
+5. **New Subplan…** makes a plan: a name and its place, saved next to the master with the same calendars, and opened in its tab. **Add Existing…** takes a saved plan into the project. **Open All** opens every subplan in tabs.
+
+To start a project from scratch: save your master plan, then **Project › Subplans › New Subplan…** for each part (Engineering, Procurement…). Then link them: in the master, select a milestone and **Project › Link to Plan** to the subplan's task it waits for. The order and hierarchy only arrange the plans; dates always come from links.
+
+Opening a master offers to open its subplans. A tab's right-click menu has **Open All Subplans**, **New Subplan…** and **Close Project** (the master and its open subplans).
+
 ### The example
 
-**File › Linked plans (example)** (or **＋ › Example**) asks for a folder, saves four plans of a compressor station there and opens them in tabs: **Main schedule**, **Engineering**, **Procurement** and **Construction**. The main schedule's milestones wait for the subplans, construction waits for the drawings and for the compressor package to arrive, and the engineering and construction plans use resource calendars (a lead engineer's leave, a six-day site week). Every plan's calendar closes for Christmas and New Year (**Project › Change Working Time** shows the holidays). Change a duration in Procurement, then update the links and watch the main schedule move.
+**File › Linked plans (example)** (or **＋ › Example**) asks for a folder, saves a project of four plans for a compressor station there and opens them in tabs: **Main schedule**, **Engineering**, **Procurement** and **Construction**. The main schedule's milestones wait for the subplans, construction waits for the drawings and for the compressor package to arrive, and the engineering and construction plans use resource calendars (a lead engineer's leave, a six-day site week). Every plan's calendar closes for Christmas and New Year (**Project › Change Working Time** shows the holidays). Change a duration in Procurement, then update the links and watch the main schedule move.
 
 ### Link a task to another plan
 

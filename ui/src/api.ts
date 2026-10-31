@@ -31,6 +31,7 @@ export interface Project {
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
+  subplans?: SubPlan[]; master?: string;
   titles: Record<string, string>; sheets: SheetData[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {
@@ -38,7 +39,9 @@ export interface Summary {
   bl_finish: string; var_finish: string; pv: string; ev: string; ac: string; spi: number | null; cpi: number | null; tasks: number; done: number; late: number;
   critical: number; milestones: number; error: string | null; week: boolean[]; off_days: number[];
 }
-export interface Out { tabs: { name: string; path: string | null; dirty: boolean; moved: number }[]; tab: number; project: Project; summary: Summary; path: string | null; dirty: boolean; undo: boolean; redo: boolean; clip: number; rev: number }
+export interface SubPlan { file: string; name: string; level?: number }
+export interface TabInfo { name: string; path: string | null; dirty: boolean; moved: number; role: "master" | "sub" | ""; group: number; level: number; project: string }
+export interface Out { tabs: TabInfo[]; tab: number; project: Project; summary: Summary; path: string | null; dirty: boolean; undo: boolean; redo: boolean; clip: number; rev: number }
 
 export interface Bar { s: number; f: number; ls: number; lf: number; bs: number | null; bf: number | null; dl: number | null; pct: number; segs: [number, number][]; links: [number, LinkType][] }
 export interface Row {

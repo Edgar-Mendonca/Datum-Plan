@@ -74,6 +74,12 @@ export const HELP: Record<string, Topic> = {
   ganttstyle: { t: "Gantt chart style", what: "Ready-made colour sets for the bars. Click one to use it; Bar Styles changes each colour." },
   showhide: { t: "Show and hide", what: "The project summary row (the whole plan as one row), summary tasks, and the labels beside the bars." },
   // Panels, pages and dialogs
+  subplans: { t: "Subplans", what: "A project made of several plans: one master plan and its subplans, each in its own file. The master keeps the list, in order, with a hierarchy (a subplan can sit under another). Dates still come from the links between the plans.",
+    how: ["Save the master plan, then Project › Subplans › New Subplan: a name and its place. It is saved next to the master with the same calendars, and opens in its tab.",
+      "Add Existing takes a saved plan into the project. ↑ ↓ change the order, Indent puts a subplan under the one above, × takes it out (the file stays).",
+      "The project's tabs sit together in one colour: ◆ marks the master, › its subplans. Opening the master offers to open its subplans; a tab's right-click menu has Open All Subplans and Close Project.",
+      "Link the subplans to the master with Project › Link to Plan, from the task that waits."],
+    tip: "A subplan belongs to one master. Keep the project's files in one folder: the master finds its subplans there when the folder is moved or copied." },
   linkedplans: { t: "Linked plans", what: "Several plans open at once, one per tab, and links from a task in one plan to tasks in others: a main schedule with its subplans, each in its own file.",
     how: ["Open or create plans: each gets a tab above the ribbon (Ctrl+Tab switches, Ctrl+W closes). ＋ offers the linked-plans example.",
       "Select a task and choose Project › Link to Plan (or right-click › Link to Plan…): pick the plan and the task, the type (FS, SS, FF, SF) and the lag.",

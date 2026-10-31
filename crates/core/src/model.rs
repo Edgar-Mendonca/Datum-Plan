@@ -538,6 +538,26 @@ pub struct Project {
     /// Settings owned by the window: saved views, tables, filters, groups, bar and text styles,
     /// page setup, reports, timeline. The engine stores them but does not read them.
     pub ui: Value,
+    /// A master plan: its subplans, in order, with their place in the hierarchy. Dates still come
+    /// from links between the plans; the list says which plans make up the project.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub subplans: Vec<SubPlan>,
+    /// A subplan: its master's file (empty for a plan on its own or a master).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub master: String,
+}
+
+/// One subplan of a master plan.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SubPlan {
+    /// The subplan's file, as last saved (found next to the master when the folder moves).
+    pub file: String,
+    /// Its name when last seen.
+    pub name: String,
+    /// Depth under the master: 0 = directly under it, 1 = under the subplan above, …
+    #[serde(skip_serializing_if = "is_zero_u8")]
+    pub level: u8,
 }
 
 impl Default for Project {
@@ -569,7 +589,7 @@ impl Project {
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
             id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
-            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null,
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(),
         }
     }
 
@@ -732,6 +752,15 @@ impl Project {
                 if x.start < lo { x.start = 0 }
                 if x.finish < lo { x.finish = 0 }
             }
+        }
+        // Subplans: a sensible number, each file once, a hierarchy without jumps.
+        self.subplans.truncate(500);
+        let mut seen = std::collections::HashSet::new();
+        self.subplans.retain(|s| !s.file.is_empty() && seen.insert(crate::links::file_name(&s.file).to_lowercase()));
+        let mut prev = None::<u8>;
+        for s in &mut self.subplans {
+            s.level = s.level.min(prev.map_or(0, |p| p + 1)).min(8);
+            prev = Some(s.level);
         }
         for r in &mut self.resources {
             if r.cal.as_ref().is_some_and(|c| !cals.contains(c)) {

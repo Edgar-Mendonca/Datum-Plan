@@ -73,6 +73,10 @@ pub enum Op {
     SheetStyle { k: usize, cells: Vec<(String, String)> },
     /// Sets a task's predecessors in other plans (links between plans).
     ExtSet { uid: u32, links: Vec<ExtLink> },
+    /// Sets a master plan's subplans (order and hierarchy).
+    Subplans { list: Vec<SubPlan> },
+    /// Sets the master a subplan belongs to (its file; empty for none).
+    Master { file: String },
     /// Inserts (`count` > 0) or deletes (`count` < 0) whole rows or columns of a spreadsheet tab
     /// at `at` (0-based); formulas on every tab follow, as in Excel.
     SheetInsert { k: usize, cols: bool, at: u32, count: i32 },
@@ -943,6 +947,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             p.tasks[i].ext = links;
             p.normalize();
         }
+        Op::Subplans { list } => {
+            if list.len() > 500 { return Err("A master plan can have at most 500 subplans.".into()) }
+            p.subplans = list;
+            p.normalize();
+        }
+        Op::Master { file } => p.master = file.chars().take(1000).collect(),
         Op::SheetInsert { k, cols, at, count } => {
             use gridcraft_formula::adjust::{Axis, Edit};
             let target = p.sheets.get(k).ok_or("That sheet does not exist.")?.name.clone();

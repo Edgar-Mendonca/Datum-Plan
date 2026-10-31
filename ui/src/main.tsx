@@ -102,6 +102,8 @@ const App = () => {
       try { if (!localStorage.getItem("guide-hint")) { localStorage.setItem("guide-hint", "1"); setTimeout(() => toast("New to Datum Plan? Help › Guide has a step-by-step guide (PDF) in English and 中文."), 1500); } } catch { /* no storage: no hint */ }
       setInterval(() => { if (opts().autosave > 0) invoke("autosave").catch(() => {}); }, Math.max(1, opts().autosave) * 60000);
       listen("close-requested", () => D.confirmClose(() => invoke("quit")));
+      // No browser menu (Back, Reload…) outside text fields: our own menus open where they apply.
+      document.addEventListener("contextmenu", e => { if (!(e.target as HTMLElement).closest?.("input, textarea, [contenteditable]")) e.preventDefault(); });
     } catch (e) { toast(String(e)); }
   });
   const keys = (e: KeyboardEvent) => {

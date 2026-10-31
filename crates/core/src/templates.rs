@@ -179,6 +179,9 @@ pub fn linked_example(start: NaiveDate) -> Vec<(String, Project)> {
             }
         }
     }
+    // One project: the main schedule is the master of the three subplans.
+    plans[0].1.subplans = LINKED[1..].iter().zip(&plans[1..]).map(|((f, _), (_, p))| crate::model::SubPlan { file: f.to_string(), name: p.name.clone(), level: 0 }).collect();
+    for (_, p) in &mut plans[1..] { p.master = LINKED[0].0.to_string() }
     let _ = crate::links::update_all(&mut plans);
     plans
 }

@@ -113,7 +113,7 @@ export const set = (uid: number, field: string, value: string) => act({ Set: { u
 export const call = async <T = any>(cmd: string, args?: object): Promise<T | undefined> => {
   try { return await invoke<T>(cmd, args); } catch (e) { toast(String(e)); return undefined; }
 };
-export const loadOut = async (cmd: string, args?: object) => { const o = await call<Out | null>(cmd, args); if (o) { setOut(o); setBackstage(null); useTable(table()); setView((opts().startView || "gantt") as View); } return o; };
+export const loadOut = async (cmd: string, args?: object) => { const o = await call<Out | null>(cmd, args); if (o) { setOut(o); setBackstage(null); useTable(table()); setView((opts().startView || "gantt") as View); if (cmd === "open") import("./plans").then(m => m.afterOpen()); } return o; };
 
 export const hideCol = (key: string) => saveAll(allCols().map(c => (c[0] === key && c[1] > 0 ? [c[0], -c[1]] : c)));
 export const unhideCol = (key: string) => saveAll(allCols().map(c => (c[0] === key ? [c[0], Math.abs(c[1]) || 90] : c)));

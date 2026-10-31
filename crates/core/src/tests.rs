@@ -624,6 +624,15 @@ fn plans_linked_to_each_other_move_together() {
     let g = c.grid(&crate::query::Query::default());
     let row = g.rows.iter().find(|r| r.name == "Engineering complete").unwrap();
     assert!(row.ext.len() == 1 && row.ext[0].starts_with("Engineering › ") && row.ext[0].ends_with("(FS)"), "{:?}", row.ext);
+    // One project: the master lists its subplans in order, and each subplan knows its master.
+    assert_eq!(plans[0].1.subplans.iter().map(|s| s.file.as_str()).collect::<Vec<_>>(), ["Engineering.dplan", "Procurement.dplan", "Construction.dplan"]);
+    assert!(plans[1..].iter().all(|x| x.1.master == "Main schedule.dplan"));
+    // The hierarchy has no jumps and each file is listed once.
+    let mut m = plans[0].1.clone();
+    m.subplans.push(crate::model::SubPlan { file: "Civil.dplan".into(), name: "Civil".into(), level: 4 });
+    m.subplans.push(crate::model::SubPlan { file: "./engineering.DPLAN".into(), name: "Again".into(), level: 0 });
+    m.normalize();
+    assert_eq!(m.subplans.iter().map(|s| (s.name.as_str(), s.level)).collect::<Vec<_>>(), [("Engineering", 0), ("Procurement", 0), ("Construction", 0), ("Civil", 1)]);
     // No work over Christmas: every calendar in the example closes from 24 December to 1 January.
     assert!(plans.iter().all(|x| x.1.calendars.iter().all(|c| c.exceptions.iter().any(|e| e.name.starts_with("Christmas")))));
     // Three weeks more for the compressor's manufacture moves the handover by about as much.

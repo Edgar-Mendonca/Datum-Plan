@@ -90,7 +90,12 @@ struct Out {
 }
 
 #[derive(Serialize)]
-struct TabInfo { name: String, path: Option<String>, dirty: bool, moved: usize }
+struct TabInfo {
+    name: String, path: Option<String>, dirty: bool, moved: usize,
+    /// "master", "sub" or "" (a plan on its own); the master's tab (-1 when it is not open), the
+    /// depth under the master, and the project's (master's) name.
+    role: &'static str, group: i64, level: u8, project: String,
+}
 
 /// Every open plan in tab order (the shown one is `a.doc`).
 fn docs(a: &App) -> Vec<&Doc> {
@@ -99,7 +104,53 @@ fn docs(a: &App) -> Vec<&Doc> {
 
 fn tab_list(a: &App) -> Vec<TabInfo> {
     let moved = link_status(a);
-    docs(a).iter().zip(moved).map(|(d, moved)| TabInfo { name: d.p.name.clone(), path: d.path.as_ref().map(|p| p.display().to_string()), dirty: d.dirty, moved: moved.len() }).collect()
+    let ds = docs(a);
+    ds.iter().enumerate().zip(moved).map(|((k, d), moved)| {
+        let (role, group, level, project) = match place(&ds, k) {
+            Place::Master => ("master", k as i64, 0, d.p.name.clone()),
+            Place::Sub(m, level) => ("sub", m as i64, level, ds[m].p.name.clone()),
+            Place::Orphan => ("sub", -1, 0, Path::new(links::file_name(&d.p.master)).file_stem().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()),
+            Place::Alone => ("", -1, 0, String::new()),
+        };
+        TabInfo { name: d.p.name.clone(), path: d.path.as_ref().map(|p| p.display().to_string()), dirty: d.dirty, moved: moved.len(), role, group, level, project }
+    }).collect()
+}
+
+/// A tab's place in a project: a master, a subplan of the open master in tab `m` (at a depth),
+/// a subplan whose master is not open, or a plan on its own.
+enum Place { Master, Sub(usize, u8), Orphan, Alone }
+
+fn file_key(d: &Doc) -> Option<String> {
+    d.path.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().to_lowercase())
+}
+
+fn place(ds: &[&Doc], k: usize) -> Place {
+    if !ds[k].p.subplans.is_empty() { return Place::Master }
+    if let Some(me) = file_key(ds[k]) {
+        for (m, d) in ds.iter().enumerate().filter(|(m, _)| *m != k) {
+            if let Some(sp) = d.p.subplans.iter().find(|s| links::file_name(&s.file).to_lowercase() == me) { return Place::Sub(m, sp.level) }
+        }
+    }
+    if ds[k].p.master.is_empty() { Place::Alone } else { Place::Orphan }
+}
+
+/// Keeps each project's tabs together: the master, then its open subplans in the master's order.
+fn regroup(a: &mut App) {
+    let ds = docs(a);
+    let mut key: Vec<(usize, usize, usize)> = (0..ds.len()).map(|k| match place(&ds, k) {
+        Place::Sub(m, _) => {
+            let me = file_key(ds[k]).unwrap_or_default();
+            (m, 1 + ds[m].p.subplans.iter().position(|s| links::file_name(&s.file).to_lowercase() == me).unwrap_or(0), k)
+        }
+        _ => (k, 0, k),
+    }).collect();
+    key.sort();
+    let order: Vec<usize> = key.into_iter().map(|x| x.2).collect();
+    if order.iter().enumerate().all(|(i, &k)| i == k) { return }
+    let cur = a.cur;
+    let mut slots: Vec<Option<Doc>> = std::mem::take(&mut a.others);
+    a.others = order.iter().map(|&k| slots[k].take()).collect();
+    a.cur = order.iter().position(|&k| k == cur).unwrap_or(0);
 }
 
 /// For each open plan, its tasks whose links point at a task in another open plan that has
@@ -133,6 +184,7 @@ fn add_tab(a: &mut App, d: Doc) {
     a.others[a.cur] = Some(old);
     a.others.push(None);
     a.cur = a.others.len() - 1;
+    regroup(a);
 }
 
 fn show_tab(a: &mut App, k: usize) {
@@ -245,6 +297,7 @@ fn apply(st: State<St>, op: Op) -> R<Out> {
         let mut a = st.lock();
         let fmt = a.opts.date_fmt.clone();
         a.doc.apply(op, &fmt)?;
+        regroup(&mut a);
         Ok(out(&a))
     })
 }
@@ -768,6 +821,176 @@ fn linked_plan(a: &App, file: &str, here: Option<&Path>) -> Option<(String, Proj
     [Some(PathBuf::from(file)), near].into_iter().flatten().find(|p| p.is_file()).and_then(|p| Doc::open(&p).ok()).map(|d| (name, d.p))
 }
 
+// ---------- a project: a master plan and its subplans ----------
+
+/// Applies an edit to the plan in tab `k` (shown or not).
+fn apply_at(a: &mut App, k: usize, op: Op) -> R<()> {
+    let fmt = a.opts.date_fmt.clone();
+    let d = if k == a.cur { &mut a.doc } else { a.others.get_mut(k).and_then(Option::as_mut).ok_or("That plan is not open.")? };
+    d.apply(op, &fmt)
+}
+
+/// Saves the plan in tab `k` after a project change when it had no other unsaved changes, so the
+/// master's list and a subplan's note of its master are not lost (other edits are never saved unasked).
+fn save_if_clean(a: &mut App, k: usize, was_clean: bool) -> R<()> {
+    let d = if k == a.cur { &mut a.doc } else { a.others.get_mut(k).and_then(Option::as_mut).ok_or("That plan is not open.")? };
+    match (was_clean, d.path.clone()) { (true, Some(p)) => d.save(&p), _ => Ok(()) }
+}
+
+/// The tab showing a file, if it is open.
+fn tab_of(a: &App, file: &str) -> Option<usize> {
+    let name = links::file_name(file).to_lowercase();
+    docs(a).iter().position(|d| file_key(d).as_deref() == Some(name.as_str()))
+}
+
+/// A subplan's file: where it was saved, or next to the master when the folder moved.
+fn sub_path(master: Option<&Path>, file: &str) -> Option<PathBuf> {
+    let near = master.and_then(Path::parent).map(|d| d.join(links::file_name(file)));
+    [Some(PathBuf::from(file)), near].into_iter().flatten().find(|p| p.is_file())
+}
+
+/// Project › Subplans › New Subplan: a new plan saved next to the master (same calendars and
+/// currency), added to the master's list at position `at` and depth `level`, and shown in a tab.
+#[tauri::command]
+fn new_subplan(app: AppHandle, st: State<St>, name: String, level: u8, at: usize) -> R<Out> {
+    let mut a = st.lock();
+    let here = a.doc.path.clone().ok_or("Save the master plan first, so its subplans can be saved next to it.")?;
+    let clean = !a.doc.dirty;
+    let folder = here.parent().ok_or("The master plan's folder was not found.")?.to_path_buf();
+    let name = name.trim().chars().filter(|c| !"\\/:*?\"<>|".contains(*c)).collect::<String>();
+    let name = if name.is_empty() { "Subplan".to_string() } else { name };
+    let mut path = folder.join(format!("{name}.dplan"));
+    let mut n = 2;
+    while path.exists() { path = folder.join(format!("{name} ({n}).dplan")); n += 1; }
+    let m = &a.doc.p;
+    let mut p = fresh(&a, Project::new(&name, m.start));
+    (p.calendars, p.calendar, p.currency, p.day_min) = (m.calendars.clone(), m.calendar.clone(), m.currency.clone(), m.day_min);
+    p.master = links::file_name(&here.display().to_string()).to_string();
+    p.setup_done = true;
+    p.normalize();
+    let mut d = Doc::new(p);
+    d.save(&path)?;
+    remember(&app, &path);
+    let mut list = a.doc.p.subplans.clone();
+    list.insert(at.min(list.len()), datum_core::SubPlan { file: path.display().to_string(), name, level });
+    let k = a.cur;
+    apply_at(&mut a, k, Op::Subplans { list })?;
+    save_if_clean(&mut a, k, clean)?;
+    add_tab(&mut a, d);
+    Ok(out(&a))
+}
+
+/// Project › Subplans › Add Existing: a saved plan becomes a subplan of the shown master.
+#[tauri::command]
+async fn add_subplan(app: AppHandle, st: State<'_, St>) -> R<Option<Out>> {
+    if st.lock().doc.path.is_none() { return Err("Save the master plan first.".into()) }
+    let Some(path) = pick(&app, "Datum Plan", &["dplan"]) else { return Ok(None) };
+    let mut a = st.lock();
+    let here = a.doc.path.clone().unwrap_or_default();
+    if path == here { return Err("A plan cannot be its own subplan.".into()) }
+    let master = links::file_name(&here.display().to_string()).to_string();
+    let k = match tab_of(&a, &path.display().to_string()) {
+        Some(k) => k,
+        None => {
+            let d = Doc::open(&path)?;
+            add_tab(&mut a, d);
+            let k = a.cur;
+            if let Some(m) = tab_of(&a, &here.display().to_string()) { show_tab(&mut a, m) }
+            k
+        }
+    };
+    let sub = docs(&a)[k];
+    if !sub.p.subplans.is_empty() { return Err(format!("“{}” is a master plan itself; a project has one master.", sub.p.name)) }
+    let item = datum_core::SubPlan { file: path.display().to_string(), name: sub.p.name.clone(), level: 0 };
+    let sub_clean = !sub.dirty;
+    apply_at(&mut a, k, Op::Master { file: master })?;
+    save_if_clean(&mut a, k, sub_clean)?;
+    let mut list = a.doc.p.subplans.clone();
+    list.push(item);
+    let m = a.cur;
+    let clean = !a.doc.dirty;
+    apply_at(&mut a, m, Op::Subplans { list })?;
+    save_if_clean(&mut a, m, clean)?;
+    regroup(&mut a);
+    remember(&app, &path);
+    Ok(Some(out(&a)))
+}
+
+/// Takes a plan out of the shown master's project (its file stays as it is; an open one forgets its master).
+#[tauri::command]
+fn remove_subplan(st: State<St>, file: String) -> R<Out> {
+    let mut a = st.lock();
+    let key = links::file_name(&file).to_lowercase();
+    let list: Vec<_> = a.doc.p.subplans.iter().filter(|s| links::file_name(&s.file).to_lowercase() != key).cloned().collect();
+    let m = a.cur;
+    apply_at(&mut a, m, Op::Subplans { list })?;
+    if let Some(k) = tab_of(&a, &file).filter(|&k| k != m) { apply_at(&mut a, k, Op::Master { file: String::new() })? }
+    regroup(&mut a);
+    Ok(out(&a))
+}
+
+/// Opens every subplan of the shown master that is not open yet (the master stays shown); says which were not found.
+#[tauri::command]
+fn open_subplans(app: AppHandle, st: State<St>) -> (Out, Vec<String>) {
+    let mut a = st.lock();
+    let here = a.doc.path.clone();
+    let list = a.doc.p.subplans.clone();
+    let mut missing = vec![];
+    for sp in &list {
+        if tab_of(&a, &sp.file).is_some() { continue }
+        match sub_path(here.as_deref(), &sp.file).map(|p| Doc::open(&p).map(|d| (p, d))) {
+            Some(Ok((p, d))) => { remember(&app, &p); add_tab(&mut a, d) }
+            _ => missing.push(sp.name.clone()),
+        }
+    }
+    if let Some(m) = here.as_ref().and_then(|h| tab_of(&a, &h.display().to_string())) { show_tab(&mut a, m) }
+    (out(&a), missing)
+}
+
+/// Closes several tabs at once (the window asks about unsaved changes first): a project's tabs.
+#[tauri::command]
+fn close_tabs(app: AppHandle, st: State<St>, ks: Vec<usize>) -> Out {
+    let mut a = st.lock();
+    let mut ks = ks;
+    ks.sort_unstable();
+    ks.dedup();
+    for &k in ks.iter().rev() {
+        if k >= a.others.len() { continue }
+        if a.others.len() == 1 { a.doc = Doc::new(Project::new("Project1", today())); break }
+        if k == a.cur { let next = if k + 1 < a.others.len() { k + 1 } else { k - 1 }; show_tab(&mut a, next) }
+        a.others.remove(k);
+        if a.cur > k { a.cur -= 1 }
+    }
+    write_recovery(&app, &a);
+    out(&a)
+}
+
+/// The shown master's subplans with what their files say now: found, open, dates and progress.
+#[derive(Serialize)]
+struct SubRow { file: String, name: String, level: u8, found: bool, open: bool, tab: i64, start: i64, finish: i64, pct: f64, tasks: usize }
+
+#[tauri::command]
+fn subplan_rows(st: State<St>) -> Vec<SubRow> {
+    let a = st.lock();
+    let here = a.doc.path.clone();
+    a.doc.p.subplans.iter().map(|sp| {
+        let tab = tab_of(&a, &sp.file);
+        let p = match tab { Some(k) => Some(docs(&a)[k].p.clone()), None => sub_path(here.as_deref(), &sp.file).and_then(|p| Doc::open(&p).ok()).map(|d| d.p) };
+        let mut row = SubRow { file: sp.file.clone(), name: sp.name.clone(), level: sp.level, found: p.is_some(), open: tab.is_some(), tab: tab.map_or(-1, |k| k as i64), start: 0, finish: 0, pct: 0.0, tasks: 0 };
+        if let Some(p) = p {
+            row.name = p.name.clone();
+            if let Ok(s) = datum_core::sched::schedule(&p) {
+                let leaf: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
+                let w = |i: usize| (s.ef[i] - s.es[i]).max(1) as f64;
+                let total: f64 = leaf.iter().map(|&i| w(i)).sum();
+                (row.start, row.finish, row.tasks) = (s.start, s.finish, leaf.len());
+                row.pct = if total > 0.0 { leaf.iter().map(|&i| w(i) * p.tasks[i].pct as f64).sum::<f64>() / total } else { 0.0 };
+            }
+        }
+        row
+    }).collect()
+}
+
 /// Where a task's links lead: the tasks it waits for in other plans ("in") and the tasks in other
 /// open plans that wait for it ("out"), for "Go to" in the window.
 #[derive(Serialize)]
@@ -1137,7 +1360,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

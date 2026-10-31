@@ -1,7 +1,7 @@
 // Several plans at once: a tab per open plan (above the ribbon), links from a task to tasks in
 // other plans, and the Linked Plans panel that shows them and brings their dates up to date.
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
-import { Out, fmtAt } from "./api";
+import { Out, SubPlan, TabInfo, fmtAt } from "./api";
 import { act, call, out, P, setOut, openMenu, openDialog, closeDialog, toast, useTable, table, tick, refresh, grid, setView, view } from "./store";
 import { RH } from "./grid";
 import { selectUid } from "./cmds";
@@ -40,12 +40,13 @@ export const closeAll = () => {
     </Dialog>
   ));
 };
-/** Shows the plan a link points at (opening it if needed) and selects the task. */
+/** Shows the plan a link points at (opening it if needed) and selects the task (uid 0: none). */
 export const goToLink = async (file: string, uid: number) => {
   const o = await call<Out>("goto_link", { file });
   if (!o) return;
   setOut(o); useTable(table());
   if (view() !== "gantt" && view() !== "tracking") setView("gantt");
+  if (!uid) return afterOpen();
   await refresh();
   selectUid(uid);
   const k = grid().rows.findIndex(r => r.uid === uid);
@@ -64,15 +65,131 @@ export const linkMenu = async (e: MouseEvent, uid: number) => {
   ]);
 };
 /** Right-click on a tab. */
-const tabMenu = (e: MouseEvent, k: number) => openMenu(e, [
-  { label: "Close", run: () => closeTab(k) }, { label: "Close All Plans", run: closeAll },
-  ...(out()!.tabs[k].moved ? ["-" as const, { label: "Update Links", run: () => showTab(k).then(() => updateLinks(true)) }] : []),
-]);
+const tabMenu = (e: MouseEvent, k: number) => {
+  const t = out()!.tabs[k], g = groupOf(k);
+  openMenu(e, [
+    ...(t.role === "master" ? [{ label: "Open All Subplans", run: () => showTab(k).then(openAll) }, { label: "New Subplan…", run: () => showTab(k).then(newSubplan) }, { label: "Subplans…", run: () => showTab(k).then(subplans) }, "-" as const] : []),
+    ...(t.role === "sub" && t.group < 0 && t.project ? [{ label: `Open Master (“${t.project}”)`, run: () => goToLink(`${t.project}.dplan`, 0) }, "-" as const] : []),
+    { label: "Close", run: () => closeTab(k) },
+    ...(g >= 0 ? [{ label: `Close Project (“${out()!.tabs[g].name}”)`, run: () => closeProject(g) }] : []),
+    { label: "Close All Plans", run: closeAll },
+    ...(t.moved ? ["-" as const, { label: "Update Links", run: () => showTab(k).then(() => updateLinks(true)) }] : []),
+  ]);
+};
+/** The master tab of the project a tab belongs to (-1: none open). */
+const groupOf = (k: number) => { const t = out()!.tabs[k]; return t.role === "master" ? k : t.group; };
+/** Closes a master and its open subplans, offering to save the ones with unsaved changes. */
+export const closeProject = (g: number) => {
+  const ks = out()!.tabs.map((t, k) => (k === g || t.group === g ? k : -1)).filter(k => k >= 0);
+  const close = async () => { const o = await call<Out>("close_tabs", { ks }); if (o) { setOut(o); useTable(table()); } };
+  const dirty = ks.filter(k => out()!.tabs[k].dirty);
+  if (!dirty.length) return close();
+  const names = dirty.map(k => out()!.tabs[k].name);
+  openDialog(() => (
+    <Dialog title="Save changes?" okText="Save" ok={async () => {
+      // Saving does not move tabs, so `ks` still names the project's tabs.
+      for (const k of dirty) { await showTab(k); const o = await call<Out | null>("save", { asNew: false }); if (!o) return false; setOut(o); }
+      await close();
+      return true;
+    }} extra={<button class="btn" onClick={() => { closeDialog(); close(); }}>Don't save</button>}>
+      <p>These plans of the project have unsaved changes: {names.join(", ")}. Save them before closing?</p>
+    </Dialog>
+  ));
+};
+
+// ---------- a project: the master plan and its subplans ----------
+
+type SubRow = { file: string; name: string; level: number; found: boolean; open: boolean; tab: number; start: number; finish: number; pct: number; tasks: number };
+/** Opens the shown master's subplans that are not open yet. */
+export const openAll = async () => {
+  const r = await call<[Out, string[]]>("open_subplans");
+  if (!r) return;
+  setOut(r[0]); useTable(table());
+  if (r[1].length) toast(`Not found next to the master: ${r[1].join(", ")}. Subplans… shows where they were.`);
+};
+/** After opening a plan: a master offers to open its subplans too. */
+export const afterOpen = () => {
+  const subs = P().subplans ?? [], open = new Set((out()?.tabs ?? []).map(t => (t.path ?? "").split(/[\\/]/).pop()!.toLowerCase()));
+  const shut = subs.filter(s => !open.has(s.file.split(/[\\/]/).pop()!.toLowerCase()));
+  if (!shut.length) return;
+  openDialog(() => (
+    <Dialog title="Open the subplans too?" okText="Open All" cancel="Not now" ok={() => { openAll(); }}>
+      <p>“{P().name}” is the master of {subs.length} {subs.length === 1 ? "subplan" : "subplans"}: {subs.map(s => s.name).join(", ")}. Open {shut.length === subs.length ? "them" : `the ${shut.length} not open yet`} in tabs beside it?</p>
+    </Dialog>
+  ));
+};
+/** New Subplan: a name and its place in the hierarchy; saved next to the master and shown. */
+export const newSubplan = () => {
+  if (!out()?.path) return toast("Save the master plan first, so its subplans can be saved next to it.");
+  if (P().master) return toast(`“${P().name}” is a subplan. Add subplans from its master (Subplans…), where the whole hierarchy is kept.`);
+  openDialog(() => {
+    const list = P().subplans ?? [];
+    const [name, setName] = createSignal(""), [under, setUnder] = createSignal(-1);
+    const ok = async () => {
+      const i = under(), lv = (k: number) => list[k]?.level ?? 0;
+      let at = list.length;
+      if (i >= 0) { at = i + 1; while (at < list.length && lv(at) > lv(i)) at++; }
+      const master = P().name, o = await call<Out>("new_subplan", { name: name() || "Subplan", level: i >= 0 ? lv(i) + 1 : 0, at });
+      if (o) { setOut(o); useTable(table()); toast(`“${name() || "Subplan"}” was saved next to “${master}” and is open in its tab. Link its tasks to the master with Project › Link to Plan.`, true); }
+      return !!o;
+    };
+    return (
+      <Dialog title="New Subplan" okText="Create" help="subplans" ok={ok}>
+        <p>A new plan of this project, saved in the master's folder with the same calendars. Its place sets the hierarchy; dates come from the links you make.</p>
+        <div class="form">
+          <Row label="Name"><input value={name()} placeholder="Engineering" onInput={e => setName(e.currentTarget.value)} ref={el => setTimeout(() => el.focus())} /></Row>
+          <Row label="Place"><select onChange={e => setUnder(+e.currentTarget.value)}><option value={-1}>Directly under “{P().name}”</option>
+            <For each={list}>{(s, k) => <option value={k()}>{"\u00a0\u00a0".repeat((s.level ?? 0) + 1)}Under “{s.name}”</option>}</For></select></Row>
+        </div>
+      </Dialog>
+    );
+  });
+};
+/** Project › Subplans: the plans that make up this project, their order and hierarchy. */
+export const subplans = () => openDialog(() => {
+  const [rows, { refetch }] = createResource(() => tick(), () => call<SubRow[]>("subplan_rows"));
+  const [pick, setPick] = createSignal(0);
+  const list = () => P().subplans ?? [];
+  const set = async (l: SubPlan[], k: number) => { if (await act({ Subplans: { list: l } })) { setPick(k); refetch(); } };
+  const move = (d: number) => { const l = [...list()], k = pick(), j = k + d; if (j < 0 || j >= l.length) return; [l[k], l[j]] = [l[j], l[k]]; set(l, j); };
+  const indent = (d: number) => { const l = list().map(s => ({ ...s })), k = pick(); if (!l[k]) return; l[k].level = Math.max(0, (l[k].level ?? 0) + d); set(l, k); };
+  const remove = async (file: string) => { const o = await call<Out>("remove_subplan", { file }); if (o) { setOut(o); refetch(); } };
+  const add = async () => { const o = await call<Out | null>("add_subplan"); if (o) { setOut(o); useTable(table()); refetch(); } };
+  const master = () => P().master;
+  return (
+    <Dialog title="Subplans" wide help="subplans" extra={<Show when={!master()}><button class="btn" onClick={() => { closeDialog(); newSubplan(); }}>New Subplan…</button><button class="btn" onClick={add}>Add Existing…</button><button class="btn pri" disabled={!list().length} onClick={() => { closeDialog(); openAll(); }}>Open All</button></Show>}>
+      <Show when={!master()} fallback={<>
+        <p>“{P().name}” is a subplan of <b>{master()!.replace(/\.dplan$/i, "")}</b>. The master keeps the project's list of plans, their order and hierarchy.</p>
+        <p><button class="btn pri" onClick={() => { closeDialog(); goToLink(master()!, 0); }}>Open the master</button></p></>}>
+        <p class="muted">“{P().name}” is the master: these plans make up its project. The order and indent set the hierarchy and how the tabs are grouped; dates come from the links between the plans. Subplans are kept next to the master.</p>
+        <table class="tbl subs"><thead><tr><th>Plan</th><th>Start</th><th>Finish</th><th>% Complete</th><th>Tasks</th><th>State</th><th /></tr></thead><tbody>
+          <For each={rows() ?? []} fallback={<tr><td colspan="7" class="muted">No subplans yet. New Subplan makes one next to this plan; Add Existing takes a saved plan.</td></tr>}>{(r, k) => (
+            <tr classList={{ on: pick() === k() }} onClick={() => setPick(k())}>
+              <td style={{ "padding-left": `${10 + r.level * 18}px` }}>{r.level ? "└ " : ""}<b>{r.name}</b></td>
+              <td>{r.start ? fmtAt(r.start) : "—"}</td><td>{r.finish ? fmtAt(r.finish - 1) : "—"}</td><td>{r.found ? `${Math.round(r.pct)}%` : "—"}</td><td>{r.found ? r.tasks : "—"}</td>
+              <td><span class="pill" classList={{ good: r.open, bad: !r.found }}>{r.open ? "Open" : r.found ? "Not open" : "File not found"}</span></td>
+              <td class="acts"><button class="btn sm" disabled={!r.found} onClick={() => { closeDialog(); r.open ? showTab(r.tab) : goToLink(r.file, 0); }}>{r.open ? "Show" : "Open"}</button>
+                <button class="x" title="Take it out of this project (the file is kept)" onClick={e => { e.stopPropagation(); remove(r.file); }}>×</button></td>
+            </tr>)}</For>
+        </tbody></table>
+        <Show when={list().length > 1}><div class="subbar"><span class="muted">Selected:</span>
+          <button class="btn sm" title="Move up" onClick={() => move(-1)}>↑</button><button class="btn sm" title="Move down" onClick={() => move(1)}>↓</button>
+          <button class="btn sm" title="Outdent: one level up the hierarchy" onClick={() => indent(-1)}>⇤ Outdent</button><button class="btn sm" title="Indent: under the plan above" onClick={() => indent(1)}>Indent ⇥</button></div></Show>
+      </Show>
+    </Dialog>
+  );
+});
+/** A project's colour: the same for its master and subplans. */
+const GC = ["#2F6FCF", "#1E7D46", "#B45309", "#6D3FC8", "#0E7490", "#C0392B"];
+const gcol = (t: TabInfo) => (t.role ? GC[[...t.project].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % GC.length] : "");
+const tabTitle = (t: TabInfo) => `${t.role === "master" ? `Master plan of the project “${t.name}”\n` : t.role === "sub" ? `Subplan of “${t.project}”${t.group < 0 ? " (the master is not open)" : ""}\n` : ""}${t.path ?? "Not saved yet"}`;
 /** Ctrl+Tab / Ctrl+Shift+Tab. */
 export const nextTab = (d: number) => { const n = out()?.tabs.length ?? 1; if (n > 1) showTab((out()!.tab + d + n) % n); };
 const plusMenu = (e: MouseEvent) => openMenu(e, [
   { label: "New plan…", run: () => import("./store").then(s => s.setBackstage("new")) },
   { label: "Open…", run: C.open },
+  "-",
+  ...(out()?.path && out()!.tabs[out()!.tab].role !== "sub" ? [{ label: `New Subplan of “${P().name}”…`, run: newSubplan }] : []),
   "-",
   { label: "Example: a main plan with three linked subplans", run: example },
 ]);
@@ -83,15 +200,18 @@ export const example = async () => {
 
 /** The tab strip: one tab per open plan, with unsaved changes marked; + adds one. */
 export const PlanTabs = () => (
-  <div class="plantabs">
+  <div class="plantabs" classList={{ solo: (out()?.tabs.length ?? 1) === 1 && !out()?.tabs[0]?.role }}>
     <For each={out()?.tabs ?? []}>{(t, k) => (
-      <div class="ptab" classList={{ on: k() === out()!.tab }} title={t.path ?? "Not saved yet"} onClick={() => k() !== out()!.tab && showTab(k())} onAuxClick={e => { if (e.button === 1) closeTab(k()); }} onContextMenu={e => { e.preventDefault(); tabMenu(e, k()); }}>
+      <div class="ptab" classList={{ on: k() === out()!.tab, proj: !!t.role, master: t.role === "master", gstart: k() > 0 && (!!t.role || !!out()!.tabs[k() - 1].role) && gcol(t) + t.project !== gcol(out()!.tabs[k() - 1]) + out()!.tabs[k() - 1].project }} style={t.role ? { "--g": gcol(t) } : undefined} title={tabTitle(t)} onClick={() => k() !== out()!.tab && showTab(k())} onAuxClick={e => { if (e.button === 1) closeTab(k()); }} onContextMenu={e => { e.preventDefault(); tabMenu(e, k()); }}>
+        <Show when={t.role === "master"}><i class="pm">◆</i></Show><Show when={t.role === "sub"}><i class="ps">{"›".repeat(t.level + 1)}</i></Show>
         <span class="nm">{t.name || "Untitled"}</span><Show when={t.dirty}><i class="dot" title="Unsaved changes">•</i></Show>
         <Show when={t.moved}><i class="mv" title={`${t.moved} ${t.moved === 1 ? "task waits" : "tasks wait"} for another plan that has moved. Project › Update Links brings the dates in.`}>⟳ {t.moved}</i></Show>
         <button class="x" title="Close (Ctrl+W)" onClick={e => { e.stopPropagation(); closeTab(k()); }}>×</button>
       </div>
     )}</For>
     <button class="padd" title="New plan, open a plan, or the linked-plans example" onClick={plusMenu}>＋</button>
+    <Show when={(() => { const t = out()?.tabs[out()!.tab]; return t?.role === "sub" && t.group < 0 && t.project ? t : null; })()}>{t => (
+      <button class="pmaster" title="This plan is a subplan; its master keeps the project's list of plans" onClick={() => goToLink(`${t().project}.dplan`, 0)}>Part of “{t().project}” · Open master</button>)}</Show>
   </div>
 );
 
