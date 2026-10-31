@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.6 — 2026-10-31
+
+See at a glance what is linked to what between plans.
+
+- **Marks by the ID:** ⇠ (purple) on a task that waits for a task in another plan (click it to see or change the link), ⇢ (green) on a task that a task in another open plan waits for. Point at a mark to read the tasks.
+- **On the Gantt:** what a task waits for is written before its bar in purple, with a dashed arrow into it ("Construction › A1130 Mechanical completion ⇢ ◆"); which other plan waits for it is written after the bar in green ("→ Construction › A1010 Site mobilisation").
+- **Linked Plans** now shows both directions: what this plan waits for, and which tasks of this plan other open plans wait for, with **Show plan** to open that tab.
+- The **External Predecessors** column reads like the Gantt: "Engineering › A1180 Final documentation issued (FS)".
+- The linked-plans example shows the External Predecessors column beside Finish, and every plan's calendar closes for Christmas and New Year.
+- The guide explains how to see what is linked, in English and Chinese.
+
 ## 0.5.5 — 2026-10-31
 
 Several plans at once, in tabs, with links between them: a main schedule and its subplans, each in its own file, moving together.

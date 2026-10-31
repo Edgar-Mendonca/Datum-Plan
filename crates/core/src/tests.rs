@@ -619,6 +619,13 @@ fn plans_linked_to_each_other_move_together() {
     // A link carries the other plan's dates: the main schedule's mechanical completion is construction's.
     assert_eq!(date(&plans, 0, "Mechanical completion"), date(&plans, 3, "Mechanical completion"));
     assert!(plans.iter().all(|x| x.1.tasks.iter().flat_map(|t| &t.ext).all(|e| e.finish > 0 && !e.name.is_empty())), "every link knows its dates");
+    // The grid marks a linked task with what it waits for, as people read it.
+    let c = crate::fields::Calc::new(&plans[0].1, "%d-%b-%y", d(2026, 11, 2));
+    let g = c.grid(&crate::query::Query::default());
+    let row = g.rows.iter().find(|r| r.name == "Engineering complete").unwrap();
+    assert!(row.ext.len() == 1 && row.ext[0].starts_with("Engineering › ") && row.ext[0].ends_with("(FS)"), "{:?}", row.ext);
+    // No work over Christmas: every calendar in the example closes from 24 December to 1 January.
+    assert!(plans.iter().all(|x| x.1.calendars.iter().all(|c| c.exceptions.iter().any(|e| e.name.starts_with("Christmas")))));
     // Three weeks more for the compressor's manufacture moves the handover by about as much.
     let before = date(&plans, 0, "Handover to operations");
     let i = plans[2].1.tasks.iter().position(|t| t.name == "Manufacture and factory acceptance test").unwrap();

@@ -92,7 +92,13 @@ fn main() {
     let guide = std::env::args().nth(1).as_deref() == Some("guide");
     let c = Calc::new(&p, "%d-%b-%y", today);
     let q = Query { cols: p.columns.iter().filter(|c| c.1 > 0).map(|c| c.0.clone()).collect(), ..Query::default() };
-    let g = c.grid(&q);
+    let mut g = c.grid(&q);
+    if !guide {
+        // One task waits for a task in another plan, and another plan waits for one.
+        let k = g.rows.iter().position(|r| r.kind == "task").unwrap_or(0);
+        g.rows[k].ext = vec!["Engineering › E1010 IFC drawings issued (FS+5d)".into()];
+        g.rows[k + 1].ext_out = vec!["Main schedule › A1040 Engineering complete (FS)".into()];
+    }
     let rows: Vec<usize> = g.rows.iter().filter(|r| r.kind == "task").filter_map(|r| p.idx(r.uid)).collect();
     let mut tl = serde_json::to_value(&g).unwrap();
     if let Some(r) = tl["rows"].as_array_mut() { r.retain(|x| x["uid"].as_u64().and_then(|u| p.idx(u as u32)).is_some_and(|i| p.tasks[i].timeline)) }
@@ -108,6 +114,7 @@ fn main() {
         "manpower": progress::manpower(&c, "week"), "earned_schedule": progress::earned_schedule(&c), "lookahead": progress::lookahead(&c, 3), "credit_library": progress::credit_library(),
         "sheet_view": sheet::sheet_view(&c, 0), "formula_shift": ["=C3*2"], "dash_map": dash_map(&c),
         "link_targets": [{ "tab": 1, "name": "Engineering", "path": "C:/Plans/Engineering.dplan", "tasks": [[1, "E1000", "Basic engineering", 0, true, c.s.start, c.s.start + 20 * cal::DAY], [2, "E1010", "IFC drawings issued", 1, false, c.s.start + 20 * cal::DAY, c.s.start + 20 * cal::DAY]] }],
+        "link_users": [{ "uid": p.tasks[2].uid, "task": p.tasks[2].name, "tab": 1, "by": "Main schedule › A1040 Engineering complete (FS)" }],
         "link_states": [{ "uid": p.tasks[1].uid, "task": p.tasks[1].name, "k": 0, "link": { "file": "C:/Plans/Engineering.dplan", "uid": 2, "kind": "FS", "lag": 0, "plan": "Engineering", "code": "E1010", "name": "IFC drawings issued", "start": c.s.start, "finish": c.s.start + 10 * cal::DAY }, "now_start": c.s.start, "now_finish": c.s.start + 15 * cal::DAY, "state": "changed" }],
         "sheet_catalog": { "functions": sheet::functions(), "names": sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect::<Vec<_>>(), "tasks": sheet::task_columns(&c).into_iter().map(|x| x.1).collect::<Vec<_>>(), "resources": sheet::RES_COLS.iter().map(|x| x.1).collect::<Vec<_>>() },
         "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "country", "email", "work", "cost"].map(String::from)), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },

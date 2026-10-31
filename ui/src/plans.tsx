@@ -108,16 +108,23 @@ export const linkSelected = () => { const u = C.ids()[0]; if (u) linkDialog(u); 
 /** The Linked Plans panel: every link of this plan, whether the other plan has moved, and Update Links. */
 export const linkedPlans = () => openDialog(() => {
   const [states, { refetch }] = createResource(() => tick(), () => call<LinkState[]>("link_states"));
+  const [users] = createResource(() => tick(), () => call<{ uid: number; task: string; tab: number; by: string }[]>("link_users"));
   const update = (all: boolean) => updateLinks(all).then(() => refetch());
   const label = (s: string) => (s === "ok" ? "Up to date" : s === "changed" ? "Moved – update" : `Not found: ${s}`);
   return (
     <Dialog title="Linked Plans" wide help="linkedplans" extra={<><button class="btn" onClick={() => update(false)}>Update This Plan</button><button class="btn pri" onClick={() => update(true)}>Update All Open Plans</button></>}>
+      <h4 class="sub"><span class="xin">⇠</span> This plan waits for</h4>
       <p class="muted">Tasks of “{P().name}” that wait for tasks in other plans. When another plan moves, its link shows <b>Moved</b> until you update. Plans that are not open are read from their files.</p>
       <table class="tbl linkstates"><thead><tr><th>Task here</th><th>Waits for</th><th>Type</th><th>Last known finish</th><th>Finish now</th><th>State</th><th /></tr></thead><tbody>
-        <For each={states() ?? []} fallback={<tr><td colspan="7" class="muted">No links to other plans. Select a task and use Link to Plan (Project tab, Linked Plans).</td></tr>}>{s => <tr classList={{ warn: s.state !== "ok" }}>
+        <For each={states() ?? []} fallback={<tr><td colspan="7" class="muted">No links to other plans. Select a task and use Project › Link to Plan.</td></tr>}>{s => <tr classList={{ warn: s.state !== "ok" }}>
           <td>{s.task}</td><td>{linkText(s.link)}</td><td>{s.link.kind}{lagText(s.link.lag)}</td><td>{s.link.finish ? fmtAt(s.link.finish - 1) : "—"}</td>
           <td>{s.now_finish ? fmtAt(s.now_finish - 1) : "—"}</td><td><span class="pill" classList={{ good: s.state === "ok", bad: s.state !== "ok" }}>{label(s.state)}</span></td>
           <td><button class="btn sm" onClick={() => { closeDialog(); linkDialog(s.uid); }}>Edit…</button></td></tr>}</For>
+      </tbody></table>
+      <h4 class="sub"><span class="xout">⇢</span> Other open plans wait for</h4>
+      <table class="tbl linkstates"><thead><tr><th>Task here</th><th>Waited for by</th><th /></tr></thead><tbody>
+        <For each={users() ?? []} fallback={<tr><td colspan="3" class="muted">No other open plan waits for this plan's tasks.</td></tr>}>{u => <tr>
+          <td>{u.task}</td><td>{u.by}</td><td><button class="btn sm" onClick={() => { closeDialog(); showTab(u.tab); }}>Show plan</button></td></tr>}</For>
       </tbody></table>
     </Dialog>
   );

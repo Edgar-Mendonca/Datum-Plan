@@ -57,6 +57,12 @@ pub fn refresh(p: &mut Project, find: &mut impl FnMut(&ExtLink) -> Result<Found,
     (changed, missing)
 }
 
+/// A link as people read it: "Engineering › E1180 Final documentation issued (FS+5d)".
+pub fn label(x: &ExtLink, day_min: i64) -> String {
+    let lag = if x.lag != 0 { format!("{}{}", if x.lag > 0 { "+" } else { "" }, crate::parse::fmt_dur(x.lag, crate::model::Unit::D, day_min)) } else { String::new() };
+    format!("{} › {}{} ({:?}{lag})", x.plan, if x.code.is_empty() { String::new() } else { format!("{} ", x.code) }, x.name, x.kind)
+}
+
 /// The file name a link points at (for finding it next to this plan when the folder moved).
 pub fn file_name(file: &str) -> &str {
     file.rsplit(['/', '\\']).next().unwrap_or(file)

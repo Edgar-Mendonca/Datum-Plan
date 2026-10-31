@@ -78,6 +78,7 @@ export const HELP: Record<string, Topic> = {
     how: ["Open or create plans: each gets a tab above the ribbon (Ctrl+Tab switches, Ctrl+W closes). ＋ offers the linked-plans example.",
       "Select a task and choose Project › Link to Plan (or right-click › Link to Plan…): pick the plan and the task, the type (FS, SS, FF, SF) and the lag.",
       "The task waits for the other plan's task like for a normal link, using its last known dates. When the other plan changes, Update Links brings the dates up to date; plans that are not open are read from their files.",
+      "Linked tasks are marked: ⇠ by the ID (purple) waits for another plan, ⇢ (green) another plan waits for it; the Gantt names the other task before or after the bar.",
       "Linked Plans lists every link with the dates it last saw and marks the ones that have moved."],
     tip: "Keep the plans of one project in one folder: the links still find each other when the folder is moved or copied." },
   sheets: { t: "Sheets", what: "Spreadsheets inside the plan that work like Excel and read the plan live: your own reports, dashboards, quantities and vendor lists, with nothing copied by hand.",

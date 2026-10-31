@@ -117,6 +117,8 @@ kbd { font: 10.5px "Segoe UI", sans-serif; color: var(--muted); border: 1px soli
 .tg { display: inline-block; width: 14px; color: var(--muted); cursor: pointer; font-weight: 400; font-size: 9px; }
 .ind { font-style: normal; margin-left: 3px; color: var(--muted); font-size: 10px; }
 .ind.late { color: var(--crit); font-weight: 700; }
+.ind.xin { color: #6D3FC8; font-weight: 700; font-size: 12px; cursor: pointer; }
+.ind.xout { color: #1E7D46; font-weight: 700; font-size: 12px; }
 .mode svg { width: 14px; height: 14px; vertical-align: middle; }
 .ico { font-size: 12px; }
 .pctc { position: relative; display: block; }
@@ -812,5 +814,6 @@ a.link { color: var(--blue); cursor: pointer; text-decoration: underline; }
 .linkpick button.on { background: var(--sel, #E3EDFC); }
 .linkpick .mono { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 h4.sub { margin: 14px 0 4px; font-size: 12.5px; }
+h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .linkstates .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; }
 .linkstates .pill.good { background: #DCFCE7; color: #166534; } .linkstates .pill.bad { background: #FEF3C7; color: #92400E; }

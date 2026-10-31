@@ -86,6 +86,12 @@ pub struct GRow {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub style: BTreeMap<String, String>,
     pub bar: Bar,
+    /// Tasks in other plans this task waits for, and (filled in by the window's shell from the
+    /// other open plans) tasks in other plans that wait for this one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ext: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ext_out: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -171,6 +177,7 @@ impl Calc<'_> {
             ms: !s.summary[i] && (t.dur == 0 || matches!(t.act_type, ActType::StartMs | ActType::FinishMs)),
             crit: s.critical(p, i), late: self.val(i, "late").truth(), manual: t.manual, off: s.off[i], lp: s.lp[i],
             kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, name: t.name.clone(), res: self.text(i, "res"), cells, icons, style: t.style.as_object().map(|m| m.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()).unwrap_or_default(), bar: self.bar(i, q.baseline),
+            ext: t.ext.iter().map(|x| crate::links::label(x, p.day_min)).collect(), ext_out: vec![],
         }
     }
 

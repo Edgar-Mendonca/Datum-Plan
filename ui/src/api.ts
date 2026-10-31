@@ -42,7 +42,7 @@ export interface Out { tabs: { name: string; path: string | null; dirty: boolean
 
 export interface Bar { s: number; f: number; ls: number; lf: number; bs: number | null; bf: number | null; dl: number | null; pct: number; segs: [number, number][]; links: [number, LinkType][] }
 export interface Row {
-  uid: number; id: number; lvl: number; kind: "task" | "summary" | "group" | "project"; ms: boolean; crit: boolean; late: boolean; manual: boolean; off: boolean; lp: boolean;
+  uid: number; id: number; lvl: number; kind: "task" | "summary" | "group" | "project"; ms: boolean; crit: boolean; late: boolean; manual: boolean; off: boolean; lp: boolean; ext?: string[]; ext_out?: string[];
   kids: boolean; open: boolean; hl: boolean; name: string; res: string; cells: string[]; icons?: [number, string][]; style?: Record<string, string>; bar: Bar;
 }
 export interface Col { key: string; name: string; kind: Kind; edit: boolean }

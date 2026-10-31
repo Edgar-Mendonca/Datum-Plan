@@ -346,7 +346,7 @@ Every plan you open or create gets a tab above the ribbon. Click a tab to show t
 
 ### The example
 
-**File › Linked plans (example)** (or **＋ › Example**) asks for a folder, saves four plans of a compressor station there and opens them in tabs: **Main schedule**, **Engineering**, **Procurement** and **Construction**. The main schedule's milestones wait for the subplans, construction waits for the drawings and for the compressor package to arrive, and the engineering and construction plans use resource calendars (a lead engineer's leave, a six-day site week). Change a duration in Procurement, then update the links and watch the main schedule move.
+**File › Linked plans (example)** (or **＋ › Example**) asks for a folder, saves four plans of a compressor station there and opens them in tabs: **Main schedule**, **Engineering**, **Procurement** and **Construction**. The main schedule's milestones wait for the subplans, construction waits for the drawings and for the compressor package to arrive, and the engineering and construction plans use resource calendars (a lead engineer's leave, a six-day site week). Every plan's calendar closes for Christmas and New Year (**Project › Change Working Time** shows the holidays). Change a duration in Procurement, then update the links and watch the main schedule move.
 
 ### Link a task to another plan
 
@@ -362,6 +362,18 @@ Save the other plan first, so the link knows its file. Then select the task that
 
 The task now waits for the other plan's task like for a normal link. The **External Predecessors** column shows its links, for example `Engineering › E1180 Final documentation issued FS+5d`.
 
+### See what is linked
+
+![The main schedule: marks by the ID, what each milestone waits for, and which subplans wait for it.](img/linked-gantt.png)
+
+A main schedule is usually milestones (0 days): each one is the moment a subplan reaches a point, such as "Engineering complete". You can see at a glance which tasks are linked:
+
+1. **By the ID:** ⇠ (purple) means the task waits for a task in another plan; click it to see or change the link. ⇢ (green) means a task in another open plan waits for this one. Point at either mark to read the tasks.
+2. **Before the bar (purple):** what the task waits for, with a dashed arrow into it: "Construction › A1130 Mechanical completion ⇢ ◆ 26 Nov".
+3. **After the bar (green):** which other plan waits for this task: "→ Construction › A1010 Site mobilisation".
+
+The **External Predecessors** column lists every link in words, and **Project › Linked Plans** lists them all in both directions.
+
 ### Keep the links up to date
 
 ![Linked Plans: what each task waits for, the date it knew and the date now, and Update All Open Plans.](img/linked-plans.png)
@@ -375,6 +387,8 @@ A link keeps the date the other task had when it was last updated, so a plan nev
 5. **Update All Open Plans** brings in the new dates in every open plan, in the right order, until nothing moves (**Update This Plan** does only the one shown). Plans that are not open are read from their files.
 
 If two plans wait for each other in a loop, the update stops and says so.
+
+Below, **Other open plans wait for** lists the tasks of this plan that tasks in other open plans wait for; **Show plan** opens that plan's tab.
 
 ## Files: save, import and export
 

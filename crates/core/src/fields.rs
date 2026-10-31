@@ -356,7 +356,7 @@ impl<'a> Calc<'a> {
             "fpath" => if s.fpath[i] > 0 { F::Num(s.fpath[i] as f64) } else { F::Null },
             "elapsed" => F::Bool(t.elapsed),
             "ignore_rc" => F::Bool(t.ignore_rc),
-            "ext" => txt(&t.ext.iter().map(|x| format!("{} › {} {:?}{}", x.plan, if x.code.is_empty() { &x.name } else { &x.code }, x.kind, if x.lag != 0 { format!("{}{}", if x.lag > 0 { "+" } else { "" }, crate::parse::fmt_dur(x.lag, crate::model::Unit::D, p.day_min)) } else { String::new() })).collect::<Vec<_>>().join("; ")),
+            "ext" => txt(&t.ext.iter().map(|x| crate::links::label(x, p.day_min)).collect::<Vec<_>>().join("; ")),
             "split" => F::Bool(!t.splits.is_empty()),
             "project_finish_var" => F::Num(self.dur_between(i, s.ef[i], s.finish) as f64),
             "pct" => F::Num(self.pct[i] as f64),

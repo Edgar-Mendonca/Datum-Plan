@@ -451,7 +451,44 @@ fn paste(st: State<St>, at: usize) -> R<Out> {
 /// The rows a view shows: filtered, grouped, sorted, with cells and bars.
 #[tauri::command]
 fn query(st: State<St>, q: Query) -> query::Grid {
-    calc(&st.lock()).grid(&q)
+    let a = st.lock();
+    let mut g = calc(&a).grid(&q);
+    let by = waited_on(&a);
+    if !by.is_empty() {
+        for r in &mut g.rows { if let Some(v) = by.get(&r.uid) { r.ext_out = v.iter().map(|x| x.1.clone()).collect() } }
+    }
+    g
+}
+
+/// Tasks of the shown plan that tasks in the other open plans wait for: uid → (the other plan's
+/// tab, "Main schedule › A1040 Engineering complete (FS)").
+fn waited_on(a: &App) -> HashMap<u32, Vec<(usize, String)>> {
+    let mut by: HashMap<u32, Vec<(usize, String)>> = HashMap::new();
+    let Some(me) = a.doc.path.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().to_lowercase()) else { return by };
+    for (k, d) in docs(a).into_iter().enumerate().filter(|&(k, _)| k != a.cur) {
+        for t in &d.p.tasks {
+            for x in t.ext.iter().filter(|x| links::file_name(&x.file).to_lowercase() == me) {
+                let code = if t.code.is_empty() { String::new() } else { format!("{} ", t.code) };
+                by.entry(x.uid).or_default().push((k, format!("{} › {code}{} ({:?})", d.p.name, t.name, x.kind)));
+            }
+        }
+    }
+    by
+}
+
+#[derive(Serialize)]
+struct LinkUser { uid: u32, task: String, tab: usize, by: String }
+
+/// For the Linked Plans panel: which tasks of this plan other open plans wait for.
+#[tauri::command]
+fn link_users(st: State<St>) -> Vec<LinkUser> {
+    let a = st.lock();
+    let mut v: Vec<LinkUser> = waited_on(&a).into_iter().flat_map(|(uid, xs)| {
+        let task = a.doc.p.idx(uid).map(|i| { let t = &a.doc.p.tasks[i]; if t.code.is_empty() { t.name.clone() } else { format!("{} {}", t.code, t.name) } }).unwrap_or_default();
+        xs.into_iter().map(move |(tab, by)| LinkUser { uid, task: task.clone(), tab, by })
+    }).collect();
+    v.sort_by_key(|x| (a.doc.p.idx(x.uid), x.tab));
+    v
 }
 
 #[tauri::command]
@@ -1008,7 +1045,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, save_all, link_targets, link_states, update_links, linked_example, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, save_all, link_targets, link_states, link_users, update_links, linked_example, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

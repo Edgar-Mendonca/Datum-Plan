@@ -341,6 +341,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
 
   // 0.5.5: plans in tabs, links to tasks in other plans, the Linked Plans panel.
   check("each open plan has a tab, unsaved ones marked", (await p.$$(".plantabs .ptab")).length === 2 && !!(await p.$(".plantabs .ptab:nth-child(2) .dot")));
+  check("a task linked to another plan is marked, and says what it waits for", (await p.getAttribute(".row .ind.xin", "title") ?? "").includes("Engineering › E1010"));
+  check("a task another plan waits for is marked too", (await p.getAttribute(".row .ind.xout", "title") ?? "").includes("Main schedule › A1040"));
   await p.click(".plantabs .ptab:nth-child(2)"); await p.waitForTimeout(200);
   check("clicking a tab shows that plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "switch_tab").pop())).includes('"k":1'));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
@@ -354,6 +356,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("OK saves the link with the other plan's file and task", ext.includes('"ExtSet"') && ext.includes("Engineering.dplan") && ext.includes('"uid":2') && ext.includes('"lag":2400'), ext);
   await p.click(".ribbon button:has-text('Linked Plans')"); await p.waitForTimeout(300);
   check("Linked Plans shows a link whose plan has moved", (await p.textContent(".dlg .linkstates")).includes("Moved"));
+  check("Linked Plans also lists what other open plans wait for", (await p.textContent(".dlg")).includes("Other open plans wait for") && (await p.textContent(".dlg")).includes("Main schedule › A1040"));
   await p.click(".dlg button:has-text('Update All Open Plans')"); await p.waitForTimeout(200);
   check("Update All Open Plans asks the engine to update every open plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "update_links").pop())).includes('"all":true'));
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);

@@ -413,7 +413,7 @@ export const Grid = (p: { width?: number }) => {
             <For each={visible()}>{([r, k]) => (
               <div class="row" style={{ top: `${k * RH}px`, width: `${total()}px` }}
                 classList={{ sum: r.kind === "summary" || r.kind === "project", grp: r.kind === "group", sel: selSet().has(r.uid), off: r.off, late: r.late, hl: r.hl, proj: r.kind === "project" }}>
-                <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }} title={r.late ? "Late" : ""}>{r.uid > 0 ? r.id : ""}{r.late && <i class="ind late">!</i>}{r.manual && <i class="ind">✎</i>}</div>
+                <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }} title={r.late ? "Late" : ""}>{r.uid > 0 ? r.id : ""}{r.late && <i class="ind late">!</i>}{r.manual && <i class="ind">✎</i>}{r.ext?.length ? <i class="ind xin" title={`Waits for a task in another plan:\n${r.ext.join("\n")}\n(click to change)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkDialog(r.uid)); }}>⇠</i> : null}{r.ext_out?.length ? <i class="ind xout" title={`Another plan waits for this task:\n${r.ext_out.join("\n")}`}>⇢</i> : null}</div>
                 <For each={grid().cols}>{(c, j) => (
                   <div class="c" classList={{ r: right(c), nm: c.key === "name", ro: !c.edit, in: inRange(k, j()), at: cur().row === k && cur().col === j(), fz: j() === frozen(), fx: !!formulaOf(c.key) }}
                     style={{ width: `${widths()[j()]}px`, ...sticky(j()), ...(r.style ? { ...F.css(r.style["*"]), ...F.css(r.style[c.key]) } : {}), ...(D.cfRules().length ? D.cfStyle(c.key, r.cells[j()] ?? "") : {}) }}>

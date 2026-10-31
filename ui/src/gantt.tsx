@@ -60,11 +60,13 @@ export const gstyle = () => ({ ...STYLES[0], grid: false, ...(out()?.project.ui?
 
 /** Canvas colours from the theme and the chosen Gantt Chart Style. */
 let K: Record<string, string> = {};
+/** "Engineering › A1180 Final documentation issued (FS+5d)" → "Engineering › A1180 Final documentat…". */
+const short = (t: string) => { const s = t.replace(/ \([A-Z]{2}[^)]*\)$/, ""); return s.length > 42 ? `${s.slice(0, 41)}…` : s; };
 const pal = () => {
   const v = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const dark = document.documentElement.dataset.theme === "dark";
   K = { ink: dark ? "#9CC2F7" : "#0C1A2B", line: v("--line"), text: v("--text2"), bg: v("--bg2"), panel: v("--panel"), off: dark ? "#141E2A" : "#F2F4F2", pale: v("--pale"), muted: v("--muted"),
-    base: dark ? "#5B6878" : "#AEB7C4", link: dark ? "#6B7F99" : "#7A8BA6", fill: dark ? "#24476E" : "#A9CAF6", blue: v("--blue"), cfill: dark ? "#5A2522" : "#F2B0B0", crit: v("--crit") };
+    base: dark ? "#5B6878" : "#AEB7C4", link: dark ? "#6B7F99" : "#7A8BA6", fill: dark ? "#24476E" : "#A9CAF6", blue: v("--blue"), cfill: dark ? "#5A2522" : "#F2B0B0", crit: v("--crit"), ext: dark ? "#B79CF5" : "#6D3FC8", extOut: dark ? "#6FCF97" : "#1E7D46" };
   const g = gstyle();
   if (!dark || g.name !== STYLES[0].name) Object.assign(K, { fill: g.fill, blue: g.edge, cfill: g.cfill, crit: g.crit, ...(dark ? {} : { ink: g.sum }) });
   K.grid = g.grid ? (dark ? "#1E2A38" : "#E8EBEF") : "";
@@ -182,8 +184,23 @@ export const Gantt = () => {
         ctx.fillStyle = B.dl < B.f ? K.crit : "#2E9D57";
         ctx.beginPath(); ctx.moveTo(dx - 4, y + 1); ctx.lineTo(dx + 4, y + 1); ctx.lineTo(dx, y + 7); ctx.fill(); ctx.fillRect(dx - 0.5, y + 5, 1, 13);
       }
-      if (trk && r.kind !== "group") { ctx.fillStyle = K.text; ctx.fillText(r.ms ? `${fmtDay(B.s)}` : `${B.pct}%`, r.ms ? lx : Math.max(lx, X(B.bf ?? B.f) + 6), y + RH / 2); }
-      else if (showLabels() && r.kind !== "group") { ctx.fillStyle = K.text; ctx.fillText(r.ms ? `${fmtDay(B.s)}` : r.res, lx, y + RH / 2); }
+      let lt = "";
+      if (trk && r.kind !== "group") { lt = r.ms ? `${fmtDay(B.s)}` : `${B.pct}%`; lx = r.ms ? lx : Math.max(lx, X(B.bf ?? B.f) + 6); ctx.fillStyle = K.text; ctx.fillText(lt, lx, y + RH / 2); }
+      else if (showLabels() && r.kind !== "group") { lt = r.ms ? `${fmtDay(B.s)}` : r.res; ctx.fillStyle = K.text; ctx.fillText(lt, lx, y + RH / 2); }
+      // Links between plans: what this task waits for, left of the bar (blue, dashed arrow in);
+      // which other plans wait for it, after its label (green arrow out).
+      if (r.ext?.length) {
+        const t = `${short(r.ext[0])}${r.ext.length > 1 ? ` +${r.ext.length - 1}` : ""}`, ex = (r.ms ? x1 - 7 : x1) - 2, tw = ctx.measureText(t).width;
+        ctx.fillStyle = ctx.strokeStyle = K.ext; ctx.setLineDash([3, 2]); ctx.beginPath(); ctx.moveTo(ex - 16, y + RH / 2); ctx.lineTo(ex - 3, y + RH / 2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(ex, y + RH / 2); ctx.lineTo(ex - 5, y + RH / 2 - 3); ctx.lineTo(ex - 5, y + RH / 2 + 3); ctx.fill();
+        // Too close to the left edge: say it after the bar instead.
+        if (ex - 20 - tw > 4) ctx.fillText(t, ex - 20 - tw, y + RH / 2);
+        else { lt += lt ? "   " : ""; ctx.fillText(`⇠ ${t}`, lx + ctx.measureText(lt).width, y + RH / 2); lt += `⇠ ${t}`; }
+      }
+      if (r.ext_out?.length) {
+        const t = `→ ${short(r.ext_out[0])}${r.ext_out.length > 1 ? ` +${r.ext_out.length - 1}` : ""}`;
+        ctx.fillStyle = K.extOut; ctx.fillText(t, lx + (lt ? ctx.measureText(lt).width + 10 : 0), y + RH / 2);
+      }
       ctx.globalAlpha = 1;
     }
     if (drag) {

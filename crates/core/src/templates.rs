@@ -144,6 +144,7 @@ const LINKS: [(usize, usize, usize, usize, crate::model::LinkType, i64); 13] = {
 /// leave, and a six-day site week with a crew holiday.
 pub fn linked_example(start: NaiveDate) -> Vec<(String, Project)> {
     use crate::model::{Calendar, ExtLink, Exception, STD_HOURS};
+    use chrono::Datelike;
     let mut plans: Vec<(String, Project)> = LINKED.iter().map(|(f, t)| (f.to_string(), build(t, start))).collect();
     for &(to, row, from, frow, kind, lag) in &LINKS {
         let uid = plans[from].1.tasks[frow - 1].uid;
@@ -154,7 +155,8 @@ pub fn linked_example(start: NaiveDate) -> Vec<(String, Project)> {
     let countries: [&[&str]; 4] = [&["GB", "AE"], &["DE", "DE", "IN", "IN", "GB"], &["AE", "AE", "CN"], &["GB", "IN", "PH", "PK", "DE"]];
     for ((_, p), cs) in plans.iter_mut().zip(countries) {
         p.resources.iter_mut().zip(cs).for_each(|(r, c)| r.country = c.to_string());
-        p.columns.insert(6, ("ext".into(), 230));
+        let at = p.columns.iter().position(|c| c.0 == "preds").unwrap_or(5);
+        p.columns.insert(at, ("ext".into(), 260));
     }
     // Engineering: the lead process engineer is on leave for two weeks during the simulation.
     let eng = &mut plans[1].1;
@@ -168,6 +170,15 @@ pub fn linked_example(start: NaiveDate) -> Vec<(String, Project)> {
     con.calendars.push(six);
     for r in con.resources.iter_mut().filter(|r| r.name.ends_with("Crew")) { r.cal = Some("Site 6-day week".into()) }
     con.resources[2].exceptions.push(Exception { name: "Holiday break".into(), from: day(250), to: day(253), hours: vec![] });
+    // Every calendar closes for Christmas and New Year, as most sites do.
+    for (_, p) in &mut plans {
+        for c in &mut p.calendars {
+            for y in start.year()..=start.year() + 2 {
+                let (Some(from), Some(to)) = (NaiveDate::from_ymd_opt(y, 12, 24), NaiveDate::from_ymd_opt(y + 1, 1, 1)) else { continue };
+                c.exceptions.push(Exception { name: format!("Christmas and New Year {y}"), from, to, hours: vec![] });
+            }
+        }
+    }
     let _ = crate::links::update_all(&mut plans);
     plans
 }
