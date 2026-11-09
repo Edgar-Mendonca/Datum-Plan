@@ -605,7 +605,9 @@ pub struct PeriodNote { pub kind: String, pub end: Option<NaiveDate>, pub summar
 /// A frozen copy of the plan at a reporting date (stored period performance).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct Snapshot { pub date: Option<NaiveDate>, pub label: String, pub comment: String, pub finish: i64, pub pct: f64, pub cost: f64, pub rows: Vec<SnapRow> }
+pub struct Snapshot { pub date: Option<NaiveDate>, pub label: String, pub comment: String, pub finish: i64, pub pct: f64, pub cost: f64, pub rows: Vec<SnapRow>,
+    /// The health score when the snapshot was taken (0–100).
+    #[serde(skip_serializing_if = "Option::is_none")] pub health: Option<f64> }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -643,6 +645,9 @@ pub struct Project {
     pub id_start: u32,
     pub id_step: u32,
     pub opts: SchedOpts,
+    /// Check Schedule: limits and weights of the health score.
+    #[serde(skip_serializing_if = "crate::check::Health::is_default")]
+    pub health: crate::check::Health,
     pub fields: Vec<CustomDef>,
     pub codes: Vec<CodeDef>,
     pub risks: Vec<Risk>,
@@ -936,7 +941,7 @@ impl Project {
             next_uid: 1, columns: DEFAULT_COLUMNS.iter().map(|(f, w)| (f.to_string(), *w)).collect(),
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
-            id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
+            id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(), health: Default::default(),
             fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], names: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(), modules: vec![], contract: Contract::default(), documents: DocRegister::default(), procurement: ProcRegister::default(),
         }
     }
@@ -1035,8 +1040,8 @@ impl Project {
     /// (Copying the tasks only to drop them cost a tenth of a second per edit at 100,000 tasks.)
     #[allow(clippy::clone_on_copy)]
     pub fn head(&self) -> Project {
-        let snapshots = self.snapshots.iter().map(|s| Snapshot { rows: vec![], ..Snapshot { date: s.date, label: s.label.clone(), comment: s.comment.clone(), finish: s.finish, pct: s.pct, cost: s.cost, rows: vec![] } }).collect();
-        Project { tasks: vec![], snapshots, format: self.format.clone(), name: self.name.clone(), start: self.start.clone(), status: self.status.clone(), day_min: self.day_min.clone(), manual_default: self.manual_default.clone(), calendar: self.calendar.clone(), calendars: self.calendars.clone(), resources: self.resources.clone(), next_uid: self.next_uid.clone(), columns: self.columns.clone(), code: self.code.clone(), description: self.description.clone(), client: self.client.clone(), manager: self.manager.clone(), location: self.location.clone(), company: self.company.clone(), logo: self.logo.clone(), currency: self.currency.clone(), setup_done: self.setup_done.clone(), id_prefix: self.id_prefix.clone(), id_start: self.id_start.clone(), id_step: self.id_step.clone(), opts: self.opts.clone(), fields: self.fields.clone(), codes: self.codes.clone(), risks: self.risks.clone(), credit: self.credit.clone(), log: self.log.clone(), titles: self.titles.clone(), sheets: self.sheets.clone(), names: self.names.clone(), pictures: self.pictures.clone(), periods: self.periods.clone(), notes: self.notes.clone(), ui: self.ui.clone(), subplans: self.subplans.clone(), master: self.master.clone(), modules: self.modules.clone(), contract: self.contract.clone(), documents: self.documents.clone(), procurement: self.procurement.clone() }
+        let snapshots = self.snapshots.iter().map(|s| Snapshot { rows: vec![], ..Snapshot { date: s.date, label: s.label.clone(), comment: s.comment.clone(), finish: s.finish, pct: s.pct, cost: s.cost, rows: vec![], health: s.health } }).collect();
+        Project { tasks: vec![], snapshots, format: self.format.clone(), name: self.name.clone(), start: self.start.clone(), status: self.status.clone(), day_min: self.day_min.clone(), manual_default: self.manual_default.clone(), calendar: self.calendar.clone(), calendars: self.calendars.clone(), resources: self.resources.clone(), next_uid: self.next_uid.clone(), columns: self.columns.clone(), code: self.code.clone(), description: self.description.clone(), client: self.client.clone(), manager: self.manager.clone(), location: self.location.clone(), company: self.company.clone(), logo: self.logo.clone(), currency: self.currency.clone(), setup_done: self.setup_done.clone(), id_prefix: self.id_prefix.clone(), id_start: self.id_start.clone(), id_step: self.id_step.clone(), opts: self.opts.clone(), health: self.health.clone(), fields: self.fields.clone(), codes: self.codes.clone(), risks: self.risks.clone(), credit: self.credit.clone(), log: self.log.clone(), titles: self.titles.clone(), sheets: self.sheets.clone(), names: self.names.clone(), pictures: self.pictures.clone(), periods: self.periods.clone(), notes: self.notes.clone(), ui: self.ui.clone(), subplans: self.subplans.clone(), master: self.master.clone(), modules: self.modules.clone(), contract: self.contract.clone(), documents: self.documents.clone(), procurement: self.procurement.clone() }
     }
 
     pub fn cal(&self, name: Option<&str>) -> &Calendar {

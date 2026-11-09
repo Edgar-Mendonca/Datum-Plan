@@ -501,3 +501,89 @@ pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
     }
     r
 }
+
+// ---------- what changed between two versions: the logic change log ----------
+
+/// One change between two versions of a plan, by unique ID.
+#[derive(Clone, Debug, Serialize, serde::Deserialize, PartialEq)]
+pub struct Change { pub uid: u32, pub id: String, pub name: String, pub kind: String, pub was: String, pub now: String }
+
+/// Every change, the project finish before and after, and the old plan's bars (ghost bars), in days.
+#[derive(Serialize)]
+pub struct Changes { pub items: Vec<Change>, pub finish: [String; 2], pub finish_var: String, pub counts: Vec<(String, usize)>, pub ghost: Vec<(u32, f64, f64)> }
+
+/// The kinds of change, in the order the log lists them.
+pub const CHANGE_KINDS: [&str; 15] = ["Added", "Deleted", "Name", "Duration", "Link added", "Link deleted", "Link changed", "Constraint", "Calendar", "Deadline", "Actual start", "Actual finish", "% complete", "Start", "Finish"];
+
+/// Compares `old` with `new` by unique ID: tasks added and deleted, names, durations, links
+/// (added, deleted, type or lag changed), constraints, calendars, deadlines, progress, and dates.
+pub fn changes(old: &Calc, new: &Calc) -> Changes {
+    let mut items = vec![];
+    let id = |c: &Calc, i: usize| { let t = &c.p.tasks[i]; if t.code.is_empty() { c.text(i, "id") } else { t.code.clone() } };
+    let link = |c: &Calc, l: &crate::model::Link| {
+        let who = c.p.idx(l.pred).map_or(format!("#{}", l.pred), |k| format!("{} {}", id(c, k), c.p.tasks[k].name));
+        let lag = if l.lag == 0 { String::new() } else if l.pct { format!(" {:+}%", l.lag) } else { format!(" {}{}", if l.lag > 0 { "+" } else { "" }, crate::parse::fmt_dur(l.lag, crate::model::Unit::D, c.p.day_min)) };
+        format!("{who}: {:?}{lag}{}", l.kind, if l.elapsed { " (elapsed)" } else { "" })
+    };
+    for (i, t) in new.p.tasks.iter().enumerate() {
+        let mut push = |kind: &str, was: String, now: String| items.push(Change { uid: t.uid, id: id(new, i), name: t.name.clone(), kind: kind.into(), was, now });
+        let Some(j) = old.p.idx(t.uid) else { push("Added", String::new(), format!("{} → {}", new.text(i, "start"), new.text(i, "finish"))); continue };
+        let o = &old.p.tasks[j];
+        let (leaf, was_leaf) = (!new.s.summary[i], !old.s.summary[j]);
+        if o.name != t.name { push("Name", o.name.clone(), t.name.clone()) }
+        if leaf && was_leaf && o.dur != t.dur { push("Duration", old.text(j, "dur"), new.text(i, "dur")) }
+        for l in &t.preds {
+            match o.preds.iter().find(|x| x.pred == l.pred) {
+                None => push("Link added", String::new(), link(new, l)),
+                Some(x) if x != l => push("Link changed", link(old, x), link(new, l)),
+                _ => {}
+            }
+        }
+        for x in o.preds.iter().filter(|x| !t.preds.iter().any(|l| l.pred == x.pred)) { push("Link deleted", link(old, x), String::new()) }
+        let cons = |c: &Calc, k: usize| { let d = c.text(k, "cdate"); format!("{}{}", c.text(k, "ctype"), if d.is_empty() { String::new() } else { format!(" {d}") }) };
+        if (o.constraint, o.cdate) != (t.constraint, t.cdate) { push("Constraint", cons(old, j), cons(new, i)) }
+        if o.cal != t.cal { push("Calendar", old.text(j, "cal"), new.text(i, "cal")) }
+        if o.deadline != t.deadline { push("Deadline", old.text(j, "deadline"), new.text(i, "deadline")) }
+        if o.act_start != t.act_start { push("Actual start", old.text(j, "astart"), new.text(i, "astart")) }
+        if o.act_finish != t.act_finish { push("Actual finish", old.text(j, "afinish"), new.text(i, "afinish")) }
+        if leaf && o.pct != t.pct { push("% complete", format!("{}%", o.pct), format!("{}%", t.pct)) }
+        if leaf && old.s.es[j] != new.s.es[i] { push("Start", old.text(j, "start"), new.text(i, "start")) }
+        if leaf && old.s.ef[j] != new.s.ef[i] { push("Finish", old.text(j, "finish"), new.text(i, "finish")) }
+    }
+    for (j, t) in old.p.tasks.iter().enumerate().filter(|(_, t)| new.p.idx(t.uid).is_none()) {
+        items.push(Change { uid: t.uid, id: id(old, j), name: t.name.clone(), kind: "Deleted".into(), was: format!("{} → {}", old.text(j, "start"), old.text(j, "finish")), now: String::new() });
+    }
+    let rank = |k: &str| CHANGE_KINDS.iter().position(|x| *x == k).unwrap_or(99);
+    items.sort_by_key(|c| rank(&c.kind));
+    let counts = CHANGE_KINDS.iter().map(|k| (k.to_string(), items.iter().filter(|c| c.kind == *k).count())).filter(|x| x.1 > 0).collect();
+    let pc = &new.s.cals[new.p.calendars.iter().position(|c| c.name == new.p.calendar).unwrap_or(0)];
+    let (a, b) = (old.s.finish, new.s.finish);
+    let var = if b >= a { pc.between(a, b) } else { -pc.between(b, a) };
+    let day = |m: i64| m as f64 / DAY as f64;
+    let ghost = (0..old.p.tasks.len()).filter(|&j| !old.s.summary[j]).map(|j| (old.p.tasks[j].uid, day(old.s.es[j]), day(old.s.ef[j]))).collect();
+    Changes { items, finish: [date_of(a - 1).to_string(), date_of(b - 1).to_string()], finish_var: crate::parse::fmt_dur(var, crate::model::Unit::D, new.p.day_min), counts, ghost }
+}
+
+// ---------- milestone trend ----------
+
+/// A milestone's forecast finish at each snapshot and now: (report day, forecast day), days since 1970.
+#[derive(Serialize)]
+pub struct Trend { pub uid: u32, pub name: String, pub points: Vec<(i64, i64)>, pub baseline: Option<i64> }
+
+/// The milestones' forecasts over the snapshots, then today's forecast at the status date, in plan order.
+pub fn milestone_trend(c: &Calc) -> Vec<Trend> {
+    let (p, s) = (c.p, &c.s);
+    let now = (c.status_at() - 1).div_euclid(DAY);
+    let mut snaps: Vec<&crate::model::Snapshot> = p.snapshots.iter().filter(|x| x.date.is_some()).collect();
+    snaps.sort_by_key(|x| x.date);
+    (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i] && (p.tasks[i].dur == 0 || matches!(p.tasks[i].act_type, crate::model::ActType::StartMs | crate::model::ActType::FinishMs))).map(|i| {
+        let t = &p.tasks[i];
+        let mut points: Vec<(i64, i64)> = snaps.iter().filter_map(|x| {
+            let r = x.rows.iter().find(|r| r.uid == t.uid)?;
+            Some((crate::cal::at(x.date?).div_euclid(DAY), (r.finish - 1).max(r.start).div_euclid(DAY)))
+        }).collect();
+        let f = (s.ef[i] - 1).max(s.es[i]).div_euclid(DAY);
+        if points.last().is_none_or(|l| l.0 < now) { points.push((now, f)) } else if let Some(l) = points.last_mut() { l.1 = f }
+        Trend { uid: t.uid, name: t.name.clone(), points, baseline: t.bls.get(&0).map(|b| (b.finish - 1).max(b.start).div_euclid(DAY)) }
+    }).collect()
+}

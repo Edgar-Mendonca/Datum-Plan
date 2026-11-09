@@ -1,8 +1,9 @@
 // Dialogs: information, settings and editors.
 import { For, Show, createSignal, createMemo, Index } from "solid-js";
 import { createStore, produce } from "solid-js/store";
-import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay, invoke, LevelPreview, fmtAt } from "./api";
-import { allCols, saveAll, deleteCol, act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query } from "./store";
+import { Calendar, CustomDef, Filter, Rule, Out, iso, dateDay, invoke, LevelPreview, fmtAt, Changes, Trend, fmtDay } from "./api";
+import { allCols, saveAll, deleteCol, act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query, ghost, setGhost } from "./store";
+import { ChartBox, line } from "./charts";
 import { Dialog, Row, Text, Pick, Check, Tabs, askText } from "./ui";
 import * as F from "./fmt";
 import { TaskTab, useInfo, TABS } from "./details";
@@ -509,17 +510,51 @@ const exportXer = () => openDialog(() => {
     <p class="muted">Choose the version the receiving program runs, or an older one: a program cannot open a file written for a newer version. Ask the person you send it to if you are not sure.</p>
   </Dialog>;
 });
+/** Compare Projects: every change against another version (the logic change log), ghost bars, export. */
 export const compare = async () => {
-  const r = await call<[string, Diff[]] | null>("compare");
+  const r = await call<[string, Changes] | null>("compare");
   if (!r) return;
-  openDialog(() => (
-    <Dialog title={`Compare with ${r[0]}`} wide>
-      <p class="muted">{r[1].length} differences. Was = the other file, Now = this plan.</p>
-      <div class="fieldlist"><table class="tbl"><thead><tr><th>Change</th><th>Task</th><th>Start was → now</th><th>Finish was → now</th><th>Duration</th><th>Cost</th><th>Finish variance</th></tr></thead>
-        <tbody><For each={r[1]}>{d => <tr><td><span class="pill" classList={{ ok: d.change === "Added", err: d.change === "Removed", warn: d.change === "Changed" }}>{d.change}</span></td><td>{d.name}</td>
-          <For each={[0, 1, 2, 3]}>{k => <td>{d.was[k] || "—"}{d.was[k] !== d.now[k] ? <> → <b>{d.now[k] || "—"}</b></> : ""}</td>}</For><td>{d.finish_var}</td></tr>}</For></tbody></table></div>
-    </Dialog>
-  ));
+  const [name, ch] = r;
+  const day = (s: string) => { const [y, m, dd] = s.split("-").map(Number); return fmtDay(dateDay(new Date(y, m - 1, dd))); };
+  openDialog(() => {
+    const [kind, setKind] = createSignal("");
+    const shown = () => ch.items.filter(c => !kind() || c.kind === kind());
+    const on = () => ghost()?.name === name;
+    const toggle = () => { if (on()) setGhost(null); else { setGhost({ name, bars: new Map(ch.ghost.map(g => [g[0], [g[1], g[2]]])) }); toast(`Ghost bars: ${name}'s bars are drawn faintly behind the Gantt's. Compare again to hide them.`, true); } };
+    const exp = async () => { const p = await call<string | null>("export_changes", { items: shown(), title: `Changes against ${name}: project finish ${day(ch.finish[0])} → ${day(ch.finish[1])} (${ch.finish_var})` }); if (p) toast(`Saved to ${p}`, true); };
+    return <Dialog title={`Compare with ${name}`} wide cancel="Close" extra={<><button class="btn" onClick={toggle}>{on() ? "Hide ghost bars" : "Show ghost bars"}</button><button class="btn" onClick={exp}>Export…</button></>}>
+      <p class="muted">Project finish <b>{day(ch.finish[0])}</b> → <b>{day(ch.finish[1])}</b> ({ch.finish_var}). {ch.items.length} changes. Was = {name}, Now = this plan.</p>
+      <div class="chips"><button class="chip" classList={{ on: !kind() }} onClick={() => setKind("")}>All {ch.items.length}</button><For each={ch.counts}>{([k, n]) => <button class="chip" classList={{ on: kind() === k }} onClick={() => setKind(k)}>{k} {n}</button>}</For></div>
+      <div class="fieldlist"><table class="tbl"><thead><tr><th>Change</th><th>ID</th><th>Task</th><th>Was</th><th>Now</th></tr></thead>
+        <tbody><For each={shown().slice(0, 2000)}>{c => <tr><td><span class="pill" classList={{ ok: c.kind === "Added", err: c.kind === "Deleted" || c.kind === "Link deleted", warn: c.kind.startsWith("Link") || c.kind === "Duration" || c.kind === "Constraint" }}>{c.kind}</span></td>
+          <td>{c.id}</td><td>{c.name}</td><td class="muted">{c.was || "—"}</td><td>{c.now || "—"}</td></tr>}</For></tbody></table></div>
+      <Show when={shown().length > 2000}><p class="muted">The first 2,000 are shown; Export… writes them all.</p></Show>
+    </Dialog>;
+  });
+};
+/** Milestone trend: each milestone's forecast finish at every snapshot and now. */
+const TREND_COL = ["#0B5CAD", "#D97706", "#059669", "#7C3AED", "#DC2626", "#0891B2", "#CA8A04", "#475569"];
+export const milestoneTrend = async () => {
+  const tr = await call<Trend[]>("milestone_trend");
+  if (!tr) return;
+  openDialog(() => {
+    const [pick, setPick] = createSignal<number[]>(tr.slice(0, 6).map(t => t.uid));
+    const days = () => [...new Set(tr.flatMap(t => t.points.map(p => p[0])))].sort((a, b) => a - b);
+    const sets = () => tr.filter(t => pick().includes(t.uid)).map((t, k) => line(t.name, days().map(d => t.points.find(p => p[0] === d)?.[1] ?? null), TREND_COL[k % TREND_COL.length]));
+    const moved = (t: Trend) => t.points.length ? t.points[t.points.length - 1][1] - t.points[0][1] : 0;
+    const flip = (u: number) => setPick(pick().includes(u) ? pick().filter(x => x !== u) : pick().length >= 8 ? pick() : [...pick(), u]);
+    return <Dialog title="Milestone Trend" wide cancel="Close">
+      <Show when={tr.length} fallback={<p class="empty">This plan has no milestones. A milestone is a task of zero duration.</p>}>
+        <p class="muted">Each line is a milestone's forecast finish at each snapshot (Progress › Snapshot) and now. A flat line keeps its date; a rising line is slipping. Take a snapshot at each update to build the trend.</p>
+        <Show when={pick().length}><ChartBox title="Milestone trend" type="line" fmt="date" y="Forecast finish" x="Reported" labels={days().map(d => fmtDay(d))} datasets={sets()} /></Show>
+        <div class="fieldlist"><table class="tbl"><thead><tr><th /><th>Milestone</th><th class="r">First forecast</th><th class="r">Forecast now</th><th class="r">Moved (days)</th><th class="r">Baseline</th></tr></thead>
+          <tbody><For each={tr}>{t => <tr><td><input type="checkbox" checked={pick().includes(t.uid)} onChange={() => flip(t.uid)} /></td><td>{t.name}</td>
+            <td class="r">{t.points.length ? fmtDay(t.points[0][1]) : "—"}</td><td class="r">{t.points.length ? fmtDay(t.points[t.points.length - 1][1]) : "—"}</td>
+            <td class="r" classList={{ late: moved(t) > 0 }}>{moved(t) > 0 ? `+${moved(t)}` : moved(t)}</td><td class="r muted">{t.baseline !== null ? fmtDay(t.baseline) : "—"}</td></tr>}</For></tbody></table></div>
+        <p class="muted">Tick up to eight milestones to draw.</p>
+      </Show>
+    </Dialog>;
+  });
 };
 /** Paste Special (Ctrl+Alt+V): values only, formats only or both, optionally transposed. */
 export const pasteSpecial = () => {

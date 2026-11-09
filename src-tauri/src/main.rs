@@ -880,9 +880,34 @@ async fn proc_export(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
     Ok(Some(path.display().to_string()))
 }
 
+/// Check Schedule: the checks with the plan's limits, the health score, and the score at each snapshot.
+#[derive(serde::Serialize)]
+struct CheckOut { checks: Vec<check::Check>, score: check::Score, trend: Vec<(Option<chrono::NaiveDate>, String, f64)> }
+
 #[tauri::command]
-fn checks(st: State<St>, limits: check::Limits) -> Vec<check::Check> {
-    check::run(&calc(&st.lock()), &limits)
+fn checks(st: State<St>) -> CheckOut {
+    let a = st.lock();
+    let c = calc(&a);
+    let checks = check::run(&c, &c.p.health.limits);
+    let score = check::score(&checks, &c.p.health);
+    let trend = c.p.snapshots.iter().filter_map(|x| x.health.map(|h| (x.date, x.label.clone(), h))).collect();
+    CheckOut { checks, score, trend }
+}
+
+/// Milestone trend: each milestone's forecast finish at every snapshot and now.
+#[tauri::command]
+fn milestone_trend(st: State<St>) -> Vec<report::Trend> { report::milestone_trend(&calc(&st.lock())) }
+
+/// Saves the change log of the last comparison as a workbook (.xlsx) or OpenDocument spreadsheet.
+#[tauri::command]
+async fn export_changes(app: AppHandle, st: State<'_, St>, items: Vec<report::Change>, title: String) -> R<Option<String>> {
+    let name = st.lock().doc.p.name.clone();
+    let Some(path) = app.dialog().file().add_filter("Workbook", &["xlsx"]).add_filter("OpenDocument spreadsheet", &["ods"]).set_file_name(format!("{name} - Changes.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    use datum_core::io::book::{Cell, Sheet};
+    let mut rows = vec![vec![Cell::from(title)], vec![], ["Change", "Activity ID", "Name", "Was", "Now"].map(Cell::from).to_vec()];
+    rows.extend(items.into_iter().map(|c| vec![Cell::from(c.kind), Cell::from(c.id), Cell::from(c.name), Cell::from(c.was), Cell::from(c.now)]));
+    datum_core::io::book::write(&path, &[Sheet { name: "Changes".into(), widths: vec![16.0, 14.0, 44.0, 36.0, 36.0], rows }])?;
+    Ok(Some(path.display().to_string()))
 }
 
 /// Network Diagram of the tasks the query shows (summaries left out).
@@ -898,7 +923,7 @@ fn network(st: State<St>, q: Query, summaries: Option<bool>, wbs: Option<bool>) 
 
 /// Compares the open plan with another plan file.
 #[tauri::command]
-async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, Vec<report::Diff>)>> {
+async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, report::Changes)>> {
     let Some(path) = pick(&app, "Datum Plan", &["dplan", "xml", "xer"]) else { return Ok(None) };
     let old = match io::import(&path)? {
         io::Imported::Plan(p, _) => *p,
@@ -906,8 +931,8 @@ async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, Vec<rep
     };
     let a = st.lock();
     let fmt = a.opts.date_fmt.clone();
-    let diffs = report::compare(&Calc::new(&old, &fmt, today()), &calc(&a));
-    Ok(Some((path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), diffs)))
+    let changes = report::changes(&Calc::new(&old, &fmt, today()), &calc(&a));
+    Ok(Some((path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), changes)))
 }
 
 /// Every plan in the workspace folder with its headline figures (portfolio view).
@@ -1699,7 +1724,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

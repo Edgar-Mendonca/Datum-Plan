@@ -55,6 +55,8 @@ export const [level, setLevel] = createSignal(0);
 export const [projSum, setProjSum] = createSignal(false);
 export const [hideSum, setHideSum] = createSignal(false);
 export const [baseline, setBaseline] = createSignal(0);
+/** Ghost bars: another version's bars (uid → start, finish in days) drawn behind the Gantt's, and its name. */
+export const [ghost, setGhost] = createSignal<{ name: string; bars: Map<number, [number, number]> } | null>(null);
 /** A master's combined view: its subplans shown under its tasks, and which are expanded (files). */
 export const [showSubs, setShowSubs] = createSignal(true);
 export const [openSubs, setOpenSubs] = createSignal<string[]>([]);

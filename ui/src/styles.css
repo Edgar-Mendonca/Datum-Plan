@@ -1153,3 +1153,9 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 /* XER export report */
 ul.report { margin: 6px 0 10px; padding-left: 18px; max-width: 560px; }
 ul.report li { margin: 4px 0; line-height: 1.4; }
+
+/* Compare Projects: change kinds as chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.chip { border: 1px solid var(--line2); background: var(--bg); color: var(--text); border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+.chip.on { background: var(--accent, #0B5CAD); border-color: var(--accent, #0B5CAD); color: #fff; }
+.kpi.health .v { font-size: 30px; }

@@ -4,7 +4,7 @@
 import { onMount, onCleanup, createEffect, on, JSX, Show } from "solid-js";
 import { Chart, registerables, type ChartDataset, type Plugin, type ScriptableContext } from "chart.js";
 import { call, toast, themeTick, P } from "./store";
-import { money } from "./api";
+import { money, fmtDay } from "./api";
 
 Chart.register(...registerables);
 
@@ -85,8 +85,8 @@ const live = new Set<Chart>();
 const sharp = (k: number) => live.forEach(c => { c.options.devicePixelRatio = Math.max(k, window.devicePixelRatio || 1); c.resize(); });
 addEventListener("beforeprint", () => sharp(3)); addEventListener("afterprint", () => sharp(2));
 
-export type Fmt = "pct" | "money" | "hours" | "num";
-export const fmtv = (v: number, f: Fmt = "num") => f === "pct" ? `${v.toFixed(1)}%` : f === "money" ? money(v, { ...P().currency, decimals: 0 }) : f === "hours" ? `${Math.round(v).toLocaleString()} h` : (Math.round(v * 100) / 100).toLocaleString();
+export type Fmt = "pct" | "money" | "hours" | "num" | "date";
+export const fmtv = (v: number, f: Fmt = "num") => f === "date" ? fmtDay(v) : f === "pct" ? `${v.toFixed(1)}%` : f === "money" ? money(v, { ...P().currency, decimals: 0 }) : f === "hours" ? `${Math.round(v).toLocaleString()} h` : (Math.round(v * 100) / 100).toLocaleString();
 
 export interface ChartProps {
   title: string;
@@ -126,7 +126,7 @@ export const ChartBox = (p: ChartProps) => {
       ticks: { color: muted, font, padding: 8, maxRotation: 0, autoSkipPadding: 18, ...(isY ? { maxTicksLimit: 6, callback: (v: string | number) => fmtv(+v, p.fmt) } : {}) },
       stacked: p.stacked,
     });
-    const vAxis = { ...axis(p.y, true), beginAtZero: true, ...(p.max !== undefined ? { max: p.max } : {}) };
+    const vAxis = { ...axis(p.y, true), beginAtZero: p.fmt !== "date", ...(p.max !== undefined ? { max: p.max } : {}) };
     const hAxis = axis(p.x, false);
     // A horizontal bar chart names every bar (task names), so none may be skipped.
     if (p.horizontal) hAxis.ticks = { ...hAxis.ticks, autoSkip: false, color: ink } as typeof hAxis.ticks;

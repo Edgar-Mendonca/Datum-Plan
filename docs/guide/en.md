@@ -149,6 +149,12 @@ Then turn it on: **Project › Schedule Options › Resource calendars**. From t
 
 **Schedule › Check Schedule** runs quality checks on the logic, float, durations and constraints (open ends, long lags, high float, negative float and more). Click a check to see the tasks behind it.
 
+The **health score** (0 to 100: Good, Fair or Poor) is the weighted share of the checks passed; a failed check keeps part of its weight by how near its limit it is. **Weights…** sets how much each check counts (0 leaves it out); the limits and weights are saved with the plan. Each snapshot keeps the score of its day, and the chart shows the trend.
+
+**Report › Compare Projects** compares the plan with another version of it (a saved .dplan, XML or XER file) and lists every change: tasks added and deleted, durations, links added, deleted or changed, constraints, calendars, actual dates, % complete and date moves, with the project finish before and after. Click a kind of change to see only those; **Export…** saves the list as a workbook. **Show ghost bars** draws the other version's bars faintly behind yours.
+
+**Report › Milestone Trend** shows how each milestone's forecast finish moved from snapshot to snapshot (take a snapshot at each update: Progress › Snapshot). A flat line keeps its date; a rising line is slipping.
+
 ## People, man-hours and costs
 
 ### The Resource Sheet

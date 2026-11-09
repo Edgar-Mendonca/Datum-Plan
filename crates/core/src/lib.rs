@@ -43,6 +43,8 @@ mod cases;
 #[cfg(test)]
 mod exchange_cases;
 #[cfg(test)]
+mod quality_cases;
+#[cfg(test)]
 mod sched_cases;
 #[cfg(test)]
 mod formula_cases;

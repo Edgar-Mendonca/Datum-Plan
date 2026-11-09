@@ -1,11 +1,11 @@
 // Views other than the Gantt chart.
 import { CountryList, Flag, countryCode, countryName } from "./flags";
 import { For, Index, Show, createSignal, createResource, createMemo, createEffect, JSX } from "solid-js";
-import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money } from "./api";
-import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut, setOut, opts, setOpts } from "./store";
+import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money, Limits, Health, CheckOut } from "./api";
+import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut, setOut, opts, setOpts, openDialog } from "./store";
 import { ChartBox, bar, line } from "./charts";
 import { C, selectUid } from "./cmds";
-import { Seg, Icon, Check as Chk } from "./ui";
+import { Seg, Icon, Check as Chk, Dialog } from "./ui";
 import { Help } from "./help";
 
 export const Page = (p: { title: string; help?: string; tools?: JSX.Element; children: JSX.Element }) => (
@@ -356,33 +356,59 @@ export const Risks = () => {
   );
 };
 
-// ---------- Check Schedule (DCMA 14 and further checks) ----------
+// ---------- Check Schedule (DCMA 14 and further checks) and the health score ----------
+const DEF_LIM: Limits = { pct: 5, high_float: 44, high_dur: 44, long_lag: 20, index: 0.95 };
+/** Each check's weight in the health score unless the plan sets its own (as the engine's check::WEIGHTS). */
+export const WEIGHTS: Record<string, number> = { logic: 3, leads: 1, lags: 1, rel: 1, hard: 2, float: 1, negative: 3, duration: 1, dates: 3, resources: 0, missed: 2, cpt: 3, cpli: 2, bei: 2, longlag: 0.5, sf: 0.5, soft: 0.5, manual: 1, sumlinks: 1, oos: 1, deadline: 2 };
+const health = (): Health => ({ limits: { ...DEF_LIM, ...(P().health?.limits ?? {}) }, weights: P().health?.weights ?? {} });
+const weightOf = (k: string) => health().weights[k] ?? WEIGHTS[k] ?? 1;
+/** Weights of the health score: how much each check counts (0 leaves it out). */
+const weightsDialog = (list: Check[]) => openDialog(() => {
+  const [w, setW] = createSignal<Record<string, number>>(Object.fromEntries(list.map(c => [c.key, weightOf(c.key)])));
+  return <Dialog title="Health score weights" okText="Apply" ok={() => {
+    const own = Object.fromEntries(Object.entries(w()).filter(([k, v]) => v !== (WEIGHTS[k] ?? 1)));
+    act({ Health: { h: { ...health(), weights: own } } });
+  }} extra={<button class="btn" onClick={() => setW(Object.fromEntries(list.map(c => [c.key, WEIGHTS[c.key] ?? 1])))}>Defaults</button>}>
+    <p class="muted">How much each check counts in the score, from 0 (left out) to 10. The score is the weighted share of the checks passed; a failed check keeps part of its weight by how near its limit it is.</p>
+    <div class="fieldlist"><table class="tbl"><tbody><For each={list}>{c => <tr><td>{c.name}</td><td class="r"><input type="number" min="0" max="10" step="0.5" style={{ width: "64px" }} value={w()[c.key]} onChange={e => setW({ ...w(), [c.key]: Math.max(0, Math.min(10, +e.currentTarget.value || 0)) })} /></td></tr>}</For></tbody></table></div>
+  </Dialog>;
+});
 export const Checks = () => {
-  const [lim, setLim] = createSignal({ pct: 5, high_float: 44, high_dur: 44, long_lag: 20, index: 0.95 });
-  const [list] = createResource(() => [tick(), lim()], () => call<Check[]>("checks", { limits: lim() }));
+  const [res] = createResource(() => tick(), () => call<CheckOut>("checks"));
+  const setLim = (k: keyof Limits, v: number) => act({ Health: { h: { ...health(), limits: { ...health().limits, [k]: v } } } });
   const show = (c: Check) => {
     if (!c.uids.length) return toast("No tasks to show for this check.", true);
     setFilter({ name: c.name, rules: c.uids.map(u => ({ field: "uid", test: "equals", value: String(u), value2: "", or: true })), summaries: true, highlight: false });
     setView("gantt");
   };
   const fmt = (c: Check) => (c.key === "cpli" || c.key === "bei" ? c.value.toFixed(2) : c.key === "cpt" ? (c.pass ? "Pass" : "Fail") : `${c.value.toFixed(1)}%`);
+  const lim = (k: keyof Limits, label: string) => <label class="muted">{label} <input type="number" style={{ width: "60px" }} value={health().limits[k]} onChange={e => setLim(k, +e.currentTarget.value)} /></label>;
   return (
     <Page title="Check Schedule" help="checks" tools={<>
-      <label class="muted">Limit % <input type="number" style={{ width: "60px" }} value={lim().pct} onChange={e => setLim({ ...lim(), pct: +e.currentTarget.value })} /></label>
-      <label class="muted">High float (d) <input type="number" style={{ width: "60px" }} value={lim().high_float} onChange={e => setLim({ ...lim(), high_float: +e.currentTarget.value })} /></label>
-      <label class="muted">High duration (d) <input type="number" style={{ width: "60px" }} value={lim().high_dur} onChange={e => setLim({ ...lim(), high_dur: +e.currentTarget.value })} /></label>
+      {lim("pct", "Limit %")}{lim("high_float", "High float (d)")}{lim("high_dur", "High duration (d)")}
+      <button class="btn" onClick={() => res() && weightsDialog(res()!.checks)}>Weights…</button>
       <button class="btn" onClick={() => C.print()}>Print</button>
     </>}>
-      <Show when={list()}>{l => <>
-        <div class="kpis"><div class="kpi" classList={{ good: l().every(c => c.pass) }}><div class="v">{l().filter(c => c.pass).length} / {l().length}</div><div class="l">checks passed</div></div></div>
-        <div class="panel" style={{ "margin-top": "14px" }}><table class="tbl">
-          <thead><tr><th>Check</th><th>What it looks for</th><th class="r">Tasks</th><th class="r">Of</th><th class="r">Result</th><th>Limit</th><th /></tr></thead>
-          <tbody><For each={l()}>{c => <tr class="link" onClick={() => show(c)}>
-            <td><b>{c.name}</b></td><td class="muted">{c.about}</td><td class="r">{c.count}</td><td class="r">{c.total}</td><td class="r">{fmt(c)}</td><td>{c.limit}</td>
-            <td><span class="pill" classList={{ ok: c.pass, err: !c.pass }}>{c.pass ? "Pass" : "Fail"}</span></td>
-          </tr>}</For></tbody>
-        </table><p class="muted">Click a check to filter the Gantt chart to its tasks.</p></div>
-      </>}</Show>
+      <Show when={res()}>{r => {
+        const l = () => r().checks, sc = () => r().score, part = (k: string) => sc().parts.find(p => p.key === k);
+        return <>
+          <div class="kpis">
+            <div class="kpi health" classList={{ good: sc().grade === "Good", bad: sc().grade === "Poor" }}><div class="v">{sc().score.toFixed(0)}</div><div class="l">health score · {sc().grade}</div></div>
+            <div class="kpi" classList={{ good: l().every(c => c.pass) }}><div class="v">{l().filter(c => c.pass).length} / {l().length}</div><div class="l">checks passed</div></div>
+          </div>
+          <Show when={r().trend.length}>
+            <ChartBox title="Health score at each snapshot" type="line" size="short" fmt="num" max={100} y="Score" labels={[...r().trend.map(t => t[1] || (t[0] ?? "")), "Now"]} datasets={[line("Health score", [...r().trend.map(t => t[2]), sc().score], "#0B5CAD")]} />
+          </Show>
+          <div class="panel" style={{ "margin-top": "14px" }}><table class="tbl">
+            <thead><tr><th>Check</th><th>What it looks for</th><th class="r">Tasks</th><th class="r">Of</th><th class="r">Result</th><th>Limit</th><th /><th class="r" title="Weight in the health score, and the share of it earned">Weight</th></tr></thead>
+            <tbody><For each={l()}>{c => <tr class="link" onClick={() => show(c)}>
+              <td><b>{c.name}</b></td><td class="muted">{c.about}</td><td class="r">{c.count}</td><td class="r">{c.total}</td><td class="r">{fmt(c)}</td><td>{c.limit}</td>
+              <td><span class="pill" classList={{ ok: c.pass, err: !c.pass }}>{c.pass ? "Pass" : "Fail"}</span></td>
+              <td class="r muted">{part(c.key)?.counted ? `${part(c.key)!.weight} · ${Math.round(part(c.key)!.earned * 100)}%` : "—"}</td>
+            </tr>}</For></tbody>
+          </table><p class="muted">Click a check to filter the Gantt chart to its tasks. The health score is the weighted share of the checks passed (Weights… sets how much each counts); each snapshot keeps the score of its day, for the trend.</p></div>
+        </>;
+      }}</Show>
     </Page>
   );
 };

@@ -55,7 +55,7 @@ export interface Project {
   format: number; name: string; start: string; status: string | null; day_min: number; manual_default: boolean; calendar: string; calendars: Calendar[];
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
-  fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
+  health?: Health; fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
   subplans?: SubPlan[]; master?: string; modules?: string[]; contract?: Contract; documents?: DocRegister; procurement?: ProcRegister;
   titles: Record<string, string>; sheets: SheetData[]; names?: DefName[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
@@ -101,7 +101,14 @@ export interface LevelPreview { moved: { uid: number; name: string; start: numbe
 /** An instant (minutes) as a short date: finishes at midnight belong to the day before. */
 export const fmtAt = (t: number, fin = false) => fmtDay(Math.floor(((fin ? t - 1 : t)) / 1440));
 export interface Curve { buckets: number[]; planned: number[]; forecast: number[]; actual: number[]; earned: number[]; status_day: number }
-export interface Check { key: string; name: string; about: string; count: number; total: number; value: number; limit: string; pass: boolean; uids: number[] }
+export interface Check { key: string; name: string; about: string; count: number; total: number; value: number; limit: string; pass: boolean; uids: number[]; lim: number }
+export interface Limits { pct: number; high_float: number; high_dur: number; long_lag: number; index: number }
+export interface Health { limits: Limits; weights: Record<string, number> }
+export interface Score { score: number; grade: string; parts: { key: string; weight: number; earned: number; counted: boolean }[] }
+export interface CheckOut { checks: Check[]; score: Score; trend: [string | null, string, number][] }
+export interface Change { uid: number; id: string; name: string; kind: string; was: string; now: string }
+export interface Changes { items: Change[]; finish: [string, string]; finish_var: string; counts: [string, number][]; ghost: [number, number, number][] }
+export interface Trend { uid: number; name: string; points: [number, number][]; baseline: number | null }
 export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean; driving: boolean; lag: string }[]; cols: number; rows: number; bands?: { name: string; row: number; rows: number }[] }
 export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }
 export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; pool?: string; setupPanel: boolean; theme: string; colourSafe?: boolean;

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1 — 2026-11-09
+
+Schedule quality: a health score, a log of logic changes, ghost bars and a milestone trend.
+
+- **Health score.** Check Schedule gives the plan a score from 0 to 100 (Good, Fair or Poor): the weighted share of the checks passed. A failed check keeps part of its weight by how near its limit it is, and a check with nothing to look at (missed tasks without a baseline) is left out. **Weights…** sets how much each check counts (0 leaves it out). The limits and weights are now kept with the plan.
+- **The score's trend.** Every snapshot keeps the score of its day; Check Schedule draws the score at each snapshot and now.
+- **Compare Projects** now lists every change against another version: tasks added and deleted, names, durations, links added, deleted or changed (type and lag), constraints, calendars, deadlines, actual dates, % complete, and start and finish moves, with the project finish before and after. Filter by kind of change, and **Export…** the log as a workbook (.xlsx) or OpenDocument spreadsheet.
+- **Ghost bars.** From Compare Projects, **Show ghost bars** draws the other version's bars faintly behind the Gantt's, so what moved stands out.
+- **Milestone Trend** (Report › Health) draws each milestone's forecast finish at every snapshot and now, with how far it moved and its baseline. A flat line keeps its date; a rising line is slipping.
+
 ## 0.8.0 — 2026-11-09
 
 XER files you can send.

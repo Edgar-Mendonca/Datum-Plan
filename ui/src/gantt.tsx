@@ -2,7 +2,7 @@
 // to move, resize, change progress or link.
 import { createSignal, createEffect, createMemo, onMount, onCleanup, Show } from "solid-js";
 import { Row, fmtDay, iso, dateDay } from "./api";
-import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick } from "./store";
+import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick, ghost } from "./store";
 import { RH } from "./grid";
 import { C } from "./cmds";
 
@@ -186,6 +186,7 @@ export const Gantt = () => {
     }));
     // Bars
     ctx.font = "11px 'Segoe UI', sans-serif"; ctx.textBaseline = "middle";
+    const gh = ghost()?.bars;
     for (let i = a; i < b; i++) {
       const r = rows[i], B = r.bar, y = i * RH - top, x1 = X(B.s), x2 = X(B.f);
       const isCrit = crit && r.crit, hasBase = base && B.bs !== null, by = hasBase ? y + 3 : y + 4, bh = hasBase ? 9 : 11;
@@ -193,6 +194,14 @@ export const Gantt = () => {
         ctx.fillStyle = K.base;
         if (B.bf === B.bs) { const bx = X(B.bs!); ctx.beginPath(); ctx.moveTo(bx, y + 12); ctx.lineTo(bx + 4, y + 16); ctx.lineTo(bx, y + 20); ctx.lineTo(bx - 4, y + 16); ctx.fill(); }
         else ctx.fillRect(X(B.bs!), y + 14, Math.max(X(B.bf) - X(B.bs!), 2), 4);
+      }
+      // Ghost bar: where the compared version had this task, faint behind today's bar.
+      const gb = gh?.get(r.uid);
+      if (gb && r.kind !== "summary") {
+        ctx.fillStyle = "rgba(110,122,140,0.18)"; ctx.strokeStyle = "rgba(110,122,140,0.75)"; ctx.setLineDash([3, 2]);
+        if (gb[1] - gb[0] < 1e-6) { const gx = X(gb[0]); ctx.beginPath(); ctx.moveTo(gx, y + 3); ctx.lineTo(gx + 7, y + 10); ctx.lineTo(gx, y + 17); ctx.lineTo(gx - 7, y + 10); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+        else { const gx = X(gb[0]), gw = Math.max(X(gb[1]) - gx, 2); ctx.fillRect(gx, by - 2, gw, bh + 4); ctx.strokeRect(gx + 0.5, by - 1.5, gw, bh + 3); }
+        ctx.setLineDash([]);
       }
       if (showSlack() && r.kind === "task" && B.lf > B.f) { ctx.fillStyle = "#7FA6DA"; ctx.fillRect(x2, y + 15, X(B.lf) - x2, 2); }
       if (showLate() && r.kind === "task" && B.ls > B.s) { ctx.strokeStyle = K.muted; ctx.setLineDash([2, 2]); ctx.strokeRect(X(B.ls) + 0.5, by + 0.5, X(B.lf) - X(B.ls), bh); ctx.setLineDash([]); }
@@ -336,7 +345,7 @@ export const Gantt = () => {
     ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up);
     document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-range", range); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
   });
-  createEffect(() => { themeTick(); out(); grid(); sel(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); draw(); });
+  createEffect(() => { themeTick(); out(); grid(); sel(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); ghost(); draw(); });
 
   return (
     <div class="chart">

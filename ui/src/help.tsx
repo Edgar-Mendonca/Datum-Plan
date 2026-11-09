@@ -151,7 +151,7 @@ export const HELP: Record<string, Topic> = {
   updprogress: { t: "Update Progress", what: "The tasks due this period, to type what really happened.",
     how: ["Set the status date and pick Weekly or Monthly.", "Type actual start and finish, % complete or remaining duration; the plan reschedules.", "Close Period stores a snapshot for the trend charts."] },
   checks: { t: "Check Schedule", what: "Quality checks of the plan: missing links, leads and lags, hard constraints, high float, long durations, the critical path test and more.",
-    how: ["Set the limits at the top.", "Click a check to filter the Gantt chart to its tasks."] },
+    how: ["Set the limits at the top; they are saved with the plan.", "Click a check to filter the Gantt chart to its tasks.", "The health score (0–100) is the weighted share of the checks passed; Weights… sets how much each counts (0 leaves it out).", "Each snapshot keeps the score of its day: the chart shows the trend."] },
   risks: { t: "Risk register", what: "Threats and opportunities with a probability and an impact from 1 to 5. The score is their product, coloured by how serious it is.",
     how: ["+ Add risk, then type its cause, owner and response.", "Link risks to tasks in the details pane.", "Delay (days) is how many working days the risk adds to each linked task if it happens (an opportunity takes them off). Schedule Risk uses it."] },
   simrisk: { t: "Schedule Risk", what: "Runs the plan hundreds of times with uncertain durations and risks, and shows how likely each finish date is (P50, P80) and which tasks drive it.",

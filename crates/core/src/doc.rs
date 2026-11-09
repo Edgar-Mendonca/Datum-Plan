@@ -27,6 +27,8 @@ pub enum Op {
     UpdateProject { through: String, reschedule: bool },
     /// Freezes the plan at the status date (period performance).
     Snapshot { label: String, comment: String },
+    /// Check Schedule settings: limits and weights of the health score.
+    Health { h: crate::check::Health },
     /// Sets a project-level value (setup, currency, branding, options) from JSON.
     ProjectSet { field: String, value: serde_json::Value },
     /// Takes the ticked parts of another plan's setup (a master's, for its subplans): details, logos, print, calendars, currency, periods, codes.
@@ -771,7 +773,16 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let w: i64 = leaf.iter().map(|&i| p.tasks[i].dur).sum();
             let pct = if w > 0 { leaf.iter().map(|&i| p.tasks[i].dur * p.tasks[i].pct as i64).sum::<i64>() as f64 / w as f64 } else { 0.0 };
             let total = leaf.iter().map(|&i| cost[i]).sum();
-            p.snapshots.push(Snapshot { date: Some(p.status.unwrap_or_else(|| date_of(s.start))), label, comment, finish: s.finish, pct, cost: total, rows });
+            let day = p.status.unwrap_or_else(|| date_of(s.start));
+            let health = Some(crate::check::health(&crate::fields::Calc::new(p, "%Y-%m-%d", day)).score);
+            p.snapshots.push(Snapshot { date: Some(day), label, comment, finish: s.finish, pct, cost: total, rows, health });
+        }
+        Op::Health { h } => {
+            let l = &h.limits;
+            if ![l.pct, l.high_float, l.high_dur, l.long_lag, l.index].iter().all(|x| x.is_finite() && (0.0..=10_000.0).contains(x)) || h.weights.values().any(|w| !w.is_finite() || !(0.0..=100.0).contains(w)) {
+                return Err("Limits and weights must be numbers from 0 up (weights up to 100).".into());
+            }
+            p.health = h;
         }
         Op::AdoptSetup { from, parts } => crate::setupshare::adopt(p, &from, &parts)?,
         Op::Modules { on } => {

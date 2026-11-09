@@ -44,7 +44,8 @@
     "A portfolio of every plan in a folder, with a timeline, the modules' figures and a shared resource pool: each resource's work across all plans against its capacity, and plans that take their rates and units from the pool.",
     "Colour-blind safe colours for charts and statuses, as an option; every status also says what it means in words.",
     "Copy Picture of the Gantt as shown and of every chart, to paste into documents and slides; exports to workbooks (.xlsx) and OpenDocument spreadsheets (.ods).",
-    "XER export that keeps activity codes, custom fields, steps and notes, written for the version the receiving program runs, with a report of what went in."
+    "XER export that keeps activity codes, custom fields, steps and notes, written for the version the receiving program runs, with a report of what went in.",
+    "A schedule health score with its trend, a log of every logic change between two versions, ghost bars of the earlier version and a milestone trend chart."
   ],
   "screenshots": [
     "docs/images/gantt.png",
