@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0 — 2026-11-09
+
+XER files you can send.
+
+- **File › Export › XER** now asks which version to write for (8.4 to 22.12) and remembers it. A planning program opens files of its own version and older, so choose the receiving program's version, or an older one.
+- The file carries much more of the plan: activity codes with their values and colours, custom fields (text, numbers, dates, costs, durations in days), steps with their weights and what is done, notes and notebook topics, the currency, total and free float, late dates, the longest path, float paths, and work on each activity.
+- The tables are written in the order planning programs read them, with the fields they expect. WBS codes are written relative to their parent, so the full code reads as in Datum Plan.
+- Activity IDs must be unique in the file: a repeated ID gets "-2" (and so on), and the report says how many. Texts longer than the format allows are cut, and the report says so.
+- After the export, a **report** lists what went in (activities, WBS nodes, relationships, calendars, resources, assignments, codes, custom fields, steps and notes) and anything the format could not hold, such as baselines (kept as separate projects by the receiving program) and elapsed lags.
+- Activity codes are written as project codes, so they never change the receiving program's own lists.
+- **Import** of XER files now brings in activity codes, custom fields, notes and steps too, and takes the project's name from its top WBS node (its ID becomes the plan's code).
+
 ## 0.7.5 — 2026-11-09
 
 The details pane is back.

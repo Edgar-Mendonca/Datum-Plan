@@ -478,10 +478,37 @@ export const importFile = async () => {
     );
   });
 };
+/** XER versions, newest last; a program opens files of its own version and older. */
+const XER_VERSIONS = ["8.4", "15.2", "16.2", "18.8", "19.12", "20.12", "21.12", "22.12"];
+const XER_KEY = "xer-version";
 export const exportAs = async (kind: string) => {
+  if (kind === "xer") return exportXer();
   const path = await call<string | null>("export", { kind, cols: cols().map(c => c[0]) });
   if (path) toast(`Exported to ${path}`, true);
 };
+/** Export to XER: the version to write for, then a report of what went in. */
+const exportXer = () => openDialog(() => {
+  let saved = "19.12";
+  try { saved = localStorage.getItem(XER_KEY) ?? saved; } catch { /* no storage */ }
+  const [ver, setVer] = createSignal(XER_VERSIONS.includes(saved) ? saved : "19.12");
+  return <Dialog title="Export to XER" okText="Export…" ok={async () => {
+    try { localStorage.setItem(XER_KEY, ver()); } catch { /* no storage */ }
+    const r = await call<string | null>("export", { kind: "xer", cols: [], version: ver() });
+    if (!r) return;
+    const [path, ...lines] = r.split("\n");
+    closeDialog();
+    openDialog(() => <Dialog title="XER exported" cancel="Close">
+      <p class="muted">Saved to {path}</p>
+      <ul class="report"><For each={lines}>{l => <li>{l}</li>}</For></ul>
+      <p class="muted">The receiving program asks how to import it: as a new project, or to update one it already has.</p>
+    </Dialog>);
+    return false;
+  }}>
+    <p class="muted">An XER carries the WBS, activities, relationships, calendars, resources and assignments, activity codes, custom fields, steps and notes.</p>
+    <div class="form"><Row label="Written for version"><select onChange={e => setVer(e.currentTarget.value)}><For each={XER_VERSIONS}>{v => <option selected={v === ver()}>{v}</option>}</For></select></Row></div>
+    <p class="muted">Choose the version the receiving program runs, or an older one: a program cannot open a file written for a newer version. Ask the person you send it to if you are not sure.</p>
+  </Dialog>;
+});
 export const compare = async () => {
   const r = await call<[string, Diff[]] | null>("compare");
   if (!r) return;

@@ -573,3 +573,73 @@ fn elapsed_lags_in_files() {
     let (q, bad) = crate::io::table::to_project(&t, &t.guess, "Q", d(2026, 11, 2), "%d-%b-%y").unwrap();
     assert_eq!((bad, lags(&q)), (0, lags(&p)));
 }
+
+// 0.8.0: an XER carries activity codes, custom fields, notes and steps, in the order the planning
+// tool reads its tables (global tables, the project, its calendars, WBS, codes, resources,
+// activities, then what hangs on them), and comes back the same; repeated IDs are made unique.
+#[test]
+fn xer_carries_codes_fields_notes_and_steps() {
+    let mut p = plan(&[(5, ""), (2, "1"), (3, "2"), (0, "3")]);
+    (p.name, p.code) = ("Pump package".into(), "PKG-01".into());
+    p.resource("Crew");
+    p.tasks[1].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+    for (k, c) in ["E-10", "E-20", "M-10", "M-10"].iter().enumerate() { p.tasks[k].code = c.to_string() }
+    p.codes.push(CodeDef { name: "Discipline".into(), scope: "Project".into(), values: vec![
+        CodeValue { value: "MEC".into(), desc: "Mechanical".into(), color: "#C00000".into() }, CodeValue { value: "ELE".into(), desc: "Electrical".into(), color: String::new() }] });
+    p.tasks[0].codes.insert("Discipline".into(), "MEC".into());
+    p.tasks[1].codes.insert("Discipline".into(), "ELE".into());
+    p.tasks[2].codes.insert("Discipline".into(), "CIV".into()); // a value not in the list yet
+    p.fields.push(CustomDef { key: "text1".into(), alias: "Vendor".into(), ..Default::default() });
+    use serde_json::json;
+    for (k, v) in [("text1", json!("Acme & Sons")), ("number1", json!(12.5)), ("date1", json!("2026-12-01")), ("duration1", json!(960)), ("cost1", json!(1000.0))] { p.tasks[0].custom.insert(k.into(), v); }
+    p.tasks[0].notes = "Line 1\nLine <2> & more".into();
+    p.tasks[1].notebook.push(NoteTopic { topic: "Scope".into(), text: "Two\nlines".into() });
+    p.tasks[1].steps = vec![Step { name: "Design".into(), weight: 30.0, done: true }, Step { name: "Check".into(), weight: 70.0, done: false }];
+    let s = schedule(&p).unwrap();
+    let (x, report) = crate::io::xer::write_report(&p, &s, d(2026, 11, 1), "15.2");
+    assert!(x.starts_with("ERMHDR\t15.2\t"), "{}", &x[..40]);
+    let order: Vec<&str> = x.lines().filter_map(|l| l.strip_prefix("%T\t")).collect();
+    let want = ["CURRTYPE", "MEMOTYPE", "UDFTYPE", "PROJECT", "CALENDAR", "PROJWBS", "ACTVTYPE", "ACTVCODE", "RSRC", "RSRCRATE", "TASK", "TASKPRED", "TASKRSRC", "TASKACTV", "UDFVALUE", "TASKMEMO", "TASKPROC"];
+    assert_eq!(order, want);
+    assert!(x.lines().all(|l| !l.contains('\r')) && x.matches("\n%T\t").count() == want.len(), "one line per row");
+    let r = report.join(" | ");
+    assert!(r.contains("4 activities") && r.contains("3 relationships") && r.contains("1 activity codes (3 assignments)") && r.contains("5 custom fields (5 values)") && r.contains("2 steps") && r.contains("2 notes"), "{r}");
+    assert!(r.contains("1 activity IDs appear more than once"), "{r}");
+    let (q, _) = crate::io::xer::read_notes(&x).unwrap();
+    assert_eq!((q.name.as_str(), q.code.as_str()), ("Pump package", "PKG-01"), "the name and the project ID both come back");
+    let codes: Vec<&str> = q.tasks.iter().map(|t| t.code.as_str()).collect();
+    assert_eq!(codes, ["E-10", "E-20", "M-10", "M-10-2"]);
+    assert_eq!(q.codes.len(), 1);
+    assert_eq!(q.codes[0].values.iter().map(|v| (v.value.as_str(), v.desc.as_str(), v.color.as_str())).collect::<Vec<_>>(), [("MEC", "Mechanical", "#C00000"), ("ELE", "Electrical", ""), ("CIV", "CIV", "")]);
+    assert_eq!(q.tasks.iter().map(|t| t.codes.get("Discipline").map(String::as_str)).collect::<Vec<_>>(), [Some("MEC"), Some("ELE"), Some("CIV"), None]);
+    let field = |alias: &str| { let k = &q.fields.iter().find(|f| f.alias == alias).unwrap_or_else(|| panic!("{alias}: {:?}", q.fields)).key; q.tasks[0].custom.get(k).cloned() };
+    assert_eq!(field("Vendor"), Some(json!("Acme & Sons")));
+    assert_eq!(field("Number1"), Some(json!(12.5)));
+    assert_eq!(field("Date1"), Some(json!("2026-12-01")));
+    assert_eq!(field("Duration1"), Some(json!(960)), "durations go in days and come back");
+    assert_eq!(field("Cost1"), Some(json!(1000.0)));
+    assert_eq!(q.tasks[0].notes, "Line 1\nLine <2> & more");
+    assert_eq!(q.tasks[1].notebook, vec![NoteTopic { topic: "Scope".into(), text: "Two\nlines".into() }]);
+    assert_eq!(q.tasks[1].steps, p.tasks[1].steps);
+    assert_eq!(q.tasks[1].res.len(), 1);
+    // The same dates on both sides.
+    let sq = schedule(&q).unwrap();
+    assert_eq!((&s.es, &s.ef), (&sq.es, &sq.ef));
+}
+
+// WBS codes are written relative to their parent (the tool joins them with "."), and long names
+// are cut to the format's limits, with a word in the report.
+#[test]
+fn xer_wbs_codes_relative_and_long_text_cut() {
+    let mut p = plan(&[(0, ""), (0, ""), (2, ""), (0, ""), (3, "")]);
+    for (k, (lvl, code)) in [(0, "P1"), (1, "P1.2"), (2, "P1.2.1"), (1, "P1.3"), (2, "P1.3.1")].iter().enumerate() { p.tasks[k].level = *lvl; p.tasks[k].code = code.to_string() }
+    p.tasks[2].name = "x".repeat(150);
+    p.normalize();
+    let s = schedule(&p).unwrap();
+    let (x, report) = crate::io::xer::write_report(&p, &s, d(2026, 11, 1), "nonsense");
+    assert!(x.starts_with("ERMHDR\t19.12\t"), "an unknown version writes the default");
+    let wbs: Vec<String> = x.lines().skip_while(|l| *l != "%T\tPROJWBS").skip(2).take_while(|l| l.starts_with("%R")).map(|l| l.split('\t').nth(6).unwrap().to_string()).collect();
+    assert_eq!(wbs[1..], ["P1", "2", "3"]);
+    assert!(report.iter().any(|l| l.starts_with("1 texts were longer")), "{report:?}");
+    assert!(x.contains(&format!("\t{}\t", "x".repeat(120))) && !x.contains(&"x".repeat(121)));
+}

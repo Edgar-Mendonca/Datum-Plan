@@ -118,16 +118,73 @@ fn read_cal(name: &str, data: &str, day_hours: f64) -> Calendar {
     c
 }
 
-pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
-    let mut o = format!("ERMHDR\t19.12\t{today}\tProject\tadmin\tDatum Plan\tdbxDatabaseNoName\tProject Management\tUSD\n");
+/// P6 versions an XER can be written for (the header line); older tools refuse a newer file.
+pub const VERSIONS: [&str; 8] = ["8.4", "15.2", "16.2", "18.8", "19.12", "20.12", "21.12", "22.12"];
+/// The version written when none is chosen: read by every version since 19.12.
+pub const DEFAULT_VERSION: &str = "19.12";
+
+/// Longest text the planning tool keeps in each field (longer text is cut, and the report says so).
+const MAX_ID: usize = 40;
+const MAX_NAME: usize = 120;
+const MAX_WBS_NAME: usize = 100;
+const MAX_CODE: usize = 60;
+
+pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String { write_report(p, s, today, DEFAULT_VERSION).0 }
+
+/// The file and the report: what was written, and anything the format could not hold.
+pub fn write_report(p: &Project, s: &Sched, today: NaiveDate, version: &str) -> (String, Vec<String>) {
+    let version = if VERSIONS.contains(&version) { version } else { DEFAULT_VERSION };
+    let mut notes: Vec<String> = vec![];
+    let mut cut = 0usize;
+    let mut fit = |x: &str, n: usize| -> String { let x = clean(x); if x.chars().count() > n { cut += 1; x.chars().take(n).collect() } else { x } };
+    let cur = &p.currency;
+    let mut o = format!("ERMHDR\t{version}\t{today}\tProject\tadmin\tDatum Plan\tdbxDatabaseNoName\tProject Management\t{}\n", clean(&cur.code));
     let mut table = |name: &str, fields: &str, rows: Vec<String>| {
+        if rows.is_empty() { return }
         let _ = writeln!(o, "%T\t{name}\n%F\t{}", fields.replace(' ', "\t"));
         rows.iter().for_each(|r| { let _ = writeln!(o, "%R\t{r}"); });
     };
-    let short: String = p.name.chars().filter(|c| c.is_alphanumeric()).take(20).collect::<String>().to_uppercase();
+    // The project ID: the plan's code when it has one, else letters and digits of its name.
+    let from: &str = if p.code.trim().is_empty() { &p.name } else { &p.code };
+    let short: String = from.chars().filter(|c| c.is_alphanumeric() || "-_.".contains(*c)).take(20).collect::<String>().to_uppercase();
     let short = if short.is_empty() { "DATUM".into() } else { short };
     let cal_id = |n: Option<&str>| p.calendars.iter().position(|c| c.name == n.unwrap_or(&p.calendar)).unwrap_or(0) + 1;
     let hd = p.day_min as f64 / 60.0;
+    let hr = |m: i64| m as f64 / 60.0;
+    let acts: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i]).collect();
+
+    // ---- global tables: currency, notebook topics, custom fields ----
+    table("CURRTYPE", "curr_id decimal_digit_cnt curr_symbol decimal_symbol digit_group_symbol pos_curr_fmt_type neg_curr_fmt_type curr_type curr_short_name group_digit_cnt base_exch_rate",
+        vec![format!("1\t{}\t{}\t.\t,\t{}\t{}\t{}\t{}\t3\t1", cur.decimals, clean(&cur.symbol), if cur.after { "1.1#" } else { "#1.1" }, if cur.after { "(1.1#)" } else { "(#1.1)" }, clean(&cur.code), clean(&cur.code))]);
+    // Notebook topics: "Notes" for the task's notes, then each topic the tasks use.
+    let mut topics: Vec<String> = vec![];
+    if p.tasks.iter().any(|t| !t.notes.trim().is_empty()) { topics.push("Notes".into()) }
+    for t in &p.tasks { for n in &t.notebook { if !n.text.trim().is_empty() && !topics.iter().any(|x| x.eq_ignore_ascii_case(n.topic.trim())) { topics.push(clean(n.topic.trim())) } } }
+    table("MEMOTYPE", "memo_type_id seq_num eps_flag proj_flag wbs_flag task_flag memo_type",
+        topics.iter().enumerate().map(|(k, n)| format!("{}\t{}\tN\tN\tY\tY\t{n}", k + 1, k + 1)).collect());
+    // Custom fields used by the activities, by the name the plan gives them.
+    let calc = crate::fields::Calc::new(p, "%Y-%m-%d", today);
+    let mut used: Vec<String> = p.fields.iter().filter(|d| !d.key.starts_with('r')).map(|d| d.key.clone()).collect();
+    for &i in &acts { for k in p.tasks[i].custom.keys() { if !k.starts_with('r') && !used.contains(k) { used.push(k.clone()) } } }
+    use crate::fields::Kind;
+    let udf: Vec<(String, String, Kind)> = used.into_iter().filter_map(|k| {
+        let key = format!("c:{k}");
+        let kind = calc.kind(&key);
+        acts.iter().any(|&i| !matches!(calc.val(i, &key), crate::formula::F::Null)).then(|| (key.clone(), calc.name(&key), kind))
+    }).collect();
+    let udf_type = |k: Kind| match k { Kind::Date => "FT_START_DATE", Kind::Fin => "FT_END_DATE", Kind::Cost => "FT_MONEY", Kind::Num | Kind::Dur | Kind::Pct | Kind::Work => "FT_FLOAT_2_DECIMALS", Kind::Int => "FT_INT", _ => "FT_TEXT" };
+    table("UDFTYPE", "udf_type_id table_name udf_type_name udf_type_label logical_data_type super_flag indicator_expression summary_indicator_expression export_flag",
+        udf.iter().enumerate().map(|(k, (_, name, kind))| {
+            let label = if matches!(kind, Kind::Dur) { format!("{name} (days)") } else { name.clone() };
+            format!("{}\tTASK\tuser_field_{}\t{}\t{}\tN\t\t\tY", 900 + k, 900 + k, fit(&label, 40), udf_type(*kind))
+        }).collect());
+
+    // ---- the project and its calendars ----
+    let data = p.status.map(|d| dt(at(d) + DAY)).unwrap_or_else(|| dt(s.start));
+    table("PROJECT", "proj_id fy_start_month_num allow_complete_flag project_flag step_complete_flag name_sep_char def_complete_pct_type proj_short_name clndr_id task_code_base task_code_step critical_drtn_hr_cnt last_recalc_date plan_start_date plan_end_date scd_end_date def_duration_type def_qty_type def_rate_type def_task_type critical_path_type task_code_prefix",
+        vec![format!("1\t1\tY\tY\tY\t.\tCP_Drtn\t{short}\t{}\t{}\t{}\t{}\t{data}\t{}\t{}\t{}\tDT_FixedDUR2\tQT_Hour\tCOST_PER_QTY\tTT_Task\t{}\t{}",
+            cal_id(None), p.id_start, p.id_step.max(1), hr(p.opts.critical_float), dt(s.start), dt(s.finish), dt(s.finish),
+            if p.opts.longest_path { "CT_DrivPath" } else { "CT_TotFloat" }, fit(&p.id_prefix, 20))]);
     // A person with leave gets a resource calendar: their base calendar plus the leave.
     let own = |r: &crate::model::Resource| (!r.exceptions.is_empty()).then(|| {
         let mut c = p.calendars.iter().find(|c| Some(&c.name) == r.cal.as_ref()).unwrap_or(&p.calendars[cal_id(None) - 1]).clone();
@@ -137,10 +194,10 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
     });
     let rcal: Vec<usize> = p.resources.iter().enumerate().map(|(k, r)| if own(r).is_some() { 1000 + k } else { cal_id(r.cal.as_deref()) }).collect();
     let mut cal_rows: Vec<String> = p.calendars.iter().enumerate().map(|(k, c)| format!("{}\t{}\t{}\t1\t\t{today} 00:00\tCA_Project\t{hd}\t{}\t{}\t{}\tN\t{}",
-        k + 1, if c.name == p.calendar { "Y" } else { "N" }, clean(&c.name), hd * 5.0, hd * 20.0, hd * 250.0, clndr_data(c))).collect();
+        k + 1, if c.name == p.calendar { "Y" } else { "N" }, fit(&c.name, 60), hd * 5.0, hd * 20.0, hd * 250.0, clndr_data(c))).collect();
     for (k, r) in p.resources.iter().enumerate() {
         if let Some(c) = own(r) {
-            cal_rows.push(format!("{}\tN\t{}\t\t{}\t{today} 00:00\tCA_Rsrc\t{hd}\t{}\t{}\t{}\tY\t{}", 1000 + k, clean(&c.name), cal_id(r.cal.as_deref()), hd * 5.0, hd * 20.0, hd * 250.0, clndr_data(&c)));
+            cal_rows.push(format!("{}\tN\t{}\t\t{}\t{today} 00:00\tCA_Rsrc\t{hd}\t{}\t{}\t{}\tY\t{}", 1000 + k, fit(&c.name, 60), cal_id(r.cal.as_deref()), hd * 5.0, hd * 20.0, hd * 250.0, clndr_data(&c)));
         }
     }
     let el = p.calendars.len() + 1;
@@ -148,81 +205,212 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
         cal_rows.push(format!("{el}\tN\t{ELAPSED}\t1\t\t{today} 00:00\tCA_Project\t24\t168\t720\t8760\tN\t{}", clndr_data(&Calendar::full(ELAPSED))));
     }
     table("CALENDAR", "clndr_id default_flag clndr_name proj_id base_clndr_id last_chng_date clndr_type day_hr_cnt week_hr_cnt month_hr_cnt year_hr_cnt rsrc_private clndr_data", cal_rows);
-    let data = p.status.map(|d| dt(at(d) + DAY)).unwrap_or_else(|| dt(s.start));
-    table("PROJECT", "proj_id proj_short_name clndr_id plan_start_date last_recalc_date scd_end_date def_complete_pct_type",
-        vec![format!("1\t{short}\t{}\t{}\t{data}\t{}\tCP_Phys", cal_id(None), dt(s.start), dt(s.finish))]);
-    // WBS: the project node, then one node per summary task.
-    let mut wbs_rows = vec![format!("1\t1\t0\tY\tWS_Open\t{short}\t{}\t", clean(&p.name))];
+
+    // ---- WBS: the project node, then one node per summary task; its code relative to its parent ----
+    let mut wbs_rows = vec![format!("1\t1\t0\tY\tWS_Open\t{short}\t{}\t", fit(&p.name, MAX_WBS_NAME))];
     let mut wbs_of = vec![1usize; p.tasks.len()];
-    let mut stack: Vec<(u8, usize)> = vec![];
+    let mut stack: Vec<(u8, usize, String)> = vec![];
+    let mut siblings: HashMap<(usize, String), u32> = HashMap::new();
+    let mut wbs_ids = 0;
     for (i, t) in p.tasks.iter().enumerate() {
-        stack.retain(|&(l, _)| l < t.level);
-        let parent = stack.last().map_or(1, |&(_, w)| w);
+        stack.retain(|(l, _, _)| *l < t.level);
+        let (parent, pcode) = stack.last().map_or((1, String::new()), |(_, w, c)| (*w, c.clone()));
         wbs_of[i] = parent;
         if s.summary[i] {
             let id = 100 + i;
-            let code = if t.code.is_empty() { format!("W{}", i + 1) } else { clean(&t.code) };
-            wbs_rows.push(format!("{id}\t1\t{}\tN\tWS_Open\t{code}\t{}\t{parent}", i + 1, clean(&t.name)));
-            stack.push((t.level, id));
+            let full = if t.code.trim().is_empty() { format!("W{}", i + 1) } else { clean(t.code.trim()) };
+            let own = full.strip_prefix(&format!("{pcode}.")).filter(|x| !pcode.is_empty() && !x.is_empty()).unwrap_or(&full).to_string();
+            let mut code = fit(&own, MAX_ID);
+            let n = siblings.entry((parent, code.to_lowercase())).or_insert(0);
+            *n += 1;
+            if *n > 1 { code = format!("{code}-{n}"); wbs_ids += 1 }
+            wbs_rows.push(format!("{id}\t1\t{}\tN\tWS_Open\t{code}\t{}\t{parent}", i + 1, fit(&t.name, MAX_WBS_NAME)));
+            stack.push((t.level, id, full));
         }
     }
     table("PROJWBS", "wbs_id proj_id seq_num proj_node_flag status_code wbs_short_name wbs_name parent_wbs_id", wbs_rows);
-    let acts: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i]).collect();
-    let held = super::ext_held(p);
-    table("TASK", "task_id proj_id wbs_id clndr_id phys_complete_pct complete_pct_type task_type duration_type status_code task_code task_name target_drtn_hr_cnt remain_drtn_hr_cnt act_start_date act_end_date early_start_date early_end_date target_start_date target_end_date cstr_date cstr_type cstr_date2 cstr_type2",
-        acts.iter().map(|&i| {
-            let t = &p.tasks[i];
-            let rsrc = t.act_type == ActType::ResourceDep || (p.opts.res_cals && !t.ignore_rc && t.res.iter().any(|a| p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work)));
-            let (dur, cons, cdate) = super::held(p, s, i, held[i]);
-            // A milestone at the end of a working period is a finish milestone (a start milestone would move to the next morning).
-            let kind = match t.act_type { ActType::Loe => "TT_LOE", ActType::WbsSummary => "TT_WBS", ActType::StartMs => "TT_Mile", ActType::FinishMs => "TT_FinMile",
-                _ if dur == 0 => if s.cals[s.ci[i]].next_start(s.es[i]) == s.es[i] { "TT_Mile" } else { "TT_FinMile" }, _ if rsrc => "TT_Rsrc", _ => "TT_Task" };
-            let status = if t.act_finish.is_some() { "TK_Complete" } else if t.act_start.is_some() { "TK_Active" } else { "TK_NotStart" };
-            let (cd, ct) = match (cdate, CS.iter().find(|(c, _)| *c == cons)) {
-                (_, Some((Constraint::ALAP, n))) => (String::new(), n.to_string()),
-                (Some(d), Some((_, n))) => (format!("{d} 00:00"), n.to_string()),
-                _ => (String::new(), String::new()),
-            };
-            let code = if t.code.is_empty() { format!("A{}", (i + 1) * 10) } else { clean(&t.code) };
-            // A physical-% task carries its physical %; the duration % stays in the remaining duration.
-            let (pc, pt) = match t.pct_type { PctType::Physical => (t.phys, "CP_Phys"), PctType::Units => (t.pct, "CP_Units"), PctType::Duration => (t.pct, "CP_Drtn") };
-            // A deadline goes as a secondary "finish on or before" constraint.
-            let (cd2, ct2) = t.deadline.map_or((String::new(), ""), |d| (format!("{d} 23:59"), "CS_MEOB"));
-            format!("{}\t1\t{}\t{}\t{pc}\t{pt}\t{kind}\tDT_FixedDUR2\t{status}\t{code}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{cd}\t{ct}\t{cd2}\t{ct2}",
-                t.uid, wbs_of[i], if t.elapsed { el } else { cal_id(t.cal.as_deref()) }, clean(&t.name), dur as f64 / 60.0, dur as f64 * (100 - t.pct as i64) as f64 / 6000.0,
-                t.act_start.map(|d| format!("{d} 08:00")).unwrap_or_default(), t.act_finish.map(|d| format!("{d} 17:00")).unwrap_or_default(),
-                dt(s.es[i]), dt(s.ef[i]), dt(s.es[i]), dt(s.ef[i]))
+    if wbs_ids > 0 { notes.push(format!("{wbs_ids} WBS codes appear twice under the same parent; the second gets \"-2\" (and so on), since each must be unique there.")) }
+
+    // ---- activity codes (project codes, so the client's own dictionary is not touched) ----
+    let mut code_rows = vec![];
+    let mut type_rows = vec![];
+    let mut code_id: HashMap<(usize, String), usize> = HashMap::new();
+    let mut next = 1;
+    for (k, d) in p.codes.iter().enumerate() {
+        let mut vals: Vec<(String, String, String)> = d.values.iter().map(|v| (v.value.clone(), v.desc.clone(), v.color.clone())).collect();
+        for &i in &acts { if let Some(v) = p.tasks[i].codes.get(&d.name).filter(|v| !v.is_empty()) { if !vals.iter().any(|x| x.0 == *v) { vals.push((v.clone(), String::new(), String::new())) } } }
+        if vals.is_empty() { continue }
+        let len = vals.iter().map(|v| v.0.chars().count()).max().unwrap_or(1).clamp(1, MAX_CODE);
+        type_rows.push(format!("{}\t{len}\t{}\t{}\t1\t\tAS_Project\tN", 800 + k, k + 1, fit(&d.name, 40)));
+        for (j, (v, desc, color)) in vals.iter().enumerate() {
+            code_id.insert((k, v.clone()), next);
+            let c = color.trim_start_matches('#');
+            code_rows.push(format!("{next}\t\t{}\t{}\t{}\t{}\t{}", 800 + k, fit(if desc.is_empty() { v } else { desc }, 100), fit(v, MAX_CODE), j + 1, if c.len() == 6 { c.to_uppercase() } else { String::new() }));
+            next += 1;
+        }
+    }
+    let ncodes = type_rows.len();
+    table("ACTVTYPE", "actv_code_type_id actv_short_len seq_num actv_code_type proj_id wbs_id actv_code_type_scope super_flag", type_rows);
+    table("ACTVCODE", "actv_code_id parent_actv_code_id actv_code_type_id actv_code_name short_name seq_num color", code_rows);
+
+    // ---- resources ----
+    let mut rshort: HashSet<String> = HashSet::new();
+    table("RSRC", "rsrc_id parent_rsrc_id clndr_id rsrc_seq_num email_addr employee_code rsrc_name rsrc_short_name rsrc_title_name def_qty_per_hr cost_qty_type active_flag auto_compute_act_flag def_cost_qty_link_flag ot_flag curr_id rsrc_type",
+        p.resources.iter().enumerate().map(|(k, r)| {
+            let ty = match r.kind { ResKind::Work => "RT_Labor", ResKind::Material => "RT_Mat", ResKind::Cost => "RT_Equip" };
+            let base: String = if r.initials.trim().is_empty() { r.name.chars().filter(|c| c.is_alphanumeric()).take(20).collect::<String>().to_uppercase() } else { clean(r.initials.trim()).to_uppercase() };
+            let base = if base.is_empty() { format!("R{}", r.uid) } else { base };
+            let mut sh = base.clone();
+            let mut n = 1;
+            while !rshort.insert(sh.to_lowercase()) { n += 1; sh = format!("{base}{n}") }
+            format!("{}\t\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\tQT_Hour\tY\tY\tY\tN\t1\t{ty}", r.uid, rcal[k], k + 1, clean(&r.email), clean(&r.code), fit(&r.name, 100), fit(&sh, 20), clean(&r.group), if r.max > 0.0 { r.max } else { 1.0 })
         }).collect());
+    table("RSRCRATE", "rsrc_rate_id rsrc_id max_qty_per_hr cost_per_qty start_date", p.resources.iter().enumerate().map(|(k, r)| format!("{}\t{}\t{}\t{}\t{} 00:00", k + 1, r.uid, if r.max > 0.0 { r.max } else { 1.0 }, r.rate, p.start)).collect());
+
+    // ---- activities: unique activity IDs, cut to the format's length ----
+    let held = super::ext_held(p);
+    let mut ids: HashSet<String> = HashSet::new();
+    let mut twice = 0;
+    let act_rows: Vec<String> = acts.iter().map(|&i| {
+        let t = &p.tasks[i];
+        let rsrc = t.act_type == ActType::ResourceDep || (p.opts.res_cals && !t.ignore_rc && t.res.iter().any(|a| p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work)));
+        let (dur, cons, cdate) = super::held(p, s, i, held[i]);
+        // A milestone at the end of a working period is a finish milestone (a start milestone would move to the next morning).
+        let kind = match t.act_type { ActType::Loe => "TT_LOE", ActType::WbsSummary => "TT_WBS", ActType::StartMs => "TT_Mile", ActType::FinishMs => "TT_FinMile",
+            _ if dur == 0 => if s.cals[s.ci[i]].next_start(s.es[i]) == s.es[i] { "TT_Mile" } else { "TT_FinMile" }, _ if rsrc => "TT_Rsrc", _ => "TT_Task" };
+        let status = if t.act_finish.is_some() { "TK_Complete" } else if t.act_start.is_some() { "TK_Active" } else { "TK_NotStart" };
+        let (cd, ct) = match (cdate, CS.iter().find(|(c, _)| *c == cons)) {
+            (_, Some((Constraint::ALAP, n))) => (String::new(), n.to_string()),
+            (Some(d), Some((_, n))) => (format!("{d} 00:00"), n.to_string()),
+            _ => (String::new(), String::new()),
+        };
+        let base = if t.code.trim().is_empty() { format!("A{}", (i + 1) * 10) } else { fit(t.code.trim(), MAX_ID) };
+        let mut code = base.clone();
+        let mut n = 1;
+        while !ids.insert(code.to_lowercase()) { n += 1; code = format!("{}-{n}", base.chars().take(MAX_ID - 3).collect::<String>()); }
+        if n > 1 { twice += 1 }
+        // A physical-% task carries its physical %; the duration % stays in the remaining duration.
+        let (pc, pt) = match t.pct_type { PctType::Physical => (t.phys, "CP_Phys"), PctType::Units => (t.pct, "CP_Units"), PctType::Duration => (t.pct, "CP_Drtn") };
+        // A deadline goes as a secondary "finish on or before" constraint.
+        let (cd2, ct2) = t.deadline.map_or((String::new(), ""), |d| (format!("{d} 23:59"), "CS_MEOB"));
+        let work: f64 = t.res.iter().filter(|a| p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work)).map(|a| dur as f64 / 60.0 * a.units).sum();
+        let left = (100 - t.pct.min(100) as i64) as f64 / 100.0;
+        let done = t.act_finish.is_some();
+        let (rs, re) = if done { (String::new(), String::new()) } else { (dt(s.rs[i].max(s.es[i])), dt(s.ef[i])) };
+        [t.uid.to_string(), "1".into(), wbs_of[i].to_string(), (if t.elapsed { el } else { cal_id(t.cal.as_deref()) }).to_string(), pc.to_string(), pt.into(), kind.into(), "DT_FixedDUR2".into(), status.into(), code,
+            fit(&t.name, MAX_NAME), hr(dur).to_string(), (if done { 0.0 } else { hr(dur) * left }).to_string(), hr(s.tf[i]).to_string(), hr(s.ff[i]).to_string(),
+            t.act_start.map(|d| format!("{d} 08:00")).unwrap_or_default(), t.act_finish.map(|d| format!("{d} 17:00")).unwrap_or_default(),
+            dt(s.es[i]), dt(s.ef[i]), dt(s.ls[i]), dt(s.lf[i]), dt(s.es[i]), dt(s.ef[i]), rs, re,
+            work.to_string(), (work * left).to_string(), (work * (1.0 - left)).to_string(), cd, ct, cd2, ct2.into(), "PT_Normal".into(),
+            (if s.lp[i] { "Y" } else { "N" }).into(), if s.fpath[i] > 0 { s.fpath[i].to_string() } else { String::new() }, "N".into(), "N".into(), "N".into()].join("\t")
+    }).collect();
+    if twice > 0 { notes.push(format!("{twice} activity IDs appear more than once; the repeats get \"-2\" (and so on), since each must be unique in the project.")) }
+    table("TASK", "task_id proj_id wbs_id clndr_id phys_complete_pct complete_pct_type task_type duration_type status_code task_code task_name target_drtn_hr_cnt remain_drtn_hr_cnt total_float_hr_cnt free_float_hr_cnt act_start_date act_end_date early_start_date early_end_date late_start_date late_end_date target_start_date target_end_date restart_date reend_date target_work_qty remain_work_qty act_work_qty cstr_date cstr_type cstr_date2 cstr_type2 priority_type driving_path_flag float_path rev_fdbk_flag lock_plan_flag auto_compute_act_flag",
+        act_rows);
     // A link to or from a summary applies to every activity under it; a percent lag becomes hours.
     let under = |i: usize| -> Vec<usize> { if s.summary[i] { p.subtree(i).filter(|&j| !s.summary[j]).collect() } else { vec![i] } };
     let mut links = vec![];
+    let mut spread = 0;
     let idx: HashMap<u32, usize> = p.tasks.iter().enumerate().rev().map(|(i, t)| (t.uid, i)).collect();
     for (i, t) in p.tasks.iter().enumerate() {
         for l in &t.preds {
             let Some(&k) = idx.get(&l.pred) else { continue };
+            if s.summary[i] || s.summary[k] { spread += 1 }
             let lag = super::work_lag(p, l, p.tasks[k].dur);
             for b in under(i) { for a in under(k) { links.push(format!("{}\t{}\t{}\t1\t1\tPR_{:?}\t{}", links.len() + 1, p.tasks[b].uid, p.tasks[a].uid, l.kind, lag as f64 / 60.0)) } }
         }
     }
+    let nlinks = links.len();
     table("TASKPRED", "task_pred_id task_id pred_task_id proj_id pred_proj_id pred_type lag_hr_cnt", links);
-    table("RSRC", "rsrc_id rsrc_name rsrc_short_name rsrc_type clndr_id", p.resources.iter().enumerate().map(|(k, r)| {
-        let ty = match r.kind { ResKind::Work => "RT_Labor", ResKind::Material => "RT_Mat", ResKind::Cost => "RT_Equip" };
-        let short: String = r.name.chars().filter(|c| c.is_alphanumeric()).take(20).collect();
-        format!("{}\t{}\t{}\t{ty}\t{}", r.uid, clean(&r.name), short.to_uppercase(), rcal[k])
-    }).collect());
-    table("RSRCRATE", "rsrc_rate_id rsrc_id cost_per_qty", p.resources.iter().enumerate().map(|(k, r)| format!("{}\t{}\t{}", k + 1, r.uid, r.rate)).collect());
+    if spread > 0 { notes.push(format!("{spread} links to or from summary tasks were written to each activity under the summary (the format links activities only).")) }
+    let pct_lags = p.tasks.iter().flat_map(|t| &t.preds).filter(|l| l.pct && l.lag != 0).count();
+    if pct_lags > 0 { notes.push(format!("{pct_lags} percent lags were written in hours (that share of the predecessor's duration).")) }
     let mut n = 0;
-    table("TASKRSRC", "taskrsrc_id task_id proj_id rsrc_id target_qty remain_qty target_qty_per_hr target_cost", acts.iter().flat_map(|&i| p.tasks[i].res.iter().map(move |a| (i, a))).map(|(i, a)| {
+    table("TASKRSRC", "taskrsrc_id task_id proj_id rsrc_id rsrc_type target_qty remain_qty act_reg_qty target_qty_per_hr remain_qty_per_hr target_cost target_start_date target_end_date", acts.iter().flat_map(|&i| p.tasks[i].res.iter().map(move |a| (i, a))).map(|(i, a)| {
         n += 1;
         let t = &p.tasks[i];
+        let dates = format!("{}\t{}", dt(s.es[i]), dt(s.ef[i]));
         // A cost resource has no quantity, only an amount.
         let kind = p.res_idx(a.res).map(|k| p.resources[k].kind);
-        if kind == Some(ResKind::Cost) { return format!("{n}\t{}\t1\t{}\t0\t0\t0\t{}", t.uid, a.res, a.units) }
+        let ty = match kind { Some(ResKind::Material) => "RT_Mat", Some(ResKind::Cost) => "RT_Equip", _ => "RT_Labor" };
+        if kind == Some(ResKind::Cost) { return format!("{n}\t{}\t1\t{}\t{ty}\t0\t0\t0\t0\t0\t{}\t{dates}", t.uid, a.res, a.units) }
         let q = if kind == Some(ResKind::Work) { t.dur as f64 / 60.0 * a.units } else { a.units };
-        format!("{n}\t{}\t1\t{}\t{q}\t{}\t{}\t", t.uid, a.res, q * (100 - t.pct as i64) as f64 / 100.0, a.units)
+        let left = (100 - t.pct.min(100) as i64) as f64 / 100.0;
+        format!("{n}\t{}\t1\t{}\t{ty}\t{q}\t{}\t{}\t{}\t{}\t\t{dates}", t.uid, a.res, q * left, q * (1.0 - left), a.units, a.units)
     }).collect());
+    let mut tact = vec![];
+    for (k, d) in p.codes.iter().enumerate() {
+        for &i in &acts {
+            if let Some(&cid) = p.tasks[i].codes.get(&d.name).and_then(|v| code_id.get(&(k, v.clone()))) { tact.push(format!("{}\t{}\t{cid}\t1", p.tasks[i].uid, 800 + k)) }
+        }
+    }
+    let ntact = tact.len();
+    table("TASKACTV", "task_id actv_code_type_id actv_code_id proj_id", tact);
+    let on_sum = (0..p.tasks.len()).filter(|&i| s.summary[i] && !p.tasks[i].codes.is_empty()).count();
+    if on_sum > 0 { notes.push(format!("{on_sum} summary tasks have activity codes; WBS nodes cannot hold them, so they were left out.")) }
+    // Custom field values: dates as dates, numbers as numbers, the rest as text (Yes/No for flags).
+    let mut vals = vec![];
+    for (k, (key, _, kind)) in udf.iter().enumerate() {
+        for &i in &acts {
+            use crate::formula::F;
+            let v = calc.val(i, key);
+            if matches!(v, F::Null) { continue }
+            let (d, num, txt) = match (kind, &v) {
+                (Kind::Date | Kind::Fin, F::Date(m)) => (dt(*m), String::new(), String::new()),
+                (Kind::Dur, F::Num(m)) => (String::new(), format!("{}", (m / p.day_min.max(1) as f64 * 100.0).round() / 100.0), String::new()),
+                (Kind::Num | Kind::Cost | Kind::Pct | Kind::Work | Kind::Int, F::Num(x)) => (String::new(), x.to_string(), String::new()),
+                _ => (String::new(), String::new(), fit(&v.to_string(), 255)),
+            };
+            vals.push(format!("{}\t{}\t1\t{d}\t{num}\t{txt}\t", 900 + k, p.tasks[i].uid));
+        }
+    }
+    let nvals = vals.len();
+    table("UDFVALUE", "udf_type_id fk_id proj_id udf_date udf_number udf_text udf_code_id", vals);
+    // Notes: the task's notes and each notebook topic, as the simple web text the format holds.
+    let memo = |x: &str| format!("<HTML><BODY>{}</BODY></HTML>", clean(&x.trim().replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace("\r\n", "\n").replace('\n', "<BR>")));
+    let topic = |n: &str| topics.iter().position(|x| x.eq_ignore_ascii_case(n.trim())).map_or(1, |k| k + 1);
+    let (mut tm, mut wm) = (vec![], vec![]);
+    for (i, t) in p.tasks.iter().enumerate() {
+        let mut items: Vec<(usize, String)> = vec![];
+        if !t.notes.trim().is_empty() { items.push((topic("Notes"), memo(&t.notes))) }
+        for nb in t.notebook.iter().filter(|x| !x.text.trim().is_empty()) { items.push((topic(&nb.topic), memo(&nb.text))) }
+        for (ty, text) in items {
+            if s.summary[i] { wm.push(format!("{}\t1\t{}\t{ty}\t{text}", wm.len() + 1, 100 + i)) } else { tm.push(format!("{}\t{}\t{ty}\t1\t{text}", tm.len() + 1, t.uid)) }
+        }
+    }
+    let nmemo = tm.len() + wm.len();
+    table("WBSMEMO", "wbs_memo_id proj_id wbs_id memo_type_id wbs_memo", wm);
+    table("TASKMEMO", "memo_id task_id memo_type_id proj_id task_memo", tm);
+    // Steps, with their weights and whether each is done.
+    let mut steps = vec![];
+    for &i in &acts {
+        for (k, st) in p.tasks[i].steps.iter().enumerate() {
+            steps.push(format!("{}\t{}\t{}\t1\t{}\t{}\t{}\t{}\t", steps.len() + 1, p.tasks[i].uid, k + 1, if st.done { "Y" } else { "N" }, fit(&st.name, 120), st.weight, if st.done { 100 } else { 0 }));
+        }
+    }
+    let nsteps = steps.len();
+    table("TASKPROC", "proc_id task_id seq_num proj_id complete_flag proc_name proc_wt complete_pct proc_descr", steps);
     o.push_str("%E\n");
-    o
+
+    // ---- the report ----
+    let nwbs = (0..p.tasks.len()).filter(|&i| s.summary[i]).count();
+    let mut head = vec![format!("Written for version {version}: {} activities, {nwbs} WBS nodes, {nlinks} relationships, {} calendars, {} resources and {n} assignments.",
+        acts.len(), p.calendars.len() + usize::from(p.tasks.iter().any(|t| t.elapsed)), p.resources.len())];
+    let mut more = vec![];
+    if ncodes > 0 { more.push(format!("{ncodes} activity codes ({ntact} assignments)")) }
+    if !udf.is_empty() { more.push(format!("{} custom fields ({nvals} values)", udf.len())) }
+    if nsteps > 0 { more.push(format!("{nsteps} steps")) }
+    if nmemo > 0 { more.push(format!("{nmemo} notes")) }
+    if !more.is_empty() { head.push(format!("Also: {}.", more.join(", "))) }
+    if cut > 0 { notes.push(format!("{cut} texts were longer than the format allows (activity IDs {MAX_ID}, names {MAX_NAME} characters) and were cut.")) }
+    let base = p.tasks.iter().any(|t| !t.bls.is_empty());
+    if base { notes.push("Baselines are not in the file: the receiving tool keeps baselines as separate projects. Export the plan with its baseline as the current dates to send one.".into()) }
+    let el = p.tasks.iter().flat_map(|t| &t.preds).filter(|l| l.elapsed && l.lag != 0).count();
+    if el > 0 { notes.push(format!("{el} elapsed lags were written as working time of the same share of a week (7 elapsed days are 5 working days on a five-day week): the format has no elapsed lags.")) }
+    let ext = p.tasks.iter().filter(|t| !t.ext.is_empty()).count();
+    if ext > 0 { notes.push(format!("{ext} activities wait for tasks in other plans; those links became constraints at their current dates.")) }
+    head.extend(notes);
+    (o, head)
 }
 
 pub fn read(text: &str) -> Result<Project, String> { read_notes(text).map(|x| x.0) }
@@ -251,8 +439,11 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     let g = |r: &HashMap<String, String>, k: &str| r.get(k).map(|s| s.trim().to_string()).unwrap_or_default();
     let date = |s: String| NaiveDate::parse_from_str(s.get(..10).unwrap_or(""), "%Y-%m-%d").ok();
     let start = date(g(proj, "plan_start_date")).unwrap_or_else(|| chrono::Local::now().date_naive());
-    let name = [g(proj, "proj_short_name")].into_iter().find(|s| !s.is_empty()).unwrap_or_else(|| "Imported project".into());
+    // The project's name is its top WBS node's; its ID (short name) is the fallback.
+    let top = rows("PROJWBS").iter().find(|w| g(w, "proj_node_flag") == "Y" && g(w, "proj_id") == pid).map(|w| g(w, "wbs_name"));
+    let name = [top.clone().unwrap_or_default(), g(proj, "proj_short_name")].into_iter().find(|s| !s.is_empty()).unwrap_or_else(|| "Imported project".into());
     let mut p = Project::new(&name, start);
+    if top.is_some_and(|t| !t.is_empty()) { p.code = g(proj, "proj_short_name") }
     p.status = date(g(proj, "last_recalc_date")).and_then(|d| d.pred_opt()).filter(|d| *d >= start);
     let mut cal_names = HashMap::new();
     let cals: Vec<&HashMap<String, String>> = rows("CALENDAR").iter().collect();
@@ -344,8 +535,10 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             ..Default::default()
         }
     };
+    let mut wbs_uid: HashMap<String, u32> = HashMap::new();
     let mut sum = |w: &HashMap<String, String>, level: u8| {
         uid += 1;
+        wbs_uid.insert(g(w, "wbs_id"), uid);
         Task { uid, name: g(w, "wbs_name"), code: g(w, "wbs_short_name"), level, ..Default::default() }
     };
     walk(root.as_deref().unwrap_or(""), 0, &mut HashSet::new(), &mut p, &kids, &acts, &place, &mut mk, &mut sum);
@@ -397,6 +590,89 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             t.res.push(Assign { res: ru, units, table: 0 });
         }
     }
+    extras(&rows, &g, &date, &wbs_uid, &mut p, &mut notes);
     p.normalize();
     Ok((p, notes))
+}
+
+/// Activity codes, custom fields, notes and steps of the activities in the file.
+fn extras<'a>(rows: &dyn Fn(&str) -> &'a [Row], g: &dyn Fn(&Row, &str) -> String, date: &dyn Fn(String) -> Option<NaiveDate>, wbs_uid: &HashMap<String, u32>, p: &mut Project, notes: &mut Vec<String>) {
+    let idx: HashMap<u32, usize> = p.tasks.iter().enumerate().map(|(i, t)| (t.uid, i)).collect();
+    let task = |r: &Row| g(r, if r.contains_key("fk_id") { "fk_id" } else { "task_id" }).parse::<u32>().ok().and_then(|u| idx.get(&u).copied());
+    // Activity codes that the activities use, with their values (all of them for a short list).
+    let mut by_code: HashMap<String, Vec<&Row>> = HashMap::new();
+    for c in rows("ACTVCODE") { by_code.entry(g(c, "actv_code_type_id")).or_default().push(c) }
+    let mut assigned: HashMap<String, Vec<(usize, String)>> = HashMap::new();
+    for a in rows("TASKACTV") { if let Some(i) = task(a) { assigned.entry(g(a, "actv_code_type_id")).or_default().push((i, g(a, "actv_code_id"))) } }
+    let mut types: Vec<&Row> = rows("ACTVTYPE").iter().filter(|t| assigned.contains_key(&g(t, "actv_code_type_id"))).collect();
+    types.sort_by_key(|t| g(t, "seq_num").parse::<i64>().unwrap_or(0));
+    for t in types {
+        let id = g(t, "actv_code_type_id");
+        let mut name = g(t, "actv_code_type");
+        if name.is_empty() { name = format!("Code {id}") }
+        while p.codes.iter().any(|c| c.name.eq_ignore_ascii_case(&name)) { name.push('*') }
+        let mut vals: Vec<&Row> = by_code.get(&id).cloned().unwrap_or_default();
+        vals.sort_by_key(|v| g(v, "seq_num").parse::<i64>().unwrap_or(0));
+        let used: HashSet<String> = assigned[&id].iter().map(|x| x.1.clone()).collect();
+        let short = |v: &Row| { let x = g(v, "short_name"); if x.is_empty() { g(v, "actv_code_name") } else { x } };
+        let values = vals.iter().filter(|v| vals.len() <= 500 || used.contains(&g(v, "actv_code_id"))).map(|v| {
+            let c = g(v, "color");
+            CodeValue { value: short(v), desc: g(v, "actv_code_name"), color: if c.len() == 6 { format!("#{c}") } else { String::new() } }
+        }).collect();
+        let val_of: HashMap<String, String> = vals.iter().map(|v| (g(v, "actv_code_id"), short(v))).collect();
+        for (i, cid) in &assigned[&id] { if let Some(v) = val_of.get(cid) { p.tasks[*i].codes.insert(name.clone(), v.clone()); } }
+        p.codes.push(CodeDef { name, scope: if g(t, "actv_code_type_scope") == "AS_Global" { "Global".into() } else { "Project".into() }, values });
+    }
+    // Custom fields of activities: each to a free field of its kind.
+    let mut by_type: HashMap<String, Vec<&Row>> = HashMap::new();
+    for v in rows("UDFVALUE") { by_type.entry(g(v, "udf_type_id")).or_default().push(v) }
+    let mut full = 0;
+    for u in rows("UDFTYPE").iter().filter(|u| g(u, "table_name") == "TASK") {
+        let Some(vals) = by_type.get(&g(u, "udf_type_id")).filter(|v| v.iter().any(|x| task(x).is_some())) else { continue };
+        let mut label = g(u, "udf_type_label");
+        let days = label.ends_with(" (days)");
+        if days { label.truncate(label.len() - 7) }
+        let (pre, max) = match g(u, "logical_data_type").as_str() {
+            _ if days => ("duration", 10), "FT_START_DATE" => ("start", 10), "FT_END_DATE" => ("finish", 10), "FT_MONEY" => ("cost", 10),
+            "FT_FLOAT_2_DECIMALS" | "FT_INT" => ("number", 20), _ => ("text", 30),
+        };
+        let Some(key) = (1..=max).map(|k| format!("{pre}{k}")).find(|k| !p.fields.iter().any(|d| d.key == *k)) else { full += 1; continue };
+        p.fields.push(CustomDef { key: key.clone(), alias: label, ..Default::default() });
+        for v in vals {
+            let Some(i) = task(v) else { continue };
+            let val = match pre {
+                "start" | "finish" => date(g(v, "udf_date")).map(|d| serde_json::json!(d.to_string())),
+                "duration" => g(v, "udf_number").parse::<f64>().ok().map(|d| serde_json::json!((d * p.day_min as f64).round() as i64)),
+                "number" | "cost" => g(v, "udf_number").parse::<f64>().ok().map(|n| serde_json::json!(n)),
+                _ => Some(g(v, "udf_text")).filter(|x| !x.is_empty()).map(|x| serde_json::json!(x)),
+            };
+            if let Some(val) = val { p.tasks[i].custom.insert(key.clone(), val); }
+        }
+    }
+    if full > 0 { notes.push(format!("{full} custom fields did not fit (every custom field of that kind is in use) and were left out.")) }
+    // Notes: the "Notes" topic goes to the task's notes, the other topics to its notebook.
+    let topic: HashMap<String, String> = rows("MEMOTYPE").iter().map(|m| (g(m, "memo_type_id"), g(m, "memo_type"))).collect();
+    let text = |html: &str| {
+        let mut out = String::new();
+        let mut tag = false;
+        let x = html.replace("\u{7f}\u{7f}", "\n").replace("<br>", "\n").replace("<BR>", "\n").replace("<br/>", "\n").replace("</p>", "\n").replace("</P>", "\n");
+        for ch in x.chars() { match ch { '<' => tag = true, '>' => tag = false, c if !tag => out.push(c), _ => {} } }
+        out.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&").trim().to_string()
+    };
+    let put = |i: usize, ty: &str, body: &str, p: &mut Project| {
+        let (name, body) = (topic.get(ty).cloned().unwrap_or_else(|| "Notes".into()), text(body));
+        if body.is_empty() { return }
+        let t = &mut p.tasks[i];
+        if name.eq_ignore_ascii_case("Notes") && t.notes.is_empty() { t.notes = body } else { t.notebook.push(NoteTopic { topic: name, text: body }) }
+    };
+    for m in rows("TASKMEMO") { if let Some(i) = task(m) { put(i, &g(m, "memo_type_id"), &g(m, "task_memo"), p) } }
+    for m in rows("WBSMEMO") { if let Some(&i) = wbs_uid.get(&g(m, "wbs_id")).and_then(|u| idx.get(u)) { put(i, &g(m, "memo_type_id"), &g(m, "wbs_memo"), p) } }
+    // Steps, in their order.
+    let mut steps: Vec<&Row> = rows("TASKPROC").iter().collect();
+    steps.sort_by_key(|s| (g(s, "task_id"), g(s, "seq_num").parse::<i64>().unwrap_or(0)));
+    for s in steps {
+        let Some(i) = task(s) else { continue };
+        let done = g(s, "complete_flag") == "Y" || g(s, "complete_pct").parse::<f64>().unwrap_or(0.0) >= 100.0;
+        p.tasks[i].steps.push(Step { name: g(s, "proc_name"), weight: g(s, "proc_wt").parse().unwrap_or(1.0), done });
+    }
 }

@@ -610,6 +610,7 @@ To share resources between plans, keep one plan whose Resource Sheet lists them 
 - **Save** ([[Ctrl+S]]) keeps the plan as a `.dplan` file on your computer. Saving is safe: the file is replaced only when the new one is complete.
 - **Import** opens plans from other scheduling programs (Project XML and XER files) and tables from workbook (.xlsx) or CSV files (you choose which column is which). After an import, a short **import report** lists anything Datum Plan changed or left out, and whether every task got the same dates as in the file.
 - **Export** writes workbooks (.xlsx, with formulas and formatting), OpenDocument spreadsheets (.ods, values), CSV, Project XML, XER, PMXML, MPX, HTML, iCalendar and JSON.
+- **Send an XER.** **File › Export › XER** asks which version to write for: choose the version the receiving program runs, or an older one (a program cannot open a file written for a newer version). The file carries the WBS, activities, relationships, calendars, resources and assignments, activity codes, custom fields, steps and notes. A report then lists what went in and anything the format could not hold, such as baselines. Activity IDs must be unique in an XER: a repeated ID gets "-2".
 - **Recovery.** Datum Plan keeps a recovery copy as you work (**File › Options** sets how often). If it ever closes before you save, it offers to recover your work the next time it starts.
 
 ## Command line and AI assistants

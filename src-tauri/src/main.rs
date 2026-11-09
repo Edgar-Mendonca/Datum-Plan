@@ -461,7 +461,7 @@ fn import_table(st: State<St>, map: Vec<String>) -> R<TableResult> {
 }
 
 #[tauri::command]
-async fn export(app: AppHandle, st: State<'_, St>, kind: String, cols: Vec<String>) -> R<Option<String>> {
+async fn export(app: AppHandle, st: State<'_, St>, kind: String, cols: Vec<String>, version: Option<String>) -> R<Option<String>> {
     let (label, ext) = match kind.as_str() {
         "xlsx" => ("Workbook", "xlsx"),
         "ods" => ("OpenDocument spreadsheet", "ods"),
@@ -478,6 +478,11 @@ async fn export(app: AppHandle, st: State<'_, St>, kind: String, cols: Vec<Strin
     let name = st.lock().doc.p.name.clone();
     let Some(path) = app.dialog().file().add_filter(label, &[ext]).set_file_name(format!("{name}.{ext}")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
     let a = st.lock();
+    // An XER says what went in, line by line, for the report shown after the export.
+    if kind == "xer" {
+        let report = io::export_xer(&a.doc.p, &path, today(), version.as_deref().unwrap_or(io::xer::DEFAULT_VERSION))?;
+        return Ok(Some(std::iter::once(path.display().to_string()).chain(report).collect::<Vec<_>>().join("\n")));
+    }
     io::export(&a.doc.p, &path, &a.opts.date_fmt, today(), &cols)?;
     Ok(Some(std::iter::once(path.display().to_string()).chain(io::export_notes(&a.doc.p, &path)).collect::<Vec<_>>().join(". ")))
 }

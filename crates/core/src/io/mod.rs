@@ -54,6 +54,14 @@ pub(crate) fn work_lag(p: &Project, l: &crate::model::Link, pdur: i64) -> i64 {
     (l.lag as i128 * week as i128 / (7 * 1440)) as i64
 }
 
+/// Writes an XER for the given version (see `xer::VERSIONS`) and says what went in and what could not.
+pub fn export_xer(p: &Project, path: &Path, today: NaiveDate, version: &str) -> Result<Vec<String>, String> {
+    let s = sched::schedule(p)?;
+    let (text, report) = xer::write_report(p, &s, today, version);
+    crate::doc::write_atomic(path, text.as_bytes())?;
+    Ok(report)
+}
+
 /// What a format cannot hold of the plan, said after an export.
 pub fn export_notes(p: &Project, path: &Path) -> Vec<String> {
     let n = p.tasks.iter().flat_map(|t| &t.preds).filter(|l| l.elapsed && l.lag != 0).count();

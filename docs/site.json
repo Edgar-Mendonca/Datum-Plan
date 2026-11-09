@@ -43,7 +43,8 @@
     "Modules a plan takes on only when it needs them: Contract Dates & Payments (contract dates against the forecast, delay damages, payments and cash in), a Document Register (review cycles in working days on the plan's or their own calendars, return codes, client delay, weighted progress) and a Procurement Register (orders from enquiry to delivery, the vendor's promise against the date the plan needs it, expediting, optional links to vendor documents).",
     "A portfolio of every plan in a folder, with a timeline, the modules' figures and a shared resource pool: each resource's work across all plans against its capacity, and plans that take their rates and units from the pool.",
     "Colour-blind safe colours for charts and statuses, as an option; every status also says what it means in words.",
-    "Copy Picture of the Gantt as shown and of every chart, to paste into documents and slides; exports to workbooks (.xlsx) and OpenDocument spreadsheets (.ods)."
+    "Copy Picture of the Gantt as shown and of every chart, to paste into documents and slides; exports to workbooks (.xlsx) and OpenDocument spreadsheets (.ods).",
+    "XER export that keeps activity codes, custom fields, steps and notes, written for the version the receiving program runs, with a report of what went in."
   ],
   "screenshots": [
     "docs/images/gantt.png",
@@ -54,33 +55,24 @@
   ],
   "roadmap": [
     {
-      "v": "0.6",
-      "title": "Registers as modules",
-      "when": "Now",
-      "items": [
-        "Contract dates against the forecast, delay damages and payments (0.6.0).",
-        "A document register: classes, issue purposes, return codes, review cycles in working days, a transmittal log, weighted progress and its S-curve (0.6.1).",
-        "A procurement register: sub-orders from enquiry to delivery, required against promised dates, an expediting log, linked to the vendor documents when you choose (0.6.2)."
-      ]
-    },
-    {
-      "v": "0.7",
-      "title": "Portfolio, quality and hardening",
-      "when": "Later",
-      "items": [
-        "One resource pool shared by several plans, a portfolio dashboard (0.7.0).",
-        "A schedule health score with its trend, ghost bars and a log of logic changes.",
-        "What-if scenarios and delay analysis: as-planned against as-built, time impact, windows.",
-        "Smooth with 100,000 tasks (0.7.1); a signed installer (no Windows warning) before 1.0."
-      ]
-    },
-    {
       "v": "0.8",
-      "title": "Working together",
+      "title": "Exchange, quality and delay analysis",
+      "when": "Next",
+      "items": [
+        "XER files you can send: codes, custom fields, steps and notes, for the receiving program's version (0.8.0).",
+        "A schedule health score with its trend, a log of logic changes between updates, ghost bars and a milestone trend chart (0.8.1).",
+        "Delay analysis on the data you have: as-planned against as-built, windows, time impact, impacted as-planned and collapsed as-built (0.8.2, 0.8.3).",
+        "What-if scenarios: copy the plan, change it, compare, keep or merge (0.8.4).",
+        "Deeper schedule risk: correlation, a tornado chart, branching risk events, cost and schedule confidence together (0.8.5)."
+      ]
+    },
+    {
+      "v": "0.9",
+      "title": "Smaller tools",
       "when": "Later",
       "items": [
-        "Shared plans in a shared folder, with check-out per WBS so no one overwrites anyone.",
-        "Comments on tasks, an audit trail, progress updates from a phone."
+        "Help › Check, list organising, a Gantt picture that reopens in Datum Plan, line of balance for repetitive work.",
+        "Builds for Mac and Linux."
       ]
     },
     {
@@ -88,7 +80,7 @@
       "title": "Stable",
       "when": "Goal",
       "items": [
-        "Text styles by task type, saved custom views, a user guide, a frozen file format."
+        "A signed installer (no Windows warning), text styles by task type, saved custom views, a frozen file format."
       ]
     }
   ]

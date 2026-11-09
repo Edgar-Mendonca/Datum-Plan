@@ -1149,3 +1149,7 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 /* Over capacity: a dot as well as the colour. */
 .pool td.pc.ov { text-align: center; font-size: 10px; line-height: 1; color: #6E2A0C; }
 .pool td.pc.ov::after { content: "●"; }
+
+/* XER export report */
+ul.report { margin: 6px 0 10px; padding-left: 18px; max-width: 560px; }
+ul.report li { margin: 4px 0; line-height: 1.4; }
