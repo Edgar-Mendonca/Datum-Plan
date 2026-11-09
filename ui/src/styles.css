@@ -1169,3 +1169,6 @@ ul.report li { margin: 4px 0; line-height: 1.4; }
 
 .evfx td { vertical-align: middle; }
 .evfx select { max-width: 260px; }
+
+/* What-if scenarios: the note when the shown tab is a scenario */
+p.note { background: var(--bg2, #F3F6FA); border-left: 3px solid #0B5CAD; padding: 6px 10px; margin: 0 0 8px; }

@@ -948,6 +948,82 @@ fn network(st: State<St>, q: Query, summaries: Option<bool>, wbs: Option<bool>) 
     network::layout_with(&c, &pick("task"), &sums, wbs.unwrap_or(false))
 }
 
+/// A what-if scenario of the shown plan: a copy saved beside it, with its finish and health.
+#[derive(serde::Serialize)]
+struct ScenarioCard { path: String, name: String, finish: String, var: f64, health: f64, tasks: usize, open: bool }
+
+/// The plan a scenario belongs to: the shown plan's file, or the plan the shown scenario came from.
+fn scenario_base(a: &App) -> R<PathBuf> {
+    let here = a.doc.path.clone().ok_or("Save the plan first: its scenarios are saved next to it.")?;
+    Ok(if a.doc.p.scenario_of.is_empty() { here } else { here.with_file_name(&a.doc.p.scenario_of) })
+}
+
+/// The scenarios of the shown plan (or of the plan the shown scenario belongs to), beside it in its folder.
+#[tauri::command]
+fn scenarios(st: State<St>) -> R<(String, String, Vec<ScenarioCard>)> {
+    let a = st.lock();
+    let base = scenario_base(&a)?;
+    let file = links::file_name(&base.display().to_string()).to_string();
+    let open: Vec<PathBuf> = docs(&a).iter().filter_map(|d| d.path.clone()).collect();
+    let bp = if a.doc.path.as_ref() == Some(&base) { a.doc.p.clone() } else { match io::import(&base)? { io::Imported::Plan(p, _) => *p, _ => return Err("The plan was not found.".into()) } };
+    let bc = Calc::new(&bp, &a.opts.date_fmt, today());
+    let pc = &bc.s.cals[bp.calendars.iter().position(|c| c.name == bp.calendar).unwrap_or(0)];
+    let wd = |x: i64, y: i64| { let m = if y >= x { pc.between(x, y) } else { -pc.between(y, x) }; (m as f64 / bp.day_min.max(1) as f64 * 10.0).round() / 10.0 };
+    let mut cards = vec![];
+    for e in std::fs::read_dir(base.parent().ok_or("The plan's folder was not found.")?).map_err(|e| e.to_string())?.flatten() {
+        let path = e.path();
+        if path.extension().and_then(|x| x.to_str()) != Some("dplan") || path == base { continue }
+        let Ok(io::Imported::Plan(p, _)) = io::import(&path) else { continue };
+        if p.scenario_of != file { continue }
+        let c = Calc::new(&p, &a.opts.date_fmt, today());
+        cards.push(ScenarioCard { path: path.display().to_string(), name: p.name.clone(), finish: datum_core::cal::date_of(c.s.finish - 1).to_string(), var: wd(bc.s.finish, c.s.finish), health: check::health(&c).score, tasks: p.tasks.len(), open: open.contains(&path) });
+    }
+    cards.sort_by(|x, y| x.name.cmp(&y.name));
+    Ok((bp.name.clone(), datum_core::cal::date_of(bc.s.finish - 1).to_string(), cards))
+}
+
+/// A new scenario: a copy of the shown plan saved beside it as "Plan - Name.dplan", opened in a tab.
+#[tauri::command]
+fn new_scenario(app: AppHandle, st: State<St>, name: String) -> R<Out> {
+    let mut a = st.lock();
+    if !a.doc.p.scenario_of.is_empty() { return Err("This is a scenario: open its plan to make another.".into()) }
+    let here = a.doc.path.clone().ok_or("Save the plan first: its scenarios are saved next to it.")?;
+    let name = name.trim().chars().filter(|c| !"\\/:*?\"<>|".contains(*c)).collect::<String>();
+    let name = if name.is_empty() { "Scenario".to_string() } else { name };
+    let stem = here.file_stem().map(|x| x.to_string_lossy().into_owned()).unwrap_or_default();
+    let folder = here.parent().ok_or("The plan's folder was not found.")?.to_path_buf();
+    let mut path = folder.join(format!("{stem} - {name}.dplan"));
+    let mut n = 2;
+    while path.exists() { path = folder.join(format!("{stem} - {name} ({n}).dplan")); n += 1; }
+    let p = datum_core::scenario::make(&a.doc.p, &name, links::file_name(&here.display().to_string()));
+    let mut d = Doc::new(p);
+    d.save(&path)?;
+    remember(&app, &path);
+    add_tab(&mut a, d);
+    Ok(out(&a))
+}
+
+/// What a scenario changes against its plan (Was = the plan, Now = the scenario), with ghost bars of the plan.
+#[tauri::command]
+fn scenario_compare(st: State<St>, path: String) -> R<report::Changes> {
+    let a = st.lock();
+    let base = scenario_base(&a)?;
+    let load = |p: &Path| -> R<Project> { if a.doc.path.as_deref() == Some(p) { Ok(a.doc.p.clone()) } else { match io::import(p)? { io::Imported::Plan(x, _) => Ok(*x), _ => Err("Not a plan.".into()) } } };
+    let (bp, sp) = (load(&base)?, load(Path::new(&path))?);
+    Ok(report::changes(&Calc::new(&bp, &a.opts.date_fmt, today()), &Calc::new(&sp, &a.opts.date_fmt, today())))
+}
+
+/// Takes the chosen kinds of change from a scenario into its plan (the shown tab must be the plan).
+#[tauri::command]
+fn scenario_merge(st: State<St>, path: String, kinds: Vec<String>) -> R<Out> {
+    let mut a = st.lock();
+    if !a.doc.p.scenario_of.is_empty() { return Err("Open the plan (not the scenario) to merge into it.".into()) }
+    let sp = match io::import(Path::new(&path))? { io::Imported::Plan(p, _) => *p, _ => return Err("Not a plan.".into()) };
+    let k = a.cur;
+    apply_at(&mut a, k, Op::Merge { from: Box::new(sp), kinds })?;
+    Ok(out(&a))
+}
+
 /// Compares the open plan with another plan file.
 #[tauri::command]
 async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, report::Changes)>> {
@@ -1751,7 +1827,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, scenarios, new_scenario, scenario_compare, scenario_merge, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

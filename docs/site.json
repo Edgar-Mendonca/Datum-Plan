@@ -46,7 +46,8 @@
     "Copy Picture of the Gantt as shown and of every chart, to paste into documents and slides; exports to workbooks (.xlsx) and OpenDocument spreadsheets (.ods).",
     "XER export that keeps activity codes, custom fields, steps and notes, written for the version the receiving program runs, with a report of what went in.",
     "A schedule health score with its trend, a log of every logic change between two versions, ghost bars of the earlier version and a milestone trend chart.",
-    "Delay analysis on the data the plan holds: as-planned against as-built, windows between updates, and delay events measured by time impact, impacted as-planned and collapsed as-built, each saying which plan it ran on."
+    "Delay analysis on the data the plan holds: as-planned against as-built, windows between updates, and delay events measured by time impact, impacted as-planned and collapsed as-built, each saying which plan it ran on.",
+    "What-if scenarios: copies of the plan to try another way of working, compared with the plan and merged back kind by kind."
   ],
   "screenshots": [
     "docs/images/gantt.png",

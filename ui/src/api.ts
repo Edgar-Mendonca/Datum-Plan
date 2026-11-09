@@ -56,7 +56,7 @@ export interface Project {
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   health?: Health; delays?: any[]; fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
-  subplans?: SubPlan[]; master?: string; modules?: string[]; contract?: Contract; documents?: DocRegister; procurement?: ProcRegister;
+  subplans?: SubPlan[]; master?: string; scenario_of?: string; modules?: string[]; contract?: Contract; documents?: DocRegister; procurement?: ProcRegister;
   titles: Record<string, string>; sheets: SheetData[]; names?: DefName[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {

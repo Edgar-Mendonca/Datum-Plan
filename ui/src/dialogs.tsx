@@ -1,5 +1,5 @@
 // Dialogs: information, settings and editors.
-import { For, Show, createSignal, createMemo, Index } from "solid-js";
+import { For, Show, createSignal, createMemo, Index, JSX } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { Calendar, CustomDef, Filter, Rule, Out, iso, dateDay, invoke, LevelPreview, fmtAt, Changes, Trend, fmtDay } from "./api";
 import { allCols, saveAll, deleteCol, act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query, ghost, setGhost } from "./store";
@@ -513,8 +513,10 @@ const exportXer = () => openDialog(() => {
 /** Compare Projects: every change against another version (the logic change log), ghost bars, export. */
 export const compare = async () => {
   const r = await call<[string, Changes] | null>("compare");
-  if (!r) return;
-  const [name, ch] = r;
+  if (r) changesDialog(`Compare with ${r[0]}`, r[0], r[1], `Was = ${r[0]}, Now = this plan.`);
+};
+/** A change log between two versions: filter by kind, export, ghost bars of the other version. */
+const changesDialog = (title: string, name: string, ch: Changes, legend: string, extra?: () => JSX.Element) => {
   const day = (s: string) => { const [y, m, dd] = s.split("-").map(Number); return fmtDay(dateDay(new Date(y, m - 1, dd))); };
   openDialog(() => {
     const [kind, setKind] = createSignal("");
@@ -522,8 +524,8 @@ export const compare = async () => {
     const on = () => ghost()?.name === name;
     const toggle = () => { if (on()) setGhost(null); else { setGhost({ name, bars: new Map(ch.ghost.map(g => [g[0], [g[1], g[2]]])) }); toast(`Ghost bars: ${name}'s bars are drawn faintly behind the Gantt's. Compare again to hide them.`, true); } };
     const exp = async () => { const p = await call<string | null>("export_changes", { items: shown(), title: `Changes against ${name}: project finish ${day(ch.finish[0])} → ${day(ch.finish[1])} (${ch.finish_var})` }); if (p) toast(`Saved to ${p}`, true); };
-    return <Dialog title={`Compare with ${name}`} wide cancel="Close" extra={<><button class="btn" onClick={toggle}>{on() ? "Hide ghost bars" : "Show ghost bars"}</button><button class="btn" onClick={exp}>Export…</button></>}>
-      <p class="muted">Project finish <b>{day(ch.finish[0])}</b> → <b>{day(ch.finish[1])}</b> ({ch.finish_var}). {ch.items.length} changes. Was = {name}, Now = this plan.</p>
+    return <Dialog title={title} wide cancel="Close" extra={<>{extra?.()}<button class="btn" onClick={toggle}>{on() ? "Hide ghost bars" : "Show ghost bars"}</button><button class="btn" onClick={exp}>Export…</button></>}>
+      <p class="muted">Project finish <b>{day(ch.finish[0])}</b> → <b>{day(ch.finish[1])}</b> ({ch.finish_var}). {ch.items.length} changes. {legend}</p>
       <div class="chips"><button class="chip" classList={{ on: !kind() }} onClick={() => setKind("")}>All {ch.items.length}</button><For each={ch.counts}>{([k, n]) => <button class="chip" classList={{ on: kind() === k }} onClick={() => setKind(k)}>{k} {n}</button>}</For></div>
       <div class="fieldlist"><table class="tbl"><thead><tr><th>Change</th><th>ID</th><th>Task</th><th>Was</th><th>Now</th></tr></thead>
         <tbody><For each={shown().slice(0, 2000)}>{c => <tr><td><span class="pill" classList={{ ok: c.kind === "Added", err: c.kind === "Deleted" || c.kind === "Link deleted", warn: c.kind.startsWith("Link") || c.kind === "Duration" || c.kind === "Constraint" }}>{c.kind}</span></td>
@@ -531,6 +533,47 @@ export const compare = async () => {
       <Show when={shown().length > 2000}><p class="muted">The first 2,000 are shown; Export… writes them all.</p></Show>
     </Dialog>;
   });
+};
+/** What-if scenarios: copies of the plan saved beside it, compared with it and merged back by kind. */
+type ScenarioCard = { path: string; name: string; finish: string; var: number; health: number; tasks: number; open: boolean };
+const MERGE_KINDS: [string, string][] = [["tasks", "Tasks added and deleted"], ["names", "Names"], ["dur", "Durations"], ["links", "Links"], ["constraints", "Constraints and deadlines"], ["calendars", "Task calendars"], ["resources", "Resource assignments"], ["progress", "Progress (actual dates and % complete)"]];
+export const scenarios = async () => {
+  const r = await call<[string, string, ScenarioCard[]] | null>("scenarios");
+  if (!r) return;
+  const [plan, finish, cards] = r;
+  const isScen = !!P().scenario_of;
+  const day = (s: string) => { const [y, m, dd] = s.split("-").map(Number); return fmtDay(dateDay(new Date(y, m - 1, dd))); };
+  const merge = (c: ScenarioCard) => openDialog(() => {
+    const [k, setK] = createSignal<string[]>(["dur", "links", "constraints", "tasks", "names"]);
+    return <Dialog title={`Merge ${c.name} into ${plan}`} okText="Merge" ok={async () => {
+      if (!k().length) { toast("Tick what to take from the scenario."); return false; }
+      const o = await call<Out | null>("scenario_merge", { path: c.path, kinds: k() });
+      if (o) { setOut(o); toast(`${c.name} merged into ${plan}. Undo takes it back.`, true); }
+    }}>
+      <p class="muted">Takes the ticked kinds of change from the scenario into the plan, by task. Everything else in the plan stays as it is; Undo takes the merge back.</p>
+      <For each={MERGE_KINDS}>{([key, label]) => <label class="chk"><input type="checkbox" checked={k().includes(key)} onChange={e => setK(e.currentTarget.checked ? [...k(), key] : k().filter(x => x !== key))} />{label}</label>}</For>
+    </Dialog>;
+  });
+  const cmp = async (c: ScenarioCard) => {
+    const ch = await call<Changes | null>("scenario_compare", { path: c.path });
+    if (ch) changesDialog(`${c.name} against ${plan}`, plan, ch, `Was = ${plan}, Now = ${c.name}.`, () => <Show when={!isScen}><button class="btn" onClick={() => merge(c)}>Merge…</button></Show>);
+  };
+  const open = async (path: string) => { const o = await call<Out | null>("open", { path }); if (o) { setOut(o); closeDialog(); } };
+  const fresh = async () => {
+    const name = await askText("New scenario", "Name (what it tries)", "", "Create");
+    if (!name) return;
+    const o = await call<Out | null>("new_scenario", { name });
+    if (o) { setOut(o); closeDialog(); toast(`Scenario ${name} is open in its own tab: change it freely, then compare it with the plan (Project › Scenarios).`, true); }
+  };
+  openDialog(() => <Dialog title="What-if Scenarios" wide cancel="Close" extra={<Show when={!isScen}><button class="btn pri" onClick={fresh}>New scenario…</button></Show>}>
+    <Show when={isScen}><p class="note">This tab is a scenario of <b>{plan}</b>. Open the plan to merge a scenario into it.</p></Show>
+    <p class="muted">A scenario is a copy of <b>{plan}</b> (finish {day(finish)}) saved beside it, to try another way of working: change it freely, compare it with the plan, then merge back what you want to keep.</p>
+    <Show when={cards.length} fallback={<p class="empty">No scenarios yet. New scenario… makes one and opens it in its own tab.</p>}>
+      <table class="tbl"><thead><tr><th>Scenario</th><th class="r">Finish</th><th class="r">Against the plan</th><th class="r">Health</th><th class="r">Tasks</th><th /></tr></thead>
+        <tbody><For each={cards}>{c => <tr><td><b>{c.name}</b>{c.open ? <span class="muted"> · open</span> : ""}</td><td class="r">{day(c.finish)}</td><td class="r" classList={{ late: c.var > 0 }}>{c.var > 0 ? `+${c.var}` : c.var} d</td><td class="r">{c.health.toFixed(0)}</td><td class="r">{c.tasks}</td>
+          <td class="r"><button class="btn sm" onClick={() => open(c.path)}>Open</button> <button class="btn sm" onClick={() => cmp(c)}>Compare</button> <Show when={!isScen}><button class="btn sm" onClick={() => merge(c)}>Merge…</button></Show></td></tr>}</For></tbody></table>
+    </Show>
+  </Dialog>);
 };
 /** Milestone trend: each milestone's forecast finish at every snapshot and now. */
 const TREND_COL = ["#0B5CAD", "#D97706", "#059669", "#7C3AED", "#DC2626", "#0891B2", "#CA8A04", "#475569"];

@@ -54,6 +54,8 @@ pub enum Op {
     Delay { id: u32, ev: Option<DelayEvent> },
     /// Put a delay event's new activities into the plan.
     DelayFrag { id: u32 },
+    /// Take the chosen kinds of change from a what-if scenario (see `scenario::KINDS`).
+    Merge { from: Box<Project>, kinds: Vec<String> },
     /// Sets a task list (steps, notebook, expenses, docs) from JSON.
     TaskList { uid: u32, field: String, value: serde_json::Value },
     /// Sets a resource list or value (rate tables, availability, custom) from JSON.
@@ -866,6 +868,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 p.log.push(x);
                 p.log.sort_by_key(|x| x.id);
             }
+        }
+        Op::Merge { from, kinds } => {
+            if let Some(k) = kinds.iter().find(|k| !crate::scenario::KINDS.iter().any(|x| x.0 == k.as_str())) { return Err(format!("Unknown kind of change: {k}.")) }
+            let q = crate::scenario::merge(p, &from, &kinds);
+            crate::sched::schedule(&q)?;
+            *p = q;
         }
         Op::DelayFrag { id } => {
             let e = p.delays.iter().find(|e| e.id == id).cloned().ok_or("That delay event no longer exists.")?;

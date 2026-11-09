@@ -17,6 +17,7 @@ pub mod progress;
 pub mod query;
 pub mod report;
 pub mod risk;
+pub mod scenario;
 pub mod sched;
 pub mod sheet;
 pub mod contract;
@@ -47,6 +48,8 @@ mod exchange_cases;
 mod quality_cases;
 #[cfg(test)]
 mod delay_cases;
+#[cfg(test)]
+mod scenario_cases;
 #[cfg(test)]
 mod sched_cases;
 #[cfg(test)]

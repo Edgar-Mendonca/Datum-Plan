@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.4 — 2026-11-09
+
+What-if scenarios.
+
+- **Project › Scenarios** lists the plan's scenarios: copies of it saved beside it ("Plan - Name.dplan"), each with its finish against the plan's, in working days, and its health score.
+- **New scenario…** copies the plan under a name and opens it in its own tab, to try another way of working (two shifts, another sequence, a later start) without touching the plan. A scenario knows which plan it came from.
+- **Compare** shows every change the scenario makes against the plan (the change log of Compare Projects), with the plan's bars as ghost bars and an export.
+- **Merge…** takes the kinds of change you tick from the scenario into the plan, by task: tasks added and deleted, names, durations, links, constraints and deadlines, task calendars, resource assignments, progress. Everything else in the plan stays as it is, and Undo takes the merge back.
+
 ## 0.8.3 — 2026-11-09
 
 Delay analysis, part two: delay events, time impact, impacted as-planned and collapsed as-built.
