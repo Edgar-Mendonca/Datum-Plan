@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.3 — 2026-11-09
+
+Delay analysis, part two: delay events, time impact, impacted as-planned and collapsed as-built.
+
+- **Delay events** (a tab of Delay Analysis): each event has a name, the date it arose, a description of the facts and the records behind them, and what it added to the plan: extra working days on tasks, a task that could not start before a date, or new activities between tasks (a fragnet). Switch an event off to leave it out. **Add to plan** puts its new activities into the plan itself.
+- **Time impact:** the events added to a copy of today's plan at its status date, one after another in the order they arose; each event's effect on the finish and the total.
+- **Impacted as-planned:** the plan as agreed is rebuilt (baseline durations, no progress, today's logic, tasks added after the baseline left out), with how close it comes to the baseline finish; then the events are added one after another.
+- **Collapsed as-built:** the plan as built is rebuilt (actual durations, the gaps that happened kept on the driving links), with how close it comes to today's finish; then the events are taken out, latest first, and each one's effect is the finish it saves.
+- Each method says which plan it ran on and what it assumes. Effects are measured with the events before already in place, so overlapping effects are not counted twice. Nothing in the plan changes.
+- **Export…** adds a sheet for each method that ran.
+
 ## 0.8.2 — 2026-11-09
 
 Delay analysis, part one: as-planned against as-built, and windows.

@@ -344,7 +344,13 @@ Give tasks their own range with the **Optimistic Duration** and **Pessimistic Du
 
 1. **As-planned v as-built** compares each task's baseline dates and duration with its actual dates (marked A) or its forecast, in working days, and shows the planned finish, the finish now and the delay between them. The chart shows the critical tasks finishing late. Show only the late tasks, the critical ones or all.
 2. **Windows** looks at the time between snapshots: how far the project finish moved in each window and in total, the progress made, and the tasks that slipped most, the ones critical at the window's start first. Take a snapshot at each update (Progress › Snapshot) and write what happened in its comment: it shows as the window's notes.
-3. **Export…** saves the analysis as a workbook.
+3. **Delay events** records what happened: each event's name, the date it arose, a description (the facts, and the letters, minutes or diary entries behind them) and what it added to the plan: extra days on a task (**+ Extension**), a task that could not start before a date (**+ Hold**), or new activities between tasks (**+ New activity**, a fragnet). Untick an event to leave it out. **Add to plan** puts its new activities into the plan.
+4. **Time impact** adds the events to a copy of today's plan, one after another in the order they arose, and shows each one's effect on the finish and the total.
+5. **Impacted as-planned** rebuilds the plan as agreed (baseline durations, no progress) and adds the events to it. It says how close the rebuilt plan comes to the baseline finish.
+6. **Collapsed as-built** rebuilds the plan as built from the actual dates, then takes the events out, latest first: each event's effect is the finish it saves. It says how close the rebuilt plan comes to today's finish.
+7. **Export…** saves the analysis as a workbook, with a sheet for each method.
+
+Each method says which plan it ran on. Effects are measured with the earlier events already in place, so effects that overlap are not counted twice. The analyses never change the plan.
 
 ### The look-ahead and the constraint log
 

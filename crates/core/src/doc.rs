@@ -50,6 +50,10 @@ pub enum Op {
     CodeDef { old: Option<String>, def: Option<CodeDef> },
     /// Adds, changes or (when `risk` is None) removes a risk by id.
     Risk { id: u32, risk: Option<Risk> },
+    /// Add (id 0), change or delete (None) a delay event.
+    Delay { id: u32, ev: Option<DelayEvent> },
+    /// Put a delay event's new activities into the plan.
+    DelayFrag { id: u32 },
     /// Sets a task list (steps, notebook, expenses, docs) from JSON.
     TaskList { uid: u32, field: String, value: serde_json::Value },
     /// Sets a resource list or value (rate tables, availability, custom) from JSON.
@@ -861,6 +865,20 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 if x.status.is_empty() { x.status = "Open".into() }
                 p.log.push(x);
                 p.log.sort_by_key(|x| x.id);
+            }
+        }
+        Op::DelayFrag { id } => {
+            let e = p.delays.iter().find(|e| e.id == id).cloned().ok_or("That delay event no longer exists.")?;
+            if e.frag.is_empty() { return Err("This event has no new activities.".into()) }
+            crate::delay::add_fragnet(p, &e);
+        }
+        Op::Delay { id, ev } => {
+            p.delays.retain(|r| r.id != id);
+            if let Some(mut e) = ev {
+                if e.extend.iter().any(|x| !(0..=crate::model::MAX_SPAN).contains(&x.1)) || e.frag.iter().any(|f| !(0..=crate::model::MAX_SPAN).contains(&f.dur)) { return Err("Durations must be from 0 up.".into()) }
+                e.id = if id == 0 { p.delays.iter().map(|r| r.id).max().unwrap_or(0) + 1 } else { id };
+                p.delays.push(e);
+                p.delays.sort_by_key(|r| r.id);
             }
         }
         Op::Risk { id, risk } => {

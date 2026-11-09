@@ -896,7 +896,8 @@ fn checks(st: State<St>) -> CheckOut {
 
 /// Delay analysis: what the plan allows, as-planned against as-built, and the windows between snapshots.
 #[derive(serde::Serialize)]
-struct DelayOut { available: datum_core::delay::Available, apab: Option<datum_core::delay::Apab>, windows: Vec<datum_core::delay::Window> }
+struct DelayOut { available: datum_core::delay::Available, apab: Option<datum_core::delay::Apab>, windows: Vec<datum_core::delay::Window>,
+    tia: Option<Result<datum_core::delay::Impact, String>>, iap: Option<Result<datum_core::delay::Impact, String>>, cab: Option<Result<datum_core::delay::Impact, String>> }
 
 #[tauri::command]
 fn delay_analysis(st: State<St>) -> DelayOut {
@@ -905,7 +906,9 @@ fn delay_analysis(st: State<St>) -> DelayOut {
     let available = datum_core::delay::available(&c);
     let apab = available.methods.iter().any(|m| m.key == "apab" && m.ok).then(|| datum_core::delay::apab(&c));
     let windows = if available.methods.iter().any(|m| m.key == "windows" && m.ok) { datum_core::delay::windows(&c) } else { vec![] };
-    DelayOut { available, apab, windows }
+    let run = |k: &str, f: fn(&Calc) -> Result<datum_core::delay::Impact, String>| available.methods.iter().any(|m| m.key == k && m.ok).then(|| f(&c));
+    let (tia, iap, cab) = (run("tia", datum_core::delay::tia), run("iap", datum_core::delay::iap), run("cab", datum_core::delay::cab));
+    DelayOut { available, apab, windows, tia, iap, cab }
 }
 
 /// Saves the delay analysis as a workbook (.xlsx) or OpenDocument spreadsheet.

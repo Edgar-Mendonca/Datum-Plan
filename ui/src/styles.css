@@ -1166,3 +1166,6 @@ ul.report li { margin: 4px 0; line-height: 1.4; }
 .mcard.ok { border-color: var(--green, #1E8E3E); opacity: 1; }
 .mcard p { margin: 0; font-size: 12px; }
 .row-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+
+.evfx td { vertical-align: middle; }
+.evfx select { max-width: 260px; }
