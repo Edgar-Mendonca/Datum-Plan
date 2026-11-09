@@ -338,6 +338,14 @@ Removing a picture from the plan also takes it off the sheets that use it.
 
 Give tasks their own range with the **Optimistic Duration** and **Pessimistic Duration** columns; tasks without them use the default range (−10% to +25%). The same plan and settings always give the same answer, and the last run is kept with the plan.
 
+### Delay analysis
+
+**Report › Delay Analysis** measures delay on the data the plan holds. The top lists what the plan has (tasks with a baseline, tasks started, snapshots) and each method with what it needs: a method runs when the data is there. The figures measure what moved; they do not say who is responsible.
+
+1. **As-planned v as-built** compares each task's baseline dates and duration with its actual dates (marked A) or its forecast, in working days, and shows the planned finish, the finish now and the delay between them. The chart shows the critical tasks finishing late. Show only the late tasks, the critical ones or all.
+2. **Windows** looks at the time between snapshots: how far the project finish moved in each window and in total, the progress made, and the tasks that slipped most, the ones critical at the window's start first. Take a snapshot at each update (Progress › Snapshot) and write what happened in its comment: it shows as the window's notes.
+3. **Export…** saves the analysis as a workbook.
+
 ### The look-ahead and the constraint log
 
 ![The Look-ahead.](img/lookahead.png)

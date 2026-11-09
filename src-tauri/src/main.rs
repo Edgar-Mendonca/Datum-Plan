@@ -894,6 +894,30 @@ fn checks(st: State<St>) -> CheckOut {
     CheckOut { checks, score, trend }
 }
 
+/// Delay analysis: what the plan allows, as-planned against as-built, and the windows between snapshots.
+#[derive(serde::Serialize)]
+struct DelayOut { available: datum_core::delay::Available, apab: Option<datum_core::delay::Apab>, windows: Vec<datum_core::delay::Window> }
+
+#[tauri::command]
+fn delay_analysis(st: State<St>) -> DelayOut {
+    let a = st.lock();
+    let c = calc(&a);
+    let available = datum_core::delay::available(&c);
+    let apab = available.methods.iter().any(|m| m.key == "apab" && m.ok).then(|| datum_core::delay::apab(&c));
+    let windows = if available.methods.iter().any(|m| m.key == "windows" && m.ok) { datum_core::delay::windows(&c) } else { vec![] };
+    DelayOut { available, apab, windows }
+}
+
+/// Saves the delay analysis as a workbook (.xlsx) or OpenDocument spreadsheet.
+#[tauri::command]
+async fn delay_export(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
+    let name = st.lock().doc.p.name.clone();
+    let Some(path) = app.dialog().file().add_filter("Workbook", &["xlsx"]).add_filter("OpenDocument spreadsheet", &["ods"]).set_file_name(format!("{name} - Delay Analysis.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let a = st.lock();
+    datum_core::delay::write_book(&calc(&a), &path)?;
+    Ok(Some(path.display().to_string()))
+}
+
 /// Milestone trend: each milestone's forecast finish at every snapshot and now.
 #[tauri::command]
 fn milestone_trend(st: State<St>) -> Vec<report::Trend> { report::milestone_trend(&calc(&st.lock())) }
@@ -1724,7 +1748,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.2 — 2026-11-09
+
+Delay analysis, part one: as-planned against as-built, and windows.
+
+- **Delay Analysis** (Report › Health, or the sidebar) measures delay on the data the plan holds. The top shows what the plan has (tasks with a baseline, tasks started, snapshots) and each method with what it needs and whether it can run. It measures what moved; it does not say who is responsible.
+- **As-planned against as-built:** each task's baseline start, finish and duration against its actual (A) or forecast dates, with the variances in working days; the planned and current finish and the delay between them; a chart of the critical tasks finishing late. Show the late tasks, the critical ones, or all; click one to find it in the Gantt.
+- **Windows:** between each pair of snapshots (and from the last one to today's plan), how far the project finish moved and in total, % complete before and after, the tasks that slipped most (those critical at the window's start first) and the snapshot's notes.
+- Snapshots now also keep which tasks were critical and their float, for the windows. Older snapshots work too, without that.
+- **Export…** saves the analysis as a workbook (.xlsx) or OpenDocument spreadsheet: a summary, the tasks and the windows.
+- Time impact, impacted as-planned and collapsed as-built come in 0.8.3.
+
 ## 0.8.1 — 2026-11-09
 
 Schedule quality: a health score, a log of logic changes, ghost bars and a milestone trend.

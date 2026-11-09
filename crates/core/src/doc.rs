@@ -768,7 +768,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         Op::Snapshot { label, comment } => {
             let s = sched::schedule(p)?;
             let cost = load::compute(p, &s).cost;
-            let rows = p.tasks.iter().enumerate().map(|(i, t)| SnapRow { uid: t.uid, start: s.es[i], finish: s.ef[i], pct: t.pct, cost: cost[i] }).collect();
+            let rows = p.tasks.iter().enumerate().map(|(i, t)| SnapRow { uid: t.uid, start: s.es[i], finish: s.ef[i], pct: t.pct, cost: cost[i], crit: s.critical(p, i), tf: s.tf[i] }).collect();
             let leaf: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
             let w: i64 = leaf.iter().map(|&i| p.tasks[i].dur).sum();
             let pct = if w > 0 { leaf.iter().map(|&i| p.tasks[i].dur * p.tasks[i].pct as i64).sum::<i64>() as f64 / w as f64 } else { 0.0 };

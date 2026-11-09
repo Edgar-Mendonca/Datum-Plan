@@ -461,7 +461,10 @@ pub struct Risk {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct SnapRow { pub uid: u32, pub start: i64, pub finish: i64, pub pct: u8, pub cost: f64 }
+pub struct SnapRow { pub uid: u32, pub start: i64, pub finish: i64, pub pct: u8, pub cost: f64,
+    /// Critical when the snapshot was taken, and the total float in minutes (for windows analysis; not in older snapshots).
+    #[serde(skip_serializing_if = "std::ops::Not::not")] pub crit: bool,
+    #[serde(skip_serializing_if = "is_zero_i64")] pub tf: i64 }
 
 /// A spreadsheet tab in the plan: typed cell inputs by A1 address, number formats, column widths.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -924,6 +927,7 @@ pub const DEFAULT_COLUMNS: [(&str, i32); 8] =
 
 fn is_zero(v: &i64) -> bool { *v == 0 }
 fn is_zero_u8(v: &u8) -> bool { *v == 0 }
+fn is_zero_i64(v: &i64) -> bool { *v == 0 }
 fn is_false(v: &bool) -> bool { !*v }
 fn is_day(u: &Unit) -> bool { *u == Unit::D }
 fn is_asap(c: &Constraint) -> bool { *c == Constraint::ASAP }

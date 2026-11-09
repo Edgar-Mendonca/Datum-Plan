@@ -1,6 +1,7 @@
 //! Datum Plan core: everything except the window. No UI or OS code lives here.
 pub mod cal;
 pub mod check;
+pub mod delay;
 pub mod doc;
 pub mod fields;
 pub mod formula;
@@ -44,6 +45,8 @@ mod cases;
 mod exchange_cases;
 #[cfg(test)]
 mod quality_cases;
+#[cfg(test)]
+mod delay_cases;
 #[cfg(test)]
 mod sched_cases;
 #[cfg(test)]
