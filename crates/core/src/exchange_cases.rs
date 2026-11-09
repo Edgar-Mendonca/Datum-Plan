@@ -108,7 +108,7 @@ fn summary_pct_rounding_matches_project_pct() {
 fn risk_on_milestone_moves_the_finish() {
     let mut p = plan(&[(5, ""), (0, "1"), (3, "2")]);
     p.risks.push(Risk { id: 1, name: "Permit".into(), prob: 5, impact: 3, status: "Open".into(), tasks: vec![p.tasks[1].uid], kind: "Threat".into(), days: 5.0, ..Default::default() });
-    let r = crate::risk::simulate(&p, &crate::risk::SimOpts { iterations: 200, low: 0.0, high: 0.0, seed: 1 }).unwrap();
+    let r = crate::risk::simulate(&p, &crate::risk::SimOpts { iterations: 200, low: 0.0, high: 0.0, seed: 1, ..Default::default() }).unwrap();
     assert!((r.risks[0].value - 0.9).abs() < 0.07);
     assert!(r.p50 > r.planned, "a 90 % risk of +5 days on the milestone changed nothing: p50 {} planned {}", r.p50, r.planned);
 }
@@ -118,7 +118,7 @@ fn risk_on_summary_moves_the_finish() {
     let mut p = plan(&[(0, ""), (5, "")]);
     p.tasks[1].level = 1;
     p.risks.push(Risk { id: 1, name: "Weather".into(), prob: 5, impact: 3, status: "Open".into(), tasks: vec![p.tasks[0].uid], kind: "Threat".into(), days: 5.0, ..Default::default() });
-    let r = crate::risk::simulate(&p, &crate::risk::SimOpts { iterations: 200, low: 0.0, high: 0.0, seed: 1 }).unwrap();
+    let r = crate::risk::simulate(&p, &crate::risk::SimOpts { iterations: 200, low: 0.0, high: 0.0, seed: 1, ..Default::default() }).unwrap();
     assert!(r.p50 > r.planned, "a 90 % risk of +5 days on the phase changed nothing");
 }
 

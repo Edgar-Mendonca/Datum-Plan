@@ -11,9 +11,18 @@ pub struct SimOpts {
     pub low: f64,
     pub high: f64,
     pub seed: u64,
+    /// "tri" (triangular, the planned duration most likely) or "uniform" (any value in the range as likely).
+    pub dist: String,
+    /// Tasks whose durations move together: "" none, "all", or the name of an activity code (tasks
+    /// with the same value of it move together), and how strongly (0–0.99).
+    pub corr_by: String,
+    pub corr: f64,
+    /// Targets for the joint confidence: a finish date (YYYY-MM-DD) and a cost; empty or 0 = the plan's.
+    pub target_date: String,
+    pub target_cost: f64,
 }
 impl Default for SimOpts {
-    fn default() -> Self { Self { iterations: 1000, low: 10.0, high: 25.0, seed: 1 } }
+    fn default() -> Self { Self { iterations: 1000, low: 10.0, high: 25.0, seed: 1, dist: String::new(), corr_by: String::new(), corr: 0.0, target_date: String::new(), target_cost: 0.0 } }
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -42,6 +51,14 @@ pub struct SimResult {
     /// Risk register entries that were simulated: how often each happened.
     pub risks: Vec<TaskRisk>,
     pub notes: Vec<String>,
+    /// Joint confidence: the targets, the chance of meeting each, and of meeting both in the same run.
+    pub target_finish: i64,
+    pub target_cost: f64,
+    pub finish_chance: f64,
+    pub cost_chance: f64,
+    pub joint: f64,
+    /// Finish day and cost of up to 500 runs, for the scatter chart.
+    pub scatter: Vec<(i64, f64)>,
 }
 
 struct Rng(u64);
@@ -59,6 +76,19 @@ fn tri(r: f64, a: f64, m: f64, b: f64) -> f64 {
 /// Probability of a risk scored 1–5.
 pub fn chance(prob: u8) -> f64 { [0.0, 0.1, 0.3, 0.5, 0.7, 0.9][prob.min(5) as usize] }
 
+/// A risk's probability: its own percent when it has one, else its 1–5 score.
+fn risk_chance(r: &Risk) -> f64 { if r.pct > 0.0 { (r.pct / 100.0).clamp(0.0, 1.0) } else { chance(r.prob) } }
+
+/// The standard normal distribution function (Abramowitz and Stegun 7.1.26, error under 1.5e-7).
+fn phi(x: f64) -> f64 {
+    let t = 1.0 / (1.0 + 0.327_591_1 * x.abs() / std::f64::consts::SQRT_2);
+    let y = 1.0 - (((((1.061_405_429 * t - 1.453_152_027) * t) + 1.421_413_741) * t - 0.284_496_736) * t + 0.254_829_592) * t * (-(x * x) / 2.0).exp();
+    if x >= 0.0 { 0.5 * (1.0 + y) } else { 0.5 * (1.0 - y) }
+}
+
+/// A standard normal draw (Box–Muller).
+fn normal(rng: &mut Rng) -> f64 { let (u, v) = (rng.f().max(1e-12), rng.f()); (-2.0 * u.ln()).sqrt() * (std::f64::consts::TAU * v).cos() }
+
 fn pct(sorted: &[i64], q: f64) -> i64 { sorted[((sorted.len() - 1) as f64 * q).round() as usize] }
 
 pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
@@ -73,7 +103,16 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
         let hi = if t.dmax > 0 { (t.dmax as f64).max(d) } else { d * (1.0 + o.high.max(0.0) / 100.0) };
         (lo, d, hi)
     };
-    let risks: Vec<&Risk> = p.risks.iter().filter(|r| r.status != "Closed" && r.days != 0.0 && !r.tasks.is_empty()).collect();
+    let risks: Vec<&Risk> = p.risks.iter().filter(|r| r.status != "Closed" && (r.days != 0.0 || r.days_max != 0.0) && !r.tasks.is_empty()).collect();
+    // Correlation groups: tasks in one group share part of their draw.
+    let rho = o.corr.clamp(0.0, 0.99);
+    let mut names: Vec<String> = vec![];
+    let group: Vec<Option<usize>> = leaves.iter().map(|&i| {
+        if rho == 0.0 || o.corr_by.is_empty() { return None }
+        let key = if o.corr_by == "all" { String::new() } else { p.tasks[i].codes.get(&o.corr_by).cloned().filter(|v| !v.is_empty())? };
+        Some(names.iter().position(|n| *n == key).unwrap_or_else(|| { names.push(key); names.len() - 1 }))
+    }).collect();
+    let uniform = o.dist == "uniform";
     let runs = o.iterations.clamp(10, 10_000) as usize;
     let mut q = p.clone();
     let mut rng = Rng(o.seed.max(1).wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
@@ -84,18 +123,24 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     for _ in 0..runs {
         let (mut add, mut hit) = (vec![0i64; n], vec![]);
         for (k, r) in risks.iter().enumerate() {
-            if rng.f() < chance(r.prob) {
+            if rng.f() < risk_chance(r) {
                 hit.push(k);
-                let m = (r.days.abs() * p.day_min as f64).round() as i64 * if r.kind == "Opportunity" { -1 } else { 1 };
+                // A risk with a range of days draws its delay from it (most likely its Delay).
+                let days = if r.days_max > 0.0 { let lo = r.days_min.min(r.days.abs()); tri(rng.f(), lo, r.days.abs().max(lo), r.days_max.max(r.days.abs())) } else { r.days.abs() };
+                let m = (days * p.day_min as f64).round() as i64 * if r.kind == "Opportunity" { -1 } else { 1 };
                 // A risk on a phase delays its last task.
                 r.tasks.iter().filter_map(|u| p.idx(*u)).map(|i| if base.summary[i] { p.subtree(i).filter(|&j| !base.summary[j]).max_by_key(|&j| base.ef[j]).unwrap_or(i) } else { i }).for_each(|i| add[i] += m);
             }
         }
         let mut cost = 0.0;
         let mut drawn = Vec::with_capacity(leaves.len());
-        for &i in &leaves {
+        // One shared draw per correlation group for this run.
+        let shared: Vec<f64> = names.iter().map(|_| normal(&mut rng)).collect();
+        for (k, &i) in leaves.iter().enumerate() {
             let (a, m, b) = range(i);
-            let d = ((tri(rng.f(), a, m, b).round() as i64) + add[i]).max(0);
+            let u = match group[k] { Some(g) => phi(rho.sqrt() * shared[g] + (1.0 - rho).sqrt() * normal(&mut rng)), None => rng.f() };
+            let x = if uniform { a + (b - a) * u } else { tri(u, a, m, b) };
+            let d = ((x.round() as i64) + add[i]).max(0);
             q.tasks[i].dur = d;
             drawn.push(d as f64);
             let fixed = p.tasks[i].fixed_cost;
@@ -113,6 +158,21 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
         return Err("No run could be scheduled. Check the plan for errors first.".into());
     }
     let mut res = SimResult { runs: fin.len(), planned: base.finish, notes: vec![], ..Default::default() };
+    if uniform { res.notes.push("Durations are drawn evenly across their ranges (uniform).".into()) }
+    if rho > 0.0 {
+        let n_in = group.iter().filter(|g| g.is_some()).count();
+        res.notes.push(if o.corr_by == "all" { format!("All tasks move together with correlation {rho:.2}.") } else { format!("{n_in} tasks in {} groups of the code {} move together with correlation {rho:.2}.", names.len(), o.corr_by) });
+    }
+    // Joint confidence: the chance of meeting the finish and the cost targets in the same run.
+    let total: f64 = (0..n).filter(|&i| !base.summary[i] && !base.off[i]).map(|i| cost0[i]).sum();
+    res.target_finish = chrono::NaiveDate::parse_from_str(&o.target_date, "%Y-%m-%d").map_or(base.finish, |d| crate::cal::at(d) + DAY);
+    res.target_cost = if o.target_cost > 0.0 { o.target_cost } else { total };
+    let kept = fin.len() as f64;
+    res.finish_chance = fin.iter().filter(|&&f| f <= res.target_finish).count() as f64 / kept;
+    res.cost_chance = costs.iter().filter(|&&c| c <= res.target_cost + 1e-6).count() as f64 / kept;
+    res.joint = fin.iter().zip(&costs).filter(|(&f, &c)| f <= res.target_finish && c <= res.target_cost + 1e-6).count() as f64 / kept;
+    let step = (fin.len() / 500).max(1);
+    res.scatter = fin.iter().zip(&costs).step_by(step).map(|(&f, &c)| ((f - 1).div_euclid(DAY), (c * 100.0).round() / 100.0)).collect();
     if failed > 0 { res.notes.push(format!("{failed} runs could not be scheduled and were left out.")) }
     if leaves.iter().all(|&i| p.tasks[i].dur == 0) { res.notes.push("No unfinished tasks with a duration: nothing to vary.".into()) }
     let ranged = leaves.iter().filter(|&&i| p.tasks[i].dmin > 0 || p.tasks[i].dmax > 0).count();
@@ -164,7 +224,7 @@ mod tests {
         p
     }
     fn day(y: u32, m: u32, d: u32) -> i64 { at(NaiveDate::from_ymd_opt(y as i32, m, d).unwrap_or_default()) }
-    const NO_RANGE: SimOpts = SimOpts { iterations: 200, low: 0.0, high: 0.0, seed: 1 };
+    const NO_RANGE: SimOpts = SimOpts { iterations: 200, low: 0.0, high: 0.0, seed: 1, dist: String::new(), corr_by: String::new(), corr: 0.0, target_date: String::new(), target_cost: 0.0 };
 
     #[test]
     fn without_uncertainty_every_run_is_the_plan() {
@@ -219,5 +279,42 @@ mod tests {
         let r = simulate(&p, &SimOpts { iterations: 300, ..SimOpts::default() }).unwrap_or_default();
         assert_eq!(r.cost, 1000.0 + 40.0 * 50.0);
         assert!(r.cost_p50 > r.cost && r.cost_p80 >= r.cost_p50 && r.cost_p80 < 1000.0 + 50.0 * 40.0 * 1.25);
+    }
+
+    // 0.8.5: tasks that move together widen the spread of the finish (ten tasks in a row, each
+    // −10 % to +25 %): independent, their deviations partly cancel; correlated, they add up.
+    #[test]
+    fn correlation_widens_the_spread() {
+        let rows: Vec<(i64, String)> = (0..10).map(|k| (5, if k == 0 { String::new() } else { k.to_string() })).collect();
+        let p = plan(&rows.iter().map(|(d, s)| (*d, s.as_str())).collect::<Vec<_>>());
+        let spread = |o: SimOpts| simulate(&p, &o).map(|r| r.p90 - r.p10).unwrap_or_default();
+        let base = SimOpts { iterations: 2000, ..SimOpts::default() };
+        let (free, tied) = (spread(base.clone()), spread(SimOpts { corr_by: "all".into(), corr: 0.9, ..base.clone() }));
+        assert!(tied as f64 > free as f64 * 1.6, "correlated {tied} against independent {free}");
+        // By an activity code: only tasks with the same value move together; the note says how many.
+        let mut q = p.clone();
+        for (k, t) in q.tasks.iter_mut().enumerate() { t.codes.insert("Crew".into(), if k < 5 { "A".into() } else { "B".into() }); }
+        let r = simulate(&q, &SimOpts { corr_by: "Crew".into(), corr: 0.9, ..base.clone() }).unwrap_or_default();
+        assert!(r.notes.iter().any(|n| n.contains("10 tasks in 2 groups of the code Crew")), "{:?}", r.notes);
+        // Uniform draws: an even range (−20 % to +20 %) is centred on the plan.
+        let u = simulate(&p, &SimOpts { dist: "uniform".into(), low: 20.0, high: 20.0, ..base }).unwrap_or_default();
+        assert!((u.planned_chance - 0.5).abs() < 0.1, "{}", u.planned_chance);
+    }
+
+    // A risk's own chance in percent and a range of delay; joint confidence of finish and cost.
+    #[test]
+    fn risk_percent_range_and_joint_confidence() {
+        let mut p = plan(&[(5, "")]);
+        p.risks.push(Risk { id: 1, name: "Late permit".into(), prob: 1, status: "Open".into(), tasks: vec![p.tasks[0].uid], kind: "Threat".into(), days: 4.0, pct: 60.0, days_min: 2.0, days_max: 10.0, ..Default::default() });
+        let r = simulate(&p, &SimOpts { iterations: 2000, ..NO_RANGE }).unwrap_or_default();
+        assert!((r.risks[0].value - 0.6).abs() < 0.05, "its own 60 %, not the score's 10 %: {}", r.risks[0].value);
+        assert!(r.p90 > day(2026, 11, 13) + 17 * 60, "the range reaches past the 4 days: {}", r.p90);
+        assert!((r.finish_chance - 0.4).abs() < 0.05);
+        // Joint: never more than either chance; with no cost the cost target is always met.
+        assert!(r.joint <= r.finish_chance.min(r.cost_chance) + 1e-9 && r.cost_chance == 1.0);
+        assert!(!r.scatter.is_empty() && r.scatter.len() <= 500);
+        // A later target date is met more often.
+        let later = simulate(&p, &SimOpts { iterations: 2000, target_date: "2026-11-20".into(), ..NO_RANGE }).unwrap_or_default();
+        assert!(later.finish_chance > r.finish_chance && later.target_finish > r.target_finish);
     }
 }

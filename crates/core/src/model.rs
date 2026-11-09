@@ -457,6 +457,11 @@ pub struct Risk {
     pub kind: String,
     /// Schedule impact in working days on each linked task when the risk occurs (schedule risk analysis).
     pub days: f64,
+    /// Its own chance in percent (0: from the 1–5 probability score).
+    #[serde(skip_serializing_if = "is_zero_f64")] pub pct: f64,
+    /// A range for the delay: least and most working days (0: always `days`).
+    #[serde(skip_serializing_if = "is_zero_f64")] pub days_min: f64,
+    #[serde(skip_serializing_if = "is_zero_f64")] pub days_max: f64,
 }
 
 /// A delay event for delay analysis: what happened and what it added to the plan (a fragnet):
@@ -958,6 +963,7 @@ pub const DEFAULT_COLUMNS: [(&str, i32); 8] =
 fn is_zero(v: &i64) -> bool { *v == 0 }
 fn is_zero_u8(v: &u8) -> bool { *v == 0 }
 fn is_zero_i64(v: &i64) -> bool { *v == 0 }
+fn is_zero_f64(v: &f64) -> bool { *v == 0.0 }
 fn is_false(v: &bool) -> bool { !*v }
 fn is_day(u: &Unit) -> bool { *u == Unit::D }
 fn is_asap(c: &Constraint) -> bool { *c == Constraint::ASAP }

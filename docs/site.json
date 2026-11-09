@@ -47,7 +47,8 @@
     "XER export that keeps activity codes, custom fields, steps and notes, written for the version the receiving program runs, with a report of what went in.",
     "A schedule health score with its trend, a log of every logic change between two versions, ghost bars of the earlier version and a milestone trend chart.",
     "Delay analysis on the data the plan holds: as-planned against as-built, windows between updates, and delay events measured by time impact, impacted as-planned and collapsed as-built, each saying which plan it ran on.",
-    "What-if scenarios: copies of the plan to try another way of working, compared with the plan and merged back kind by kind."
+    "What-if scenarios: copies of the plan to try another way of working, compared with the plan and merged back kind by kind.",
+    "Schedule risk with tasks that move together, joint confidence of finish and cost, and risks with their own chance and range of delay."
   ],
   "screenshots": [
     "docs/images/gantt.png",
@@ -59,8 +60,8 @@
   "roadmap": [
     {
       "v": "0.8",
-      "title": "Exchange, quality and delay analysis",
-      "when": "Next",
+      "title": "Exchange, quality, delay analysis, scenarios and risk",
+      "when": "Now",
       "items": [
         "XER files you can send: codes, custom fields, steps and notes, for the receiving program's version (0.8.0).",
         "A schedule health score with its trend, a log of logic changes between updates, ghost bars and a milestone trend chart (0.8.1).",
@@ -72,7 +73,7 @@
     {
       "v": "0.9",
       "title": "Smaller tools",
-      "when": "Later",
+      "when": "Next",
       "items": [
         "Help › Check, list organising, a Gantt picture that reopens in Datum Plan, line of balance for repetitive work.",
         "Builds for Mac and Linux."

@@ -327,7 +327,7 @@ export const Risks = () => {
     <Page title="Risk Register" help="risks" tools={<><button class="btn" onClick={() => setView("simrisk")}>Schedule Risk…</button><button class="btn pri" onClick={() => put(blank())}>+ Add risk</button></>}>
       <div class="cols">
         <div class="panel" style={{ "grid-column": "span 2" }}>
-          <table class="tbl"><thead><tr><th>ID</th><th>Risk</th><th>Type</th><th>Cause</th><th>Prob. (1–5)</th><th>Impact (1–5)</th><th>Score</th><th title="Working days added to each linked task when the risk happens (taken off for an opportunity). Used by Schedule Risk.">Delay (days)</th><th>Owner</th><th>Response</th><th>Status</th><th>Tasks</th><th /></tr></thead>
+          <table class="tbl"><thead><tr><th>ID</th><th>Risk</th><th>Type</th><th>Cause</th><th>Prob. (1–5)</th><th>Impact (1–5)</th><th>Score</th><th title="Its own chance in percent; empty uses the probability score (1 = 10 % … 5 = 90 %). Used by Schedule Risk.">Chance %</th><th title="Working days added to each linked task when the risk happens (taken off for an opportunity). Used by Schedule Risk.">Delay (days)</th><th title="Least and most days, when the delay is uncertain: Schedule Risk draws it from this range, most likely the Delay.">Range (days)</th><th>Owner</th><th>Response</th><th>Status</th><th>Tasks</th><th /></tr></thead>
             <tbody><For each={P().risks}>{r => (
               <tr>
                 <td>R{r.id}</td><td><input value={r.name} onChange={e => put({ ...r, name: e.currentTarget.value })} /></td>
@@ -336,7 +336,9 @@ export const Risks = () => {
                 <td><input type="number" min="1" max="5" value={r.prob} onChange={e => put({ ...r, prob: +e.currentTarget.value })} /></td>
                 <td><input type="number" min="1" max="5" value={r.impact} onChange={e => put({ ...r, impact: +e.currentTarget.value })} /></td>
                 <td style={{ background: color(r.prob * r.impact) }}><b>{r.prob * r.impact}</b></td>
+                <td><input type="number" min="0" max="100" step="5" style={{ width: "56px" }} placeholder="—" value={r.pct || ""} onChange={e => put({ ...r, pct: Math.min(100, Math.max(0, +e.currentTarget.value || 0)) })} /></td>
                 <td><input type="number" min="0" step="0.5" value={r.days ?? 0} onChange={e => put({ ...r, days: +e.currentTarget.value || 0 })} /></td>
+                <td class="nowrap"><input type="number" min="0" step="0.5" style={{ width: "50px" }} placeholder="—" value={r.days_min || ""} onChange={e => put({ ...r, days_min: Math.max(0, +e.currentTarget.value || 0) })} />–<input type="number" min="0" step="0.5" style={{ width: "50px" }} placeholder="—" value={r.days_max || ""} onChange={e => put({ ...r, days_max: Math.max(0, +e.currentTarget.value || 0) })} /></td>
                 <td><input value={r.owner} onChange={e => put({ ...r, owner: e.currentTarget.value })} /></td>
                 <td><input value={r.response} onChange={e => put({ ...r, response: e.currentTarget.value })} /></td>
                 <td><select value={r.status} onChange={e => put({ ...r, status: e.currentTarget.value })}><option>Open</option><option>Mitigating</option><option>Closed</option></select></td>

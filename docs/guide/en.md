@@ -338,6 +338,12 @@ Removing a picture from the plan also takes it off the sheets that use it.
 
 Give tasks their own range with the **Optimistic Duration** and **Pessimistic Duration** columns; tasks without them use the default range (−10% to +25%). The same plan and settings always give the same answer, and the last run is kept with the plan.
 
+4. **Draw:** triangular (the planned duration is the most likely) or uniform (any value in the range is as likely).
+5. **Move together:** tasks that rise and fall together (the same crew, the same weather) can be correlated, all of them or those that share a value of an activity code, with a strength from 0 to 0.99. Correlated tasks widen the range of the finish.
+6. **Targets and joint confidence:** set a target date and a target cost (or leave them empty for the plan's). The answer gives the chance of meeting both in the same run, and the scatter shows each run's finish against its cost: the shaded box holds the runs that meet both.
+
+In the **Risk Register**, a risk can have its own **Chance %** (instead of the 1–5 score) and a **Range** for its delay (least and most days): Schedule Risk draws the delay from that range, most likely the Delay.
+
 ### Delay analysis
 
 **Report › Delay Analysis** measures delay on the data the plan holds. The top lists what the plan has (tasks with a baseline, tasks started, snapshots) and each method with what it needs: a method runs when the data is there. The figures measure what moved; they do not say who is responsible.

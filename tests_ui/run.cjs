@@ -319,7 +319,17 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".page .ptools .btn.pri"); await p.waitForTimeout(500);
   const rk = await p.textContent(".page");
   check("Schedule Risk runs and shows P50, P80 and criticality", rk.includes("P80") && rk.includes("P50") && (await p.$$(".page tr.click")).length >= 3 && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "risk_run").pop())).includes('"iterations":1000'));
+  // 0.8.5: joint confidence of finish and cost, correlation and the draw, risks with their own chance and range.
+  check("Schedule Risk shows the joint confidence of finish and cost, with each run on a scatter", (await p.textContent(".kpis")).includes("cost within") && (await p.$$("svg.scatter circle")).length > 50);
+  await p.selectOption(".page .ptools select >> nth=1", "uniform");
+  await p.selectOption(".page .ptools select >> nth=2", "all");
+  await p.waitForTimeout(100);
+  await p.fill(".page .ptools input[type=date]", "2027-03-31");
+  await p.click(".page .ptools .btn.pri"); await p.waitForTimeout(500);
+  const ro = await p.evaluate(() => window.__calls.filter(c => c[0] === "risk_run").pop()?.[1]?.opts);
+  check("…runs with the draw, tasks moving together, and the targets chosen", !!ro && ro.dist === "uniform" && ro.corr_by === "all" && ro.corr === 0.5 && ro.target_date === "2027-03-31", JSON.stringify(ro));
   await p.click('.side button[title="Risks"]'); await p.waitForTimeout(200);
+  check("the risk register takes a risk's own chance in percent and a range of delay", (await p.textContent(".page thead")).includes("Chance %") && (await p.textContent(".page thead")).includes("Range (days)"));
   check("the risk register has a Delay (days) column", (await p.textContent(".page thead")).includes("Delay (days)"));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   await p.click(".tabs > button:text-is('Resource')"); await p.waitForTimeout(100);

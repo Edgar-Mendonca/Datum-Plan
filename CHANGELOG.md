@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.5 — 2026-11-09
+
+Deeper schedule risk: tasks that move together, joint confidence of finish and cost, risks with their own chance and range.
+
+- **Move together:** tasks whose durations rise and fall together (the same crew, the same weather) can be correlated: all tasks, or the tasks that share a value of an activity code, with a strength from 0 to 0.99. Correlated tasks widen the range of the finish, as they do on site; the notes say how many tasks and groups were correlated.
+- **Draw:** triangular (the planned duration most likely, as before) or uniform (any value in the range as likely).
+- **Joint confidence:** the chance of finishing by a target date and within a target cost in the same run (the plan's finish and cost unless you set others), with the chance of each alone, and a scatter of every run's finish against its cost.
+- **Risk register:** a risk can have its own chance in percent (instead of the 1–5 score) and a range for its delay (least and most days); Schedule Risk draws the delay from that range, most likely the Delay.
+- The same plan and settings still give the same answer, and plans without the new settings give the same results as before.
+
 ## 0.8.4 — 2026-11-09
 
 What-if scenarios.

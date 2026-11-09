@@ -1172,3 +1172,10 @@ ul.report li { margin: 4px 0; line-height: 1.4; }
 
 /* What-if scenarios: the note when the shown tab is a scenario */
 p.note { background: var(--bg2, #F3F6FA); border-left: 3px solid #0B5CAD; padding: 6px 10px; margin: 0 0 8px; }
+
+/* Schedule Risk: joint confidence scatter */
+svg.scatter { width: 100%; max-width: 720px; height: auto; display: block; }
+svg.scatter .in { fill: #0B5CAD; opacity: .55; } svg.scatter .out { fill: #C0392B; opacity: .45; }
+svg.scatter .ok-box { fill: rgba(11, 92, 173, .07); } svg.scatter .target { stroke: #0B5CAD; stroke-dasharray: 4 3; }
+svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-size: 11px; fill: var(--muted, #5F6B7A); }
+:root[data-cb="1"] svg.scatter .out { fill: #D55E00; }

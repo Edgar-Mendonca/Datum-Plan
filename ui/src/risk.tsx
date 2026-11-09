@@ -15,7 +15,24 @@ const [res, setRes] = createSignal<SimResult | null>(null);
 const saved = () => (P().ui?.risk?.result ? (P().ui.risk as { result: SimResult; at: string; opts: { iterations: number; low: number; high: number } }) : null);
 const shown = () => res() ?? saved()?.result ?? null;
 const [busy, setBusy] = createSignal(false);
-const [opts, setOpts] = createSignal({ iterations: 1000, low: 10, high: 25, seed: 1 });
+const [opts, setOpts] = createSignal({ iterations: 1000, low: 10, high: 25, seed: 1, dist: "tri", corr_by: "", corr: 0.5, target_date: "", target_cost: 0 });
+
+/** Finish against cost for each run, with the targets: the runs in the lower-left box meet both. */
+const Scatter = (p: { r: SimResult }) => {
+  const W = 560, H = 260, L = 70, B = 34, pts = () => p.r.scatter ?? [];
+  const xs = () => pts().map(q => q[0]), ys = () => pts().map(q => q[1]);
+  const tx = () => Math.floor(((p.r.target_finish ?? p.r.planned) - 1) / 1440), ty = () => p.r.target_cost ?? p.r.cost;
+  const x0 = () => Math.min(...xs(), tx()) - 1, x1 = () => Math.max(...xs(), tx()) + 1, y0 = () => Math.min(...ys(), ty()) * 0.98, y1 = () => Math.max(...ys(), ty()) * 1.02 || 1;
+  const X = (v: number) => L + (v - x0()) / Math.max(1e-9, x1() - x0()) * (W - L - 10), Y = (v: number) => H - B - (v - y0()) / Math.max(1e-9, y1() - y0()) * (H - B - 10);
+  return <svg class="scatter" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Finish against cost for each run">
+    <rect x={L} y={Y(ty())} width={Math.max(0, X(tx()) - L)} height={Math.max(0, H - B - Y(ty()))} class="ok-box" />
+    <For each={pts()}>{q => <circle cx={X(q[0])} cy={Y(q[1])} r="2.2" class={q[0] <= tx() && q[1] <= ty() + 1e-6 ? "in" : "out"} />}</For>
+    <line x1={X(tx())} x2={X(tx())} y1="6" y2={H - B} class="target" /><line x1={L} x2={W - 6} y1={Y(ty())} y2={Y(ty())} class="target" />
+    <line x1={L} x2={W - 6} y1={H - B} y2={H - B} class="axis" /><line x1={L} x2={L} y1="6" y2={H - B} class="axis" />
+    <text x={X(tx())} y={H - B + 14} class="lab" text-anchor="middle">{fmtDay(tx())}</text><text x={L - 6} y={Y(ty()) + 4} class="lab" text-anchor="end">{cur(ty())}</text>
+    <text x={(L + W) / 2} y={H - 4} class="lab" text-anchor="middle">Finish</text><text x="12" y={(H - B) / 2} class="lab" transform={`rotate(-90 12 ${(H - B) / 2})`} text-anchor="middle">Cost</text>
+  </svg>;
+};
 
 export const runRisk = async () => {
   setBusy(true);
@@ -34,6 +51,10 @@ export const ScheduleRisk = () => {
     <Page title="Schedule Risk" help="simrisk" tools={<>
       <label class="muted">Runs <select value={opts().iterations} onChange={e => num("iterations", e.currentTarget.value)}><For each={[500, 1000, 2000, 5000]}>{n => <option value={n}>{n.toLocaleString()}</option>}</For></select></label>
       <label class="muted" title="Tasks without their own optimistic and pessimistic durations vary between these limits.">Default range −<input class="num" type="number" min="0" max="100" value={opts().low} onChange={e => num("low", e.currentTarget.value)} />% to +<input class="num" type="number" min="0" value={opts().high} onChange={e => num("high", e.currentTarget.value)} />%</label>
+      <label class="muted" title="Triangular: the planned duration is the most likely. Uniform: any value in the range is as likely.">Draw <select value={opts().dist} onChange={e => setOpts({ ...opts(), dist: e.currentTarget.value })}><option value="tri">Triangular</option><option value="uniform">Uniform</option></select></label>
+      <label class="muted" title="Tasks that move together (the same crew, the same weather): all tasks, or the tasks that share a value of an activity code.">Move together <select value={opts().corr_by} onChange={e => setOpts({ ...opts(), corr_by: e.currentTarget.value })}><option value="">None</option><option value="all">All tasks</option><For each={P().codes}>{c => <option value={c.name}>By {c.name}</option>}</For></select>
+        <Show when={opts().corr_by}> <input class="num" type="number" min="0" max="0.99" step="0.1" value={opts().corr} onChange={e => setOpts({ ...opts(), corr: Math.min(0.99, Math.max(0, +e.currentTarget.value || 0)) })} /></Show></label>
+      <label class="muted" title="The date and budget to meet; empty uses the plan's finish and cost.">Targets <input type="date" value={opts().target_date} onChange={e => setOpts({ ...opts(), target_date: e.currentTarget.value })} /> <input class="num" style={{ width: "90px" }} type="number" min="0" placeholder="Cost" value={opts().target_cost || ""} onChange={e => setOpts({ ...opts(), target_cost: Math.max(0, +e.currentTarget.value || 0) })} /></label>
       <button class="btn pri" disabled={busy()} onClick={runRisk}>{busy() ? "Running…" : res() ? "Run again" : "Run analysis"}</button>
     </>}>
       <Show when={!res() && saved()}><p class="muted">Results of the run on {saved()!.at} ({saved()!.opts.iterations.toLocaleString()} runs, −{saved()!.opts.low}% to +{saved()!.opts.high}%). Run again after changing the plan.</p></Show>
@@ -54,6 +75,7 @@ export const ScheduleRisk = () => {
             <Kpi v={fmtAt(r().p90, true)} l="P90" />
             <Kpi v={cur(r().cost_p50)} l={`Cost P50 (plan ${cur(r().cost)})`} />
             <Kpi v={cur(r().cost_p80)} l="Cost P80" />
+            <Show when={r().joint !== undefined}><Kpi v={pct(r().joint!)} l={`Finish by ${fmtAt(r().target_finish ?? r().planned, true)} and cost within ${cur(r().target_cost ?? r().cost)}`} bad={r().joint! < 0.5} good={r().joint! >= 0.8} /></Show>
           </div>
           <div class="cols riskcharts">
             <div class="panel" style={{ "grid-column": "span 2" }}>
@@ -68,6 +90,11 @@ export const ScheduleRisk = () => {
               <p class="muted">The longer these tasks take, the later the project finishes (1 = always together).</p>
             </div>
           </div>
+          <Show when={(r().scatter ?? []).length}>
+            <div class="panel"><h2>Joint confidence: finish and cost together</h2>
+              <Scatter r={r()} />
+              <p class="muted">Each dot is a run. The shaded box holds the runs that meet both targets: {pct(r().joint ?? 0)} of them; the date alone {pct(r().finish_chance ?? 0)}, the cost alone {pct(r().cost_chance ?? 0)}.</p></div>
+          </Show>
           <div class="cols">
             <div class="panel"><h2>Criticality: how often each task was critical</h2>
               <table class="tbl"><tbody><For each={r().criticality}>{t => <tr class="click" onClick={() => { setView("gantt"); selectUid(t.uid); }}><td>{t.name}</td><td class="r"><span class="meter"><i style={{ width: pct(t.value) }} /></span> {pct(t.value)}</td></tr>}</For></tbody></table>

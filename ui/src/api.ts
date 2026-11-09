@@ -21,7 +21,7 @@ export interface Resource {
 export interface Indicator { scope: number; test: string; value: string; icon: string }
 export interface CustomDef { key: string; alias: string; lookup: { value: string; desc: string }[]; restrict: boolean; default: string; formula: string; rollup: string; indicators: Indicator[]; show_icons: boolean }
 export interface CodeDef { name: string; scope: string; values: { value: string; desc: string; color: string }[] }
-export interface Risk { id: number; name: string; cause: string; prob: number; impact: number; owner: string; response: string; status: string; tasks: number[]; kind: string; days: number }
+export interface Risk { id: number; name: string; cause: string; prob: number; impact: number; owner: string; response: string; status: string; tasks: number[]; kind: string; days: number; pct?: number; days_min?: number; days_max?: number }
 export interface SchedOpts {
   retained: boolean; critical_float: number; longest_path: boolean; lag_cal: string; float_paths: number; open_ends_critical: boolean;
   level_within_slack: boolean; level_split: boolean; level_order: string; effort_default: boolean; task_type_default: string; from_finish: boolean; finish_date: string | null; res_cals?: boolean;
@@ -96,7 +96,7 @@ export interface Manpower { buckets: number[]; unit: string; status_day: number;
 export interface EarnedSchedule { es: number; at: number; pd: number; spi_t: number; sv_t: number; ieac: number; planned_finish: number; forecast_finish: number }
 export interface Lookahead { from: number; to: number; rows: { uid: number; code: string; name: string; es: number; ef: number; pct: number; res: string; crit: boolean; open: number; overdue: number }[] }
 export interface TaskRisk { uid: number; name: string; value: number }
-export interface SimResult { runs: number; planned: number; planned_chance: number; p10: number; p50: number; p80: number; p90: number; days: [number, number][]; cost: number; cost_p50: number; cost_p80: number; criticality: TaskRisk[]; drivers: TaskRisk[]; risks: TaskRisk[]; notes: string[] }
+export interface SimResult { runs: number; planned: number; planned_chance: number; p10: number; p50: number; p80: number; p90: number; days: [number, number][]; cost: number; cost_p50: number; cost_p80: number; criticality: TaskRisk[]; drivers: TaskRisk[]; risks: TaskRisk[]; notes: string[]; target_finish?: number; target_cost?: number; finish_chance?: number; cost_chance?: number; joint?: number; scatter?: [number, number][] }
 export interface LevelPreview { moved: { uid: number; name: string; start: number; new_start: number; finish: number; new_finish: number }[]; finish: number; new_finish: number; over_before: number; over_after: number }
 /** An instant (minutes) as a short date: finishes at midnight belong to the day before. */
 export const fmtAt = (t: number, fin = false) => fmtDay(Math.floor(((fin ? t - 1 : t)) / 1440));
