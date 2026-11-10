@@ -310,8 +310,8 @@ fn planned_pct(c: &Calc) -> f64 {
     let leaves: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
     let w: f64 = leaves.iter().map(|&i| p.tasks[i].dur as f64).sum();
     // A plan of milestones only takes the plain average, as PercentComplete does.
-    if w <= 0.0 { return if leaves.is_empty() { 0.0 } else { leaves.iter().map(|&i| c.val(i, "plannedpct").num()).sum::<f64>() / leaves.len() as f64 } }
-    leaves.iter().map(|&i| p.tasks[i].dur as f64 * c.val(i, "plannedpct").num()).sum::<f64>() / w
+    if w <= 0.0 { return if leaves.is_empty() { 0.0 } else { leaves.iter().map(|&i| c.planned_share(i)).sum::<f64>() / leaves.len() as f64 } }
+    leaves.iter().map(|&i| p.tasks[i].dur as f64 * c.planned_share(i)).sum::<f64>() / w
 }
 
 /// Names that hold dates (shown as dates when a cell has no format of its own).

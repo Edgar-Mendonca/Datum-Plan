@@ -118,3 +118,23 @@ fn milestone_trend_from_snapshots() {
     // eight days of work from 16 Nov it is now 25 Nov.
     assert_eq!(tr[0].points, [(day(2026, 11, 6), day(2026, 11, 13)), (day(2026, 11, 13), day(2026, 11, 25))]);
 }
+
+// The S-curve has a point at the status date itself, between period ends, where planned and actual
+// are measured on the same day; the per-period bars leave it out.
+#[test]
+fn scurve_point_at_the_status_date() {
+    let mut doc = Doc::new(plan(&[(30, ""), (40, "1")]));
+    let u = doc.p.tasks[0].uid;
+    for (f, v) in [("astart", "2026-11-02"), ("pct", "20")] { doc.apply(Op::Set { uid: u, field: f.into(), value: v.into() }, "%Y-%m-%d").unwrap() }
+    doc.apply(Op::Baseline { uids: vec![], clear: false, n: 0 }, "%Y-%m-%d").unwrap();
+    doc.apply(Op::ProjectSet { field: "status".into(), value: serde_json::json!("2026-11-18") }, "%Y-%m-%d").unwrap();
+    let c = calc(&doc.p);
+    let s = crate::report::scurve(&c, "month", "duration", None);
+    let k = s.status_at.unwrap_or_else(|| panic!("{:?} {}", s.days.iter().map(|d| crate::cal::date_of(d * crate::cal::DAY)).collect::<Vec<_>>(), s.status_day));
+    assert_eq!(crate::cal::date_of(s.days[k] * crate::cal::DAY), d(2026, 11, 18));
+    assert!(s.actual[k].is_some() && s.actual[k + 1].is_none(), "the actual line ends at the status date");
+    // Planned there is the plan on that day, as the dashboard's PlannedPercent; actual is behind it.
+    let pp = crate::sheet::project_names(&c).into_iter().find(|x| x.0 == "PlannedPercent").map(|x| match x.1 { gridcraft_core::Value::Number(n) => n, _ => -1.0 }).unwrap();
+    assert!((s.planned[k] - pp).abs() < 0.05, "{} vs {pp}", s.planned[k]);
+    assert!(s.planned[k + 1] > s.planned[k] && s.actual[k].unwrap() < s.planned[k]);
+}

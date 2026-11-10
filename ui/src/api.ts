@@ -150,7 +150,7 @@ export interface SheetImage { pic: number; cell: string; w: number; h: number; f
 export interface Photo { data: string; caption: string }
 export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
 export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean, number | null][]; filtered?: number[]; lists?: string[][]; links?: [string, string][]; invalid?: string[]; cond?: [string, string][] }
-export interface SCurve { days: number[]; planned: number[]; actual: (number | null)[]; forecast: number[]; total: number; status_day: number; name: string; weight: string }
+export interface SCurve { days: number[]; planned: number[]; actual: (number | null)[]; forecast: number[]; total: number; status_day: number; name: string; weight: string; status_at?: number | null }
 export interface PRow { uid: number; code: string; name: string; start: string; finish: string; pct: number; note: string }
 export interface PeriodReport {
   kind: string; from: number; to: number; prev_from: number; planned_prev: number; planned: number; actual_prev: number; actual: number;

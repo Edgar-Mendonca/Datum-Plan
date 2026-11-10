@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.6 — 2026-11-10
+
+S-curves measured on the status date, and charts that copy sharp into documents.
+
+- **S-curves at the status date.** A monthly (or weekly) S-curve now has a point at the status date itself. Before, the status marker sat on the period's end, where the planned line showed the plan at the end of the month while the actual line showed progress at the status date, so the lines looked apart when they were not. Now planned, actual and forecast are read on the same day, and they match the dashboard's progress and variance figures. Per-period bars leave the extra point out, and the S-Curves data table marks it.
+- The project's planned progress no longer rounds each task to a whole percent before adding them up, so it agrees with the S-curve to the decimal.
+- **Copy and PNG of a chart** now draw it for a document: page-wide proportions, larger text, light colours whatever the theme, the chart's title on top, at three times the sharpness. The picture carries its print size, so a word processor places it 16 cm wide, sharp and readable. Copy Picture of the Gantt pastes at its screen size.
+- The status label stays inside the plot when the status date is near the start or the end.
+
 ## 0.8.5 — 2026-11-09
 
 Deeper schedule risk: tasks that move together, joint confidence of finish and cost, risks with their own chance and range.

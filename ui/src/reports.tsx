@@ -66,15 +66,18 @@ export const Tools = (p: { title: string; help?: string; children?: JSX.Element 
 );
 
 /** S-curve chart from engine data: planned, actual and forecast cumulative %. */
+/** The curve without its status-date point (for per-period figures). */
+export const periodsOnly = (c: SCurve): SCurve => { const k = c.status_at; if (k === null || k === undefined) return c; const cut = <T,>(v: T[]) => v.filter((_, i) => i !== k); return { ...c, days: cut(c.days), planned: cut(c.planned), actual: cut(c.actual), forecast: cut(c.forecast), status_at: null }; };
 export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short" | "fill"; money?: boolean; bare?: boolean }) => {
-  const k = createMemo(() => p.c.days.findIndex(d => d >= p.c.status_day));
+  const k = createMemo(() => p.c.status_at ?? p.c.days.findIndex(d => d >= p.c.status_day));
   const conv = (v: (number | null)[]) => (p.money ? v.map(x => (x === null ? null : (x / 100) * p.c.total)) : v);
-  return <ChartBox title={p.title ?? `S-curve: ${p.c.name}`} type="line" size={p.size} days={p.c.days} labels={p.c.days.map(d => label(d, p.unit))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
+  return <ChartBox title={p.title ?? `S-curve: ${p.c.name}`} type="line" size={p.size} days={p.c.days} labels={p.c.days.map((d, i) => (i === p.c.status_at ? fmtDay(d) : label(d, p.unit)))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
     y={p.money ? `Cumulative (${P().currency.code})` : "Cumulative progress"} marker={k() >= 0 ? k() : null} bare={p.bare}
     datasets={[line("Planned (baseline)", conv(p.c.planned), COL.grey, [6, 4]), line("Actual", conv(p.c.actual), COL.blue, undefined, true), line("Forecast", conv(p.c.forecast.map((v, i) => (i >= k() && k() >= 0 ? v : null))), COL.red, [2, 3])]} />;
 };
 /** Progress per period (not cumulative): planned vs actual bars. */
-export const PeriodBars = (p: { c: SCurve; unit: string; last?: number; size?: "fill"; bare?: boolean }) => {
+export const PeriodBars = (p0: { c: SCurve; unit: string; last?: number; size?: "fill"; bare?: boolean }) => {
+  const p = { get c() { return periodsOnly(p0.c); }, get unit() { return p0.unit; }, get last() { return p0.last; }, get size() { return p0.size; }, get bare() { return p0.bare; } };
   const n = () => p.c.days.length;
   const from = () => Math.max(1, n() - (p.last ?? 24));
   const delta = (v: (number | null)[]) => v.slice(from()).map((x, i) => (x === null || v[from() + i - 1] === null ? null : x - (v[from() + i - 1] as number)));
@@ -180,7 +183,7 @@ export const SCurves = () => {
       </div>
       <Show when={main()}>{c => (
         <div class="panel"><h2>Data</h2><div class="wlwrap"><table class="tbl"><thead><tr><th>Period end</th><th class="r">Planned</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Variance</th></tr></thead>
-          <tbody><For each={c().days.slice(1)}>{(d, i) => { const k = i() + 1, a = c().actual[k]; return <tr><td>{fmtDay(d, "long")}</td><td class="r">{pct(c().planned[k])}</td><td class="r">{a === null ? "" : pct(a)}</td><td class="r">{pct(c().forecast[k])}</td><td class="r" classList={{ late: a !== null && a < c().planned[k] - 0.05 }}>{a === null ? "" : pct(a - c().planned[k])}</td></tr>; }}</For></tbody></table></div></div>
+          <tbody><For each={c().days.slice(1)}>{(d, i) => { const k = i() + 1, a = c().actual[k]; return <tr classList={{ hl: k === c().status_at }}><td>{fmtDay(d, "long")}{k === c().status_at ? " (status date)" : ""}</td><td class="r">{pct(c().planned[k])}</td><td class="r">{a === null ? "" : pct(a)}</td><td class="r">{pct(c().forecast[k])}</td><td class="r" classList={{ late: a !== null && a < c().planned[k] - 0.05 }}>{a === null ? "" : pct(a - c().planned[k])}</td></tr>; }}</For></tbody></table></div></div>
       )}</Show>
     </section>
   );

@@ -705,6 +705,9 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.evaluate(() => { window.__calls.length = 0; });
   await p.click(".chartbox header button:has-text('Copy') >> nth=0"); await p.waitForTimeout(400);
   check("every chart has Copy, to paste it as a picture", (await p.evaluate(() => window.__calls.filter(c => c[0] === "copy_picture").length)) === 1);
+  const cc = await p.evaluate(() => { const c = window.__calls.filter(x => x[0] === "copy_picture").pop()?.[1]; const v = new DataView(Uint8Array.from(atob(c.dib.slice(0, 64)), ch => ch.charCodeAt(0)).buffer); const png = atob(c.png.split(",")[1].slice(0, 120)); return { w: v.getInt32(4, true), h: v.getInt32(8, true), ppm: v.getInt32(24, true), phys: png.includes("pHYs"), png: c.png }; });
+  if (process.env.CHARTPNG) require("fs").writeFileSync(process.env.CHARTPNG, Buffer.from(cc.png.split(",")[1], "base64"));
+  check("…drawn page-wide and sharp (2880 px), tagged to paste 16 cm wide", cc.w === 2880 && cc.h > 1300 && Math.abs(cc.ppm - 18000) < 2 && cc.phys, JSON.stringify({ ...cc, png: undefined }));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   // 0.7.0: Portfolio: plans with their modules, a timeline, and the shared resource pool.
   await p.click('.side button[title="Portfolio"]'); await p.waitForTimeout(400);

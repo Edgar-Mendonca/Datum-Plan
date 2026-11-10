@@ -16,7 +16,12 @@ export const COL = { ...STD };
 /** Switches the chart and status colours (the page's `data-cb`) to the colour-blind safe set or back. */
 export const setColourSafe = (on: boolean) => { Object.assign(COL, on ? SAFE : STD); document.documentElement.dataset.cb = on ? "1" : "0"; };
 
-const cssv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/** While a chart is drawn for a document (Copy, PNG): light colours and a text scale. */
+let doc = 0;
+const LIGHT: Record<string, string> = { "--text": "#1B2733", "--muted": "#4B5563", "--line2": "#E3E8EF", "--line3": "#9AA3AF", "--bg2": "#FFFFFF" };
+const cssv = (n: string) => (doc ? LIGHT[n] ?? "" : getComputedStyle(document.documentElement).getPropertyValue(n).trim());
+/** A font size in px, larger when drawing for a document. */
+const fs = (px: number) => px * (doc || 1);
 
 /** A marker line with a small label (the status date), and a soft line under the pointer. */
 const lines = (marker: () => number | null | undefined, label: string): Plugin => ({
@@ -32,10 +37,12 @@ const lines = (marker: () => number | null | undefined, label: string): Plugin =
       ctx.strokeStyle = COL.green; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(px, a.top + 18); ctx.lineTo(px, a.bottom); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.font = "600 10px 'IBM Plex Sans', sans-serif";
+      ctx.font = `600 ${fs(10)}px 'IBM Plex Sans', sans-serif`;
       const w = ctx.measureText(label).width + 12;
-      ctx.fillStyle = COL.green; ctx.beginPath(); ctx.roundRect(px - w / 2, a.top, w, 17, 8.5); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, px, a.top + 9);
+      const hh = fs(17);
+      const lx = Math.min(Math.max(px - w / 2, a.left + 2), a.right - w);
+      ctx.fillStyle = COL.green; ctx.beginPath(); ctx.roundRect(lx, a.top, w, hh, hh / 2); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, lx + w / 2, a.top + hh / 2 + 0.5);
     }
     const act = ch.tooltip?.getActiveElements?.() ?? [];
     if (act.length && !(ch.options as { indexAxis?: string }).indexAxis?.startsWith("y")) {
@@ -51,7 +58,7 @@ const ends = (f: () => Fmt | undefined): Plugin => ({
   id: "ends",
   afterDatasetsDraw(ch) {
     const { ctx, chartArea: a } = ch;
-    ctx.save(); ctx.font = "600 10.5px 'IBM Plex Sans', sans-serif"; ctx.textBaseline = "middle";
+    ctx.save(); ctx.font = `600 ${fs(10.5)}px 'IBM Plex Sans', sans-serif`; ctx.textBaseline = "middle";
     const used: number[] = [];
     ch.data.datasets.forEach((d, k) => {
       if ((d as { type?: string }).type !== "line" || !ch.isDatasetVisible(k)) return;
@@ -60,10 +67,11 @@ const ends = (f: () => Fmt | undefined): Plugin => ({
       if (i < 0 || !pts[i]) return;
       const text = fmtv(vals[i] as number, f()), w = ctx.measureText(text).width;
       let y = pts[i].y;
-      while (used.some(u => Math.abs(u - y) < 13)) y -= 13;
+      const gap = fs(13);
+      while (used.some(u => Math.abs(u - y) < gap)) y -= gap;
       used.push(y);
-      const x = Math.min(pts[i].x + 6, a.right + 44 - w);
-      ctx.fillStyle = cssv("--bg2") || "#fff"; ctx.fillRect(x - 2, y - 7, w + 4, 14);
+      const x = Math.min(pts[i].x + 6, a.right + fs(44) - w);
+      ctx.fillStyle = cssv("--bg2") || "#fff"; ctx.fillRect(x - 2, y - gap / 2, w + 4, gap);
       ctx.fillStyle = String(d.borderColor ?? "#333"); ctx.fillText(text, x, y);
     });
     ctx.restore();
@@ -115,10 +123,13 @@ export const ChartBox = (p: ChartProps) => {
   let ch: Chart | undefined;
   /** Nothing to draw: no periods, or every value empty or zero (no costs, no hours yet). */
   const empty = () => !p.labels.length || p.datasets.every(d => d.data.every(v => !v));
-  const build = (first = false) => {
-    if (ch) { live.delete(ch); ch.destroy(); }
+  /** Draws the chart on the box's canvas, or (`to`) on a canvas of its own for a document. */
+  const build = (first = false, to?: HTMLCanvasElement): Chart | undefined => {
+    const target = to ?? cv;
+    if (!to && ch) { live.delete(ch); ch.destroy(); }
     const ink = cssv("--text"), muted = cssv("--muted"), grid = cssv("--line2");
-    const font = { family: "'IBM Plex Sans', 'Segoe UI', sans-serif", size: 11 };
+    const font = { family: "'IBM Plex Sans', 'Segoe UI', sans-serif", size: fs(11) };
+    const sharpness = to ? 3 : Math.max(2, window.devicePixelRatio || 1);
     const axis = (title?: string, isY = false) => ({
       title: { display: !!title, text: title, color: muted, font: { ...font, weight: 500 as const }, padding: { bottom: 6 } },
       border: { display: !isY, color: cssv("--line3") || "#9AA3AF", width: 1 },
@@ -136,11 +147,11 @@ export const ChartBox = (p: ChartProps) => {
       // One colour per slice, a thin gap between slices, the legend beside the ring.
       const pal = Object.values(COL).filter(c => c !== COL.black);
       const bg = cssv("--bg2") || "#fff";
-      ch = new Chart(cv, {
+      const made = new Chart(target, {
         type: p.type,
         data: { labels: p.labels, datasets: p.datasets.map(d => ({ ...d, backgroundColor: p.labels.map((_, i) => pal[i % pal.length]), borderColor: bg, borderWidth: 2, hoverOffset: 6 })) as never },
         options: {
-          responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(2, window.devicePixelRatio || 1), animation: first ? { duration: 600, easing: "easeOutQuart" } : false, cutout: p.type === "doughnut" ? "62%" : 0,
+          responsive: !to, maintainAspectRatio: false, devicePixelRatio: sharpness, animation: first && !to ? { duration: 600, easing: "easeOutQuart" } : false, cutout: p.type === "doughnut" ? "62%" : 0,
           layout: { padding: 6 },
           plugins: {
             legend: { position: "right", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: 7, boxHeight: 7, padding: 10 } },
@@ -150,18 +161,20 @@ export const ChartBox = (p: ChartProps) => {
         } as never,
         plugins: [paper],
       });
+      if (to) return made;
+      ch = made;
       live.add(ch);
-      return;
+      return ch;
     }
-    ch = new Chart(cv, {
+    const made = new Chart(target, {
       type: p.type,
-      data: { labels: p.labels, datasets: p.datasets as ChartDataset<"line" | "bar", (number | null)[]>[] },
+      data: { labels: p.labels, datasets: (to ? p.datasets.map(d => ({ ...d, borderWidth: (d as { type?: string }).type === "line" || p.type === "line" ? 3 : (d as { borderWidth?: number }).borderWidth })) : p.datasets) as ChartDataset<"line" | "bar", (number | null)[]>[] },
       options: {
-        responsive: true, maintainAspectRatio: false, animation: first ? { duration: 600, easing: "easeOutQuart" } : false,
+        responsive: !to, maintainAspectRatio: false, animation: first && !to ? { duration: 600, easing: "easeOutQuart" } : false,
         indexAxis: p.horizontal ? "y" : "x",
         interaction: { mode: "index", intersect: false },
-        layout: { padding: { top: 2, right: p.type === "line" || p.datasets.some(d => (d as { type?: string }).type === "line") ? 48 : 8, left: 2 } },
-        devicePixelRatio: Math.max(2, window.devicePixelRatio || 1),
+        layout: { padding: { top: 2, right: p.type === "line" || p.datasets.some(d => (d as { type?: string }).type === "line") ? fs(48) : 8, left: 2 } },
+        devicePixelRatio: sharpness,
         elements: {
           line: { borderWidth: 2.5, tension: 0.4, cubicInterpolationMode: "monotone", borderCapStyle: "round" },
           point: { radius: 0, hoverRadius: many ? 3 : 5, hitRadius: 10, hoverBorderWidth: 2, hoverBackgroundColor: "#fff" },
@@ -170,7 +183,7 @@ export const ChartBox = (p: ChartProps) => {
         datasets: { bar: { categoryPercentage: 0.72, barPercentage: 0.88, maxBarThickness: 28 } },
         scales: (p.horizontal ? { x: vAxis, y: hAxis } : { x: hAxis, y: vAxis }) as never,
         plugins: {
-          legend: { position: "top", align: "end", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: 7, boxHeight: 7, padding: 14 } },
+          legend: { position: "top", align: "end", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: fs(7), boxHeight: fs(7), padding: fs(14) } },
           tooltip: {
             backgroundColor: "rgba(17, 24, 39, 0.92)", titleColor: "#fff", bodyColor: "#E5E7EB", borderWidth: 0, cornerRadius: 8, padding: 10, boxPadding: 4, caretSize: 6,
             usePointStyle: true, titleFont: { ...font, weight: 600 as const }, bodyFont: font,
@@ -180,8 +193,34 @@ export const ChartBox = (p: ChartProps) => {
       },
       plugins: [paper, lines(() => p.marker, `${p.markerLabel ?? "Status"}${p.marker !== null && p.marker !== undefined && p.labels[p.marker] ? ` · ${p.labels[p.marker]}` : ""}`), ends(() => p.fmt)],
     });
-    ch.options.color = muted;
+    made.options.color = muted;
+    if (to) return made;
+    ch = made;
     live.add(ch);
+    return ch;
+  };
+  /** The chart drawn for a document: a page-wide layout (960 × 470 px at three times the sharpness),
+   *  larger text, light colours whatever the theme, and its title on top. */
+  const picture = async (): Promise<HTMLCanvasElement | null> => {
+    if (!ch) return null;
+    const W = 960, H = p.type === "doughnut" || p.type === "pie" ? 420 : 470, T = 40, K = 3;
+    const host = document.createElement("div");
+    host.style.cssText = `position:fixed;left:-20000px;top:0;width:${W}px;height:${H}px`;
+    const c2 = document.createElement("canvas");
+    c2.style.width = `${W}px`; c2.style.height = `${H}px`; c2.width = W; c2.height = H;
+    host.appendChild(c2); document.body.appendChild(host);
+    doc = 1.3;
+    let made: Chart | undefined;
+    try { made = build(false, c2); made?.update("none"); } finally { doc = 0; }
+    const out = document.createElement("canvas");
+    out.width = W * K; out.height = (H + T) * K;
+    const x = out.getContext("2d")!;
+    x.fillStyle = "#fff"; x.fillRect(0, 0, out.width, out.height);
+    x.fillStyle = "#0C1A2B"; x.font = `600 ${17 * K}px 'IBM Plex Sans', 'Segoe UI', sans-serif`; x.textBaseline = "middle";
+    x.fillText(p.title, 12 * K, (T / 2 + 2) * K);
+    x.drawImage(c2, 0, T * K, W * K, H * K);
+    made?.destroy(); host.remove();
+    return out;
   };
   // The box can change width without the window changing (sidebar, panes): follow it.
   const ro = new ResizeObserver(() => ch?.resize());
@@ -189,8 +228,10 @@ export const ChartBox = (p: ChartProps) => {
   onCleanup(() => { ro.disconnect(); if (ch) { live.delete(ch); ch.destroy(); } });
   createEffect(on(() => [p.labels, p.datasets, themeTick(), p.marker], () => build(), { defer: true }));
   const save = async () => {
-    if (!ch) return;
-    const path = await call<string | null>("save_file", { name: `${p.title}.png`, data: ch.toBase64Image("image/png", 1) });
+    const pic = await picture();
+    if (!pic) return;
+    const { pngAt } = await import("./picture");
+    const path = await call<string | null>("save_file", { name: `${p.title}.png`, data: pngAt(pic, 16) });
     if (path) toast(`Saved ${path}`, true);
   };
   /** A one-way copy of the values in Datum Plot: changes there never come back. */
@@ -202,7 +243,7 @@ export const ChartBox = (p: ChartProps) => {
   };
   return (
     <div class="chartbox" data-marker={p.marker ?? ""} classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>
-      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={() => ch && import("./picture").then(m => m.copyCanvas(ch!.canvas, p.title))} title="Copy the chart as a picture, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
+      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={async () => { const pic = await picture(); if (pic) (await import("./picture")).copyCanvas(pic, p.title, 16); }} title="Copy the chart as a picture, page-wide and sharp, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
       <div class="cv" classList={{ blank: empty() }}><canvas ref={cv} /></div>
       <Show when={empty()}><p class="nodata">{p.fmt === "money" ? "No costs in this plan yet." : p.fmt === "hours" ? "No hours assigned yet." : "No data yet."}</p></Show>
     </div>

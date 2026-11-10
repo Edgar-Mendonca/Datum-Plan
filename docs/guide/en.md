@@ -153,6 +153,8 @@ The **health score** (0 to 100: Good, Fair or Poor) is the weighted share of the
 
 **Report › Compare Projects** compares the plan with another version of it (a saved .dplan, XML or XER file) and lists every change: tasks added and deleted, durations, links added, deleted or changed, constraints, calendars, actual dates, % complete and date moves, with the project finish before and after. Click a kind of change to see only those; **Export…** saves the list as a workbook. **Show ghost bars** draws the other version's bars faintly behind yours.
 
+**Copy** on any chart copies it drawn for a document: page-wide, with larger text, light colours and its title, sharp enough to read when pasted 16 cm wide. **PNG** saves the same picture.
+
 **Report › Milestone Trend** shows how each milestone's forecast finish moved from snapshot to snapshot (take a snapshot at each update: Progress › Snapshot). A flat line keeps its date; a rising line is slipping.
 
 ## People, man-hours and costs

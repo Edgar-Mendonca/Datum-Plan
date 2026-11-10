@@ -104,7 +104,7 @@ const copyGantt = async () => {
   if (!["gantt", "tracking"].includes(view())) return toast("Copy Picture copies the Gantt chart: open the Gantt (or the Tracking Gantt) first. Each chart has its own Copy button.");
   const { ganttPicture } = await import("./gantt"), { copyCanvas } = await import("./picture");
   const cv = ganttPicture();
-  if (cv) copyCanvas(cv, "The Gantt chart");
+  if (cv) copyCanvas(cv, "The Gantt chart", cv.width / 2 / 96 * 2.54);
 };
 const exportMenu = (): Item[] => [["Workbook (.xlsx)", "xlsx"], ["OpenDocument spreadsheet (.ods)", "ods"], ["Project XML (.xml)", "xml"], ["XER (.xer)", "xer"], ["PMXML (.xml)", "pmxml"], ["MPX (.mpx)", "mpx"], ["CSV (.csv)", "csv"], ["Web page (.html)", "html"], ["iCalendar (.ics)", "ics"], ["JSON (.json)", "json"]].map(([l, k]) => ({ label: l, run: () => C.exportAs(k) }));
 const baselineMenu = (): Item[] => Array.from({ length: 11 }, (_, k) => ({ label: k ? `Baseline ${k}` : "Baseline", run: () => { setBaseline(k); setShowBase(true); }, on: baseline() === k && showBase() }));

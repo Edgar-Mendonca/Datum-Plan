@@ -218,6 +218,15 @@ impl<'a> Calc<'a> {
     }
 
     /// The status (data) instant: end of the status date, or now.
+    /// Where the baseline (or, without one, the current plan) says task `i` should be at the status
+    /// date, 0–100, unrounded (the project's figure and the S-curve sum these).
+    pub fn planned_share(&self, i: usize) -> f64 {
+        let (t, s) = (&self.p.tasks[i], &self.s);
+        let (a, b) = t.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
+        let (dd, c) = (self.progress_at(), &s.cals[s.ci[i]]);
+        if dd <= a { 0.0 } else if dd >= b { 100.0 } else { c.between(a, dd) as f64 / c.between(a, b).max(1) as f64 * 100.0 }
+    }
+
     pub fn status_at(&self) -> i64 {
         at(self.p.status.unwrap_or(self.today)) + DAY
     }
@@ -382,10 +391,7 @@ impl<'a> Calc<'a> {
             "qtydone" => if t.qty > 0.0 || t.qty_done > 0.0 { F::Num(t.qty_done) } else { F::Null },
             "qtyunit" => txt(&t.qty_unit),
             "plannedpct" | "pctvar" => {
-                // Where the baseline (or, without one, the current plan) says the task should be at the status date.
-                let (a, b) = t.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
-                let (dd, c) = (self.progress_at(), &s.cals[s.ci[i]]);
-                let planned = if dd <= a { 0.0 } else if dd >= b { 100.0 } else { (c.between(a, dd) as f64 / c.between(a, b).max(1) as f64 * 100.0).round() };
+                let planned = self.planned_share(i).round();
                 F::Num(if key == "pctvar" { self.pct[i] as f64 - planned } else { planned })
             }
             "work" => F::Num(l.work[i] / 60.0),

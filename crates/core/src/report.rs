@@ -352,6 +352,9 @@ pub struct SCurve {
     pub name: String,
     /// The weighting used: duration, cost, work or physical.
     pub weight: String,
+    /// The point at the status date, between two period ends (planned, actual and forecast are all
+    /// measured on that day there; per-period bars leave it out).
+    pub status_at: Option<usize>,
 }
 
 /// Cumulative progress S-curve for the project or one summary (`scope` uid), weighted by
@@ -374,8 +377,12 @@ pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
     days.insert(0, lo - 1);
     if days.last().is_some_and(|&l| l < fin) { days.push(fin) }
     let dd = c.progress_at();
+    // A point at the status date itself, so the lines compare the same day there (a monthly curve
+    // would otherwise set the plan at the month's end against progress at the status date).
+    let sd = dd / DAY - 1;
+    let status_at = match days.binary_search(&sd) { Err(k) if k > 0 && k < days.len() => { days.insert(k, sd); Some(k) } _ => None };
     let h = history(c);
-    let mut out = SCurve { days: vec![], planned: vec![], actual: vec![], forecast: vec![], total, status_day: dd / DAY - 1, name: scope.and_then(|u| p.idx(u)).map_or(p.name.clone(), |k| p.tasks[k].name.clone()), weight };
+    let mut out = SCurve { days: vec![], planned: vec![], actual: vec![], forecast: vec![], total, status_day: dd / DAY - 1, name: scope.and_then(|u| p.idx(u)).map_or(p.name.clone(), |k| p.tasks[k].name.clone()), weight, status_at };
     let mut prev = i64::MIN;
     for d in days {
         let t = (d + 1) * DAY;
