@@ -1179,3 +1179,12 @@ svg.scatter .in { fill: #0B5CAD; opacity: .55; } svg.scatter .out { fill: #C0392
 svg.scatter .ok-box { fill: rgba(11, 92, 173, .07); } svg.scatter .target { stroke: #0B5CAD; stroke-dasharray: 4 3; }
 svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-size: 11px; fill: var(--muted, #5F6B7A); }
 :root[data-cb="1"] svg.scatter .out { fill: #D55E00; }
+
+/* Risk register: room for the type, the range on one line, wrapped names readable */
+.riskreg select { min-width: 112px; }
+.riskreg td.nowrap { white-space: nowrap; }
+.riskreg td.nowrap input { display: inline-block; width: 50px; }
+.riskreg td input:not([type=number]) { min-width: 120px; }
+.riskreg td input[type=number] { width: 64px; }
+.matrix div { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.25; padding: 2px; overflow: hidden; }
+.riskreg .btn { white-space: nowrap; }

@@ -344,7 +344,7 @@ Give tasks their own range with the **Optimistic Duration** and **Pessimistic Du
 5. **Move together:** tasks that rise and fall together (the same crew, the same weather) can be correlated, all of them or those that share a value of an activity code, with a strength from 0 to 0.99. Correlated tasks widen the range of the finish.
 6. **Targets and joint confidence:** set a target date and a target cost (or leave them empty for the plan's). The answer gives the chance of meeting both in the same run, and the scatter shows each run's finish against its cost: the shaded box holds the runs that meet both.
 
-In the **Risk Register**, a risk can have its own **Chance %** (instead of the 1–5 score) and a **Range** for its delay (least and most days): Schedule Risk draws the delay from that range, most likely the Delay.
+In the **Risk Register**, link each risk to the tasks it would delay with **Link tasks…** (or from a task's details pane, Risks tab); the probability × impact matrix shows each open risk in its cell. A risk can have its own **Chance %** (instead of the 1–5 score) and a **Range** for its delay (least and most days): Schedule Risk draws the delay from that range, most likely the Delay.
 
 ### Delay analysis
 

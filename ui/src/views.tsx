@@ -319,6 +319,23 @@ export const TeamPlanner = () => {
 };
 
 // ---------- Risks ----------
+/** Link a risk to the tasks it would delay: every task of the plan (not only those shown), searchable. */
+const linkRiskTasks = async (r: { id: number; name: string; tasks: number[] }) => {
+  const g = await call<{ rows: Row[] }>("query", { q: { cols: ["code", "name"], filter: { name: "", rules: [{ field: "summary", test: "equals", value: "No", value2: "", or: false }], summaries: false, highlight: false }, group: [], sort: [], flat: true, collapsed: [], level: 0, hide_summaries: false, project_summary: false, baseline: 0 } });
+  if (!g) return;
+  openDialog(() => {
+    const [on, setOn] = createSignal<number[]>([...r.tasks]), [find, setFind] = createSignal("");
+    const rows = () => g.rows.filter(x => x.uid > 0 && x.kind === "task" && (!find() || `${x.cells[0] ?? ""} ${x.name}`.toLowerCase().includes(find().toLowerCase())));
+    const flip = (u: number) => setOn(on().includes(u) ? on().filter(x => x !== u) : [...on(), u]);
+    return <Dialog title={`Tasks delayed by R${r.id}: ${r.name}`} wide okText="Link" ok={() => { const risk = P().risks.find(x => x.id === r.id); if (risk) act({ Risk: { id: r.id, risk: { ...risk, tasks: on() } } }); }}>
+      <p class="muted">Tick the tasks this risk would delay. When it happens, Schedule Risk adds its Delay to each ticked task, so tick the one task it really holds up (often an item's manufacture and delivery), not several in parallel.</p>
+      <div class="form"><input placeholder="Find a task by ID or name" value={find()} onInput={e => setFind(e.currentTarget.value)} /></div>
+      <p class="muted">{on().length} linked.</p>
+      <div class="fieldlist" style={{ "max-height": "52vh" }}><table class="tbl"><tbody><For each={rows().slice(0, 1500)}>{x =>
+        <tr class="link" onClick={() => flip(x.uid)}><td style={{ width: "28px" }}><input type="checkbox" checked={on().includes(x.uid)} onClick={e => e.stopPropagation()} onChange={() => flip(x.uid)} /></td><td class="muted" style={{ width: "110px" }}>{x.cells[0]}</td><td style={{ "padding-left": `${6 + x.lvl * 12}px` }}>{x.name}</td></tr>}</For></tbody></table></div>
+    </Dialog>;
+  });
+};
 export const Risks = () => {
   const blank = () => ({ id: Math.max(0, ...P().risks.map(r => r.id)) + 1, name: "New risk", cause: "", prob: 3, impact: 3, owner: "", response: "", status: "Open", tasks: [], kind: "Threat", days: 0 });
   const put = (r: any) => act({ Risk: { id: r.id, risk: r } });
@@ -326,8 +343,8 @@ export const Risks = () => {
   return (
     <Page title="Risk Register" help="risks" tools={<><button class="btn" onClick={() => setView("simrisk")}>Schedule Risk…</button><button class="btn pri" onClick={() => put(blank())}>+ Add risk</button></>}>
       <div class="cols">
-        <div class="panel" style={{ "grid-column": "span 2" }}>
-          <table class="tbl"><thead><tr><th>ID</th><th>Risk</th><th>Type</th><th>Cause</th><th>Prob. (1–5)</th><th>Impact (1–5)</th><th>Score</th><th title="Its own chance in percent; empty uses the probability score (1 = 10 % … 5 = 90 %). Used by Schedule Risk.">Chance %</th><th title="Working days added to each linked task when the risk happens (taken off for an opportunity). Used by Schedule Risk.">Delay (days)</th><th title="Least and most days, when the delay is uncertain: Schedule Risk draws it from this range, most likely the Delay.">Range (days)</th><th>Owner</th><th>Response</th><th>Status</th><th>Tasks</th><th /></tr></thead>
+        <div class="panel" style={{ "grid-column": "1 / -1", "overflow-x": "auto" }}>
+          <table class="tbl riskreg"><thead><tr><th>ID</th><th>Risk</th><th>Type</th><th>Cause</th><th>Prob. (1–5)</th><th>Impact (1–5)</th><th>Score</th><th title="Its own chance in percent; empty uses the probability score (1 = 10 % … 5 = 90 %). Used by Schedule Risk.">Chance %</th><th title="Working days added to each linked task when the risk happens (taken off for an opportunity). Used by Schedule Risk.">Delay (days)</th><th title="Least and most days, when the delay is uncertain: Schedule Risk draws it from this range, most likely the Delay.">Range (days)</th><th>Owner</th><th>Response</th><th>Status</th><th>Tasks</th><th /></tr></thead>
             <tbody><For each={P().risks}>{r => (
               <tr>
                 <td>R{r.id}</td><td><input value={r.name} onChange={e => put({ ...r, name: e.currentTarget.value })} /></td>
@@ -342,16 +359,17 @@ export const Risks = () => {
                 <td><input value={r.owner} onChange={e => put({ ...r, owner: e.currentTarget.value })} /></td>
                 <td><input value={r.response} onChange={e => put({ ...r, response: e.currentTarget.value })} /></td>
                 <td><select value={r.status} onChange={e => put({ ...r, status: e.currentTarget.value })}><option>Open</option><option>Mitigating</option><option>Closed</option></select></td>
-                <td class="muted">{r.tasks.length}</td><td><button class="x" onClick={() => act({ Risk: { id: r.id, risk: null } })}>×</button></td>
+                <td><button class="btn sm" title={r.tasks.length ? "Change the linked tasks" : "Link the tasks this risk would delay"} onClick={() => linkRiskTasks(r)}>{r.tasks.length ? `${r.tasks.length} linked` : "Link tasks…"}</button></td><td><button class="x" onClick={() => act({ Risk: { id: r.id, risk: null } })}>×</button></td>
               </tr>
             )}</For></tbody></table>
-          <Show when={!P().risks.length}><p class="empty">No risks recorded. Add threats and opportunities, score them, and link them to tasks in the details pane.</p></Show>
+          <Show when={!P().risks.length}><p class="empty">No risks recorded. Add threats and opportunities, score them, and link each to the tasks it would delay (Link tasks…).</p></Show>
         </div>
         <div class="panel"><h2>Probability × impact</h2>
           <div class="matrix"><For each={[5, 4, 3, 2, 1]}>{p => <For each={[1, 2, 3, 4, 5]}>{i => {
-            const n = P().risks.filter(r => r.prob === p && r.impact === i && r.status !== "Closed").length;
-            return <div style={{ background: color(p * i) }}>{n || ""}</div>;
-          }}</For>}</For></div><p class="muted">Rows: probability (5 at the top). Columns: impact.</p>
+            // Worked out again whenever the risks change.
+            const here = () => P().risks.filter(r => r.prob === p && r.impact === i && r.status !== "Closed");
+            return <div style={{ background: color(p * i) }} title={here().map(r => `R${r.id} ${r.name}`).join("\n")}>{here().length ? here().map(r => `R${r.id}`).join(" ") : ""}</div>;
+          }}</For>}</For></div><p class="muted">Rows: probability (5 at the top). Columns: impact. Each open risk shows in its cell; closed risks are left out.</p>
         </div>
       </div>
     </Page>

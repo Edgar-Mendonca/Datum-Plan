@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.7 — 2026-11-10
+
+Risk register fixes.
+
+- **The probability × impact matrix follows the register:** a risk shows in its cell (by its ID) as soon as it is scored, and moves when its probability or impact changes. Before, the matrix only counted the risks there were when the page opened. Closed risks are left out.
+- **Link tasks… in the register:** each risk's Tasks button lists every task of the plan (searchable by ID or name, collapsed or not) to tick the ones it would delay. Before, risks could only be linked from a task's details pane (Risks tab), which was easy to miss.
+- The register uses the page's full width, scrolls sideways when the window is narrow, and the Type and Range boxes have room.
+
 ## 0.8.6 — 2026-11-10
 
 S-curves measured on the status date, and charts that copy sharp into documents.
