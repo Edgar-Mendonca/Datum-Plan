@@ -1188,3 +1188,6 @@ svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-siz
 .riskreg td input[type=number] { width: 64px; }
 .matrix div { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.25; padding: 2px; overflow: hidden; }
 .riskreg .btn { white-space: nowrap; }
+
+/* A merged range being edited shows only the editor */
+.sheetgrid .mcell.editing > * { visibility: hidden; }

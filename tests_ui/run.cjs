@@ -882,6 +882,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("ribbon dropdown arrows are not drawn as pane dividers", (await p.$$(".ribbon .split")).length === 0 && (await p.$$(".ribbon .sarr")).length >= 2);
   const mbg = await p.$eval(".sheetgrid .mcell", e => getComputedStyle(e).backgroundColor), cbg = await p.$eval(".sheetgrid .gscroll, .sheetgrid", e => getComputedStyle(e).backgroundColor);
   check("a merged cell keeps the sheet's white background", mbg === cbg || mbg === "rgb(255, 255, 255)" || mbg.includes("198, 239, 206"), `${mbg} vs ${cbg}`);
+  // 0.8.8: editing a merged cell: the editor covers the whole range and the cell's own text hides (nothing shows twice).
+  { const mb = await p.$eval(".sheetgrid .mcell", e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+    await p.dblclick(".sheetgrid .mcell"); await p.waitForTimeout(250);
+    const eb = await p.$eval(".sheetgrid textarea.edit, .sheetgrid input.edit", e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+    const hidden = await p.$eval(".sheetgrid .mcell", e => [...e.children].every(c => getComputedStyle(c).visibility === "hidden"));
+    check("editing a merged cell: the editor covers the merged range and its text is not shown twice", eb.every((v, i) => Math.abs(v - mb[i]) < 3) && hidden, JSON.stringify([mb, eb, hidden]));
+    await p.keyboard.press("Escape"); await p.waitForTimeout(150); }
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Borders options']"); await p.waitForTimeout(150);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-borders.png"), clip: { x: 300, y: 40, width: 700, height: 520 } });

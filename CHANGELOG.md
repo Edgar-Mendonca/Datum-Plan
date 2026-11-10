@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.8 — 2026-11-10
+
+Sheets: dragging tabs, and editing merged cells.
+
+- **Drag a sheet tab** to move the sheet, as in a spreadsheet. Dragging did not work in the installed app: the window took every drag for dropping files. It now leaves drags to the page, which also brings back dragging columns in the task sheet and tiles on a dashboard.
+- **Editing a merged cell** shows its text once: the editor covers the whole merged range, centred, and the cell's own text hides while you type. Before, the editor sat over the first cell only and the text showed twice.
+
 ## 0.8.7 — 2026-11-10
 
 Risk register fixes.

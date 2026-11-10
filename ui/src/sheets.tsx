@@ -1066,7 +1066,7 @@ export const Sheets = () => {
   const MergeView = (m: { r0: number; c0: number; r1: number; c1: number }) => {
     const x = () => cells().get(a1(m.r0, m.c0)), st = () => sheet()?.style ?? {};
     const sides = () => { const t = F.parse(st()[a1(m.r0, m.c0)]), b = F.parse(st()[a1(m.r1, m.c0)]), rr = F.parse(st()[a1(m.r0, m.c1)]); return { "border-bottom": F.line(b.bb) ?? "1px solid var(--line2)", "border-right": F.line(rr.br) ?? "1px solid var(--line2)", ...(t.bt ? { "border-top": F.line(t.bt) } : {}), ...(t.bl ? { "border-left": F.line(t.bl) } : {}) }; };
-    return <div class="c mcell" classList={{ r: !!x()?.[3], sin: inR(m.r0, m.c0), at: cur()[0] === m.r0 && cur()[1] === m.c0 }}
+    return <div class="c mcell" classList={{ r: !!x()?.[3], sin: inR(m.r0, m.c0), at: cur()[0] === m.r0 && cur()[1] === m.c0, editing: edit() !== null && home()?.r === m.r0 && home()?.c === m.c0 }}
       style={{ left: `${lefts()[m.c0]}px`, top: `${top_(m.r0)}px`, width: `${lefts()[m.c1] + width(m.c1) - lefts()[m.c0]}px`, height: `${top_(m.r1 + 1) - top_(m.r0)}px`, ...cellCss(m.r0, m.c0, top_(m.r1 + 1) - top_(m.r0)), ...sides() }}>
       <Show when={fmtOf(m.r0, m.c0) === "flag" && x()?.[2]} fallback={<span>{x()?.[2] ?? ""}</span>}><FlagText country={x()![2]} /></Show></div>;
   };
@@ -1080,7 +1080,12 @@ export const Sheets = () => {
   };
   /** The in-cell editor: a box that grows with the lines typed (Alt+Enter); a country cell keeps its list of countries. */
   const EditBox = () => {
-    const box2 = () => { const hm = home()!, m = mergeAt(hm.r, hm.c); return { left: `${lefts()[hm.c]}px`, top: `${top_(hm.r)}px`, width: `${Math.max(m ? lefts()[m.c1] + width(m.c1) - lefts()[hm.c] : width(hm.c), 180)}px`, height: `${Math.max(RH, rh(hm.r), (edit() ?? "").split("\n").length * 17 + 5)}px` }; };
+    // Over a merged range the box covers the whole range (and hides its text), so nothing shows twice.
+    const box2 = () => {
+      const hm = home()!, m = mergeAt(hm.r, hm.c);
+      const w = m ? lefts()[m.c1] + width(m.c1) - lefts()[m.c0] : width(hm.c), h = m ? top_(m.r1 + 1) - top_(m.r0) : rh(hm.r);
+      return { left: `${lefts()[m ? m.c0 : hm.c]}px`, top: `${top_(m ? m.r0 : hm.r)}px`, width: `${Math.max(w, m ? 0 : 180)}px`, height: `${Math.max(RH, h, (edit() ?? "").split("\n").length * 17 + 5)}px`, "text-align": m ? "center" : undefined } as JSX.CSSProperties;
+    };
     const on = { onMouseDown: (e: MouseEvent) => e.stopPropagation(), onFocus: () => { lastEl = "cell"; }, onInput: (e: InputEvent) => typed(e.currentTarget as HTMLTextAreaElement), onKeyDown: edKey, onKeyUp: caretOf, onClick: caretOf, onBlur: blur };
     const ref = (e: HTMLInputElement | HTMLTextAreaElement) => { cellEl = e; setTimeout(() => { if (document.activeElement !== barEl) { lastEl = "cell"; e.focus(); e.setSelectionRange(caret(), caret()); } }); };
     return <Show when={fmtOf(home()!.r, home()!.c) === "flag"} fallback={<textarea class="edit" rows={1} spellcheck={false} style={box2()} value={edit()!} ref={ref} {...on} />}><input class="edit" list="countries" style={box2()} value={edit()!} ref={ref} {...on} /></Show>;
