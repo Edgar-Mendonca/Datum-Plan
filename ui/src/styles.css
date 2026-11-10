@@ -475,6 +475,7 @@ input, select, textarea { background: var(--bg2); color: var(--text); }
 .sheettabs { display: flex; gap: 0; border-top: 1px solid var(--line); background: var(--panel); flex: none; }
 .sheettabs button { padding: 4px 14px; font: 500 10.5px var(--mono); letter-spacing: .06em; border-right: 1px solid var(--line); color: var(--muted); }
 .sheettabs button.on { background: var(--bg2); color: var(--blue); box-shadow: inset 0 2px var(--blue); }
+.sheettabs .sstat { align-self: center; padding: 0 12px; font: 500 10.5px var(--mono); color: var(--muted); white-space: pre; }
 @media print { .chartbox header button, .fbar { display: none !important; } .chartbox { break-inside: avoid; } .charts:not(.wide):not(.flow) { grid-template-columns: repeat(2, minmax(0, 1fr)); } .charts.flow > * { flex-basis: 300px; } }
 .printonly { display: none; }
 @media print { .printonly { display: block !important; } }

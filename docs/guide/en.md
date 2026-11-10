@@ -394,7 +394,7 @@ When you open **Sheets**, the ribbon opens on **Home**; **Sheet Tools › Format
 
 - **Clipboard:** Paste (with Paste Special), Cut, Copy and Format Painter. A paste brings the copied cells' formulas, look and number formats in one step; one copied cell pasted on a larger selection fills all of it.
 - **Font:** font, size (up to 48), bold, italic, underline, strikethrough, font colour and fill. The colour arrows open a palette (theme colours with lighter and darker shades, standard and recent colours, **More Colors…**).
-- **Alignment:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells).
+- **Alignment:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells). Merging keeps only the upper-left value; Undo brings the others back.
 - **Editing:** **Find** (Find and Replace), **Fill** (Down and Right), **Clear** (All, Formats or Contents) and **Sort** A to Z or Z to A (formulas move with their rows, empty cells go last).
 
 **Sheet Tools › Format** holds the tools only a sheet has. Sheet Tools is always on the ribbon; from another view it opens Sheets.
@@ -419,6 +419,8 @@ When you open **Sheets**, the ribbon opens on **Home**; **Sheet Tools › Format
 - **Data Validation…:** what a cell may hold. A **list** (the values typed in or read from cells, also on another sheet, for example `Lists!A1:A9`; an arrow shows on the cell and [[Alt+Down]] opens it), a **whole number**, **decimal**, **date**, **time** or **text length** between, above or below limits (values or cells), or a **custom** formula that must be TRUE, written for the first cell (`=AND(A2>0,A2<=B2)`). Limits, list sources and conditional formats that point at cells follow them when rows, columns or cells move. An optional message shows while the cell is selected; a wrong value is refused (**Stop**) or asked about (**Warn**). **Circle Invalid Data** rings the cells that already break their rules.
 - **Remove Duplicates…** (Home › Sort) removes repeated rows, comparing the columns you choose.
 - **Find All** lists every match to click through; **Look in** chooses the values shown or the formulas typed, and **Every sheet** searches all the tabs.
+- **Totals of the selection:** select two or more cells and the bar by the sheet tabs shows their **Average**, **Count** and **Sum** (hidden and filtered rows left out).
+- **Copy to a document:** copied cells paste into Word or an e-mail as a table, with their fonts, fills, widths and merges, and into a spreadsheet program as cells.
 - **Go To:** [[F5]] or [[Ctrl+G]], or type an address in the box left of the formula bar (B12, A1:D20, Sheet2!A1), or a defined name.
 - **Several lines in a cell:** [[Alt+Enter]] while typing starts a new line; the row grows to show them.
 - **Links:** a typed web or e-mail address, or `=HYPERLINK(address, text)`, shows as a link. [[Ctrl]]+click (or right-click › **Open Link**) shows the full address and opens it in your browser. **Link…** (Insert › Link…, or right-click) adds or edits one; [[Ctrl+K]] stays Tell Me.

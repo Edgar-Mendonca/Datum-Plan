@@ -138,6 +138,21 @@ export const Sheets = () => {
   onMount(() => { if (box) ro.observe(box); F.setTarget(fmtTarget); });
   onCleanup(() => { ro.disconnect(); if (F.target() === fmtTarget) F.setTarget(null); if (edit() !== null) commit(null); });
   const range = () => { const g = S.last(); return [g.r0, g.c0, g.r1, g.c1]; };
+  // Average, Count and Sum of the selection, as a spreadsheet's status bar shows them (hidden rows and columns left out).
+  const stats = createMemo(() => {
+    const gs = S.ranges().map(g => [Math.min(g.r0, g.r1), Math.min(g.c0, g.c1), Math.max(g.r0, g.r1), Math.max(g.c0, g.c1)]);
+    if (gs.length === 1 && gs[0][0] === gs[0][2] && gs[0][1] === gs[0][3]) return null;
+    let n = 0, m = 0, sum = 0;
+    for (const [a, , shown, , v] of cells().values()) {
+      if (shown === "") continue;
+      const [r, c] = parseA1(a);
+      if (!gs.some(g => r >= g[0] && r <= g[2] && c >= g[1] && c <= g[3]) || hidR().has(r) || hidC().has(c)) continue;
+      n++; if (typeof v === "number") { m++; sum += v; }
+    }
+    if (!n) return null;
+    const f = (x: number) => x.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    return m ? `Average: ${f(sum / m)}   Count: ${n}   Sum: ${f(sum)}` : `Count: ${n}`;
+  });
   const inR = S.inRange;
   const put = async (list: [string, string][], kk = k()) => { if (list.length) await act({ SheetCells: { k: kk, cells: list, fmt: null } }); };
   const go = (r: number, c: number, ext = false, add = false) => S.pick(r, c, ext, add);
@@ -304,7 +319,27 @@ export const Sheets = () => {
     Object.assign(sclip, { merges: mg, text: clip.text, inputs, styles: clip.styles, fmts: Array.from({ length: r1 - r0 + 1 }, (_, i) => Array.from({ length: c1 - c0 + 1 }, (_, j) => fm[a1(r0 + i, c0 + j)] ?? "")), k: k(), r0, c0, cut });
     return clip.text;
   };
-  const onCopy = (e: ClipboardEvent, cut = false) => { if (edit() !== null) return; e.preventDefault(); e.clipboardData?.setData("text/plain", copy(cut)); };
+  /** The selection as an HTML table (shown values, fonts, fills, borders, alignment, merged cells, column
+   *  widths), so it pastes into a document, a spreadsheet program or an e-mail as a real table. */
+  const htmlTable = () => {
+    const [r0, c0, r1, c1] = range();
+    const st = sheet()?.style ?? {}, esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+    const rows = Array.from({ length: r1 - r0 + 1 }, (_, i) => r0 + i).filter(r => !fltRows().has(r) && rh(r) > 0);
+    const cols = Array.from({ length: c1 - c0 + 1 }, (_, j) => c0 + j).filter(c => width(c) > 0);
+    const inside = merges().filter(m => m.r0 >= r0 && m.r1 <= r1 && m.c0 >= c0 && m.c1 <= c1);
+    const covered = (r: number, c: number) => inside.some(m => r >= m.r0 && r <= m.r1 && c >= m.c0 && c <= m.c1 && !(r === m.r0 && c === m.c0));
+    const kebab = (o: Record<string, unknown>) => Object.entries(o).filter(([, v]) => v !== undefined && v !== "").map(([k2, v]) => `${k2}:${v}`).join(";");
+    const body = rows.map(r => `<tr style="height:${rh(r)}px">${cols.filter(c => !covered(r, c)).map(c => {
+      const x = cells().get(a1(r, c)), m = inside.find(g => g.r0 === r && g.c0 === c);
+      const css = F.css(st[a1(r, c)]) as Record<string, unknown>;
+      delete css["justify-content"];
+      const align = css["text-align"] ?? (x?.[3] ? "right" : undefined);
+      const span = m ? ` colspan="${cols.filter(cc => cc >= m.c0 && cc <= m.c1).length}" rowspan="${rows.filter(rr => rr >= m.r0 && rr <= m.r1).length}"` : "";
+      return `<td${span} style="${kebab({ "font-family": "Calibri, 'IBM Plex Sans', Arial, sans-serif", "font-size": "11pt", "vertical-align": "middle", padding: "2px 5px", border: "0.5pt solid #D4D9E1", "white-space": css["white-space"] ?? "nowrap", ...css, "text-align": align })}">${esc(x?.[2] ?? "")}</td>`;
+    }).join("")}</tr>`).join("");
+    return `<html><body><table style="border-collapse:collapse"><colgroup>${cols.map(c => `<col style="width:${width(c)}px">`).join("")}</colgroup>${body}</table></body></html>`;
+  };
+  const onCopy = (e: ClipboardEvent, cut = false) => { if (edit() !== null) return; e.preventDefault(); e.clipboardData?.setData("text/plain", copy(cut)); e.clipboardData?.setData("text/html", htmlTable()); };
   /** What a paste puts at the cursor: copies made in Sheets bring their formulas (moved by the distance); anything else pastes as text. */
   const pasted = async (text: string, tr = false): Promise<[string, string][]> => {
     const [r0, c0] = cur();
@@ -538,9 +573,11 @@ export const Sheets = () => {
     if (b.r0 === b.r1 && b.c0 === b.c1) return toast("Select two or more cells to merge.");
     const add = kind === "across" ? Array.from({ length: b.r1 - b.r0 + 1 }, (_, i) => ({ ...b, r0: b.r0 + i, r1: b.r0 + i })).filter(m => m.c1 > m.c0) : [b];
     const centre = kind === "center" ? [{ SheetStyle: { k: k(), cells: [[a1(b.r0, b.c0), F.ser({ ...F.parse(sheet()?.style?.[a1(b.r0, b.c0)]), a: "c" })]] } }] : [];
-    const lost = [] as string[]; S.each((r, c) => { if (!(r === b.r0 && c === b.c0) && input(k(), r, c)) lost.push(a1(r, c)); }, 20000);
-    if (lost.length && kind !== "across") toast("Merging keeps only the upper-left value; the others are hidden under it.");
-    return saveMerges([...keep, ...add.map(asA1)], centre);
+    // As in a spreadsheet: a merged range keeps only its upper-left value (Undo brings the others back).
+    const lost = [] as string[];
+    for (const m of add) for (let r = m.r0; r <= m.r1; r++) for (let c = m.c0; c <= m.c1; c++) if (!(r === m.r0 && c === m.c0) && input(k(), r, c)) lost.push(a1(r, c));
+    if (lost.length) toast(`Merged: only the upper-left value is kept (${lost.length} other value${lost.length === 1 ? "" : "s"} cleared; Undo brings ${lost.length === 1 ? "it" : "them"} back).`);
+    return saveMerges([...keep, ...add.map(asA1)], [...centre, ...(lost.length ? [{ SheetCells: { k: k(), cells: lost.map(x => [x, ""]), fmt: null } }] : [])]);
   };
   const merged = () => merges().some(overlaps(bounds()));
   /** A cell style sets font and fill; alignment, wrapping and (unless the style has its own) borders stay, as in a spreadsheet. */
@@ -1201,6 +1238,7 @@ export const Sheets = () => {
           </Show></Show>}</For>
         <button onClick={addSheet} title="New sheet">＋</button>
         <span class="grow" />
+        <Show when={stats()}><span class="sstat" title="Of the selected cells: the average and sum of the numbers, and how many cells have a value">{stats()}</span></Show>
         <span class="smodes">
           <button classList={{ on: sheetMode() === "normal" }} title="Normal: the cells" onClick={() => setSheetMode("normal")}><Icon n="vnormal" /></button>
           <button classList={{ on: sheetMode() === "layout" }} title="Page Layout: the pages as they will print, with header and footer" onClick={() => setSheetMode("layout")}><Icon n="vlayout" /></button>

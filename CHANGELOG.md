@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.9 — 2026-11-10
+
+Sheets: a check of the everyday spreadsheet work, and what it found.
+
+- **Sum, Average and Count of the selection** show by the sheet tabs when you select two or more cells, as in a spreadsheet. Hidden and filtered rows are left out.
+- **Copy to Word or an e-mail as a table.** Copied cells now also carry a formatted table (fonts, fills, borders, widths, merged cells, numbers to the right), so they paste into a document as a table. A spreadsheet program still gets the cells.
+- **Percent Style** shows 0.28 as 28%, as in a spreadsheet. Before, it added a % sign to the number as it was, so 0.28 showed 0%.
+- **Merge & Center** keeps only the upper-left value and clears the others, with a note; Undo brings them back. Before, the other values stayed hidden under the merge and could still be read by formulas.
+- **A live test of Sheets** runs the built window against the real engine: typing, formulas and plan data, undo, keys, fill, copy and paste with other programs, rows and columns, merges, number formats and dates, sort, filter, freeze, hide, status colours, Format Painter, tabs, and the speed of a 2,000-row sheet (63 checks).
+
 ## 0.8.8 — 2026-11-10
 
 Sheets: dragging tabs, and editing merged cells.
