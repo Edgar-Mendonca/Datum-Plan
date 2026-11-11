@@ -4,9 +4,9 @@ import { CustomDashboard, DashTabs, dashK, dashboards } from "./dashboards";
 import { For, Show, createSignal, createResource, createMemo, createEffect, on, JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Curve, Grid, Rule, fmtDay, money, dateDay, iso, SCurve, PeriodReport, PeriodNote, PRow, Usage, EarnedSchedule, fmtAt } from "./api";
-import { call, out, P, tick, toast, act, openMenu } from "./store";
+import { call, out, P, tick, toast, act, openMenu, openDialog } from "./store";
 import { C, selectUid } from "./cmds";
-import { Seg } from "./ui";
+import { Seg, Dialog, Row, Check, Pick, Text } from "./ui";
 import { ChartBox, COL, line, bar } from "./charts";
 import { Help } from "./help";
 
@@ -68,12 +68,77 @@ export const Tools = (p: { title: string; help?: string; children?: JSX.Element 
 /** S-curve chart from engine data: planned, actual and forecast cumulative %. */
 /** The curve without its status-date point (for per-period figures). */
 export const periodsOnly = (c: SCurve): SCurve => { const k = c.status_at; if (k === null || k === undefined) return c; const cut = <T,>(v: T[]) => v.filter((_, i) => i !== k); return { ...c, days: cut(c.days), planned: cut(c.planned), actual: cut(c.actual), forecast: cut(c.forecast), status_at: null }; };
+/** How the plan's S-curves look (Format in the chart's corner), kept with the plan. "report": the
+ *  progress of each period as bars on the left axis and the cumulative curves on the right, the data
+ *  date and progress under a centred title, the legend below; "lines": the cumulative curves only. */
+export type ScOpts = { style: "report" | "lines"; title: string; sub: boolean; pbars: boolean; abars: boolean; fc: "auto" | "on" | "off"; smooth: boolean; marker: boolean; legend: "bottom" | "top"; rotate: boolean; cp: string; ca: string; cf: string; bp: string; ba: string };
+export const SC_DEF: ScOpts = { style: "report", title: "", sub: true, pbars: true, abars: true, fc: "auto", smooth: true, marker: true, legend: "bottom", rotate: false, cp: "#1F3864", ca: "#2E8B3E", cf: "#E07B24", bp: "#9DC3E6", ba: "#A9D18E" };
+export const scOpts = (): ScOpts => ({ ...SC_DEF, ...((out()?.project.ui?.scurve ?? {}) as Partial<ScOpts>) });
+export const scurveOptions = () => openDialog(() => {
+  const [o, setO] = createStore<ScOpts>({ ...scOpts() });
+  const cols: [keyof ScOpts, string][] = [["cp", "Planned (cumulative)"], ["ca", "Actual (cumulative)"], ["cf", "Forecast"], ["bp", "Planned per period"], ["ba", "Actual per period"]];
+  return (
+    <Dialog title="S-curve Format" help="scurves" ok={() => act({ Ui: { key: "scurve", value: { ...o } } })}
+      extra={<button class="btn" onClick={() => setO({ ...SC_DEF })}>Reset</button>}>
+      <div class="form">
+        <Row label="Style"><Seg options={[["report", "Bars and curves"], ["lines", "Curves only"]]} value={o.style} set={v => setO("style", v as ScOpts["style"])} /></Row>
+        <Row label="Title"><Text value={o.title} placeholder="As each chart is named (Project S-curve)" set={v => setO("title", v)} /></Row>
+        <Row label=""><Check label="Data date, planned and actual % under the title" value={o.sub} set={v => setO("sub", v)} /></Row>
+        <Row label="Bars per period"><span class="inline"><Check label="Planned" value={o.pbars} disabled={o.style !== "report"} set={v => setO("pbars", v)} /><Check label="Actual" value={o.abars} disabled={o.style !== "report"} set={v => setO("abars", v)} /></span></Row>
+        <Row label="Forecast curve"><Pick value={o.fc} set={v => setO("fc", v as ScOpts["fc"])} options={[["auto", "When it differs from the plan"], ["on", "Always"], ["off", "Never"]]} /></Row>
+        <Row label="Legend"><Seg options={[["bottom", "Below"], ["top", "Above"]]} value={o.legend} set={v => setO("legend", v as ScOpts["legend"])} /></Row>
+        <Row label=""><span class="inline"><Check label="Smooth curves" value={o.smooth} set={v => setO("smooth", v)} /><Check label="Status date line" value={o.marker} set={v => setO("marker", v)} /><Check label="Slanted dates" value={o.rotate} set={v => setO("rotate", v)} /></span></Row>
+        <For each={cols}>{([k, l]) => <Row label={l}><input type="color" value={o[k] as string} onInput={e => setO(k, e.currentTarget.value as never)} /></Row>}</For>
+      </div>
+      <p class="muted">For every S-curve in this plan (reports, dashboards, print and Copy), saved with the plan.</p>
+    </Dialog>
+  );
+});
+/** An S-curve from the engine's data (planned, actual and forecast cumulative %), drawn as `scOpts` says. */
 export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short" | "fill"; money?: boolean; bare?: boolean }) => {
+  const o = scOpts;
   const k = createMemo(() => p.c.status_at ?? p.c.days.findIndex(d => d >= p.c.status_day));
   const conv = (v: (number | null)[]) => (p.money ? v.map(x => (x === null ? null : (x / 100) * p.c.total)) : v);
-  return <ChartBox title={p.title ?? `S-curve: ${p.c.name}`} type="line" size={p.size} days={p.c.days} labels={p.c.days.map((d, i) => (i === p.c.status_at ? fmtDay(d) : label(d, p.unit)))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
-    y={p.money ? `Cumulative (${P().currency.code})` : "Cumulative progress"} marker={k() >= 0 ? k() : null} bare={p.bare}
-    datasets={[line("Planned (baseline)", conv(p.c.planned), COL.grey, [6, 4]), line("Actual", conv(p.c.actual), COL.blue, undefined, true), line("Forecast", conv(p.c.forecast.map((v, i) => (i >= k() && k() >= 0 ? v : null))), COL.red, [2, 3])]} />;
+  const f = (v: number | null | undefined) => (v === null || v === undefined ? "–" : p.money ? money(v, { ...P().currency, decimals: 0 }) : `${v.toFixed(1)}%`);
+  const own = () => p.title ?? `S-curve: ${p.c.name}`;
+  const title = () => (o().title && !p.money && p.c.name === P().name ? o().title : own());
+  const sub = () => {
+    if (!o().sub) return undefined;
+    const i = k() >= 0 ? k() : p.c.days.length - 1, day = k() >= 0 ? p.c.days[i] : p.c.status_day;
+    const cv = (v: (number | null)[]) => conv(v)[i];
+    return `Data date: ${fmtDay(day)}   |   Planned ${f(cv(p.c.planned))}   |   Actual ${f(cv(p.c.actual))}`;
+  };
+  // The forecast is drawn from the status date on, and (auto) only when it leaves the plan's curve.
+  const showFc = () => o().fc === "on" || (o().fc === "auto" && k() >= 0 && p.c.forecast.some((v, i) => i >= k() && Math.abs(v - p.c.planned[i]) > 0.05));
+  const fcData = () => conv(p.c.forecast.map((v, i) => (i >= k() && k() >= 0 ? v : null)));
+  const tension = () => (o().smooth ? undefined : 0);
+  const lines = () => (
+    <ChartBox title={title()} subtitle={sub()} type="line" size={p.size} days={p.c.days} labels={p.c.days.map((d, i) => (i === p.c.status_at ? fmtDay(d) : label(d, p.unit)))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
+      y={p.money ? `Cumulative (${P().currency.code})` : "Cumulative progress"} marker={o().marker && k() >= 0 ? k() : null} bare={p.bare} legend={o().legend} tension={tension()} extra={<button onClick={scurveOptions} title="How the plan's S-curves look: bars, curves, colours, title">Format</button>}
+      datasets={[line("Planned", conv(p.c.planned), o().cp), line("Actual", conv(p.c.actual), o().ca, undefined, true), ...(showFc() ? [line("Forecast", fcData(), o().cf, [6, 4])] : [])]} />
+  );
+  const report = () => {
+    const c = p.c, pc = periodsOnly(c), pd = pc.days;
+    const mids = pd.slice(1).map((d, i) => (pd[i] + d) / 2), labs = pd.slice(1).map(d => label(d, p.unit));
+    const per = (v: (number | null)[]) => { const w = conv(v); return mids.map((x, i) => ({ x, y: w[i + 1] === null || w[i] === null ? null : (w[i + 1] as number) - (w[i] as number), t: labs[i] })); };
+    const pts = (v: (number | null)[]) => { const w = conv(v); return c.days.map((x, i) => ({ x, y: w[i] })); };
+    const bars = o().pbars || o().abars, ax = bars ? "y2" : "y";
+    const L = (name: string, v: (number | null)[], col: string, dash?: number[]) => ({ ...line(name, [], col, dash), data: pts(v), yAxisID: ax, order: 0, borderWidth: dash ? 2.2 : 2.6 }) as never;
+    const B = (name: string, v: (number | null)[], col: string) => ({ ...bar(name, [], col), data: per(v), yAxisID: "y", order: 1 }) as never;
+    const per1 = p.unit === "month" ? "Month" : p.unit === "week" ? "Week" : "Period";
+    const cum = p.money ? `Cumulative (${P().currency.code})` : "Cumulative %";
+    const ds = [...(o().pbars ? [B(`Planned ${per1.toLowerCase()} ${p.money ? "" : "%"}`.trim(), pc.planned, o().bp)] : []), ...(o().abars ? [B(`Actual ${per1.toLowerCase()} ${p.money ? "" : "%"}`.trim(), pc.actual, o().ba)] : []),
+      L(`Planned cum.${p.money ? "" : " %"}`, c.planned, o().cp), L(`Actual cum.${p.money ? "" : " %"}`, c.actual, o().ca), ...(showFc() ? [L("Forecast", fcData() as number[], o().cf, [6, 4])] : [])];
+    const mk = k() >= 0 ? c.days[k()] : null;
+    return <ChartBox title={title()} subtitle={sub()} center type="bar" size={p.size} days={c.days} labels={labs} fmt={p.money ? "money" : "pct"} bare={p.bare} legend={o().legend} ends={false} radius={1} tension={tension()}
+      y={bars ? `${per1} ${p.money ? `(${P().currency.code})` : "%"}` : cum} max={bars || p.money ? undefined : 100} y2={bars ? cum : undefined} y2max={bars && !p.money ? 100 : undefined}
+      time={{ min: c.days[0], max: c.days[c.days.length - 1], ticksAt: mids, tickLabel: i => labs[i] ?? "", rotate: o().rotate }}
+      marker={o().marker ? mk : null} markerText={mk !== null ? `Status · ${fmtDay(mk)}` : undefined}
+      extra={<button onClick={scurveOptions} title="How the plan's S-curves look: bars, curves, colours, title">Format</button>}
+      datasets={ds} />;
+  };
+  // per-period bars need the periods' own values: periodsOnly drops the status-date point
+  return <Show when={o().style === "report"} fallback={lines()}>{report()}</Show>;
 };
 /** Progress per period (not cumulative): planned vs actual bars. */
 export const PeriodBars = (p0: { c: SCurve; unit: string; last?: number; size?: "fill"; bare?: boolean }) => {
@@ -82,7 +147,7 @@ export const PeriodBars = (p0: { c: SCurve; unit: string; last?: number; size?: 
   const from = () => Math.max(1, n() - (p.last ?? 24));
   const delta = (v: (number | null)[]) => v.slice(from()).map((x, i) => (x === null || v[from() + i - 1] === null ? null : x - (v[from() + i - 1] as number)));
   return <ChartBox title={`Progress per ${p.unit}`} type="bar" fmt="pct" y="Progress in period" size={p.size} bare={p.bare} days={p.c.days.slice(from())} labels={p.c.days.slice(from()).map(d => label(d, p.unit))}
-    datasets={[bar("Planned", delta(p.c.planned), COL.grey), bar("Actual", delta(p.c.actual), COL.blue)]} />;
+    datasets={[bar("Planned", delta(p.c.planned), scOpts().style === "report" ? scOpts().bp : COL.grey), bar("Actual", delta(p.c.actual), scOpts().style === "report" ? scOpts().ba : COL.blue)]} />;
 };
 
 // ---------- dashboard ----------

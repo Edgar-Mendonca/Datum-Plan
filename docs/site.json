@@ -27,7 +27,7 @@
   "highlights": [
     "A task sheet that works like a spreadsheet, with formula columns and Sheets tabs.",
     "Critical path to the minute: calendars, constraints, all link types, levelling with a preview of what moves.",
-    "Resources, man-hours and costs with workload and manpower by trade; Tracking Gantt with 11 baselines; earned value, earned schedule and S-curves from each period's progress.",
+    "Resources, man-hours and costs with workload and manpower by trade; Tracking Gantt with 11 baselines; earned value, earned schedule and S-curves from each period's progress, drawn as in a progress report (bars per period and cumulative curves, styled in Format).",
     "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
     "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
     "Dashboard, progress reports and a report builder; print to PDF from every view; printed Gantt text sized in points, by row type or row by row, with columns that fit their text.",

@@ -447,6 +447,8 @@ input, select, textarea { background: var(--bg2); color: var(--text); }
 .chartbox header h3 { margin: 0; flex: 1; font: 500 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .chartbox header button { font: 500 9.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); padding: 1px 6px; }
 .chartbox header button:hover { color: var(--blue); border-color: var(--blue); }
+.chartbox header.center h3 { text-align: center; font: 700 14px var(--sans, 'IBM Plex Sans', sans-serif); letter-spacing: 0; text-transform: none; color: var(--text); }
+.chartbox header h3 small { display: block; margin-top: 3px; font: 500 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0; text-transform: none; color: var(--muted); white-space: pre; }
 /* The plot fills its box (as tall as the tallest chart in the row); the canvas never sizes the box. */
 .chartbox .cv { position: relative; flex: 1 1 auto; min-height: 280px; width: 100%; min-width: 0; overflow: hidden; }
 .chartbox .cv canvas { position: absolute; inset: 0; max-width: 100%; }

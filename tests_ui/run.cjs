@@ -390,6 +390,18 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => c === "earned_schedule" ? { es: 8, at: 10, pd: 40, spi_t: 0.8, sv_t: -2, ieac: 50, planned_finish: 30010000, forecast_finish: 30024400 } : inv(c, a); });
   await p.click('.side button[title="S-Curves"]'); await p.waitForTimeout(400);
   check("S-Curves show earned schedule: SPI(t) and the finish at this pace", (await p.textContent(".page .kpis")).includes("SPI(t)") && (await p.textContent(".page .kpis")).includes("0.80"));
+  // 0.8.12: S-curves as in a report: period bars and cumulative curves on two axes, data date under the title, Format to change them.
+  { const hd = await p.$eval(".chartbox header.center", h => h.textContent).catch(() => "");
+    check("an S-curve shows bars per period and cumulative curves, the data date and progress under a centred title", /Data date: .+Planned .+Actual/.test(hd), hd);
+    const leg = await p.evaluate(() => { const c = [...document.querySelectorAll(".chartbox")].find(b => b.querySelector("header.center")); const ch = c && window.Chart ? null : null; return c ? c.querySelector("canvas").height : 0; });
+    check("…drawn on its canvas", leg > 100, String(leg));
+    await p.click(".chartbox header.center button:has-text('Format')"); await p.waitForTimeout(250);
+    check("Format opens the S-curve Format dialog", (await p.textContent(".dlg")).includes("Bars per period"));
+    await p.click(".dlg .seg button:has-text('Curves only')"); await p.fill(".dlg input[placeholder^='As each chart']", "Weekly S-curve");
+    await p.click(".dlg button:has-text('OK')"); await p.waitForTimeout(400);
+    const sc = JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()));
+    check("…and saves the look with the plan", sc.includes('"key":"scurve"') && sc.includes('"style":"lines"') && sc.includes("Weekly S-curve"), sc.slice(0, 200));
+    await p.click(".chartbox header button:has-text('Format')"); await p.waitForTimeout(250); await p.click(".dlg button:has-text('Reset')"); await p.click(".dlg button:has-text('OK')"); await p.waitForTimeout(300); }
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 0.4.2: Schedule Risk, Look-ahead and Manpower print as themselves (not the Dashboard); the risk run is kept with the plan.
@@ -488,7 +500,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 0.5.15: a chart's values open in Datum Plot as a one-way copy, with dates for a time chart.
   await p.click(".charts.wide .chartbox header button:has-text('Datum Plot')"); await p.waitForTimeout(200);
   const toPlot = await p.evaluate(() => window.__calls.filter(c => c[0] === "open_in_plot").pop()?.[1]?.chart);
-  check("Datum Plot gets the chart's series, colours and dates", !!toPlot && toPlot.series.length === 3 && toPlot.days.length === toPlot.labels.length && toPlot.days.length > 2 && /^#/.test(toPlot.series[1].color) && toPlot.units === "%", JSON.stringify(toPlot)?.slice(0, 200));
+  check("Datum Plot gets the chart's series, colours and dates", !!toPlot && toPlot.series.length >= 3 && toPlot.series.every(x => x.values.length === toPlot.days.length) && toPlot.days.length === toPlot.labels.length && toPlot.days.length > 2 && /^#/.test(toPlot.series[1].color) && toPlot.units === "%", JSON.stringify(toPlot)?.slice(0, 200));
   check("charts draw at twice the screen's sharpness", await p.$eval(".charts.wide canvas", c => c.width >= 2 * c.getBoundingClientRect().width - 2));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 

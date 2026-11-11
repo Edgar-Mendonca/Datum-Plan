@@ -23,6 +23,8 @@ const cssv = (n: string) => (doc ? LIGHT[n] ?? "" : getComputedStyle(document.do
 /** A font size in px, larger when drawing for a document. */
 const fs = (px: number) => px * (doc || 1);
 
+/** A point's value: a number, or the y of an {x, y} point on a time axis. */
+const yv = (v: unknown): number | null => (v !== null && typeof v === "object" ? (v as { y: number | null }).y : (v as number | null) ?? null);
 /** A marker line with a small label (the status date), and a soft line under the pointer. */
 const lines = (marker: () => number | null | undefined, label: string): Plugin => ({
   id: "lines",
@@ -63,9 +65,9 @@ const ends = (f: () => Fmt | undefined): Plugin => ({
     ch.data.datasets.forEach((d, k) => {
       if ((d as { type?: string }).type !== "line" || !ch.isDatasetVisible(k)) return;
       const pts = ch.getDatasetMeta(k).data, vals = d.data as (number | null)[];
-      let i = vals.length - 1; while (i >= 0 && (vals[i] === null || vals[i] === undefined)) i--;
+      let i = vals.length - 1; while (i >= 0 && yv(vals[i]) === null) i--;
       if (i < 0 || !pts[i]) return;
-      const text = fmtv(vals[i] as number, f()), w = ctx.measureText(text).width;
+      const text = fmtv(yv(vals[i]) as number, f()), w = ctx.measureText(text).width;
       let y = pts[i].y;
       const gap = fs(13);
       while (used.some(u => Math.abs(u - y) < gap)) y -= gap;
@@ -116,13 +118,29 @@ export interface ChartProps {
   /** The day (since 1970) of each label, for a time axis in Datum Plot. */
   days?: number[];
   extra?: JSX.Element;
+  /** A time axis: x is the day of each point ({x, y} data), ticks at `ticksAt`, named by `tickLabel`. */
+  time?: { min: number; max: number; ticksAt: number[]; tickLabel: (i: number) => string; rotate?: boolean };
+  /** A second value axis on the right (datasets with yAxisID "y2"): its title and top. */
+  y2?: string;
+  y2max?: number;
+  /** The status line's text when the axis is a time axis. */
+  markerText?: string;
+  legend?: "top" | "bottom";
+  /** The last value at the end of each line (default on). */
+  ends?: boolean;
+  /** A line under the title (data date and progress), and the title centred, as in a report. */
+  subtitle?: string;
+  center?: boolean;
+  /** Bar corners (px) and line smoothing (0 straight). */
+  radius?: number;
+  tension?: number;
 }
 
 export const ChartBox = (p: ChartProps) => {
   let cv!: HTMLCanvasElement;
   let ch: Chart | undefined;
   /** Nothing to draw: no periods, or every value empty or zero (no costs, no hours yet). */
-  const empty = () => !p.labels.length || p.datasets.every(d => d.data.every(v => !v));
+  const empty = () => !p.labels.length || p.datasets.every(d => d.data.every(v => !yv(v)));
   /** Draws the chart on the box's canvas, or (`to`) on a canvas of its own for a document. */
   const build = (first = false, to?: HTMLCanvasElement): Chart | undefined => {
     const target = to ?? cv;
@@ -138,9 +156,13 @@ export const ChartBox = (p: ChartProps) => {
       stacked: p.stacked,
     });
     const vAxis = { ...axis(p.y, true), beginAtZero: p.fmt !== "date", ...(p.max !== undefined ? { max: p.max } : {}) };
-    const hAxis = axis(p.x, false);
+    const hAxis: Record<string, unknown> = axis(p.x, false);
+    const t = p.time;
+    if (t) Object.assign(hAxis, { type: "linear", min: t.min, max: t.max, afterBuildTicks: (s: { ticks: { value: number }[] }) => { s.ticks = t.ticksAt.map(value => ({ value })); },
+      ticks: { ...(hAxis.ticks as object), autoSkip: true, maxRotation: t.rotate ? 45 : 0, minRotation: t.rotate ? 45 : 0, callback: (_v: number, i: number) => t.tickLabel(i) } });
+    const right = p.y2 ? { y2: { ...axis(p.y2, true), position: "right", beginAtZero: true, grid: { display: false }, ...(p.y2max !== undefined ? { max: p.y2max } : {}) } } : {};
     // A horizontal bar chart names every bar (task names), so none may be skipped.
-    if (p.horizontal) hAxis.ticks = { ...hAxis.ticks, autoSkip: false, color: ink } as typeof hAxis.ticks;
+    if (p.horizontal) hAxis.ticks = { ...(hAxis.ticks as object), autoSkip: false, color: ink };
     const many = p.labels.length > 40;
     const round = p.type === "doughnut" || p.type === "pie";
     if (round) {
@@ -172,26 +194,27 @@ export const ChartBox = (p: ChartProps) => {
       options: {
         responsive: !to, maintainAspectRatio: false, animation: first && !to ? { duration: 600, easing: "easeOutQuart" } : false,
         indexAxis: p.horizontal ? "y" : "x",
-        interaction: { mode: "index", intersect: false },
-        layout: { padding: { top: 2, right: p.type === "line" || p.datasets.some(d => (d as { type?: string }).type === "line") ? fs(48) : 8, left: 2 } },
+        interaction: { mode: t ? "x" : "index", intersect: false },
+        layout: { padding: { top: 2, right: p.ends !== false && (p.type === "line" || p.datasets.some(d => (d as { type?: string }).type === "line")) ? fs(48) : 8, left: 2 } },
         devicePixelRatio: sharpness,
         elements: {
-          line: { borderWidth: 2.5, tension: 0.4, cubicInterpolationMode: "monotone", borderCapStyle: "round" },
+          line: { borderWidth: 2.5, tension: p.tension ?? 0.4, cubicInterpolationMode: p.tension === 0 ? "default" : "monotone", borderCapStyle: "round" },
           point: { radius: 0, hoverRadius: many ? 3 : 5, hitRadius: 10, hoverBorderWidth: 2, hoverBackgroundColor: "#fff" },
-          bar: { borderWidth: 0, borderRadius: p.stacked ? 3 : 6, borderSkipped: p.stacked ? "start" : false },
+          bar: { borderWidth: 0, borderRadius: p.radius ?? (p.stacked ? 3 : 6), borderSkipped: p.stacked || p.radius !== undefined ? "start" : false },
         },
         datasets: { bar: { categoryPercentage: 0.72, barPercentage: 0.88, maxBarThickness: 28 } },
-        scales: (p.horizontal ? { x: vAxis, y: hAxis } : { x: hAxis, y: vAxis }) as never,
+        scales: (p.horizontal ? { x: vAxis, y: hAxis } : { x: hAxis, y: vAxis, ...right }) as never,
         plugins: {
-          legend: { position: "top", align: "end", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: fs(7), boxHeight: fs(7), padding: fs(14) } },
+          legend: { position: p.legend ?? "top", align: p.legend === "bottom" ? "center" : "end", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: fs(7), boxHeight: fs(7), padding: fs(14), sort: (a: { datasetIndex?: number }, b: { datasetIndex?: number }) => (a.datasetIndex ?? 0) - (b.datasetIndex ?? 0) } },
           tooltip: {
             backgroundColor: "rgba(17, 24, 39, 0.92)", titleColor: "#fff", bodyColor: "#E5E7EB", borderWidth: 0, cornerRadius: 8, padding: 10, boxPadding: 4, caretSize: 6,
             usePointStyle: true, titleFont: { ...font, weight: 600 as const }, bodyFont: font,
-            callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed[p.horizontal ? "x" : "y"] === null ? "—" : fmtv(c.parsed[p.horizontal ? "x" : "y"] as number, p.fmt)}` },
+            callbacks: { ...(t ? { title: (it: { raw: unknown }[]) => { const x = (it[0]?.raw as { x?: number; t?: string } | undefined); return x?.t ?? (x?.x !== undefined ? fmtDay(Math.round(x.x)) : ""); } } : {}),
+              label: (c: { dataset: { label?: string }; parsed: Record<string, number | null> }) => ` ${c.dataset.label}: ${c.parsed[p.horizontal ? "x" : "y"] === null ? "—" : fmtv(c.parsed[p.horizontal ? "x" : "y"] as number, p.fmt)}` } as never,
           },
         },
       },
-      plugins: [paper, lines(() => p.marker, `${p.markerLabel ?? "Status"}${p.marker !== null && p.marker !== undefined && p.labels[p.marker] ? ` · ${p.labels[p.marker]}` : ""}`), ends(() => p.fmt)],
+      plugins: [paper, lines(() => p.marker, p.markerText ?? `${p.markerLabel ?? "Status"}${p.marker !== null && p.marker !== undefined && p.labels[p.marker] ? ` · ${p.labels[p.marker]}` : ""}`), ...(p.ends === false ? [] : [ends(() => p.fmt)])],
     });
     made.options.color = muted;
     if (to) return made;
@@ -203,7 +226,7 @@ export const ChartBox = (p: ChartProps) => {
    *  larger text, light colours whatever the theme, and its title on top. */
   const picture = async (): Promise<HTMLCanvasElement | null> => {
     if (!ch) return null;
-    const W = 960, H = p.type === "doughnut" || p.type === "pie" ? 420 : 470, T = 40, K = 3;
+    const W = 960, H = p.type === "doughnut" || p.type === "pie" ? 420 : 470, T = p.subtitle ? 62 : 40, K = 3;
     const host = document.createElement("div");
     host.style.cssText = `position:fixed;left:-20000px;top:0;width:${W}px;height:${H}px`;
     const c2 = document.createElement("canvas");
@@ -216,8 +239,12 @@ export const ChartBox = (p: ChartProps) => {
     out.width = W * K; out.height = (H + T) * K;
     const x = out.getContext("2d")!;
     x.fillStyle = "#fff"; x.fillRect(0, 0, out.width, out.height);
-    x.fillStyle = "#0C1A2B"; x.font = `600 ${17 * K}px 'IBM Plex Sans', 'Segoe UI', sans-serif`; x.textBaseline = "middle";
-    x.fillText(p.title, 12 * K, (T / 2 + 2) * K);
+    x.fillStyle = "#0C1A2B"; x.font = `${p.center ? 700 : 600} ${(p.center ? 20 : 17) * K}px 'IBM Plex Sans', 'Segoe UI', sans-serif`; x.textBaseline = "middle";
+    x.textAlign = p.center ? "center" : "left";
+    const tx = (p.center ? W / 2 : 12) * K;
+    x.fillText(p.title, tx, (p.subtitle ? 20 : T / 2 + 2) * K);
+    if (p.subtitle) { x.fillStyle = "#4B5563"; x.font = `500 ${12.5 * K}px 'IBM Plex Sans', 'Segoe UI', sans-serif`; x.fillText(p.subtitle, tx, 45 * K); }
+    x.textAlign = "left";
     x.drawImage(c2, 0, T * K, W * K, H * K);
     made?.destroy(); host.remove();
     return out;
@@ -237,13 +264,16 @@ export const ChartBox = (p: ChartProps) => {
   /** A one-way copy of the values in Datum Plot: changes there never come back. */
   const toPlot = async () => {
     const units = p.fmt === "pct" ? "%" : p.fmt === "money" ? P().currency.code : p.fmt === "hours" ? "h" : "";
-    const series = p.datasets.map(d => ({ name: String(d.label ?? ""), values: (d.data as (number | null)[]).map(v => (v === null || v === undefined ? null : +v)), color: String(typeof d.borderColor === "string" && d.borderColor !== cssv("--bg2") ? d.borderColor : typeof d.backgroundColor === "string" ? d.backgroundColor : ""), line: (d as { type?: string }).type === "line" || p.type === "line" }));
-    const msg = await call<string>("open_in_plot", { chart: { title: p.title, y: p.y ?? "", units, labels: p.labels, days: p.days ?? [], series } });
+    // On a time axis every series is put on the chart's days: a point at a day, a period's bar at the day it ends.
+    const ds0 = p.days ?? [];
+    const onDays = (d: unknown[]) => ds0.map((day, j) => { const pt = (d as { x: number; y: number | null }[]).find(q => q.x <= day && (j === 0 ? q.x >= day : q.x > ds0[j - 1])); return pt ? pt.y : null; });
+    const series = p.datasets.map(d => ({ name: String(d.label ?? ""), values: (p.time ? onDays(d.data as unknown[]) : (d.data as unknown[]).map(yv)).map(v => (v === null || v === undefined ? null : +v)), color: String(typeof d.borderColor === "string" && d.borderColor !== cssv("--bg2") ? d.borderColor : typeof d.backgroundColor === "string" ? d.backgroundColor : ""), line: (d as { type?: string }).type === "line" || p.type === "line" }));
+    const msg = await call<string>("open_in_plot", { chart: { title: p.title, y: p.y ?? "", units, labels: p.time ? ds0.map(d => fmtDay(d)) : p.labels, days: ds0, series } });
     if (msg) toast(msg, true);
   };
   return (
     <div class="chartbox" data-marker={p.marker ?? ""} classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>
-      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={async () => { const pic = await picture(); if (pic) (await import("./picture")).copyCanvas(pic, p.title, 16); }} title="Copy the chart as a picture, page-wide and sharp, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
+      <Show when={!p.bare}><header classList={{ center: p.center }}><h3>{p.title}<Show when={p.subtitle}><small>{p.subtitle}</small></Show></h3>{p.extra}<button onClick={async () => { const pic = await picture(); if (pic) (await import("./picture")).copyCanvas(pic, p.title, 16); }} title="Copy the chart as a picture, page-wide and sharp, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
       <div class="cv" classList={{ blank: empty() }}><canvas ref={cv} /></div>
       <Show when={empty()}><p class="nodata">{p.fmt === "money" ? "No costs in this plan yet." : p.fmt === "hours" ? "No hours assigned yet." : "No data yet."}</p></Show>
     </div>

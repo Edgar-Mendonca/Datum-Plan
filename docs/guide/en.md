@@ -263,9 +263,11 @@ Make the dashboard your client or manager wants, as many as you like; they are s
 
 1. **Earned schedule.** SPI(t) compares when the plan expected today's progress with today: 0.92 means 92% of planned speed. **Earned schedule 23 of 25 days** means the progress made in 25 working days was planned for 23, so the project is 2 days behind, and **Finish at this pace** projects the finish date.
 
-The S-curve shows cumulative progress: grey dashes are the baseline (planned), the blue line is actual (it follows the progress you stored at each **Close period**), and the dotted line is the forecast. The status line marks the status date, and each line ends with its latest value. You can weight progress by duration, cost, hours or physical % complete.
+The S-curve is drawn as in a progress report: light bars show the progress planned and achieved in each week or month (left axis), and the curves show the cumulative planned and actual progress (right axis, 0 to 100 %). The actual curve follows the progress you stored at each **Close period**. The forecast (dashed) shows from the status date once it leaves the plan's curve. Under the centred title are the data date and the planned and actual % on that date; the legend is below. You can weight progress by duration, cost, hours or physical % complete.
 
-Every chart has two buttons at its top right. **PNG** saves it as a picture. **Datum Plot** opens a copy of its values in Datum Plot, where you can style the graph for a report or a paper. The copy is saved in **Documents › Datum Plan › To Datum Plot**. It is a one-way copy: what you change in Datum Plot never changes the plan. Charts over time keep their dates, as days from the first date with each row titled by its date.
+**Format** (top right of the S-curve) sets how every S-curve in the plan looks: **Bars and curves** or **Curves only**, your own title (for example "Weekly S-curve: Planned vs Actual"), the data-date line under it, which bars to show, when to draw the forecast, the legend above or below, smooth curves, the status-date line, slanted dates, and the five colours. **Reset** brings the standard look back. The choice is saved with the plan, and **Copy**, **PNG** and print use it.
+
+Every chart has these buttons at its top right. **Copy** puts a page-wide, sharp picture of it on the clipboard for Word, slides or a workbook. **PNG** saves it as a picture. **Datum Plot** opens a copy of its values in Datum Plot, where you can style the graph for a report or a paper. The copy is saved in **Documents › Datum Plan › To Datum Plot**. It is a one-way copy: what you change in Datum Plot never changes the plan. Charts over time keep their dates, as days from the first date with each row titled by its date.
 
 ### The progress report
 

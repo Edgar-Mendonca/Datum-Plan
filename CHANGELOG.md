@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.12 — 2026-11-11
+
+S-curves drawn as in a progress report, and a Format dialog to change them.
+
+- **Bars and curves.** Each S-curve now shows the progress planned and achieved in each week or month as light bars (left axis) and the cumulative planned and actual curves (right axis, 0 to 100 %), on a true time axis.
+- **A report title.** The title is centred, with the data date and the planned and actual % on that date under it; the legend sits below the chart.
+- **The forecast shows only when it says something:** from the status date, once it leaves the plan's curve. Before, it was drawn on top of the planned curve and made it look broken.
+- **Format** (top right of an S-curve) changes every S-curve in the plan: bars and curves or curves only, your own title, the data-date line, which bars, the forecast, legend above or below, smooth curves, the status line, slanted dates and the colours. Saved with the plan; Copy, PNG and print use it.
+- **Datum Plot** gets the bars and the curves on the same dates.
+- Progress per period uses the S-curve's bar colours.
+
 ## 0.8.11 — 2026-11-11
 
 Plans reopen the way you left them.
