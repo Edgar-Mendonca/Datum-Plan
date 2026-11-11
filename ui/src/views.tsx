@@ -2,7 +2,7 @@
 import { CountryList, Flag, countryCode, countryName } from "./flags";
 import { For, Index, Show, createSignal, createResource, createMemo, createEffect, JSX } from "solid-js";
 import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money, Limits, Health, CheckOut } from "./api";
-import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut, setOut, opts, setOpts, openDialog } from "./store";
+import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut, setOut, opts, setOpts, openDialog , kept, pane } from "./store";
 import { ChartBox, bar, line } from "./charts";
 import { C, selectUid } from "./cmds";
 import { Seg, Icon, Check as Chk, Dialog } from "./ui";
@@ -16,9 +16,9 @@ export const Page = (p: { title: string; help?: string; tools?: JSX.Element; chi
 /** Box sizes for the three box layouts. */
 export const NET_BOX: Record<string, { W: number; H: number }> = { compact: { W: 160, H: 50 }, standard: { W: 214, H: 72 }, detailed: { W: 230, H: 104 } };
 const NET_COLS = ["code", "name", "dur", "start", "finish", "pct", "tf", "res"];
-export const [netBox, setNetBox] = createSignal<"compact" | "standard" | "detailed">("standard");
+export const [netBox, setNetBox] = kept<"compact" | "standard" | "detailed">("net-box", "standard");
 /** Show summary tasks as boxes, and lay the network out in WBS bands (one per top-level phase). */
-export const [netSums, setNetSums] = createSignal(false), [netWbs, setNetWbs] = createSignal(false);
+export const [netSums, setNetSums] = pane("net-summaries", false), [netWbs, setNetWbs] = pane("net-wbs", false);
 export const loadNet = () => call<Net>("network", { q: query(), summaries: netSums() || netWbs(), wbs: netWbs() });
 /** One network box: shape by type, outline by criticality, cross or slash for progress, amber flag when late. */
 export const NetBox = (p: { v: (k: string) => string; r: Row; W: number; H: number; mode: string; sel?: boolean; dim?: boolean }) => {

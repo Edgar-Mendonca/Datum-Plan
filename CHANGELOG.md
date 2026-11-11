@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.11 — 2026-11-11
+
+Plans reopen the way you left them.
+
+- **Each saved plan remembers its view:** the table, filter, group and sort, collapsed summaries and outline level, Gantt zoom, the baseline shown in the Tracking Gantt, the sheet open with its zoom and view (Normal, Page Layout, Page Breaks), and the dashboard shown. Close Datum Plan, open the plan again, and it looks as it did.
+- **Each open plan keeps its own view.** Switching plan tabs no longer carries one plan's filter or collapsed summaries over to another.
+- **The window layout is kept** for every plan: the width of the task sheet beside the Gantt, the details pane tab, and the network diagram's box size, summaries and WBS layout.
+- These are kept on your computer, not in the plan file: changing them never marks a plan as changed or adds an Undo step.
+
 ## 0.8.10 — 2026-11-11
 
 - **Project Summary Task stays ticked.** The Gantt's Show/Hide ticks (Project Summary Task, Summary Tasks, Subplans) and its bar ticks (Critical Tasks, Slack, Late Tasks, Baseline, Bar Labels) are now kept as you leave them, so they are the same the next time you open Datum Plan. Before, they went back to their defaults at every start.

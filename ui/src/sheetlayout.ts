@@ -3,6 +3,7 @@
 import { createSignal } from "solid-js";
 import { SheetData, SheetImage } from "./api";
 import * as F from "./fmt";
+import { keepView, out } from "./store";
 
 export const ROW_H = 22, COL_W = 96;
 const parseA1 = (s: string): [number, number] | null => { const m = /^([A-Z]+)(\d+)$/.exec(s); if (!m) return null; let c = 0; for (const ch of m[1]) c = c * 26 + ch.charCodeAt(0) - 64; return [+m[2] - 1, c - 1]; };
@@ -50,3 +51,6 @@ export const [sheetZoom, setSheetZoom] = createSignal(1);
 const ZOOMS = [0.1, 0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
 export const zoomSheet = (dir: 1 | -1) => setSheetZoom(z => (dir > 0 ? ZOOMS.find(x => x > z + 1e-6) ?? 4 : [...ZOOMS].reverse().find(x => x < z - 1e-6) ?? 0.1));
 export const [sheetMode, setSheetMode] = createSignal<"normal" | "breaks" | "layout">("normal");
+keepView("sheet", sheetK, v => setSheetK(Math.max(0, Math.min(v, (out()?.project.sheets.length ?? 1) - 1))));
+keepView("sheetZoom", sheetZoom, setSheetZoom);
+keepView("sheetMode", sheetMode, setSheetMode);

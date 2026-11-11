@@ -4,7 +4,7 @@
 // formulas, and country flags. The engine works out every formula in one call (dash_eval).
 import { For, Show, Switch, Match, createMemo, createResource, createSignal, JSX } from "solid-js";
 import { askText, askYes } from "./ui";
-import { act, call, out, P, tick, openMenu, openDialog, Item } from "./store";
+import { act, call, out, P, tick, openMenu, openDialog, Item, keepView } from "./store";
 import { Curve, PeriodReport, SCurve, Usage } from "./api";
 import { pictures, picData, addPicture } from "./pictures";
 import { Dialog, Row } from "./ui";
@@ -34,6 +34,7 @@ type Shown = [string, number | null, string];
 export const dashboards = (): Dash[] => (P().ui?.dashboards ?? []) as Dash[];
 /** The dashboard shown: -1 is the built-in project dashboard. */
 export const [dashK, setDashK] = createSignal(-1);
+keepView("dash", dashK, v => setDashK(out() && v < dashboards().length ? v : -1));
 const save = (list: Dash[]) => act({ Ui: { key: "dashboards", value: list } });
 const newId = () => Math.random().toString(36).slice(2, 9);
 const T = (kind: Kind, title: string, w: number, h: number, extra: Partial<Tile> = {}): Tile => ({ id: newId(), kind, title, w, h, ...extra });

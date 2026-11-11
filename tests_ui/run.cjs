@@ -634,6 +634,25 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("…and after a restart it is still ticked", await rp.$eval("label.chk:has-text('Project Summary Task') input", x => x.checked));
     await rc.close(); }
   await p.click("label.chk:has-text('Project Summary Task') input"); await p.waitForTimeout(300);
+  // 0.8.11: a saved plan reopens with the view it was closed with (filter, zoom, details tab, sheet, …).
+  { const fx = { ...fix, state: { ...fix.state, path: "C:/Plans/Keep.dplan" } };
+    const open = async (st) => { const rc = await b.newContext({ viewport: { width: 1440, height: 900 }, storageState: st ?? await p.context().storageState() }); const rp = await rc.newPage(); await rp.addInitScript(mock, fx); await rp.goto(url); await rp.waitForTimeout(700); if (await rp.$(".bs aside .back")) { await rp.click(".bs aside .back"); await rp.waitForTimeout(300); } return [rc, rp]; };
+    let [rc, rp] = await open();
+    await rp.click(".tabs > button:text-is('Schedule')"); await rp.waitForTimeout(150);
+    await rp.click(".ribbon button:has-text('Critical Path')"); await rp.waitForTimeout(300);
+    await rp.click("button[title='Zoom In']"); await rp.waitForTimeout(200);
+    const z0 = await rp.$eval("input.zoom", x => x.value);
+    await rp.click(".dhead button:has-text('Status')").catch(() => {}); await rp.waitForTimeout(200);
+    const tab0 = await rp.$eval(".dhead .on", x => x.textContent).catch(() => "");
+    const kept = await rp.evaluate(() => JSON.parse(localStorage.getItem("view:C:/Plans/Keep.dplan") ?? "{}"));
+    check("a saved plan's view is kept for it: table, filter, group, sort, outline, zoom, baseline, sheet and dashboard", ["table", "filter", "group", "sort", "collapsed", "level", "baseline", "zoom", "sheet", "sheetZoom", "sheetMode", "dash"].every(k => k in kept) && kept.filter.name === "Critical", JSON.stringify(Object.keys(kept)));
+    { const st = await rc.storageState(); await rc.close(); [rc, rp] = await open(st); }
+    const fb = await rp.$eval("button.mode:has-text('Filter applied')", x => x.textContent).catch(() => "");
+    check("…and after a restart it opens with the same filter", /Critical/.test(fb), fb);
+    check("…the same zoom", (await rp.$eval("input.zoom", x => x.value)) === z0 && z0 !== "", z0);
+    check("…and the same details tab (kept on the computer)", tab0 !== "" && (await rp.$eval(".dhead .on", x => x.textContent).catch(() => "")) === tab0, tab0);
+    await rp.click("button.mode:has-text('Filter applied')").catch(() => {}); await rp.waitForTimeout(200);
+    await rc.close(); }
   // 0.8.0: Export to XER asks which version to write for, then reports what went in.
   await p.click(".tabs > button:text-is('Report')"); await p.waitForTimeout(150);
   await p.click(".ribbon button:has-text('Export')"); await p.waitForTimeout(200);

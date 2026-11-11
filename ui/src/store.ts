@@ -5,7 +5,7 @@ import { invoke, Out, Grid, Query, Filter, FieldList, Options } from "./api";
 
 export const [out, setOutRaw] = createSignal<Out | null>(null);
 export const [tick, setTick] = createSignal(0);
-export const setOut = (o: Out | null | undefined) => { if (o) batch(() => { setOutRaw(o); setTick(t => t + 1); }); };
+export const setOut = (o: Out | null | undefined) => { if (o) batch(() => { const prev = out(); setOutRaw(o); swapView(prev, o); setTick(t => t + 1); }); };
 export const P = () => out()!.project;
 export const [fields, setFields] = createSignal<FieldList>({ task: [], resource: [], filters: [] });
 /** auto, light or dark; auto follows Windows. */
@@ -60,6 +60,13 @@ export const pane = (key: string, first: boolean) => {
   const [get, put] = createSignal(v);
   return [get, (x: boolean) => { put(x); try { localStorage.setItem(key, x ? "1" : "0"); } catch { /* no storage */ } }] as const;
 };
+/** A layout choice kept on this computer, the same for every plan (a width, a tab, a box size). */
+export const kept = <T,>(key: string, first: T) => {
+  let v = first;
+  try { const s = localStorage.getItem(key); if (s !== null) v = JSON.parse(s) as T; } catch { /* no storage */ }
+  const [get, put] = createSignal<T>(v);
+  return [get, (x: T) => { put(() => x); try { localStorage.setItem(key, JSON.stringify(x)); } catch { /* no storage */ } }] as const;
+};
 export const [projSum, setProjSum] = pane("show-projsum", false);
 export const [hideSum, setHideSum] = pane("hide-summaries", false);
 export const [baseline, setBaseline] = createSignal(0);
@@ -113,13 +120,13 @@ export const curUid = () => curRow()?.uid ?? 0;
 
 // ---------- layout ----------
 export const [details, setDetails] = pane("pane-details", true);
-export const [detailsTab, setDetailsTab] = createSignal("general");
+export const [detailsTab, setDetailsTab] = kept("details-tab", "general");
 export const [timeline, setTimeline] = pane("pane-timeline", typeof innerHeight !== "number" || innerHeight >= 700);
 export const [zoom, setZoom] = createSignal(24);
 /** Project Setup is a page (sidebar › Setup). */
 export const setupOpen = () => view() === "setup";
 export const setSetupOpen = (v: boolean) => setView(v ? "setup" : ((opts().startView || "gantt") as View));
-export const [gridW, setGridW] = createSignal(620);
+export const [gridW, setGridW] = kept("grid-width", 620);
 
 // ---------- editing ----------
 export const act = async (op: object, quiet = false): Promise<boolean> => {
@@ -159,3 +166,52 @@ export const openMenu = (e: MouseEvent | { x: number; y: number }, items: Item[]
 export const [dialogs, setDialogs] = createSignal<(() => JSX.Element)[]>([]);
 export const openDialog = (d: () => JSX.Element) => setDialogs(v => [...v, d]);
 export const closeDialog = () => setDialogs(v => v.slice(0, -1));
+
+// ---------- each plan's view, as it was left ----------
+/** What a plan was showing (table, filter, group, sort, outline, zoom, baseline, sheet, dashboard) is kept for
+ *  that plan: on this computer by its file, so it opens the way it was closed, and in memory for a new plan.
+ *  Switching tabs swaps it, so one plan's outline or filter never shows on another. Not in the plan file: it is
+ *  a view, not plan data, and changing it neither marks the plan changed nor fills Undo. */
+const views: Record<string, [() => unknown, (v: any) => void, unknown]> = {};
+const [vver, setVver] = createSignal(0);
+const vmem = new Map<string, Record<string, unknown>>();
+let vkey = "";
+const keyOf = (o: Out) => (o.path ? `view:${o.path}` : `new:${o.tab}`);
+const vread = (k: string): Record<string, unknown> | null => {
+  if (vmem.has(k)) return vmem.get(k)!;
+  try { const s = k.startsWith("view:") ? localStorage.getItem(k) : null; return s ? JSON.parse(s) : null; } catch { return null; }
+};
+const vsnap = () => Object.fromEntries(Object.entries(views).map(([n, [g]]) => [n, g()]));
+/** Registers a signal as part of a plan's view; its first value is the default for a plan seen the first time. */
+export const keepView = <T,>(name: string, get: () => T, set: (v: T) => void) => {
+  views[name] = [get, set, get()];
+  const st = vkey ? vread(vkey) : null;
+  if (st && name in st) set(st[name] as T);
+  setVver(v => v + 1);
+};
+const swapView = (prev: Out | null, o: Out) => {
+  const k = keyOf(o);
+  if (k === vkey) return;
+  if (vkey) vmem.set(vkey, vsnap());
+  // Saving a plan (first time, or Save As) gives it a file: its view goes with it.
+  const carry = prev && prev.tab === o.tab && prev.tabs.length === o.tabs.length && !vread(k);
+  vkey = k;
+  if (carry) return;
+  const st = vread(k);
+  for (const [n, [, set, d]] of Object.entries(views)) set(st && n in st ? st[n] : d);
+};
+keepView("table", table, useTable);
+keepView("filter", filter, setFilter);
+keepView("group", group, setGroup);
+keepView("sort", sort, setSort);
+keepView("collapsed", collapsed, setCollapsed);
+keepView("level", level, setLevel);
+keepView("baseline", baseline, setBaseline);
+keepView("zoom", zoom, setZoom);
+keepView("subs", openSubs, setOpenSubs);
+createRoot(() => createEffect(() => {
+  vver(); const s = vsnap();
+  if (!vkey) return;
+  if (vkey.startsWith("view:")) try { localStorage.setItem(vkey, JSON.stringify(s)); } catch { /* no storage */ }
+  vmem.set(vkey, s);
+}));
