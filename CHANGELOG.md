@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.10 — 2026-11-11
+
+- **Project Summary Task stays ticked.** The Gantt's Show/Hide ticks (Project Summary Task, Summary Tasks, Subplans) and its bar ticks (Critical Tasks, Slack, Late Tasks, Baseline, Bar Labels) are now kept as you leave them, so they are the same the next time you open Datum Plan. Before, they went back to their defaults at every start.
+
 ## 0.8.9 — 2026-11-10
 
 Sheets: a check of the everyday spreadsheet work, and what it found.

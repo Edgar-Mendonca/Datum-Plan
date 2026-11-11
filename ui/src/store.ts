@@ -52,13 +52,21 @@ export const [group, setGroup] = createSignal<string[]>([]);
 export const [sort, setSort] = createSignal<[string, boolean][]>([]);
 export const [collapsed, setCollapsed] = createSignal<number[]>([]);
 export const [level, setLevel] = createSignal(0);
-export const [projSum, setProjSum] = createSignal(false);
-export const [hideSum, setHideSum] = createSignal(false);
+/** A pane, or a show/hide tick, as the user last left it (kept on this computer across restarts). The details pane starts shown (it takes at most a third of
+ *  the height); the timeline starts closed on a short window (a laptop at 125 %), so the task rows have room. */
+export const pane = (key: string, first: boolean) => {
+  let v = first;
+  try { const s = localStorage.getItem(key); if (s !== null) v = s === "1"; } catch { /* no storage */ }
+  const [get, put] = createSignal(v);
+  return [get, (x: boolean) => { put(x); try { localStorage.setItem(key, x ? "1" : "0"); } catch { /* no storage */ } }] as const;
+};
+export const [projSum, setProjSum] = pane("show-projsum", false);
+export const [hideSum, setHideSum] = pane("hide-summaries", false);
 export const [baseline, setBaseline] = createSignal(0);
 /** Ghost bars: another version's bars (uid → start, finish in days) drawn behind the Gantt's, and its name. */
 export const [ghost, setGhost] = createSignal<{ name: string; bars: Map<number, [number, number]> } | null>(null);
 /** A master's combined view: its subplans shown under its tasks, and which are expanded (files). */
-export const [showSubs, setShowSubs] = createSignal(true);
+export const [showSubs, setShowSubs] = pane("show-subplans", true);
 export const [openSubs, setOpenSubs] = createSignal<string[]>([]);
 export const toggleSub = (file: string) => setOpenSubs(o => (o.includes(file) ? o.filter(f => f !== file) : [...o, file]));
 export const [grid, setGrid] = createSignal<Grid>({ cols: [], rows: [], shown: 0, total: 0 });
@@ -104,14 +112,6 @@ export const curRow = () => grid().rows[cur().row];
 export const curUid = () => curRow()?.uid ?? 0;
 
 // ---------- layout ----------
-/** A pane shown or hidden as the user last left it. The details pane starts shown (it takes at most a third of
- *  the height); the timeline starts closed on a short window (a laptop at 125 %), so the task rows have room. */
-const pane = (key: string, first: boolean) => {
-  let v = first;
-  try { const s = localStorage.getItem(key); if (s !== null) v = s === "1"; } catch { /* no storage */ }
-  const [get, put] = createSignal(v);
-  return [get, (x: boolean) => { put(x); try { localStorage.setItem(key, x ? "1" : "0"); } catch { /* no storage */ } }] as const;
-};
 export const [details, setDetails] = pane("pane-details", true);
 export const [detailsTab, setDetailsTab] = createSignal("general");
 export const [timeline, setTimeline] = pane("pane-timeline", typeof innerHeight !== "number" || innerHeight >= 700);

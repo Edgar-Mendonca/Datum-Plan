@@ -624,6 +624,16 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ribbon button:has-text('Details')"); await p.waitForTimeout(150);
   check("…as is showing it again", !!(await p.$(".dsplit")) && (await p.evaluate(() => localStorage.getItem("pane-details"))) === "1");
   await p.setViewportSize({ width: 1440, height: 900 }); await p.waitForTimeout(400);
+  // 0.8.10: the Gantt's Show/Hide ticks (Project Summary Task above all) stay as the user left them after a restart.
+  await p.click(".ctxgrp:not(.sheetctx) button"); await p.waitForTimeout(150);
+  await p.click("label.chk:has-text('Project Summary Task') input"); await p.waitForTimeout(300);
+  check("ticking Project Summary Task is remembered for the next start", (await p.evaluate(() => localStorage.getItem("show-projsum"))) === "1");
+  { const rc = await b.newContext({ viewport: { width: 1440, height: 900 }, storageState: await p.context().storageState() }); const rp = await rc.newPage(); await rp.addInitScript(mock, fix);
+    await rp.goto(url); await rp.waitForTimeout(700); if (await rp.$(".bs aside .back")) { await rp.click(".bs aside .back"); await rp.waitForTimeout(300); }
+    await rp.click(".ctxgrp:not(.sheetctx) button"); await rp.waitForTimeout(150);
+    check("…and after a restart it is still ticked", await rp.$eval("label.chk:has-text('Project Summary Task') input", x => x.checked));
+    await rc.close(); }
+  await p.click("label.chk:has-text('Project Summary Task') input"); await p.waitForTimeout(300);
   // 0.8.0: Export to XER asks which version to write for, then reports what went in.
   await p.click(".tabs > button:text-is('Report')"); await p.waitForTimeout(150);
   await p.click(".ribbon button:has-text('Export')"); await p.waitForTimeout(200);

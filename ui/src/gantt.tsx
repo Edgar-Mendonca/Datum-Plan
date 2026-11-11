@@ -2,15 +2,15 @@
 // to move, resize, change progress or link.
 import { createSignal, createEffect, createMemo, onMount, onCleanup, Show } from "solid-js";
 import { Row, fmtDay, iso, dateDay } from "./api";
-import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick, ghost } from "./store";
+import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick, ghost, pane } from "./store";
 import { RH } from "./grid";
 import { C } from "./cmds";
 
-export const [showCrit, setShowCrit] = createSignal(true);
-export const [showBase, setShowBase] = createSignal(false);
-export const [showSlack, setShowSlack] = createSignal(false);
-export const [showLate, setShowLate] = createSignal(false);
-export const [showLabels, setShowLabels] = createSignal(true);
+export const [showCrit, setShowCrit] = pane("show-crit", true);
+export const [showBase, setShowBase] = pane("show-base", false);
+export const [showSlack, setShowSlack] = pane("show-slack", false);
+export const [showLate, setShowLate] = pane("show-late", false);
+export const [showLabels, setShowLabels] = pane("show-labels", true);
 /** The dates in view in the Gantt chart: the timeline draws them as its zoom box. */
 export const [inView, setInView] = createSignal<[number, number] | null>(null);
 
