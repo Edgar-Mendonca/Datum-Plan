@@ -4,7 +4,8 @@ import { CustomDashboard, DashTabs, dashK, dashboards } from "./dashboards";
 import { For, Show, createSignal, createResource, createMemo, createEffect, on, JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Curve, Grid, Rule, fmtDay, money, dateDay, iso, SCurve, PeriodReport, PeriodNote, PRow, Usage, EarnedSchedule, fmtAt } from "./api";
-import { call, out, P, tick, toast, act, openMenu, openDialog } from "./store";
+import { call, out, P, tick, toast, act, openMenu, openDialog, setView } from "./store";
+import { setSheetK } from "./sheetlayout";
 import { C, selectUid } from "./cmds";
 import { Seg, Dialog, Row, Check, Pick, Text } from "./ui";
 import { ChartBox, COL, line, bar } from "./charts";
@@ -95,7 +96,30 @@ export const scurveOptions = () => openDialog(() => {
   );
 });
 /** An S-curve from the engine's data (planned, actual and forecast cumulative %), drawn as `scOpts` says. */
-export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short" | "fill"; money?: boolean; bare?: boolean }) => {
+/** The S-curve as a workbook with a spreadsheet chart, or its table as a sheet of the plan. */
+const scBook = async (c: SCurve, scope: number | null, title: string) => {
+  const path = await call<string | null>("export_scurve", { how: c.weight, scope, style: { ...scOpts(), title } });
+  if (path) toast(`Saved ${path}: a Weekly and a Monthly sheet, each with its data and a chart to edit in your spreadsheet program.`, true);
+};
+const scSheet = async (c: SCurve, unit: string, scope: number | null, title: string) => {
+  const u = unit === "month" ? "month" : "week";
+  const s = await call<{ name: string; cells: Record<string, string>; fmt: Record<string, string> } | null>("scurve_sheet", { unit: u, how: c.weight, scope, style: { ...scOpts(), title } });
+  if (!s) return;
+  const k = P().sheets.findIndex(x => x.name.toLowerCase() === s.name.toLowerCase());
+  let ok: boolean;
+  if (k < 0) ok = await act({ Sheet: { k: null, sheet: s } });
+  else {
+    // The sheet is already there: its values are refreshed (cells the curve no longer reaches are cleared).
+    const groups = new Map<string, [string, string][]>(), put = (f: string, a: string, v: string) => groups.set(f, [...(groups.get(f) ?? []), [a, v]]);
+    for (const a of Object.keys(P().sheets[k].cells ?? {})) if (!(a in s.cells)) put("", a, "");
+    for (const [a, v] of Object.entries(s.cells)) put(s.fmt[a] ?? "", a, v);
+    ok = await act({ Batch: [...groups].map(([f, cells]) => ({ SheetCells: { k, cells, fmt: f || null } })) });
+  }
+  if (!ok) return;
+  setSheetK(k < 0 ? P().sheets.length - 1 : k); setView("sheets");
+  toast(`The S-curve's ${u === "month" ? "monthly" : "weekly"} figures are on the sheet “${s.name}”: the period columns are formulas over the cumulative ones. Do it again to refresh them.`, true);
+};
+export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short" | "fill"; money?: boolean; bare?: boolean; scope?: number }) => {
   const o = scOpts;
   const k = createMemo(() => p.c.status_at ?? p.c.days.findIndex(d => d >= p.c.status_day));
   const conv = (v: (number | null)[]) => (p.money ? v.map(x => (x === null ? null : (x / 100) * p.c.total)) : v);
@@ -114,7 +138,7 @@ export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?:
   const tension = () => (o().smooth ? undefined : 0);
   const lines = () => (
     <ChartBox title={title()} subtitle={sub()} type="line" size={p.size} days={p.c.days} labels={p.c.days.map((d, i) => (i === p.c.status_at ? fmtDay(d) : label(d, p.unit)))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
-      y={p.money ? `Cumulative (${P().currency.code})` : "Cumulative progress"} marker={o().marker && k() >= 0 ? k() : null} bare={p.bare} legend={o().legend} tension={tension()} extra={<button onClick={scurveOptions} title="How the plan's S-curves look: bars, curves, colours, title">Format</button>}
+      y={p.money ? `Cumulative (${P().currency.code})` : "Cumulative progress"} marker={o().marker && k() >= 0 ? k() : null} bare={p.bare} legend={o().legend} tension={tension()} extra={<><button onClick={scurveOptions} title="How the plan's S-curves look: bars, curves, colours, title">Format</button><button onClick={() => scBook(p.c, p.scope ?? null, title())} title="Save as a workbook: a Weekly and a Monthly sheet, each with the figures and a chart (bars and cumulative curves) to edit in the spreadsheet program">Workbook</button><button onClick={() => scSheet(p.c, p.unit, p.scope ?? null, title())} title="Put the figures on a sheet of this plan, to see, edit and use them in formulas or a dashboard">To Sheet</button></>}
       datasets={[line("Planned", conv(p.c.planned), o().cp), line("Actual", conv(p.c.actual), o().ca, undefined, true), ...(showFc() ? [line("Forecast", fcData(), o().cf, [6, 4])] : [])]} />
   );
   const report = () => {
@@ -134,7 +158,7 @@ export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?:
       y={bars ? `${per1} ${p.money ? `(${P().currency.code})` : "%"}` : cum} max={bars || p.money ? undefined : 100} y2={bars ? cum : undefined} y2max={bars && !p.money ? 100 : undefined}
       time={{ min: c.days[0], max: c.days[c.days.length - 1], ticksAt: mids, tickLabel: i => labs[i] ?? "", rotate: o().rotate }}
       marker={o().marker ? mk : null} markerText={mk !== null ? `Status · ${fmtDay(mk)}` : undefined}
-      extra={<button onClick={scurveOptions} title="How the plan's S-curves look: bars, curves, colours, title">Format</button>}
+      extra={<><button onClick={scurveOptions} title="How the plan's S-curves look: bars, curves, colours, title">Format</button><button onClick={() => scBook(p.c, p.scope ?? null, title())} title="Save as a workbook: a Weekly and a Monthly sheet, each with the figures and a chart (bars and cumulative curves) to edit in the spreadsheet program">Workbook</button><button onClick={() => scSheet(p.c, p.unit, p.scope ?? null, title())} title="Put the figures on a sheet of this plan, to see, edit and use them in formulas or a dashboard">To Sheet</button></>}
       datasets={ds} />;
   };
   // per-period bars need the periods' own values: periodsOnly drops the status-date point
@@ -244,7 +268,7 @@ export const SCurves = () => {
         <Show when={costc()?.weight === "cost" && costc()}>{c => <SCurveChart c={c()} unit={unit()} title="Cost S-curve" money />}</Show>
         <Show when={hours()?.weight === "work" && hours()}>{c => <ChartBox title="Hours S-curve" type="line" fmt="hours" y="Cumulative hours" days={c().days} labels={c().days.map(d => label(d, unit()))}
           datasets={[line("Planned", c().planned.map(v => (v / 100) * c().total), COL.grey, [6, 4]), line("Actual", c().actual.map(v => (v === null ? null : (v / 100) * c().total)), COL.blue, undefined, true), line("Forecast", c().forecast.map(v => (v / 100) * c().total), COL.red, [2, 3])]} />}</Show>
-        <For each={each() ?? []}>{c => <Show when={c}><SCurveChart c={c!} unit={unit()} size="short" /></Show>}</For>
+        <For each={each() ?? []}>{(c, i) => <Show when={c}><SCurveChart c={c!} unit={unit()} size="short" scope={phases()?.rows[i()]?.uid} /></Show>}</For>
       </div>
       <Show when={main()}>{c => (
         <div class="panel"><h2>Data</h2><div class="wlwrap"><table class="tbl"><thead><tr><th>Period end</th><th class="r">Planned</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Variance</th></tr></thead>

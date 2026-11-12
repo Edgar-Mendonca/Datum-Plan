@@ -1,5 +1,6 @@
 //! File exchange: project XML, XER and PMXML, workbook (.xlsx), CSV, MPX, JSON, HTML and iCalendar.
 pub mod book;
+pub mod scurve_book;
 pub mod sheetbook;
 pub mod formats;
 pub mod mspdi;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.13 — 2026-11-12
+
+S-curves in a spreadsheet, to edit there.
+
+- **Workbook** (top right of an S-curve) saves a workbook with a Weekly and a Monthly sheet: the figures and a real chart of the spreadsheet program, in your Format colours and title, with the bars per period on the left axis and the cumulative planned, actual and forecast curves on the right. Edit the chart there like any other. The period columns are formulas over the cumulative ones, so a corrected value moves the bars and the curves.
+- **To Sheet** puts the same figures on a sheet of the plan (S-Curve Weekly or S-Curve Monthly), to check them, use them in formulas or chart them on a dashboard. Press it again after an update to refresh them.
+- Phase S-curves (Progress page) export their own phase.
+
 ## 0.8.12 — 2026-11-11
 
 S-curves drawn as in a progress report, and a Format dialog to change them.
