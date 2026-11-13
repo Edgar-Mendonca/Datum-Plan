@@ -672,7 +672,7 @@ Then ask anything about the plan shown, for example:
 - *"Check the schedule and list the tasks without logic."*
 - *"Why did the finish move since the baseline?"*, *"Write a short status summary."*
 
-Each change Claude makes shows at once, with a note at the bottom, and is one **Undo** step ([[Ctrl+Z]]). Claude works on the plan in the tab shown (it can also list the open plans and switch tabs), keeps to the same rules as you (a locked baseline stays locked), and never saves the file unless you ask it to. Claude can read the schedule, the checks, the S-curve, the risk results, the look-ahead and the sheets, and add, change, link, delete and update tasks, set the status date and type in sheets.
+Each change Claude makes shows at once, with a note at the bottom, and is one **Undo** step ([[Ctrl+Z]]). Claude works on the plan in the tab shown (it can also list the open plans and switch tabs), keeps to the same rules as you (a locked baseline stays locked), and never saves the file unless you ask it to. Claude can read the schedule, the checks, the S-curve, the risk results, the look-ahead and the sheets, and add, change, link, delete and update tasks, set the status date and type in sheets. It can also manage resources and assignments, calendars and their holidays, activity codes, custom fields, constraints, deadlines and notes, run any filter, and indent, outdent or move tasks: *"Add a Rigger resource at 300% and assign it to the lifting tasks"*, *"Add a shutdown from 24 to 26 December to the project calendar"*, *"Code tasks 12 to 18 as Area U-100"*.
 
 ## Command line and AI assistants
 

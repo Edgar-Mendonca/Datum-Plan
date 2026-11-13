@@ -283,7 +283,11 @@ impl<'a> Calc<'a> {
     /// Looks a field up by key, display name or alias.
     pub fn key_of(&self, name: &str) -> Option<String> {
         let n = name.trim().to_lowercase();
-        if task_fields().iter().any(|f| f.key == n) || n.starts_with("c:") || n.starts_with("code:") {
+        if let Some(c) = n.strip_prefix("code:") {
+            // Code names keep their case: code:area finds the Area code.
+            return Some(format!("code:{}", self.p.codes.iter().find(|d| d.name.to_lowercase() == c).map_or(&name.trim()[5..], |d| d.name.as_str())));
+        }
+        if task_fields().iter().any(|f| f.key == n) || n.starts_with("c:") {
             return Some(n);
         }
         self.names.get(&n).cloned()

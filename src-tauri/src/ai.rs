@@ -213,7 +213,7 @@ mod tests {
         assert_eq!(init["result"]["serverInfo"]["name"], "datum-plan");
         assert!(answer(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), |_, _| Ok(json!(null))).is_none());
         let list = answer(&json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }), |_, _| Ok(json!(null))).unwrap();
-        assert!(list["result"]["tools"].as_array().unwrap().len() >= 25);
+        assert!(list["result"]["tools"].as_array().unwrap().len() >= 50);
         let off = answer(&json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "plan_summary", "arguments": {} } }), |_, _| Err("closed".into())).unwrap();
         assert_eq!(off["result"]["isError"], true);
         assert_eq!(answer(&json!({ "jsonrpc": "2.0", "id": 4, "method": "nope" }), |_, _| Ok(json!(null))).unwrap()["error"]["code"], -32601);

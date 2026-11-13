@@ -13,6 +13,10 @@ export const [aiOn, setAiOn] = createSignal(false);
 const DID: Record<string, string> = {
   add_tasks: "added tasks", set_task_fields: "changed a task", link_tasks: "linked tasks", unlink_tasks: "removed a link", delete_tasks: "deleted tasks",
   update_progress: "recorded progress", set_status_date: "set the status date", set_baseline: "saved a baseline", set_sheet_cells: "typed in a sheet",
+  add_resources: "added resources", set_resource_fields: "changed a resource", delete_resources: "deleted resources", assign_resource: "assigned a resource", unassign_resource: "removed a resource from tasks",
+  add_calendar: "added a calendar", set_calendar: "changed a calendar", delete_calendar: "deleted a calendar", define_code: "changed an activity code", set_task_codes: "coded tasks",
+  define_custom_field: "set up a custom field", delete_custom_field: "removed a custom field", set_constraint: "set a constraint", set_deadline: "set a deadline",
+  indent_tasks: "indented tasks", outdent_tasks: "outdented tasks", move_tasks: "moved tasks", set_task_notes: "wrote a note",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
 

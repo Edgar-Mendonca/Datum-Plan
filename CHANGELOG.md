@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.2 — 2026-11-13
+
+AI Link: 26 more tools for Claude (51 in all).
+
+- **Resources and assignments**: list, add, change and delete resources (kind, max units, rate, calendar…); assign a resource to tasks with its units, remove it, and see a task's or a resource's assignments.
+- **Calendars and exceptions**: list calendars and read one in full; add a calendar (a copy, or a standard week) with its working hours per weekday; add or remove holidays, shutdowns and extra working days; rename; delete one nothing uses.
+- **Activity codes and custom fields**: define codes and their values (rename keeps the tasks' values), code tasks; name custom fields, give them a formula or a value list, remove them.
+- **Constraints, deadlines and notes** on many tasks at once; a dated constraint needs its date.
+- **Filters**: the built-in and saved filters, and any filter by rules on any field (codes and custom fields too).
+- **Outline**: indent, outdent and move tasks with their subtasks.
+- Every change is still one Undo step, shown at once with a note saying what Claude did.
+- Fix: a filter, group or formula on an activity code with capitals in its name (code:Area) found no values.
+
 ## 0.9.0 — 2026-11-13
 
 AI Link: Claude works on the plan you have open.
