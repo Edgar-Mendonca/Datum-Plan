@@ -20,6 +20,10 @@ const DID: Record<string, string> = {
   set_risk: "changed the risk register", delete_risk: "removed a risk", set_delay_event: "changed a delay event", delete_delay_event: "removed a delay event", add_fragnet: "added a delay event's activities",
   take_snapshot: "took a snapshot", set_health_settings: "changed the health settings", level_resources: "levelled resources", clear_levelling: "cleared levelling",
   update_project: "updated progress through a date", mark_on_track: "marked tasks on track", split_task: "split a task", save_interim: "saved an interim plan", set_constraint_log_item: "changed the constraint log",
+  set_contract: "changed the contract", set_contract_date: "changed a contract date", set_payment: "changed a payment milestone", set_vendor_document: "changed the document register",
+  log_submission: "logged a document submission", set_order: "changed an order", log_expediting: "added an expediting note", clear_baseline: "cleared a baseline",
+  add_sheet: "added a sheet", rename_sheet: "renamed a sheet", delete_sheet: "deleted a sheet", format_sheet_cells: "formatted a sheet", set_number_format: "set a number format",
+  define_name: "changed a defined name", format_tasks: "formatted tasks", add_dashboard: "added a dashboard", delete_dashboard: "deleted a dashboard", export_plan: "saved a copy to Downloads", export_register: "saved a register to Downloads",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
 

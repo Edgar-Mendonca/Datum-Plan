@@ -99,12 +99,43 @@ pub fn tools() -> Value {
         { "name": "set_constraint_log_item", "description": "Add (no id) or change an entry of the constraint log: uid (the task held up), kind, text, owner, need (date), status (Open, Closed); remove deletes it.", "inputSchema": obj(json!({ "id": { "type": "integer" }, "uid": uid(), "kind": { "type": "string" }, "text": { "type": "string" }, "owner": { "type": "string" }, "need": { "type": "string" }, "status": { "type": "string" }, "remove": { "type": "boolean" } }), &[]) },
         { "name": "resource_usage", "description": "Hours or cost per week or month, by resource or by task (over-allocated periods marked), or people per period by trade (by: trade).", "inputSchema": obj(json!({ "by": { "type": "string", "enum": ["resource", "task", "trade"] }, "what": { "type": "string", "enum": ["work", "cost"] }, "unit": { "type": "string", "enum": ["week", "month"] } }), &[]) },
     ]);
-    let mut all: Vec<Value> = [base, more, third].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
+    // Registers, baselines, exports, sheets and dashboards (0.9.5).
+    let rid = |what: &str| json!({ "type": "integer", "description": format!("The {what}'s id (0 or none adds one)") });
+    let item = |what: &str, fields: &str| json!({ "type": "object", "description": format!("{what} fields to set: {fields}. Dates YYYY-MM-DD.") });
+    let style = || json!({ "type": "object", "description": "bold, italic, underline, strike (true/false), color and fill (#RRGGBB), size (px), font, align (left, center, right), border (\"thin #000000\": thin, med, thick, dbl, dash, dot); an empty value removes it" });
+    let fourth = json!([
+        { "name": "contract_status", "description": "The contract: value, contract dates (forecast against the date, float, delay damages) and payment milestones (due, invoiced, paid).", "inputSchema": none() },
+        { "name": "set_contract", "description": "The contract's number, value and warning days (a contract date with less float is at risk).", "inputSchema": obj(json!({ "number": { "type": "string" }, "value": { "type": "number" }, "warn_days": { "type": "integer" } }), &[]) },
+        { "name": "set_contract_date", "description": "Add or change a contract date (met by a task's finish), or remove it.", "inputSchema": obj(json!({ "id": rid("contract date"), "fields": item("Contract date", "name, task (uid), date, value, ld_rate (% per week), ld_cap (%), grace (days), note"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "set_payment", "description": "Add or change a payment milestone (a share or amount, due some days after its task finishes), or remove it.", "inputSchema": obj(json!({ "id": rid("payment"), "fields": item("Payment", "name, pct, amount, task (uid), terms (days), invoiced, paid"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "document_register", "description": "The vendor document register: each document's planned, actual and forecast dates of its six steps, revisions and resubmissions, and the progress earned against planned.", "inputSchema": none() },
+        { "name": "set_vendor_document", "description": "Add or change a vendor document, or remove it.", "inputSchema": obj(json!({ "id": rid("document"), "fields": item("Document", "number, title, vendor, package, disc, kind, class (1–3), key, offset (P + n), first (date), weight, task (uid that needs it), remarks"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "log_submission", "description": "Record a submission of a vendor document and the client's return (or change one by id).", "inputSchema": obj(json!({ "id": rid("submission"), "fields": item("Submission", "doc (document id), rev, purpose (ICR, IFA, IFC1…), transmittal, sent, ret_transmittal, returned, code (Code 1…), crs") }), &[]) },
+        { "name": "procurement_status", "description": "The procurement register: each order's planned and actual RFQ, PO, manufacturing, inspection release and delivery, promised date, float to need, and progress.", "inputSchema": none() },
+        { "name": "set_order", "description": "Add or change an order (equipment item or sub-order), or remove it.", "inputSchema": obj(json!({ "id": rid("order"), "fields": item("Order", "tag, name, vendor, origin, po_no, value, long_lead, task (uid), need (uid), required, planned and actual ([RFQ, PO, manufacturing, IRN, delivery] dates or null), mfg_pct, promised, remarks"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "log_expediting", "description": "Add a note to an order's expediting log.", "inputSchema": obj(json!({ "id": { "type": "integer" }, "note": { "type": "string" }, "date": { "type": "string" }, "by": { "type": "string" } }), &["id", "note"]) },
+        { "name": "list_baselines", "description": "Which baselines (0–10) are set: how many tasks, and the project finish in each.", "inputSchema": none() },
+        { "name": "baseline_variance", "description": "Tasks against a baseline (default 0): start and finish variance in days, slipped most first.", "inputSchema": obj(json!({ "n": { "type": "integer" }, "limit": { "type": "integer" } }), &[]) },
+        { "name": "clear_baseline", "description": "Clear a baseline (0–10) for the whole plan or some tasks. Ask the user first.", "inputSchema": obj(json!({ "n": { "type": "integer" }, "uids": uids() }), &["n"]) },
+        { "name": "export_plan", "description": "Save a copy of the plan in another format to the Downloads folder: xlsx, ods, csv, xml (Project XML), xer, pmxml, mpx, json, html, ics.", "inputSchema": obj(json!({ "format": { "type": "string", "enum": ["xlsx", "ods", "csv", "xml", "xer", "pmxml", "mpx", "json", "html", "ics"] } }), &["format"]) },
+        { "name": "export_register", "description": "Save a register as a workbook to the Downloads folder: documents, procurement or delays (the delay analysis).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement", "delays"] } }), &["register"]) },
+        { "name": "add_sheet", "description": "Add a sheet (spreadsheet tab), optionally with cells: {\"A1\":\"Vendor\",\"B1\":\"=SUM(B2:B9)\"}.", "inputSchema": obj(json!({ "name": { "type": "string" }, "cells": { "type": "object" } }), &["name"]) },
+        { "name": "rename_sheet", "description": "Rename a sheet (formulas that refer to it follow).", "inputSchema": obj(json!({ "name": { "type": "string" }, "to": { "type": "string" } }), &["name", "to"]) },
+        { "name": "delete_sheet", "description": "Delete a sheet. Ask the user first.", "inputSchema": obj(json!({ "name": { "type": "string" } }), &["name"]) },
+        { "name": "format_sheet_cells", "description": "Format cells of a sheet (a range like A1:D1): bold, colours, size, alignment, borders; and column widths in px ({\"A\":180}).", "inputSchema": obj(json!({ "name": { "type": "string" }, "range": { "type": "string" }, "style": style(), "widths": { "type": "object" } }), &["name"]) },
+        { "name": "set_number_format", "description": "Number format of sheet cells (a range): #,##0.00, 0.0%, dd-mmm-yy, \"$\"#,##0 …; empty for General.", "inputSchema": obj(json!({ "name": { "type": "string" }, "range": { "type": "string" }, "format": { "type": "string" } }), &["name", "range", "format"]) },
+        { "name": "define_name", "description": "Add, change or (empty formula) remove a defined name for the sheets' formulas, e.g. Rate =Inputs!$B$2.", "inputSchema": obj(json!({ "name": { "type": "string" }, "formula": { "type": "string" }, "comment": { "type": "string" } }), &["name"]) },
+        { "name": "format_tasks", "description": "Format rows of the task sheet (or one column of them): bold, italic, colours, size…", "inputSchema": obj(json!({ "uids": uids(), "column": { "type": "string", "description": "A field key (name, start…); none for the whole row" }, "style": style() }), &["uids", "style"]) },
+        { "name": "list_dashboards", "description": "The plan's own dashboards and their tiles.", "inputSchema": none() },
+        { "name": "add_dashboard", "description": "Add a dashboard (or replace one of the same name) with tiles: [{\"kind\":\"number\",\"title\":\"SPI\",\"formula\":\"=SPI\",\"size\":3}, {\"kind\":\"ring\",\"title\":\"Progress\",\"formula\":\"=PercentComplete\"}, {\"kind\":\"chart\",\"title\":\"S-curve\",\"plan\":\"scurve\",\"size\":12}, {\"kind\":\"table\",\"title\":\"Late\",\"plan\":\"late\"}, {\"kind\":\"text\",\"text\":\"Notes\"}]. Plan charts: scurve, periodbars, phases, costev, manpower; lists: milestones, late, critical, upcoming, completed. Size 3, 4, 6, 8 or 12 (of 12).", "inputSchema": obj(json!({ "name": { "type": "string" }, "tiles": { "type": "array", "items": { "type": "object" } } }), &["name", "tiles"]) },
+        { "name": "delete_dashboard", "description": "Delete one of the plan's dashboards.", "inputSchema": obj(json!({ "name": { "type": "string" } }), &["name"]) },
+    ]);
+    let mut all: Vec<Value> = [base, more, third, fourth].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
     // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
     for t in &mut all {
         let n = t["name"].as_str().unwrap_or("").to_string();
         t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "switch_plan" | "save_plan"),
-            "destructiveHint": n.starts_with("delete_") || matches!(n.as_str(), "set_baseline" | "save_plan" | "apply_operation"), "openWorldHint": false });
+            "destructiveHint": n.starts_with("delete_") || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "apply_operation"), "openWorldHint": false });
     }
     Value::Array(all)
 }
@@ -150,6 +181,59 @@ fn dates(v: &mut Value, keys: &[&str]) {
         _ => {}
     }
 }
+/// `old` with the given fields set (by their names in the plan file); unknown fields are refused.
+fn patch<T: serde::Serialize + serde::de::DeserializeOwned>(old: &T, f: &Value, fixed: &[&str]) -> Result<T, String> {
+    let mut v = serde_json::to_value(old).map_err(|e| e.to_string())?;
+    for (k, x) in f.as_object().into_iter().flatten() {
+        if fixed.contains(&k.as_str()) || v.get(k).is_none() { return Err(format!("{k} cannot be set here.")) }
+        v[k] = x.clone();
+    }
+    serde_json::from_value(v).map_err(|e| format!("A value has the wrong kind ({e}). Dates are YYYY-MM-DD."))
+}
+/// The cells of a range like A1:C3 (or one cell), at most 10,000.
+fn cells_of(r: &str) -> Result<Vec<String>, String> {
+    let one = |x: &str| -> Option<(u32, u32)> {
+        let x = x.trim().trim_matches('$').replace('$', "").to_uppercase();
+        let cut = x.find(|c: char| c.is_ascii_digit())?;
+        let col = x[..cut].chars().try_fold(0u32, |n, c| c.is_ascii_uppercase().then(|| n * 26 + (c as u32 - 64)))?;
+        Some((col.checked_sub(1)?, x[cut..].parse::<u32>().ok()?.checked_sub(1)?))
+    };
+    let bad = || format!("\"{r}\" is not a range like A1:C3.");
+    let (a, b) = r.split_once(':').unwrap_or((r, r));
+    let ((c0, r0), (c1, r1)) = (one(a).ok_or_else(bad)?, one(b).ok_or_else(bad)?);
+    let (c0, c1, r0, r1) = (c0.min(c1), c0.max(c1), r0.min(r1), r0.max(r1));
+    if (c1 - c0 + 1) as u64 * (r1 - r0 + 1) as u64 > 10_000 { return Err("Format at most 10,000 cells at a time.".into()) }
+    Ok((r0..=r1).flat_map(|r| (c0..=c1).map(move |c| format!("{}{}", sheet::col_name(c), r + 1))).collect())
+}
+/// A cell style ("b;c:#C0392B;z:12") with the given changes.
+fn restyle(old: &str, st: &Value) -> Result<String, String> {
+    let mut m: Vec<(String, String)> = old.split(';').filter(|t| !t.is_empty()).map(|t| { let (k, v) = t.split_once(':').unwrap_or((t, "")); (k.to_string(), v.to_string()) }).collect();
+    for (k, v) in st.as_object().ok_or("style is needed, like {\"bold\":true,\"fill\":\"#FFF2CC\"}.")? {
+        let flag = |c: &str| (c.to_string(), String::new());
+        let on = v.as_bool().unwrap_or(!txt(v).trim().is_empty() && txt(v) != "false");
+        let val = txt(v).trim().to_string();
+        let (key, set) = match k.as_str() {
+            "bold" => ("b", on.then(|| flag("b"))), "italic" => ("i", on.then(|| flag("i"))), "underline" => ("u", on.then(|| flag("u"))), "strike" => ("s", on.then(|| flag("s"))), "wrap" => ("w", on.then(|| flag("w"))),
+            "color" | "fill" => {
+                if !val.is_empty() && !(val.len() == 7 && val.starts_with('#') && val[1..].chars().all(|c| c.is_ascii_hexdigit())) { return Err(format!("{k} is a colour like #C0392B.")) }
+                (if k == "color" { "c" } else { "f" }, (!val.is_empty()).then(|| (if k == "color" { "c" } else { "f" }.to_string(), val.clone())))
+            }
+            "size" => ("z", match v.as_f64() { Some(z) if (6.0..=72.0).contains(&z) => Some(("z".into(), z.to_string())), None if val.is_empty() => None, _ => return Err("size is from 6 to 72.".into()) }),
+            "font" => ("n", (!val.is_empty()).then(|| ("n".into(), val.replace([';', ':'], "")))),
+            "align" => ("a", match val.as_str() { "" => None, "left" | "l" => Some(("a".into(), "l".into())), "center" | "c" => Some(("a".into(), "c".into())), "right" | "r" => Some(("a".into(), "r".into())), _ => return Err("align is left, center or right.".into()) }),
+            "border" => ("", { for b in ["bt", "bb", "bl", "br"] { m.retain(|x| x.0 != b); if !val.is_empty() { m.push((b.into(), val.replace([';', ':'], ""))) } } None }),
+            x => return Err(format!("No style {x}: bold, italic, underline, strike, wrap, color, fill, size, font, align, border.")),
+        };
+        if key.is_empty() { continue }
+        m.retain(|x| x.0 != key);
+        if let Some(x) = set { m.push(x) }
+    }
+    Ok(m.iter().map(|(k, v)| if v.is_empty() { k.clone() } else { format!("{k}:{v}") }).collect::<Vec<_>>().join(";"))
+}
+fn sheet_k(p: &Project, a: &Value) -> Result<usize, String> {
+    let n = s(a, "name").ok_or("name is needed (the sheet; see get_sheet).")?;
+    p.sheets.iter().position(|x| x.name.eq_ignore_ascii_case(n.trim())).ok_or_else(|| format!("No sheet called {n}."))
+}
 /// A date from an instant (minutes; a finish is the end of its last minute).
 fn inst(t: i64) -> String { crate::cal::date_of((t - 1).max(0)).to_string() }
 
@@ -159,7 +243,9 @@ pub fn changes(name: &str) -> bool {
         | "add_resources" | "set_resource_fields" | "delete_resources" | "assign_resource" | "unassign_resource" | "add_calendar" | "set_calendar" | "delete_calendar"
         | "define_code" | "set_task_codes" | "define_custom_field" | "delete_custom_field" | "set_constraint" | "set_deadline" | "indent_tasks" | "outdent_tasks" | "move_tasks" | "set_task_notes"
         | "set_risk" | "delete_risk" | "set_delay_event" | "delete_delay_event" | "add_fragnet" | "take_snapshot" | "set_health_settings" | "level_resources" | "clear_levelling"
-        | "update_project" | "mark_on_track" | "split_task" | "save_interim" | "set_constraint_log_item" | "undo" | "redo")
+        | "update_project" | "mark_on_track" | "split_task" | "save_interim" | "set_constraint_log_item"
+        | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
+        | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard" | "undo" | "redo")
 }
 
 fn s<'a>(a: &'a Value, k: &str) -> Option<&'a str> { a[k].as_str().filter(|x| !x.trim().is_empty()) }
@@ -796,6 +882,196 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             Ok(json!({ "unit": g.unit, "periods": g.buckets.iter().map(|d| crate::delay::date(*d)).collect::<Vec<_>>(),
                 "rows": g.rows.iter().take(300).map(|r| json!({ "name": r.name, "total": r1(r.total), "values": r.vals.iter().map(|x| r1(*x)).collect::<Vec<_>>(), "over": r.over.iter().any(|x| *x) })).collect::<Vec<_>>() }))
         }
+        "contract_status" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            Ok(json!({ "number": doc.p.contract.number, "status": crate::contract::status(&c) }))
+        }
+        "set_contract" => {
+            let f = json!({ "number": a.get("number"), "value": a.get("value"), "warn_days": a.get("warn_days") });
+            let f = Value::Object(f.as_object().cloned().unwrap_or_default().into_iter().filter(|(_, v)| !v.is_null()).collect());
+            if f.as_object().is_none_or(|m| m.is_empty()) { return Err("Give number, value or warn_days.".into()) }
+            let c = patch(&doc.p.contract, &f, &["dates", "payments"])?;
+            apply(doc, Op::Contract { c: Box::new(c) })?;
+            Ok(json!({ "number": doc.p.contract.number, "value": doc.p.contract.value }))
+        }
+        "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" => {
+            let id = a["id"].as_u64().unwrap_or(0) as u32;
+            let remove = a["remove"].as_bool() == Some(true);
+            let f = &a["fields"];
+            let p = &doc.p;
+            let task_ok = |v: &Value, k: &str| -> Result<(), String> { match v[k].as_u64() { Some(u) if u > 0 && p.idx(u as u32).is_none() => Err(format!("No task with uid {u}.")), _ => Ok(()) } };
+            for k in ["task", "need"] { task_ok(f, k)? }
+            fn put<T: serde::Serialize + serde::de::DeserializeOwned + Default + Clone>(list: &mut Vec<T>, id: u32, idof: impl Fn(&T) -> u32, f: &Value, remove: bool) -> Result<(), String> {
+                let k = list.iter().position(|x| idof(x) == id);
+                if id != 0 && k.is_none() { return Err("No entry with that id.".into()) }
+                match (k, remove) {
+                    (Some(k), true) => { list.remove(k); }
+                    (None, true) => return Err("id is needed to remove an entry.".into()),
+                    (Some(k), false) => list[k] = patch(&list[k], f, &["id"])?,
+                    (None, false) => list.push(patch(&T::default(), f, &["id"])?),
+                }
+                Ok(())
+            }
+            let op = match name {
+                "set_contract_date" | "set_payment" => {
+                    let mut c = p.contract.clone();
+                    if name == "set_payment" { put(&mut c.payments, id, |x| x.id, f, remove)? } else { put(&mut c.dates, id, |x| x.id, f, remove)? }
+                    Op::Contract { c: Box::new(c) }
+                }
+                "set_vendor_document" | "log_submission" => {
+                    let mut r = p.documents.clone();
+                    if name == "log_submission" {
+                        let doc_id = f["doc"].as_u64().map(|d| d as u32).or_else(|| r.log.iter().find(|x| x.id == id).map(|x| x.doc));
+                        if !doc_id.is_some_and(|d| r.docs.iter().any(|x| x.id == d)) { return Err("doc is needed: a document id from document_register.".into()) }
+                        put(&mut r.log, id, |x| x.id, f, remove)?
+                    } else { put(&mut r.docs, id, |x| x.id, f, remove)? }
+                    Op::Documents { r: Box::new(r) }
+                }
+                _ => { let mut r = p.procurement.clone(); put(&mut r.items, id, |x| x.id, f, remove)?; Op::Procurement { r: Box::new(r) } }
+            };
+            apply(doc, op)?;
+            let p = &doc.p;
+            let last = match name { "set_contract_date" => p.contract.dates.last().map(|x| x.id), "set_payment" => p.contract.payments.last().map(|x| x.id),
+                "set_vendor_document" => p.documents.docs.last().map(|x| x.id), "log_submission" => p.documents.log.last().map(|x| x.id), _ => p.procurement.items.last().map(|x| x.id) };
+            Ok(json!({ if remove { "removed" } else { "id" }: if id == 0 { last.unwrap_or(0) } else { id } }))
+        }
+        "log_expediting" => {
+            let id = a["id"].as_u64().ok_or("id is needed (an order id from procurement_status).")? as u32;
+            let mut r = doc.p.procurement.clone();
+            let it = r.items.iter_mut().find(|x| x.id == id).ok_or("No order with that id.")?;
+            let date = Some(s(a, "date").map(|x| parse::date_in(x, fmt)).transpose()?.unwrap_or(today));
+            it.log.push(Expedite { date, note: s(a, "note").ok_or("note is needed.")?.into(), by: s(a, "by").unwrap_or("").into() });
+            apply(doc, Op::Procurement { r: Box::new(r) })?;
+            Ok(json!({ "order": id }))
+        }
+        "document_register" | "procurement_status" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            let mut v = if name == "document_register" { json!({ "documents": doc.p.documents.docs, "status": crate::docreg::status(&c) }) } else { json!({ "orders": doc.p.procurement.items, "status": crate::procure::status(&c) }) };
+            if let Some(m) = v["status"].as_object_mut() { m.remove("weekly"); m.remove("monthly"); }
+            Ok(v)
+        }
+        "list_baselines" => {
+            let p = &doc.p;
+            Ok(json!((0..=10u8).filter_map(|n| {
+                let b: Vec<&Baseline> = p.tasks.iter().filter_map(|t| t.bls.get(&n)).collect();
+                (!b.is_empty()).then(|| json!({ "n": n, "tasks": b.len(), "finish": inst(b.iter().map(|x| x.finish).max().unwrap_or(0)) }))
+            }).collect::<Vec<_>>()))
+        }
+        "baseline_variance" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            let n = a["n"].as_u64().unwrap_or(0).min(10) as u8;
+            let day = crate::cal::DAY as f64;
+            let mut rows: Vec<(f64, Value)> = (0..doc.p.tasks.len()).filter(|&i| !c.s.summary[i] && !c.s.off[i]).filter_map(|i| {
+                let (t, b) = (&doc.p.tasks[i], doc.p.tasks[i].bls.get(&n)?);
+                let (sv, fv) = ((c.s.es[i] - b.start) as f64 / day, (c.s.ef[i] - b.finish) as f64 / day);
+                Some((fv, json!({ "uid": t.uid, "id": i + 1, "name": t.name, "baseline_start": crate::cal::date_of(b.start).to_string(), "start": crate::cal::date_of(c.s.es[i]).to_string(), "start_var_days": (sv * 10.0).round() / 10.0,
+                    "baseline_finish": inst(b.finish), "finish": inst(c.s.ef[i]), "finish_var_days": (fv * 10.0).round() / 10.0 })))
+            }).collect();
+            if rows.is_empty() { return Err(format!("Baseline {n} is not set; see list_baselines.")) }
+            rows.sort_by(|x, y| y.0.total_cmp(&x.0));
+            let lim = a["limit"].as_u64().unwrap_or(50).clamp(1, 500) as usize;
+            Ok(json!({ "baseline": n, "tasks": rows.len(), "late": rows.iter().filter(|r| r.0 > 0.0).count(), "rows": rows.into_iter().take(lim).map(|r| r.1).collect::<Vec<_>>() }))
+        }
+        "clear_baseline" => {
+            let n = a["n"].as_u64().filter(|n| *n <= 10).ok_or("n is from 0 to 10.")? as u8;
+            apply(doc, Op::Baseline { uids: uid_list(a, "uids").unwrap_or_default(), clear: true, n })?;
+            Ok(json!({ "cleared": n }))
+        }
+        "add_sheet" => {
+            let n = s(a, "name").ok_or("name is needed.")?.trim().to_string();
+            let cells = a["cells"].as_object().map(|m| m.iter().map(|(c, v)| (c.to_uppercase(), txt(v))).filter(|x| !x.1.is_empty()).collect()).unwrap_or_default();
+            apply(doc, Op::Batch(vec![Op::Sheet { k: None, sheet: Some(SheetData { name: n.clone(), ..Default::default() }) }, Op::SheetCells { k: doc.p.sheets.len(), cells, fmt: None }]))?;
+            Ok(json!({ "sheet": n }))
+        }
+        "rename_sheet" => {
+            let k = sheet_k(&doc.p, a)?;
+            let mut sh = doc.p.sheets[k].clone();
+            sh.name = s(a, "to").ok_or("to is needed (the new name).")?.trim().into();
+            apply(doc, Op::Sheet { k: Some(k), sheet: Some(sh) })?;
+            Ok(json!({ "sheet": doc.p.sheets[k].name }))
+        }
+        "delete_sheet" => {
+            let k = sheet_k(&doc.p, a)?;
+            let n = doc.p.sheets[k].name.clone();
+            apply(doc, Op::Sheet { k: Some(k), sheet: None })?;
+            Ok(json!({ "deleted": n }))
+        }
+        "format_sheet_cells" => {
+            let k = sheet_k(&doc.p, a)?;
+            let mut ops = vec![];
+            if let Some(r) = s(a, "range") {
+                let sh = &doc.p.sheets[k];
+                ops.push(Op::SheetStyle { k, cells: cells_of(r)?.into_iter().map(|c| { let v = restyle(sh.style.get(&c).map_or("", |x| x.as_str()), &a["style"]); v.map(|v| (c, v)) }).collect::<Result<_, _>>()? });
+            }
+            if let Some(w) = a["widths"].as_object() {
+                let mut sh = doc.p.sheets[k].clone();
+                for (c, v) in w {
+                    let col = cells_of(&format!("{c}1"))?.first().cloned().ok_or("A column is a letter like B.")?;
+                    let i = col.trim_end_matches('1').chars().fold(0u32, |n, ch| n * 26 + (ch as u32 - 64)) - 1;
+                    sh.widths.insert(i, v.as_u64().filter(|x| (8..=2000).contains(x)).ok_or("A width is in px, from 8 to 2000.")? as u16);
+                }
+                ops.push(Op::Sheet { k: Some(k), sheet: Some(sh) });
+            }
+            if ops.is_empty() { return Err("Give a range with a style, or widths.".into()) }
+            apply(doc, Op::Batch(ops))?;
+            Ok(json!({ "sheet": doc.p.sheets[k].name }))
+        }
+        "set_number_format" => {
+            let k = sheet_k(&doc.p, a)?;
+            let cells = cells_of(s(a, "range").ok_or("range is needed, like B2:B20.")?)?.into_iter().map(|c| (c, String::new())).collect();
+            apply(doc, Op::SheetCells { k, cells, fmt: Some(a.get("format").map(txt).unwrap_or_default().trim().into()) })?;
+            Ok(json!({ "sheet": doc.p.sheets[k].name }))
+        }
+        "define_name" => {
+            let n = s(a, "name").ok_or("name is needed.")?.trim().to_string();
+            let mut names = doc.p.names.clone();
+            let f = a.get("formula").map(txt).unwrap_or_default().trim().to_string();
+            let at = names.iter().position(|x| x.name.eq_ignore_ascii_case(&n));
+            match (at, f.is_empty()) {
+                (Some(i), true) => { names.remove(i); }
+                (None, true) => return Err(format!("No name {n} to remove.")),
+                (Some(i), false) => { names[i].formula = f; if let Some(c) = s(a, "comment") { names[i].comment = c.into() } }
+                (None, false) => names.push(DefName { name: n.clone(), formula: f, comment: s(a, "comment").unwrap_or("").into(), sheet: String::new() }),
+            }
+            apply(doc, Op::Names { names })?;
+            Ok(json!({ "names": doc.p.names.len() }))
+        }
+        "format_tasks" => {
+            let key = s(a, "column").unwrap_or("*").to_string();
+            let cells = uid_list(a, "uids")?.into_iter().map(|uid| {
+                let i = doc.p.idx(uid).ok_or_else(|| format!("No task with uid {uid}."))?;
+                let old = doc.p.tasks[i].style.get(&key).and_then(Value::as_str).unwrap_or("");
+                Ok((uid, key.clone(), restyle(old, &a["style"])?))
+            }).collect::<Result<Vec<_>, String>>()?;
+            apply(doc, Op::Style { cells })?;
+            Ok(json!({ "tasks": uid_list(a, "uids")?.len() }))
+        }
+        "list_dashboards" => Ok(json!(doc.p.ui["dashboards"].as_array().into_iter().flatten().map(|d| json!({ "name": d["name"],
+            "tiles": d["tiles"].as_array().into_iter().flatten().map(|t| json!({ "kind": t["kind"], "title": t["title"], "formula": t["formula"], "plan": t["plan"], "src": t["src"] })).collect::<Vec<_>>() })).collect::<Vec<_>>())),
+        "add_dashboard" | "delete_dashboard" => {
+            let n = s(a, "name").ok_or("name is needed.")?.trim().to_string();
+            let mut list: Vec<Value> = doc.p.ui["dashboards"].as_array().cloned().unwrap_or_default();
+            let had = list.len();
+            list.retain(|d| !d["name"].as_str().is_some_and(|x| x.eq_ignore_ascii_case(&n)));
+            if name == "delete_dashboard" {
+                if list.len() == had { return Err(format!("No dashboard called {n}.")) }
+            } else {
+                const KINDS: [&str; 7] = ["number", "ring", "chart", "table", "countries", "text", "image"];
+                let tiles = a["tiles"].as_array().filter(|v| !v.is_empty() && v.len() <= 60).ok_or("tiles is needed: 1 to 60 tiles.")?.iter().enumerate().map(|(k, t)| {
+                    let kind = t["kind"].as_str().filter(|x| KINDS.contains(x)).ok_or("Each tile has a kind: number, ring, chart, table, countries, text or image.")?;
+                    let w = t["size"].as_u64().filter(|w| [3, 4, 6, 8, 12].contains(w)).unwrap_or(if matches!(kind, "chart" | "table") { 6 } else { 3 });
+                    let mut o = json!({ "id": format!("ai{}{k}", doc.p.next_uid), "kind": kind, "title": t["title"].as_str().unwrap_or(""), "w": w, "h": if matches!(kind, "chart" | "table") { 2 } else { 1 } });
+                    for f in ["formula", "fmt", "sub", "plan", "src", "chart", "text"] { if let Some(x) = t[f].as_str() { o[f] = json!(x) } }
+                    Ok(o)
+                }).collect::<Result<Vec<_>, String>>()?;
+                list.push(json!({ "name": n, "tiles": tiles }));
+            }
+            apply(doc, Op::Ui { key: "dashboards".into(), value: json!(list) })?;
+            Ok(json!({ "dashboards": list.len() }))
+        }
         "apply_operation" => {
             let op = serde_json::from_value(a["operation"].clone()).map_err(|e| format!("Not an operation ({e}). See list_operations."))?;
             apply(doc, op)?;
@@ -819,7 +1095,7 @@ mod tests {
         let mut doc = plan();
         for t in tools().as_array().unwrap() {
             let n = t["name"].as_str().unwrap();
-            if matches!(n, "list_plans" | "switch_plan" | "save_plan") { continue } // the window's own
+            if matches!(n, "list_plans" | "switch_plan" | "save_plan" | "export_plan" | "export_register") { continue } // the window's own
             let r = run(&mut doc, n, json!({}));
             assert!(r.is_ok() || r.as_ref().unwrap_err().len() > 5, "{n}: {r:?}");
         }
@@ -856,6 +1132,71 @@ mod tests {
         assert!(run(&mut doc, "get_tasks", json!({ "fields": ["nosuchfield"] })).unwrap_err().contains("list_fields"));
         run(&mut doc, "set_status_date", json!({ "date": "2026-11-13" })).unwrap();
         assert_eq!(doc.p.status, Some(d(2026, 11, 13)));
+    }
+    #[test]
+    fn registers_baselines_sheets_formats_and_dashboards() {
+        let mut doc = plan();
+        let names: Vec<String> = tools().as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect();
+        assert!(names.len() >= 101 && names.iter().collect::<std::collections::HashSet<_>>().len() == names.len(), "{} tools", names.len());
+        let t: Vec<u64> = run(&mut doc, "get_tasks", json!({ "filter": "not_started" })).unwrap()["tasks"].as_array().unwrap().iter().map(|x| x["uid"].as_u64().unwrap()).collect();
+        let (a, b) = (t[0], t[1]);
+        // Contract, documents, procurement.
+        run(&mut doc, "set_contract", json!({ "number": "C-100", "value": 2_000_000 })).unwrap();
+        let cd = run(&mut doc, "set_contract_date", json!({ "fields": { "name": "Mechanical completion", "task": a, "date": "2027-01-15", "ld_rate": 0.5, "ld_cap": 10 } })).unwrap()["id"].as_u64().unwrap();
+        run(&mut doc, "set_payment", json!({ "fields": { "name": "Advance", "pct": 10, "task": a, "terms": 30 } })).unwrap();
+        assert!(run(&mut doc, "set_contract_date", json!({ "fields": { "nosuch": 1 } })).is_err());
+        assert!(run(&mut doc, "set_contract_date", json!({ "fields": { "task": 999999 } })).unwrap_err().contains("999999"));
+        let cs = run(&mut doc, "contract_status", json!({})).unwrap();
+        assert_eq!(cs["number"], "C-100");
+        run(&mut doc, "set_contract_date", json!({ "id": cd, "remove": true })).unwrap();
+        assert!(doc.p.contract.dates.is_empty() && doc.p.contract.payments.len() == 1);
+        let d = run(&mut doc, "set_vendor_document", json!({ "fields": { "number": "V-001", "title": "GA drawing", "class": 1, "task": b } })).unwrap()["id"].as_u64().unwrap();
+        run(&mut doc, "log_submission", json!({ "fields": { "doc": d, "rev": "A", "purpose": "ICR", "sent": "2026-11-10", "returned": "2026-11-20", "code": "Code 2" } })).unwrap();
+        assert!(run(&mut doc, "log_submission", json!({ "fields": { "doc": 999 } })).is_err());
+        let dr = run(&mut doc, "document_register", json!({})).unwrap();
+        assert_eq!(dr["documents"][0]["number"], "V-001");
+        assert!(dr["status"].get("weekly").is_none());
+        let o = run(&mut doc, "set_order", json!({ "fields": { "tag": "P-101", "name": "Feed pump", "vendor": "Acme", "value": 120000, "task": a, "need": b, "planned": ["2026-11-01", "2026-11-15", null, null, "2027-02-01"] } })).unwrap()["id"].as_u64().unwrap();
+        run(&mut doc, "log_expediting", json!({ "id": o, "note": "Casting poured" })).unwrap();
+        assert_eq!(doc.p.procurement.items[0].log[0].note, "Casting poured");
+        assert!(run(&mut doc, "procurement_status", json!({})).unwrap()["orders"].as_array().unwrap().len() == 1);
+        // Baselines.
+        assert!(run(&mut doc, "baseline_variance", json!({})).unwrap_err().contains("not set"));
+        run(&mut doc, "set_baseline", json!({ "n": 1 })).unwrap();
+        assert_eq!(run(&mut doc, "list_baselines", json!({})).unwrap()[0]["n"], 1);
+        run(&mut doc, "set_task_fields", json!({ "uid": a, "fields": { "dur": "20d" } })).unwrap();
+        let v = run(&mut doc, "baseline_variance", json!({ "n": 1 })).unwrap();
+        assert!(v["late"].as_u64().unwrap() >= 1 && v["rows"][0]["finish_var_days"].as_f64().unwrap() > 0.0, "{v}");
+        run(&mut doc, "clear_baseline", json!({ "n": 1 })).unwrap();
+        assert!(run(&mut doc, "list_baselines", json!({})).unwrap().as_array().unwrap().is_empty());
+        // Sheets, names and formats.
+        run(&mut doc, "add_sheet", json!({ "name": "Costs", "cells": { "A1": "Item", "B1": "Cost", "B2": "100", "B3": "=B2*2" } })).unwrap();
+        assert!(run(&mut doc, "add_sheet", json!({ "name": "costs" })).is_err(), "names are unique");
+        run(&mut doc, "format_sheet_cells", json!({ "name": "Costs", "range": "A1:B1", "style": { "bold": true, "fill": "#FFF2CC", "align": "center" }, "widths": { "A": 180 } })).unwrap();
+        let k = doc.p.sheets.iter().position(|x| x.name == "Costs").unwrap();
+        assert_eq!(doc.p.sheets[k].style["B1"], "a:c;b;f:#FFF2CC");
+        assert_eq!(doc.p.sheets[k].widths[&0], 180);
+        run(&mut doc, "format_sheet_cells", json!({ "name": "Costs", "range": "B1", "style": { "bold": false } })).unwrap();
+        assert_eq!(doc.p.sheets[k].style["B1"], "a:c;f:#FFF2CC");
+        assert!(run(&mut doc, "format_sheet_cells", json!({ "name": "Costs", "range": "A1", "style": { "fill": "yellow" } })).is_err());
+        run(&mut doc, "set_number_format", json!({ "name": "Costs", "range": "B2:B3", "format": "#,##0.00" })).unwrap();
+        assert_eq!(doc.p.sheets[k].fmt["B3"], "#,##0.00");
+        run(&mut doc, "define_name", json!({ "name": "Rate", "formula": "=Costs!$B$2" })).unwrap();
+        run(&mut doc, "rename_sheet", json!({ "name": "Costs", "to": "Cost Plan" })).unwrap();
+        assert!(doc.p.names[0].formula.contains("Cost Plan"), "{}", doc.p.names[0].formula);
+        run(&mut doc, "define_name", json!({ "name": "Rate", "formula": "" })).unwrap();
+        run(&mut doc, "delete_sheet", json!({ "name": "Cost Plan" })).unwrap();
+        assert!(!doc.p.sheets.iter().any(|x| x.name == "Cost Plan"));
+        assert_eq!(cells_of("B2:C3").unwrap(), ["B2", "C2", "B3", "C3"]);
+        // Task formatting and dashboards.
+        run(&mut doc, "format_tasks", json!({ "uids": [a], "style": { "bold": true, "color": "#C0392B" } })).unwrap();
+        let ia = doc.p.idx(a as u32).unwrap();
+        assert_eq!(doc.p.tasks[ia].style["*"], "b;c:#C0392B");
+        run(&mut doc, "add_dashboard", json!({ "name": "Client", "tiles": [{ "kind": "number", "title": "SPI", "formula": "=SPI" }, { "kind": "chart", "title": "S-curve", "plan": "scurve", "size": 12 }] })).unwrap();
+        assert!(run(&mut doc, "add_dashboard", json!({ "name": "Bad", "tiles": [{ "kind": "pie" }] })).is_err());
+        assert_eq!(run(&mut doc, "list_dashboards", json!({})).unwrap()[0]["tiles"][1]["plan"], "scurve");
+        run(&mut doc, "delete_dashboard", json!({ "name": "client" })).unwrap();
+        assert!(run(&mut doc, "list_dashboards", json!({})).unwrap().as_array().unwrap().is_empty());
     }
     #[test]
     fn risks_delays_snapshots_health_levelling_and_updates() {

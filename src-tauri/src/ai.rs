@@ -124,6 +124,29 @@ fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                 show_tab(&mut ap, k);
                 Ok(json!({ "shown": tabs[k].name }))
             }
+            "export_plan" | "export_register" => {
+                let dir = app.path().download_dir().map_err(|_| "No Downloads folder.")?;
+                let p = &ap.doc.p;
+                let clean = |s: &str| s.chars().map(|c| if c.is_alphanumeric() || " -_().".contains(c) { c } else { ' ' }).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ");
+                let file = |stem: &str, ext: &str| { let base = clean(stem).chars().take(100).collect::<String>(); let mut f = dir.join(format!("{base}.{ext}")); for n in 2..1000 { if !f.exists() { break } f = dir.join(format!("{base} ({n}).{ext}")) } f };
+                let fmt = ap.opts.date_fmt.clone();
+                let f = if name == "export_plan" {
+                    let ext = a["format"].as_str().filter(|x| ["xlsx", "ods", "csv", "xml", "xer", "pmxml", "mpx", "json", "html", "ics"].contains(x)).ok_or("format is xlsx, ods, csv, xml, xer, pmxml, mpx, json, html or ics.")?;
+                    let f = file(&p.name, ext);
+                    if ext == "xer" { datum_core::io::export_xer(p, &f, today(), datum_core::io::xer::DEFAULT_VERSION)?; } else { datum_core::io::export(p, &f, &fmt, today(), &[])?; }
+                    f
+                } else {
+                    let c = datum_core::fields::Calc::new(p, &fmt, today());
+                    if let Some(e) = &c.error { return Err(e.clone()) }
+                    match a["register"].as_str() {
+                        Some("documents") => { let f = file(&format!("{} - Document Register", p.name), "xlsx"); datum_core::docreg::write_book(p, &datum_core::docreg::status(&c), &f)?; f }
+                        Some("procurement") => { let f = file(&format!("{} - Procurement", p.name), "xlsx"); datum_core::procure::write_book(p, &datum_core::procure::status(&c), &f)?; f }
+                        Some("delays") => { let f = file(&format!("{} - Delay Analysis", p.name), "xlsx"); datum_core::delay::write_book(&c, &f)?; f }
+                        _ => return Err("register is documents, procurement or delays.".into()),
+                    }
+                };
+                Ok(json!({ "saved": f.display().to_string() }))
+            }
             "save_plan" => {
                 let p = ap.doc.path.clone().filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("dplan"))).ok_or("This plan has no .dplan file yet: ask the user to save it once (File › Save).")?;
                 ap.doc.save(&p)?;
@@ -265,7 +288,7 @@ mod tests {
         assert_eq!(init["result"]["serverInfo"]["name"], "datum-plan");
         assert!(answer(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), |_, _| Ok(json!(null))).is_none());
         let list = answer(&json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }), |_, _| Ok(json!(null))).unwrap();
-        assert!(list["result"]["tools"].as_array().unwrap().len() >= 76);
+        assert!(list["result"]["tools"].as_array().unwrap().len() >= 101);
         let off = answer(&json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "plan_summary", "arguments": {} } }), |_, _| Err("closed".into())).unwrap();
         assert_eq!(off["result"]["isError"], true);
         assert_eq!(answer(&json!({ "jsonrpc": "2.0", "id": 4, "method": "nope" }), |_, _| Ok(json!(null))).unwrap()["error"]["code"], -32601);

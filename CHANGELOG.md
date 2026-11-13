@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.5 — 2026-11-13
+
+AI Link: the last 25 tools of the plan, 101 in all.
+
+- **Registers**: the contract (number, value, contract dates with delay damages, payment milestones), the vendor document register (documents and their submissions) and the procurement register (orders and expediting notes): read their status, add, change and remove entries.
+- **Baselines**: which baselines are set, every task's start and finish variance against one (slipped most first), clear a baseline.
+- **Sheets**: add, rename and delete sheets; format cells (bold, colours, size, alignment, borders), column widths and number formats; defined names.
+- **Formatting and dashboards**: format rows or columns of the task sheet; read, add and delete the plan's own dashboards (number, ring, chart, table and text tiles).
+- **Exports**: save a copy of the plan (workbook, CSV, Project XML, XER, PMXML, MPX, JSON, web page, iCalendar) or a register as a workbook to the Downloads folder.
+- New tools appear in Claude without installing anything again: update Datum Plan and start a new chat.
+
 ## 0.9.4 — 2026-11-13
 
 AI Link: 25 more tools for Claude (76 in all), fewer questions, and ready-made requests.
