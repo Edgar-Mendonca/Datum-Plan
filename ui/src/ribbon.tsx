@@ -4,6 +4,7 @@ import { linkSelected, linkedPlans, updateLinks, subplans, shareSetup } from "./
 import { For, Show, JSX, createSignal, createMemo, createEffect, onMount, onCleanup } from "solid-js";
 import { setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
+import { aiOn, aiLink } from "./ai";
 import * as D from "./dialogs";
 import * as P2 from "./progress";
 import { Icon } from "./ui";
@@ -229,6 +230,7 @@ const Home = () => {
         <B i="clear" l="Clear" off={!sh()} dd={e => openMenu(e, [{ label: "Clear All", run: () => A()?.clearKind("all") }, { label: "Clear Formats", run: () => A()?.clearKind("formats") }, { label: "Clear Contents", keys: "Delete", run: () => A()?.clearKind("contents") }])} /></S>
       <S><B i="az" l="Sort" dd={e => openMenu(e, sh() ? [{ label: "Sort A to Z", run: () => A()?.sortRows(true) }, { label: "Sort Z to A", run: () => A()?.sortRows(false) }, { label: "Custom Sort…", run: run("customSort") }, "-", { label: "Filter", keys: "Ctrl+Shift+L", on: !!A()?.filtering(), run: run("toggleFilter") }, { label: "Clear Filter", run: run("clearFilter") }] : sortMenu())} /></S></G>
     <G l="Proofing" h="spelling"><B big i="spell" l="Spelling" run={() => import("./spell").then(m => m.spelling())} title="Check the spelling of task names, notes and sheet text (F7)" /></G>
+    <G l="Claude" h="ailink"><B big i="ai" l="AI Link" on={aiOn()} run={() => aiLink()} title={aiOn() ? "AI Link is on: Claude can work on the plan you have open. Click to set up or turn off." : "Let Claude (Claude Desktop) read and change the plan you have open"} /></G>
   </>;
 };
 const SheetCells = () => {

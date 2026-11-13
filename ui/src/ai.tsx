@@ -1,0 +1,67 @@
+// AI Link (Home › AI Link): Claude works on the plan open in this window. The engine has the tools
+// (crates/core/src/assist.rs); the window switches the link on, sets up Claude Desktop, and shows
+// Claude's changes as they happen (each one an Undo step).
+import { Show, createSignal } from "solid-js";
+import { call, openDialog, opts, refresh, setOpts, setOut, toast } from "./store";
+import { Dialog } from "./ui";
+import { Out, listen } from "./api";
+
+type Info = { on: boolean; exe: string; claude_config: string | null; claude_set: boolean; snippet: string };
+export const [aiOn, setAiOn] = createSignal(false);
+
+/** What Claude just did, in words for the note at the bottom. */
+const DID: Record<string, string> = {
+  add_tasks: "added tasks", set_task_fields: "changed a task", link_tasks: "linked tasks", unlink_tasks: "removed a link", delete_tasks: "deleted tasks",
+  update_progress: "recorded progress", set_status_date: "set the status date", set_baseline: "saved a baseline", set_sheet_cells: "typed in a sheet",
+  apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
+};
+
+/** At start: the link's state, and Claude's changes shown as they come. */
+export const initAi = async () => {
+  const i = await call<Info>("ai_info");
+  if (i) setAiOn(i.on);
+  listen("ai-change", async (p: { out: Out; tool: string }) => {
+    setOut(p.out);
+    await refresh();
+    toast(`Claude ${DID[p.tool] ?? "changed the plan"}. Undo (Ctrl+Z) takes it back.`, true);
+  });
+};
+
+export const aiLink = () => openDialog(() => {
+  const [i, setI] = createSignal<Info | null>(null);
+  const [busy, setBusy] = createSignal(false);
+  const load = async () => { const x = await call<Info>("ai_info"); if (x) { setI(x); setAiOn(x.on); } };
+  const turn = async (on: boolean) => { setBusy(true); const x = await call<Info>("ai_link", { on }); setBusy(false); if (x) { setI(x); setAiOn(x.on); setOpts({ ...opts(), aiLink: x.on }); toast(on ? "AI Link on: Claude can work on the plan you have open." : "AI Link off.", true); } };
+  const setup = async () => { const f = await call<string>("ai_setup_claude"); if (f) { toast(`Claude Desktop knows Datum Plan now (${f}). Restart Claude Desktop once.`, true); load(); } };
+  const copy = (t: string, what: string) => navigator.clipboard?.writeText(t).then(() => toast(`${what} copied.`, true));
+  load();
+  return (
+    <Dialog title="AI Link: Claude" help="ailink" cancel="Close">
+      <div class="ailink">
+        <p>Ask Claude, in Claude Desktop, to read or change the plan you have open here: <i>“Add a 3-day pump test after task 24 and link handover to it”</i>, <i>“Which tasks are late and why?”</i>. You see each change at once, and <b>Undo</b> takes it back. No API key is needed: Claude uses your own Claude account.</p>
+        <Show when={i()}>{x => <>
+          <div class="ailink-step" classList={{ done: x().on }}>
+            <b>1</b><div><div class="t">Switch the AI Link on</div><div class="muted">Only Claude on this computer can reach it, with a key that changes each time. Datum Plan never saves your file unless you ask.</div></div>
+            <button class="btn" classList={{ pri: !x().on }} disabled={busy()} onClick={() => turn(!x().on)}>{x().on ? "Turn off" : "Turn on"}</button>
+          </div>
+          <div class="ailink-step" classList={{ done: x().claude_set }}>
+            <b>2</b><div><div class="t">Add Datum Plan to Claude Desktop {x().claude_set ? "(done)" : ""}</div><div class="muted">Once. Datum Plan writes itself into Claude Desktop's settings{x().claude_config ? ` (${x().claude_config})` : ""} and keeps a backup of the old file.</div></div>
+            <button class="btn" classList={{ pri: x().on && !x().claude_set }} onClick={setup}>{x().claude_set ? "Again" : "Set up Claude"}</button>
+          </div>
+          <div class="ailink-step">
+            <b>3</b><div><div class="t">Restart Claude Desktop and ask</div><div class="muted">Quit Claude Desktop fully (also from the tray) and open it again. Then try: <i>“What plan is open in Datum Plan, and what is its finish date?”</i></div></div>
+          </div>
+          <details class="ailink-more">
+            <summary>By hand, or with Claude Code</summary>
+            <p class="muted">Claude Desktop: add this to {x().claude_config ?? "claude_desktop_config.json"} (Settings › Developer › Edit Config):</p>
+            <pre>{x().snippet}</pre>
+            <button class="btn sm" onClick={() => copy(x().snippet, "The settings text")}>Copy</button>
+            <p class="muted">Claude Code (in a terminal):</p>
+            <pre>{`claude mcp add datum-plan -- "${x().exe}" --mcp`}</pre>
+            <button class="btn sm" onClick={() => copy(`claude mcp add datum-plan -- "${x().exe}" --mcp`, "The command")}>Copy</button>
+          </details>
+        </>}</Show>
+      </div>
+    </Dialog>
+  );
+});

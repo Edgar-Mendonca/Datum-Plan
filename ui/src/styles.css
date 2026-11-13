@@ -1209,3 +1209,16 @@ svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-siz
 .spell-sugg > .muted { padding: 6px 8px; }
 .spell-btns { display: flex; flex-direction: column; gap: 5px; width: 178px; }
 .spell-btns .btn { white-space: nowrap; }
+
+/* AI Link dialog */
+.ailink { max-width: 560px; display: flex; flex-direction: column; gap: 10px; }
+.ailink > p { margin: 0; line-height: 1.5; }
+.ailink-step { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); padding: 10px 12px; }
+.ailink-step > b { width: 24px; height: 24px; border-radius: 50%; background: var(--blue); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; font-size: 12px; }
+.ailink-step.done > b { background: var(--green, #1E7D46); }
+.ailink-step > div { flex: 1; }
+.ailink-step .t { font-weight: 600; margin-bottom: 2px; }
+.ailink-step .muted { font-size: 11.5px; }
+.ailink-more pre { background: var(--bg2); border: 1px solid var(--line); padding: 8px; font-size: 11px; white-space: pre-wrap; word-break: break-all; margin: 4px 0; }
+.ailink-more summary { cursor: pointer; color: var(--muted); }
+.aion { color: #D97757; font-weight: 600; cursor: pointer; }

@@ -1,5 +1,6 @@
 //! Datum Plan desktop shell: owns the open plan, files, options and recovery, and talks to the window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod ai;
 mod clip;
 mod pdf;
 mod update;
@@ -46,11 +47,13 @@ struct Options {
     /// Spelling: the English used (en-GB or en-US) and the words added to the dictionary.
     spell_lang: String,
     dictionary: Vec<String>,
+    /// AI Link: Claude may work on the open plan (switched on in Home › AI Link; off at first).
+    ai_link: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true, spell_lang: "en-GB".into(), dictionary: vec![] }
+        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true, spell_lang: "en-GB".into(), dictionary: vec![], ai_link: false }
     }
 }
 
@@ -1580,6 +1583,24 @@ fn spell_check(st: State<St>, lang: String, own: Vec<String>) -> Vec<datum_core:
     datum_core::spell::check(&st.lock().doc.p, &lang, &own)
 }
 
+/// AI Link: its state, the path Claude needs and whether Claude Desktop knows Datum Plan.
+#[tauri::command]
+fn ai_info() -> serde_json::Value { ai::info() }
+
+/// Switches the AI Link on or off (remembered for the next start).
+#[tauri::command]
+fn ai_link(app: AppHandle, st: State<St>, on: bool) -> R<serde_json::Value> {
+    if on { ai::start(&app)? } else { ai::stop() }
+    let mut a = st.lock();
+    a.opts.ai_link = on;
+    if let Some(f) = options_file(&app) { let _ = doc::write_atomic(&f, serde_json::to_string(&a.opts).unwrap_or_default().as_bytes()); }
+    Ok(ai::info())
+}
+
+/// Adds Datum Plan to Claude Desktop's settings.
+#[tauri::command]
+fn ai_setup_claude() -> R<String> { ai::setup_claude() }
+
 #[tauri::command]
 fn periods(st: State<St>, kind: String) -> Vec<i64> {
     report::period_ends(&calc(&st.lock()), &kind)
@@ -1806,6 +1827,7 @@ fn version() -> &'static str {
 #[tauri::command]
 fn quit(app: AppHandle) {
     clear_recovery(&app);
+    ai::stop();
     app.exit(0);
 }
 
@@ -1826,6 +1848,8 @@ async fn install_update(app: AppHandle, url: String, sums: Option<String>) -> R<
 }
 
 fn main() {
+    // Started by Claude as `Datum Plan.exe --mcp`: be the bridge to the open window, no window of our own.
+    if std::env::args().any(|a| a == "--mcp") { ai::bridge(); return }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -1843,7 +1867,10 @@ fn main() {
                 }));
             }
             let opts = options_file(app.handle()).and_then(|f| std::fs::read_to_string(f).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+            let opts: Options = opts;
+            let link = opts.ai_link;
             app.manage(St(Mutex::new(App { doc: Doc::new(Project::new("Project1", today())), others: vec![None], cur: 0, opts, clip: vec![], table: None, files: HashMap::new() })));
+            if link { let _ = ai::start(app.handle()); }
             Ok(())
         })
         .on_window_event(|w, e| {
@@ -1853,11 +1880,12 @@ fn main() {
                     let _ = w.emit("close-requested", ());
                 } else {
                     clear_recovery(w.app_handle());
+                    ai::stop();
                 }
             }
         })
         .invoke_handler(tauri::generate_handler![
-            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, export_scurve, scurve_sheet, spell_check, sheet_to_plan, share_setup, copy, paste,
+            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, export_scurve, scurve_sheet, spell_check, ai_info, ai_link, ai_setup_claude, sheet_to_plan, share_setup, copy, paste,
             query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, scenarios, new_scenario, scenario_compare, scenario_merge, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])

@@ -9,6 +9,7 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "@fontsource/ibm-plex-mono/latin-500.css";
 import "@fontsource/ibm-plex-mono/latin-600.css";
 import "./styles.css";
+import { initAi, aiOn, aiLink } from "./ai";
 import { invoke, listen, Out, FieldList, Options } from "./api";
 import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut, setThemeRaw, applyTheme } from "./store";
 import { C } from "./cmds";
@@ -86,6 +87,7 @@ const Status = () => {
       <Show when={filter().rules.length}><button class="mode" onClick={() => setFilter(ALL)}>Filter applied: {filter().name || "custom"} ✕</button></Show>
       <span class="muted">{grid().shown} of {grid().total} tasks{sel().length > 1 ? ` · ${sel().length} selected` : ""}</span>
       <span class="muted">{s() ? `${s()!.start} – ${s()!.finish} · ${s()!.dur} · ${(s()!.pct + 0).toFixed(Math.min(2, out()?.project.pct_decimals ?? 0)).replace(/^-(0[.0]*)$/, "$1")}% · ${s()!.cost}` : ""}</span>
+      <Show when={aiOn()}><button class="mode aion" title="AI Link is on: Claude can work on the plan you have open" onClick={() => aiLink()}>✦ Claude linked</button></Show>
       <span class="grow" />
       <span class="vsc">
         <button title="Gantt Chart" onClick={() => C.view("gantt")}><Icon n="gantt" /></button><button title="Task Usage" onClick={() => C.view("taskusage")}><Icon n="table" /></button>
@@ -117,6 +119,7 @@ const App = () => {
       try { if (!localStorage.getItem("guide-hint")) { localStorage.setItem("guide-hint", "1"); setTimeout(() => toast("New to Datum Plan? Help › Guide has a step-by-step guide (PDF) in English and 中文."), 1500); } } catch { /* no storage: no hint */ }
       setInterval(() => { if (opts().autosave > 0) invoke("autosave").catch(() => {}); }, Math.max(1, opts().autosave) * 60000);
       listen("close-requested", () => D.confirmClose(() => invoke("quit")));
+      initAi();
       // No browser menu (Back, Reload…) outside text fields: our own menus open where they apply.
       document.addEventListener("contextmenu", e => { if (!(e.target as HTMLElement).closest?.("input, textarea, [contenteditable]")) e.preventDefault(); });
     } catch (e) { toast(String(e)); }

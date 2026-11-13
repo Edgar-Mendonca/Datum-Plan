@@ -656,6 +656,24 @@ To share resources between plans, keep one plan whose Resource Sheet lists them 
 - **Send an XER.** **File › Export › XER** asks which version to write for: choose the version the receiving program runs, or an older one (a program cannot open a file written for a newer version). The file carries the WBS, activities, relationships, calendars, resources and assignments, activity codes, custom fields, steps and notes. A report then lists what went in and anything the format could not hold, such as baselines. Activity IDs must be unique in an XER: a repeated ID gets "-2".
 - **Recovery.** Datum Plan keeps a recovery copy as you work (**File › Options** sets how often). If it ever closes before you save, it offers to recover your work the next time it starts.
 
+## Work with Claude: AI Link
+
+**Home › AI Link** lets Claude, in the Claude Desktop app, read and change the plan you have open, while you watch. You ask in plain words; Claude does it in Datum Plan. No API key is needed: Claude uses your own Claude account.
+
+1. **Turn on.** Home › AI Link › **Turn on**. Only Claude on this computer can reach the plan, with a key that changes each time; nothing listens while it is off. The status bar shows **Claude linked**. It stays on for the next start until you turn it off.
+2. **Set up Claude** (once). The button adds Datum Plan to Claude Desktop's settings and keeps a backup of the old file. To do it by hand, the dialog shows the text to add (Claude Desktop › Settings › Developer › Edit Config), and the command for Claude Code.
+3. **Restart Claude Desktop** (quit it fully, also from the tray) and ask, for example: *"What plan is open in Datum Plan, and what is its finish date?"*
+
+Then ask anything about the plan shown, for example:
+
+- *"Which tasks are late as of today, and by how much?"*
+- *"Add a 3-day pump test after task 24, linked finish-to-start, and link handover to it."*
+- *"Set Site survey to 100%, finished on 26 November."*
+- *"Check the schedule and list the tasks without logic."*
+- *"Why did the finish move since the baseline?"*, *"Write a short status summary."*
+
+Each change Claude makes shows at once, with a note at the bottom, and is one **Undo** step ([[Ctrl+Z]]). Claude works on the plan in the tab shown (it can also list the open plans and switch tabs), keeps to the same rules as you (a locked baseline stays locked), and never saves the file unless you ask it to. Claude can read the schedule, the checks, the S-curve, the risk results, the look-ahead and the sheets, and add, change, link, delete and update tasks, set the status date and type in sheets.
+
 ## Command line and AI assistants
 
 `datum-cli` (on the Releases page) works with plans without the window: show a plan's facts or schedule, change it, export it, or run the risk analysis. `datum-cli mcp` lets an AI assistant open a plan, read it, change it with the same operations the window uses, and save it. Type `datum-cli help` for the commands.

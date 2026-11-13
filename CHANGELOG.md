@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 — 2026-11-13
+
+AI Link: Claude works on the plan you have open.
+
+- **Home › AI Link** lets Claude, in the Claude Desktop app with your own Claude account (no API key), read and change the plan open in Datum Plan while you watch: "Which tasks are late?", "Add a 3-day pump test after task 24 and link handover to it", "Set Site survey to 100%, finished on 26 November".
+- **25 tools**: the plan's facts, tasks (filtered, any fields), one task in full, the schedule checks and health score, the S-curve, schedule risk, the look-ahead and the sheets; add, change, link, unlink, delete and update tasks, set the status date and a baseline, type in sheets, undo and redo, list and switch the open plans, and save when asked.
+- **Every change shows at once** with a note, and is one Undo step. Claude keeps to the plan's rules (a locked baseline stays locked) and never saves unless asked.
+- **Safe by design**: off until you turn it on; only Claude on this computer can reach it (127.0.0.1), with a key that changes each time; it stops when Datum Plan closes.
+- **Set up Claude** (once) adds Datum Plan to Claude Desktop's settings, with a backup of the old file; the dialog also shows the text to add by hand and the command for Claude Code. Claude starts Datum Plan's own program as the link (`--mcp`), so nothing else is installed.
+
 ## 0.8.16 — 2026-11-13
 
 - **Spelling** (Home › Proofing, F7) checks the spelling of task names, notes, text custom fields and the text in every sheet, in English (UK or US). Each unknown word shows in its text with suggestions, and the task is selected: Change, Change All (Undo takes them back), Ignore, Ignore All, and Add to Dictionary (your own words, kept on this computer). Acronyms (HAZOP), codes with digits (PX-200B) and web or e-mail addresses are left alone. The dictionaries come from the SCOWL word lists (licences in `crates/core/dict`).
