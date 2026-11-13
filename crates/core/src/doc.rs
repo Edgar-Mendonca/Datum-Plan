@@ -68,6 +68,8 @@ pub enum Op {
     MarkOnTrack { uids: Vec<u32> },
     /// Saves (or clears) the baseline of the given tasks, or of all tasks when empty.
     Baseline { uids: Vec<u32>, clear: bool, #[serde(default)] n: u8 },
+    /// Locks or unlocks the baseline dates for typing (the plan opens locked).
+    BaselineLock { unlocked: bool },
     Project { name: String, start: String, status: String, calendar: String, day_hours: f64, manual_default: bool },
     CalPut { old: Option<String>, cal: Calendar },
     CalDelete { name: String },
@@ -166,6 +168,8 @@ impl Doc {
     /// Applies `op` to a copy and keeps it only if the plan still schedules.
     /// `fmt` is the date format the user types in.
     pub fn apply(&mut self, op: Op, fmt: &str) -> Result<(), String> {
+        // Locking is how the window is used, not an edit of the plan: no Undo step, nothing to save.
+        if let Op::BaselineLock { unlocked } = op { self.p.baseline_unlocked = unlocked; return Ok(()) }
         let mut q = self.p.clone();
         exec(&mut q, op, fmt)?;
         q.normalize();
@@ -184,7 +188,8 @@ impl Doc {
     }
 
     pub fn undo(&mut self) {
-        if let Some(p) = self.undo.pop() {
+        if let Some(mut p) = self.undo.pop() {
+            p.baseline_unlocked = self.p.baseline_unlocked;
             self.redo.push(std::mem::replace(&mut self.p, p));
             self.dirty = true;
         }
@@ -193,7 +198,8 @@ impl Doc {
     pub fn undo_steps(&self) -> usize { self.undo.len() }
 
     pub fn redo(&mut self) {
-        if let Some(p) = self.redo.pop() {
+        if let Some(mut p) = self.redo.pop() {
+            p.baseline_unlocked = self.p.baseline_unlocked;
             self.undo.push(std::mem::replace(&mut self.p, p));
             self.dirty = true;
         }
@@ -339,9 +345,33 @@ fn set_pct_by(p: &mut Project, i: usize, n: u8, s: Option<&sched::Sched>) -> Res
 
 pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str) -> Result<(), String> { set_by(p, i, field, value, fmt, None) }
 
+/// "b3start" → (3, false), "b0finish" → (0, true): the baseline date fields that can be typed in.
+pub(crate) fn baseline_field(f: &str) -> Option<(u8, bool)> {
+    let r = f.strip_prefix('b')?;
+    let (n, end) = if let Some(n) = r.strip_suffix("start") { (n, false) } else { (r.strip_suffix("finish")?, true) };
+    n.parse::<u8>().ok().filter(|&n| n <= 10).map(|n| (n, end))
+}
+
+/// A baseline date typed in (only while the baseline is unlocked): the time of day stays, and the
+/// baseline duration follows the task's calendar between the two dates.
+fn set_baseline(p: &mut Project, i: usize, n: u8, end: bool, v: &str, fmt: &str) -> Result<(), String> {
+    let name = if n == 0 { "baseline".to_string() } else { format!("baseline {n}") };
+    if !p.baseline_unlocked { return Err(format!("The {name} is locked. Unlock it in Progress › Unlock Baseline to change its dates.")) }
+    let Some(b) = p.tasks[i].bls.get(&n).copied() else { return Err(format!("This task has no {name} yet: save one with Progress › Set Baseline first.")) };
+    let d = parse::date_in(v, fmt)?;
+    let mut b2 = b;
+    if end { b2.finish = crate::cal::at(d) + b.finish.rem_euclid(crate::cal::DAY) } else { b2.start = crate::cal::at(d) + b.start.rem_euclid(crate::cal::DAY) }
+    if b2.finish < b2.start { return Err(if end { "That baseline finish is before the baseline start.".into() } else { "That baseline start is after the baseline finish.".into() }) }
+    let cn = p.tasks[i].cal.clone().unwrap_or_else(|| p.calendar.clone());
+    if let Some(c) = p.calendars.iter().find(|c| c.name == cn) { b2.dur = if b.dur == 0 && b.start == b.finish && b2.start == b2.finish { 0 } else { crate::cal::WorkCal::new(c).between(b2.start, b2.finish) } }
+    p.tasks[i].bls.insert(n, b2);
+    Ok(())
+}
+
 /// `set`, with % complete and task mode taking their dates from schedule `s` when given.
 fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Option<&sched::Sched>) -> Result<(), String> {
     let v = value.trim();
+    if let Some((n, end)) = baseline_field(field) { return set_baseline(p, i, n, end, v, fmt) }
     let any_row = field.starts_with("c:") || field.starts_with("code:") || matches!(field, "name" | "notes" | "code" | "preds" | "active" | "timeline" | "deadline" | "priority" | "costaccount" | "responsible" | "hyperlink" | "style" | "fixedcost");
     if p.is_summary(i) && !any_row {
         return Err(format!("A summary task's {field} comes from the tasks under it."));
@@ -951,6 +981,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 set_pct_by(p, i, n as u8, Some(&s))?;
             }
         }
+        Op::BaselineLock { unlocked } => p.baseline_unlocked = unlocked,
         Op::Baseline { uids, clear, n } => {
             let s = sched::schedule(p)?;
             let l = load::compute(p, &s);

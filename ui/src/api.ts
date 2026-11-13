@@ -52,6 +52,8 @@ export interface ProcRegister { preset: string; weights: number[]; weighting: st
 export interface ItemOut { id: number; planned: D5; actual: D5; forecast: string | null; var: number | null; required: string | null; float: number | null; rag: string; status: string; next: string; next_date: string | null; days_late: number; weight: number; earned: number; planned_pct: number; task_name: string; need_name: string; docs: number; docs_ok: number; docs_late: boolean }
 export interface ProcOut { data_date: string | null; items: ItemOut[]; earned: number; planned: number; weights: number[]; weights_ok: boolean; weekly: { end: string; planned: number; actual: number | null }[]; monthly: { end: string; planned: number; actual: number | null }[] }
 export interface Project {
+  /** The baseline dates can be typed in (never saved: a plan opens locked). */
+  baseline_unlocked?: boolean;
   format: number; name: string; start: string; status: string | null; day_min: number; manual_default: boolean; calendar: string; calendars: Calendar[];
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;

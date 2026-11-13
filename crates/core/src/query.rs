@@ -340,7 +340,7 @@ impl Calc<'_> {
         let shown = rows.iter().filter(|r| r.uid > 0).count();
         let cols = cols.iter().map(|k| Col {
             key: k.clone(), name: self.name(k), kind: self.kind(k),
-            edit: k.starts_with("c:") || k.starts_with("code:") || task_fields().iter().any(|f| &f.key == k && f.edit),
+            edit: k.starts_with("c:") || k.starts_with("code:") || task_fields().iter().any(|f| &f.key == k && f.edit) || (self.p.baseline_unlocked && crate::doc::baseline_field(k).is_some()),
         }).collect();
         Grid { cols, rows, shown, total: n }
     }

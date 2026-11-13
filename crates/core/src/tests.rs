@@ -1012,3 +1012,34 @@ fn a_long_hand_back_chain_between_two_plans_settles() {
     let s = schedule(&plans[1].1).unwrap();
     assert_eq!(crate::cal::date_of(s.ef[7] - 1), d(2026, 11, 23), "b7 is the 16th one-day task in a row");
 }
+
+#[test]
+fn baseline_dates_change_only_when_unlocked() {
+    let mut doc = Doc::new(plan(&[(5, ""), (3, "1")]));
+    let u = doc.p.tasks[1].uid;
+    op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
+    let b = doc.p.tasks[1].bls[&0];
+    // Locked (as every plan opens): typing a baseline date is refused, and the column is read-only.
+    let e = op(&mut doc, Op::Set { uid: u, field: "b0start".into(), value: "16-Nov-26".into() }).unwrap_err();
+    assert!(e.contains("locked"), "{e}");
+    let col = |doc: &Doc| Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2)).grid(&crate::query::Query { cols: vec!["b0start".into()], ..Default::default() }).cols[0].edit;
+    assert!(!col(&doc));
+    // Unlocking adds no Undo step and nothing to save.
+    let undo = doc.can_undo();
+    op(&mut doc, Op::BaselineLock { unlocked: true }).unwrap();
+    assert_eq!(doc.can_undo(), undo);
+    assert!(col(&doc));
+    assert!(!doc.json().contains("baseline_unlocked"));
+    // Unlocked: the dates move, keep their time of day, and the duration follows the calendar.
+    op(&mut doc, Op::Set { uid: u, field: "b0finish".into(), value: "20-Nov-26".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: u, field: "b0start".into(), value: "16-Nov-26".into() }).unwrap();
+    let n = &doc.p.tasks[1].bls[&0];
+    assert_eq!((n.start, n.finish), (at(d(2026, 11, 16)) + b.start.rem_euclid(DAY), at(d(2026, 11, 20)) + b.finish.rem_euclid(DAY)));
+    assert_eq!(n.dur, 5 * D);
+    assert!(op(&mut doc, Op::Set { uid: u, field: "b0start".into(), value: "23-Nov-26".into() }).is_err(), "start after finish");
+    assert!(op(&mut doc, Op::Set { uid: u, field: "b4start".into(), value: "16-Nov-26".into() }).unwrap_err().contains("no baseline 4"));
+    // Undo takes the edit back and leaves the lock as it is.
+    doc.undo();
+    assert_eq!(doc.p.tasks[1].bls[&0].start, b.start);
+    assert!(doc.p.baseline_unlocked);
+}

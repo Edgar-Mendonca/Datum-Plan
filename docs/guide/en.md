@@ -190,11 +190,13 @@ Costs come from the people's rates, from a task's **Fixed Cost** (and its accrua
 
 When the plan is agreed, click **Progress › Set Baseline**. A baseline is a copy of the plan's dates, durations, work and cost; Datum Plan compares the live plan with it. There are 11 baselines (Baseline 0 to 10), so you can keep re-baselined versions too.
 
+To change the baseline, save it again (**Set Baseline** overwrites it; **For: Selected tasks** changes only those), clear it (**Action: Clear baseline**), or type new dates. A baseline is **locked**: its Baseline Start and Baseline Finish cannot be typed in. **Progress › Unlock Baseline** unlocks it; then type the new dates in those columns (the baseline duration follows the task's calendar, and Undo takes a change back). **Lock Baseline** locks it again, and a plan always opens locked. To see where each task should be by the status date, insert the **Baseline % Complete** column, with **% Complete Variance** (actual minus baseline) beside it.
+
 ![The Progress tab.](img/progress-tab.png)
 
 1. **Update.** Set % complete in steps (0%, 25%, 50%, 75%, 100%), **Mark on Track** (progress as planned up to the status date), **Update Tasks** and **Update Project**.
 2. **Period.** **Update Progress** (the update page), **Look-ahead**, **Status Date** and **Reporting Periods** (when your weeks and months end).
-3. **Baselines.** **Set Baseline**, **Store Snapshot**, **Show Baseline** (draw baseline bars) and **Tracking Gantt**.
+3. **Baselines.** **Set Baseline**, **Store Snapshot**, **Show Baseline** (draw baseline bars), **Tracking Gantt** and **Unlock Baseline** / **Lock Baseline**.
 4. **Progress Reports.** **Progress Report**, **S-Curves**, **Manpower** and **Dashboard**.
 5. **Measure.** **Rules of Credit** (see below).
 

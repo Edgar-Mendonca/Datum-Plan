@@ -41,6 +41,8 @@ const Font = (p0: { noAlign?: boolean }) => {
   </>;
 };
 
+/** Locks or unlocks the baseline dates for typing in the task sheet (a plan always opens locked). */
+const lockBaseline = (u: boolean) => act({ BaselineLock: { unlocked: u } }).then(ok => ok && toast(u ? "Baseline unlocked: type new dates in Baseline Start and Baseline Finish (insert those columns if they are not shown). Lock it again when you are done." : "Baseline locked: its dates can no longer be typed in.", true));
 const B = (p: { i: string; l: string; run?: (e: MouseEvent) => void; big?: boolean; on?: boolean; off?: boolean; dd?: (e: MouseEvent) => void; title?: string }) => p.big && p.run && p.dd ? (
   // Split button: the picture runs the command, the label opens the menu.
   <div class="rbw big splitbig" classList={{ on: p.on }}>
@@ -288,7 +290,7 @@ export const Ribbon = () => (
       <G l="Update" h="update"><div class="pcts"><For each={[0, 25, 50, 75, 100]}>{v => <button class="rb" title={`${v}% complete`} onClick={() => C.pct(v)}><Icon n="pct" /><span>{v}%</span></button>}</For></div>
         <S><B i="track" l="Mark on Track" run={C.onTrack} /><B i="info" l="Update Tasks" run={C.info} /><B i="track" l="Update Project" run={C.update} /></S></G>
       <G l="Period" h="period"><B big i="update" l="Update Progress" run={() => C.view("update")} /><B big i="cal" l="Look-ahead" run={() => C.view("lookahead")} /><S><B i="calendar2" l="Status Date" run={() => D.projectInfo()} /><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /></S></G>
-      <G l="Baselines" h="baselines"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="report" l="Store Snapshot" run={() => D.snapshot()} /><B i="base" l="Show Baseline" dd={e => openMenu(e, baselineMenu())} on={showBase()} /><B i="base" l="Tracking Gantt" run={() => C.view("tracking")} /></S></G>
+      <G l="Baselines" h="baselines"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="report" l="Store Snapshot" run={() => D.snapshot()} /><B i="base" l="Show Baseline" dd={e => openMenu(e, baselineMenu())} on={showBase()} /><B i="base" l="Tracking Gantt" run={() => C.view("tracking")} /></S><S><B i={P().baseline_unlocked ? "unlock" : "lock"} l={P().baseline_unlocked ? "Lock Baseline" : "Unlock Baseline"} on={!!P().baseline_unlocked} title={P().baseline_unlocked ? "The baseline dates can be typed in now. Lock them again (a plan always opens locked)." : "The baseline is locked. Unlock it to type new baseline start and finish dates in the task sheet; it locks again when the plan is next opened."} run={() => lockBaseline(!P().baseline_unlocked)} /></S></G>
       <G l="Progress Reports" h="progressReports"><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="team" l="Manpower" run={() => C.view("manpower")} /><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /></G>
       <G l="Measure" h="credit"><B big i="list" l="Rules of Credit" run={() => P2.rulesOfCredit()} /></G>
     </Show>

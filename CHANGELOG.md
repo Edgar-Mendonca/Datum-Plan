@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.14 — 2026-11-13
+
+Baseline dates that can be changed on purpose.
+
+- **Unlock Baseline / Lock Baseline** (Progress › Baselines). A baseline is locked: Baseline Start and Baseline Finish (of any of the 11 baselines) cannot be typed in. Unlock it to type new dates in those columns; the baseline duration follows the task's calendar, the time of day stays, and Undo takes a change back. Lock it again when done; a plan always opens with its baseline locked. Locking is not an edit of the plan: no Undo step and nothing to save.
+- The guide explains how to change a baseline (set it again, clear it, or unlock and type) and how to show where each task should be by the status date (Baseline % Complete and % Complete Variance columns).
+
 ## 0.8.13 — 2026-11-12
 
 S-curves in a spreadsheet, to edit there.

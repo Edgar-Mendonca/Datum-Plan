@@ -246,6 +246,7 @@ fn out(a: &App) -> Out {
     let mut project = serde_json::to_value(d.p.head()).unwrap_or_default();
     if let Some(m) = project.as_object_mut() {
         m.remove("tasks");
+        m.insert("baseline_unlocked".into(), d.p.baseline_unlocked.into());
         if let Some(snaps) = m.get_mut("snapshots").and_then(|v| v.as_array_mut()) {
             snaps.iter_mut().filter_map(|x| x.as_object_mut()).for_each(|x| { x.remove("rows"); });
         }
