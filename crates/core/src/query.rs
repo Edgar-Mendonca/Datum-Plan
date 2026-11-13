@@ -313,8 +313,8 @@ impl Calc<'_> {
             // Children of each row (and of the root, at index n), sorted within their parent.
             let mut kids: Vec<Vec<usize>> = vec![vec![]; n + 1];
             let mut stack: Vec<usize> = vec![];
-            for i in 0..n {
-                let lv = p.tasks[i].level as usize;
+            for (i, t) in p.tasks.iter().enumerate().take(n) {
+                let lv = t.level as usize;
                 stack.truncate(lv);
                 kids[stack.last().copied().unwrap_or(n)].push(i);
                 stack.push(i);

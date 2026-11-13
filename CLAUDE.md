@@ -15,7 +15,7 @@ User preferences:
 - The UI is SolidJS + Vite in `ui/src/*.tsx` (built to `ui/dist`). State lives in `ui/src/store.ts`; the engine computes all values, the window only shows them.
 
 Checks before pushing:
-- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo clippy --workspace --all-targets -- -D warnings`, and with the newest Rust too (`rustup toolchain install stable -c clippy`, then `cargo +stable clippy ...`): CI uses the latest stable, whose new lints can fail a push that passes locally
 - `cargo test --workspace`
 - `npm run check:ui`, then `npm run build:ui` and the UI tests (`node tests_ui/run.cjs`)
 - For changes to Sheets: `npm run test:sheets` (the window against the real engine)

@@ -250,7 +250,7 @@ fn resource_calendars_drive_task_dates() {
     // A task calendar and a person's calendar: work only when both do (mornings only here).
     let mut p = build(&["5d||res=Dana; cal=Mornings"], |p| {
         let mut m = Calendar::standard("Mornings");
-        for k in 0..5 { m.week[k] = vec![(480, 720)] }
+        for w in m.week.iter_mut().take(5) { *w = vec![(480, 720)] }
         p.calendars.push(m);
     });
     p.opts.res_cals = true;
@@ -318,7 +318,7 @@ fn a_finish_field_from_a_formula_shows_its_own_day() {
 fn a_plan_of_milestones_only_reports_its_progress() {
     let mut p = build(&["0d", "0d", "0d"], |_| {});
     p.tasks[1].level = 1; p.tasks[2].level = 1;
-    for k in 1..3 { p.tasks[k].pct = 100; p.tasks[k].act_start = Some(d(2026, 11, 2)); p.tasks[k].act_finish = Some(d(2026, 11, 2)); }
+    for t in p.tasks.iter_mut().skip(1).take(2) { t.pct = 100; t.act_start = Some(d(2026, 11, 2)); t.act_finish = Some(d(2026, 11, 2)); }
     let c = crate::fields::Calc::new(&p, "%d-%b-%y", d(2026, 11, 9));
     assert_eq!(c.summary().pct, 100.0);
 }

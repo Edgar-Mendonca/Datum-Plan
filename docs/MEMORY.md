@@ -711,6 +711,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 - Then 0.8.14 (user question on changing baselines and a baseline % column; the column already existed): baseline lock/unlock with typed baseline dates.
 - Then 0.8.15: project row Baseline % Complete, percentages with 0–2 decimals.
 - Then 0.8.16: Spelling (Home › Proofing, F7).
+- Then a CI fix: Rust 1.100's clippy (`needless_range_loop`) failed CI from 0.8.14 on while the local 1.97 passed; four old loops rewritten, and CLAUDE.md now says to run clippy with `cargo +stable` as well.
 - Waiting on Datum Plot: Plot cannot read dates yet. The hub's `briefs/PLOT-DATES.md` asks Plot's chat for optional date columns (days since 1970-01-01, `Table.xFormat = "date"`). When a Plot release has it: change `io/dplot.rs` to write X as days since 1970 with `xFormat: "date"` and `xTitle: "Date"` (instead of days from the first date), and name the minimum Plot version in the guide.
 - Next (from the agreed list): all done. Then schedule quality (health trend, ghost bars, logic change log, milestone trend), a shared resource pool, a portfolio dashboard.
 

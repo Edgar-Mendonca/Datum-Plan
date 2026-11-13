@@ -22,12 +22,12 @@ fn random_plan(r: &mut Rng, n: usize, loops: bool) -> Project {
         p.tasks.push(t);
     }
     let uids: Vec<u32> = p.tasks.iter().map(|t| t.uid).collect();
-    for i in 1..n {
+    for (i, t) in p.tasks.iter_mut().enumerate().take(n).skip(1) {
         for _ in 0..r.below(3) {
             let j = if loops { r.below(n as u64) as usize } else { r.below(i as u64) as usize };
             let kind = ["FS", "SS", "FF", "SF"][r.below(4) as usize];
             let lag = r.below(5) as i64 - 2;
-            if let Ok(mut l) = parse::preds(&format!("{}{kind}{lag:+}d", j + 1), &uids, 480) { p.tasks[i].preds.append(&mut l) }
+            if let Ok(mut l) = parse::preds(&format!("{}{kind}{lag:+}d", j + 1), &uids, 480) { t.preds.append(&mut l) }
         }
     }
     p
