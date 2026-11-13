@@ -409,6 +409,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("…Unlock Baseline unlocks it (and the button turns into Lock Baseline)", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()?.[1])).includes('"BaselineLock":{"unlocked":true}') && !!(await p.$(".ribbon button:has-text('Lock Baseline')")));
   await p.click(".ribbon button:has-text('Lock Baseline')"); await p.waitForTimeout(300);
   check("…and Lock Baseline locks it again", !!(await p.$(".ribbon button:has-text('Unlock Baseline')")));
+  // 0.8.15: percentages with decimals (Gantt Chart Tools › Format › Percent), saved with the plan.
+  await p.click(".ctxgrp:not(.sheetctx) button"); await p.waitForTimeout(150);
+  await p.click(".ribbon button[title^='Increase Decimal: show percentages']"); await p.waitForTimeout(300);
+  check("Format › Percent › Increase Decimal shows percentages with a decimal (saved with the plan)", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()?.[1])).includes('"ProjectSet":{"field":"pct_decimals","value":1}'));
   // 0.8.13: the S-curve as a workbook with a spreadsheet chart, or as a sheet of the plan.
   await p.click(".chartbox header.center button:has-text('Workbook')"); await p.waitForTimeout(300);
   { const x = await p.evaluate(() => window.__calls.filter(c => c[0] === "export_scurve").pop()?.[1]);

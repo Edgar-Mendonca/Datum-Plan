@@ -118,6 +118,8 @@ pub struct Calc<'a> {
     pub fmt: String,
     pub today: NaiveDate,
     pub pct: Vec<u8>,
+    /// % complete unrounded (a summary's weighted figure), for showing with decimals.
+    pub pctf: Vec<f64>,
     pub wbs: Vec<String>,
     pub id_of: HashMap<u32, usize>,
     pub succs: Vec<Vec<String>>,
@@ -181,14 +183,15 @@ impl<'a> Calc<'a> {
             stack[lv] += 1;
             stack.iter().map(u32::to_string).collect::<Vec<_>>().join(".")
         }).collect();
-        let pct = (0..n).map(|i| {
+        let pctf: Vec<f64> = (0..n).map(|i| {
             if !s.summary[i] {
-                return p.tasks[i].pct;
+                return p.tasks[i].pct as f64;
             }
             let kids: Vec<&Task> = p.subtree(i).skip(1).filter(|&j| !s.summary[j] && !s.off[j]).map(|j| &p.tasks[j]).collect();
             let w: i64 = kids.iter().map(|k| k.dur).sum();
-            if w > 0 { (kids.iter().map(|k| k.pct as f64 * k.dur as f64).sum::<f64>() / w as f64).round() as u8 } else { (kids.iter().map(|k| k.pct as f64).sum::<f64>() / kids.len().max(1) as f64).round() as u8 }
+            if w > 0 { kids.iter().map(|k| k.pct as f64 * k.dur as f64).sum::<f64>() / w as f64 } else { kids.iter().map(|k| k.pct as f64).sum::<f64>() / kids.len().max(1) as f64 }
         }).collect();
+        let pct: Vec<u8> = pctf.iter().map(|x| x.round() as u8).collect();
         let defs = p.fields.iter().map(|d| (d.key.clone(), (d.clone(), formula::parse(&d.formula).ok().filter(|_| !d.formula.trim().is_empty())))).collect();
         let mut names: HashMap<String, String> = task_fields().iter().map(|f| (f.name.to_lowercase(), f.key.clone())).collect();
         for (k, a) in [("planned % complete", "plannedpct"), ("percent complete", "pct"), ("total slack", "tf"), ("free slack", "ff"), ("total float", "tf"), ("free float", "ff"), ("name", "name"), ("resource names", "res")] {
@@ -205,7 +208,7 @@ impl<'a> Calc<'a> {
         for (k, t) in &p.titles {
             names.insert(t.to_lowercase(), k.clone());
         }
-        let mut c = Calc { p, s, l, ev: Ev::default(), error, fmt: fmt.into(), today, pct, wbs, id_of, succs, defs, names, xl: HashMap::new(), memo: RefCell::default() };
+        let mut c = Calc { p, s, l, ev: Ev::default(), error, fmt: fmt.into(), today, pct, pctf, wbs, id_of, succs, defs, names, xl: HashMap::new(), memo: RefCell::default() };
         c.ev = c.earned_value();
         let excel: Vec<(String, String)> = p.fields.iter().filter(|d| crate::sheet::is_excel(&d.formula) && !d.key.starts_with('r')).map(|d| (d.key.clone(), d.formula.clone())).collect();
         // Again when classic formulas exist, so a formula column can read one that reads another formula column.
@@ -378,7 +381,7 @@ impl<'a> Calc<'a> {
             "ext" => txt(&t.ext.iter().map(|x| crate::links::label(x, p.day_min)).collect::<Vec<_>>().join("; ")),
             "split" => F::Bool(!t.splits.is_empty()),
             "project_finish_var" => F::Num(self.dur_between(i, s.ef[i], s.finish) as f64),
-            "pct" => F::Num(self.pct[i] as f64),
+            "pct" => F::Num(self.pctf[i]),
             "phys" => F::Num(t.phys as f64),
             "workpct" => F::Num(if l.work[i] > 0.0 { (l.awork[i] / l.work[i] * 100.0).round() } else { self.pct[i] as f64 }),
             "astart" => opt(t.act_start),
@@ -391,8 +394,8 @@ impl<'a> Calc<'a> {
             "qtydone" => if t.qty > 0.0 || t.qty_done > 0.0 { F::Num(t.qty_done) } else { F::Null },
             "qtyunit" => txt(&t.qty_unit),
             "plannedpct" | "pctvar" => {
-                let planned = self.planned_share(i).round();
-                F::Num(if key == "pctvar" { self.pct[i] as f64 - planned } else { planned })
+                let planned = self.planned_share(i);
+                F::Num(if key == "pctvar" { self.pctf[i] - planned } else { planned })
             }
             "work" => F::Num(l.work[i] / 60.0),
             "awork" => F::Num(l.awork[i] / 60.0),
@@ -509,7 +512,7 @@ impl<'a> Calc<'a> {
             }
             (Kind::Cost, x) => money(x.num(), &p.currency),
             (Kind::Work, x) => format!("{} hrs", num(x.num())),
-            (Kind::Pct, x) => format!("{}%", x.num().round() + 0.0),
+            (Kind::Pct, x) => pct_text(x.num(), p.pct_decimals),
             (Kind::Int, x) => format!("{}", x.num().round() as i64),
             (Kind::Num, x) => num(x.num()),
             (_, x) => x.to_string(),
@@ -703,4 +706,11 @@ impl Ctx for ResRow<'_, '_> {
     fn work_between(&self, a: i64, b: i64) -> i64 { let w = &self.c.s.cals[self.c.s.rcal[self.k]]; if b >= a { w.between(a, b) } else { -w.between(b, a) } }
     fn work_add(&self, a: i64, m: i64) -> i64 { self.c.s.cals[self.c.s.rcal[self.k]].add(a, m) }
     fn date_fmt(&self) -> &str { &self.c.fmt }
+}
+
+/// A percentage with `d` decimals (0–2), never "-0%".
+pub fn pct_text(x: f64, d: u8) -> String {
+    let d = d.min(2) as usize;
+    let k = 10f64.powi(d as i32);
+    format!("{:.*}%", d, (x * k).round() / k + 0.0)
 }

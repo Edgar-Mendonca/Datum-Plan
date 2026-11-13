@@ -217,8 +217,11 @@ impl Calc<'_> {
         let top: Vec<usize> = (0..p.tasks.len()).filter(|&i| p.tasks[i].level == 0 && !s.off[i]).collect();
         let sum = |f: &dyn Fn(usize) -> f64| top.iter().map(|&i| f(i)).sum::<f64>();
         let pc = &s.cals[p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0)];
-        let dur: f64 = top.iter().map(|&i| self.p.tasks[i].dur as f64).sum();
-        let pct = if dur > 0.0 { top.iter().map(|&i| self.pct[i] as f64 * p.tasks[i].dur as f64).sum::<f64>() / dur } else { 0.0 };
+        // As the status bar and PercentComplete: the tasks (not summaries) weighted by duration.
+        let leaves: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
+        let dur: f64 = leaves.iter().map(|&i| p.tasks[i].dur as f64).sum();
+        let pct = if dur > 0.0 { leaves.iter().map(|&i| p.tasks[i].pct as f64 * p.tasks[i].dur as f64).sum::<f64>() / dur }
+            else if leaves.is_empty() { 0.0 } else { leaves.iter().map(|&i| p.tasks[i].pct as f64).sum::<f64>() / leaves.len() as f64 };
         let bls: Vec<&Baseline> = top.iter().filter_map(|&i| p.tasks[i].bls.get(&0)).collect();
         let cells = cols.iter().map(|k| {
             let v = match k.as_str() {
@@ -227,7 +230,9 @@ impl Calc<'_> {
                 "start" | "es" => F::Date(s.start),
                 "finish" | "ef" => F::Date(s.finish),
                 "dur" => F::Num(pc.between(s.start, s.finish) as f64),
-                "pct" => F::Num(pct.round()),
+                "pct" => F::Num(pct),
+                "plannedpct" => F::Num(crate::sheet::planned_pct(self)),
+                "pctvar" => F::Num(pct - crate::sheet::planned_pct(self)),
                 "b0start" => bls.iter().map(|b| b.start).min().map_or(F::Null, F::Date),
                 "b0finish" => bls.iter().map(|b| b.finish).max().map_or(F::Null, F::Date),
                 "b0cost" => F::Num(bls.iter().map(|b| b.cost).sum()),

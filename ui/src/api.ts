@@ -54,6 +54,8 @@ export interface ProcOut { data_date: string | null; items: ItemOut[]; earned: n
 export interface Project {
   /** The baseline dates can be typed in (never saved: a plan opens locked). */
   baseline_unlocked?: boolean;
+  /** Decimal places for percentages in the task sheet (0–2). */
+  pct_decimals?: number;
   format: number; name: string; start: string; status: string | null; day_min: number; manual_default: boolean; calendar: string; calendars: Calendar[];
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.15 — 2026-11-13
+
+- **The project summary row shows Baseline % Complete and % Complete Variance** for the whole plan (the same duration-weighted figures as the dashboard). Its % Complete is now weighted the same way.
+- **Percentages with decimals.** Gantt Chart Tools › Format › Percent: Increase or Decrease Decimal shows every percentage in the task sheet with 0, 1 or 2 decimals (saved with the plan), so 0.01 % of progress shows instead of 0%. Summary rows keep their exact weighted figure instead of a whole number; the status bar follows the same setting.
+
 ## 0.8.14 — 2026-11-13
 
 Baseline dates that can be changed on purpose.

@@ -305,7 +305,7 @@ pub fn project_names(c: &Calc) -> Vec<(&'static str, Value, &'static str)> {
 }
 
 /// Planned % complete at the status date, weighted by duration like `PercentComplete`.
-fn planned_pct(c: &Calc) -> f64 {
+pub(crate) fn planned_pct(c: &Calc) -> f64 {
     let (p, s) = (c.p, &c.s);
     let leaves: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
     let w: f64 = leaves.iter().map(|&i| p.tasks[i].dur as f64).sum();

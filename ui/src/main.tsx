@@ -85,7 +85,7 @@ const Status = () => {
         New Tasks: {out()?.project.manual_default ? "Manually Scheduled" : "Auto Scheduled"}</button>
       <Show when={filter().rules.length}><button class="mode" onClick={() => setFilter(ALL)}>Filter applied: {filter().name || "custom"} ✕</button></Show>
       <span class="muted">{grid().shown} of {grid().total} tasks{sel().length > 1 ? ` · ${sel().length} selected` : ""}</span>
-      <span class="muted">{s() ? `${s()!.start} – ${s()!.finish} · ${s()!.dur} · ${Math.round(s()!.pct)}% · ${s()!.cost}` : ""}</span>
+      <span class="muted">{s() ? `${s()!.start} – ${s()!.finish} · ${s()!.dur} · ${(s()!.pct + 0).toFixed(Math.min(2, out()?.project.pct_decimals ?? 0)).replace(/^-(0[.0]*)$/, "$1")}% · ${s()!.cost}` : ""}</span>
       <span class="grow" />
       <span class="vsc">
         <button title="Gantt Chart" onClick={() => C.view("gantt")}><Icon n="gantt" /></button><button title="Task Usage" onClick={() => C.view("taskusage")}><Icon n="table" /></button>

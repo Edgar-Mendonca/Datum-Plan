@@ -1043,3 +1043,19 @@ fn baseline_dates_change_only_when_unlocked() {
     assert_eq!(doc.p.tasks[1].bls[&0].start, b.start);
     assert!(doc.p.baseline_unlocked);
 }
+
+#[test]
+fn project_row_baseline_pct_and_decimals() {
+    let mut doc = Doc::new(plan(&[(3, ""), (7, "1")]));
+    op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
+    let u0 = doc.p.tasks[0].uid;
+    op(&mut doc, Op::Set { uid: u0, field: "pct".into(), value: "1".into() }).unwrap();
+    doc.p.status = Some(d(2026, 11, 2));
+    let q = crate::query::Query { cols: vec!["pct".into(), "plannedpct".into(), "pctvar".into()], project_summary: true, ..Default::default() };
+    let row = |doc: &Doc| Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2)).grid(&q).rows[0].cells.clone();
+    // The project row has its Baseline % Complete (one day of ten planned by the end of 2 Nov) and the variance.
+    assert_eq!(row(&doc), vec!["0%", "10%", "-10%"]);
+    op(&mut doc, Op::ProjectSet { field: "pct_decimals".into(), value: serde_json::json!(2) }).unwrap();
+    assert_eq!(row(&doc), vec!["0.30%", "10.00%", "-9.70%"]);
+    assert_eq!(crate::fields::pct_text(-0.001, 1), "0.0%");
+}

@@ -835,7 +835,10 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 return Err(format!("{field} cannot be set here."));
             }
             v[&field] = value;
+            let unlocked = p.baseline_unlocked;
             *p = serde_json::from_value(v).map_err(|e| format!("That value does not fit {field}: {e}"))?;
+            p.baseline_unlocked = unlocked;
+            p.pct_decimals = p.pct_decimals.min(2);
         }
         Op::FieldDef { def } => {
             if crate::sheet::is_excel(&def.formula) {

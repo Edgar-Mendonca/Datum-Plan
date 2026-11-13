@@ -190,7 +190,7 @@ Datum Plan 自动排程：修改工期或逻辑关系后，所有相关的日期
 
 计划确定后，点击 **Progress › Set Baseline**（设置基准计划）。基准计划是计划日期、工期、工时和费用的一份副本，Datum Plan 会把当前计划与它进行对比。共有 11 个基准计划（Baseline 0 至 10），因此重新确定基准后，旧版本也可以保留。
 
-要更改基准计划，可以再次保存（**Set Baseline** 会覆盖原有基准；选择 **For: Selected tasks** 则只更改所选任务），清除它（**Action: Clear baseline**），或直接输入新日期。基准计划默认处于**锁定**状态：Baseline Start（基准开始）和 Baseline Finish（基准完成）不能直接输入。点击 **Progress › Unlock Baseline**（解锁基准）后，即可在这两列中输入新日期（基准工期按任务日历自动计算，可用 Undo 撤销）。点击 **Lock Baseline**（锁定基准）再次锁定；计划每次打开时都处于锁定状态。若要查看每项任务到状态日期按基准应完成多少，可插入 **Baseline % Complete**（基准完成百分比）列，并在旁边插入 **% Complete Variance**（完成百分比偏差，实际减基准）。
+要更改基准计划，可以再次保存（**Set Baseline** 会覆盖原有基准；选择 **For: Selected tasks** 则只更改所选任务），清除它（**Action: Clear baseline**），或直接输入新日期。基准计划默认处于**锁定**状态：Baseline Start（基准开始）和 Baseline Finish（基准完成）不能直接输入。点击 **Progress › Unlock Baseline**（解锁基准）后，即可在这两列中输入新日期（基准工期按任务日历自动计算，可用 Undo 撤销）。点击 **Lock Baseline**（锁定基准）再次锁定；计划每次打开时都处于锁定状态。若要查看每项任务到状态日期按基准应完成多少，可插入 **Baseline % Complete**（基准完成百分比）列，并在旁边插入 **% Complete Variance**（完成百分比偏差，实际减基准）；项目摘要行显示整个计划的数值。**Gantt Chart Tools › Format › Percent**（百分比）设置所有百分比显示的小数位数（0 到 2 位，随计划保存），这样 0.01% 的进度也能看到。
 
 ![Progress（进度）选项卡。](img/progress-tab.png)
 
