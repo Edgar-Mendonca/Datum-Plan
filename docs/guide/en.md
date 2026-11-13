@@ -661,8 +661,8 @@ To share resources between plans, keep one plan whose Resource Sheet lists them 
 **Home › AI Link** lets Claude, in the Claude Desktop app, read and change the plan you have open, while you watch. You ask in plain words; Claude does it in Datum Plan. No API key is needed: Claude uses your own Claude account.
 
 1. **Turn on.** Home › AI Link › **Turn on**. Only Claude on this computer can reach the plan, with a key that changes each time; nothing listens while it is off. The status bar shows **Claude linked**. It stays on for the next start until you turn it off.
-2. **Set up Claude** (once). The button adds Datum Plan to Claude Desktop's settings and keeps a backup of the old file. To do it by hand, the dialog shows the text to add (Claude Desktop › Settings › Developer › Edit Config), and the command for Claude Code.
-3. **Restart Claude Desktop** (quit it fully, also from the tray) and ask, for example: *"What plan is open in Datum Plan, and what is its finish date?"*
+2. **Add to Claude** (once). Datum Plan makes a Claude extension, **Datum Plan.mcpb**, in your Downloads folder and opens it: Claude Desktop asks to install Datum Plan, and you click **Install**. Nothing to edit. If Claude Desktop does not open, the file is shown in its folder: drag it onto Claude Desktop › Settings › Extensions. The extension keeps working after Datum Plan updates. (Other ways, under the dialog's last section: write Claude Desktop's settings file, or the command for Claude Code.)
+3. **Ask.** In Claude Desktop, Settings › Extensions shows Datum Plan switched on. Start a new chat and ask, for example: *"What plan is open in Datum Plan, and what is its finish date?"* Claude asks before it uses each tool the first time: choose **Always allow** for the tools you are happy with.
 
 Then ask anything about the plan shown, for example:
 

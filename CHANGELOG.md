@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.3 — 2026-11-13
+
+AI Link: add Datum Plan to Claude with one click.
+
+- **Home › AI Link › Add to Claude** makes a Claude extension (Datum Plan.mcpb, in Downloads) and opens it: Claude Desktop asks to install Datum Plan and you click Install. No settings file to edit. If Claude Desktop does not open it, the file is shown in its folder to drag onto Claude Desktop › Settings › Extensions.
+- The extension keeps working after Datum Plan updates: it asks the open Datum Plan for the current tools.
+- Writing Claude Desktop's settings file is still there, under the dialog's other ways, and now says to close Claude Desktop first (a running Claude Desktop can write over it).
+
 ## 0.9.2 — 2026-11-13
 
 AI Link: 26 more tools for Claude (51 in all).

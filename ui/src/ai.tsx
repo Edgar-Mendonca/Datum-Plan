@@ -36,6 +36,8 @@ export const aiLink = () => openDialog(() => {
   const [busy, setBusy] = createSignal(false);
   const load = async () => { const x = await call<Info>("ai_info"); if (x) { setI(x); setAiOn(x.on); } };
   const turn = async (on: boolean) => { setBusy(true); const x = await call<Info>("ai_link", { on }); setBusy(false); if (x) { setI(x); setAiOn(x.on); setOpts({ ...opts(), aiLink: x.on }); toast(on ? "AI Link on: Claude can work on the plan you have open." : "AI Link off.", true); } };
+  const [added, setAdded] = createSignal<{ file: string; opened: boolean } | null>(null);
+  const add = async () => { setBusy(true); const x = await call<{ file: string; opened: boolean }>("ai_add_to_claude"); setBusy(false); if (x) { setAdded(x); toast(x.opened ? "Claude Desktop is asking to install Datum Plan: click Install." : "Drag Datum Plan.mcpb onto Claude Desktop › Settings › Extensions.", true); } };
   const setup = async () => { const f = await call<string>("ai_setup_claude"); if (f) { toast(`Claude Desktop knows Datum Plan now (${f}). Restart Claude Desktop once.`, true); load(); } };
   const copy = (t: string, what: string) => navigator.clipboard?.writeText(t).then(() => toast(`${what} copied.`, true));
   load();
@@ -48,16 +50,18 @@ export const aiLink = () => openDialog(() => {
             <b>1</b><div><div class="t">Switch the AI Link on</div><div class="muted">Only Claude on this computer can reach it, with a key that changes each time. Datum Plan never saves your file unless you ask.</div></div>
             <button class="btn" classList={{ pri: !x().on }} disabled={busy()} onClick={() => turn(!x().on)}>{x().on ? "Turn off" : "Turn on"}</button>
           </div>
-          <div class="ailink-step" classList={{ done: x().claude_set }}>
-            <b>2</b><div><div class="t">Add Datum Plan to Claude Desktop {x().claude_set ? "(done)" : ""}</div><div class="muted">Once. Datum Plan writes itself into Claude Desktop's settings{x().claude_config ? ` (${x().claude_config})` : ""} and keeps a backup of the old file.</div></div>
-            <button class="btn" classList={{ pri: x().on && !x().claude_set }} onClick={setup}>{x().claude_set ? "Again" : "Set up Claude"}</button>
+          <div class="ailink-step" classList={{ done: !!added() || x().claude_set }}>
+            <b>2</b><div><div class="t">Add Datum Plan to Claude Desktop</div><div class="muted">Once. Claude Desktop opens and asks to install Datum Plan: click <b>Install</b>. Nothing to edit.
+              <Show when={added()}>{a => <> {a().opened ? "" : <>If Claude did not open, drag <b>Datum Plan.mcpb</b> (shown in its folder, {a().file}) onto Claude Desktop › Settings › Extensions.</>}</>}</Show></div></div>
+            <button class="btn" classList={{ pri: x().on && !added() }} disabled={busy()} onClick={add}>Add to Claude</button>
           </div>
           <div class="ailink-step">
-            <b>3</b><div><div class="t">Restart Claude Desktop and ask</div><div class="muted">Quit Claude Desktop fully (also from the tray) and open it again. Then try: <i>“What plan is open in Datum Plan, and what is its finish date?”</i></div></div>
+            <b>3</b><div><div class="t">Ask Claude</div><div class="muted">In Claude Desktop, check Settings › Extensions shows Datum Plan switched on, then start a new chat: <i>“What plan is open in Datum Plan, and what is its finish date?”</i></div></div>
           </div>
           <details class="ailink-more">
-            <summary>By hand, or with Claude Code</summary>
-            <p class="muted">Claude Desktop: add this to {x().claude_config ?? "claude_desktop_config.json"} (Settings › Developer › Edit Config):</p>
+            <summary>Other ways: Claude's settings file, or Claude Code</summary>
+            <p class="muted">Write Datum Plan into Claude Desktop's settings file{x().claude_config ? ` (${x().claude_config})` : ""}, with a backup; close Claude Desktop first, then open it again: <button class="btn sm" onClick={setup}>{x().claude_set ? "Write again" : "Write settings"}</button></p>
+            <p class="muted">Or by hand: add this to {x().claude_config ?? "claude_desktop_config.json"} (Settings › Developer › Edit Config):</p>
             <pre>{x().snippet}</pre>
             <button class="btn sm" onClick={() => copy(x().snippet, "The settings text")}>Copy</button>
             <p class="muted">Claude Code (in a terminal):</p>

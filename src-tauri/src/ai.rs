@@ -5,12 +5,16 @@
 //! 127.0.0.1, with the key that the window wrote to `ai-link.json` in its settings folder when the
 //! link was switched on. The window runs the tool on the plan shown (datum_core::assist), so every
 //! change is an Undo step and appears at once. Nothing listens unless the link is on.
+//!
+//! Claude learns about Datum Plan from an extension file (`Datum Plan.mcpb`, made by `extension`):
+//! one click on Install in Claude Desktop, no settings to edit. Writing Claude's settings file
+//! (`setup_claude`) is the fallback.
 use super::{guard, out, regroup, show_tab, tab_list, today, St};
 use datum_core::assist;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -105,6 +109,7 @@ fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
     let (r, shown) = {
         let mut ap = st.lock();
         let r = guard(|| match name {
+            "_tools" => Ok(assist::tools()),
             "list_plans" => Ok(json!({ "shown": ap.cur, "plans": tab_list(&ap).iter().enumerate().map(|(k, t)| json!({ "tab": k, "name": t.name, "file": t.path, "unsaved": t.dirty })).collect::<Vec<_>>() })),
             "switch_plan" => {
                 let tabs = tab_list(&ap);
@@ -156,6 +161,41 @@ pub fn setup_claude() -> Result<String, String> {
     Ok(f.display().to_string())
 }
 
+/// The extension's manifest (MCPB): Claude runs `bin` inside the extension with --mcp.
+fn manifest(bin: &str) -> Value {
+    let platform = if cfg!(windows) { "win32" } else if cfg!(target_os = "macos") { "darwin" } else { "linux" };
+    json!({ "manifest_version": "0.3", "name": "datum-plan", "display_name": "Datum Plan", "version": env!("CARGO_PKG_VERSION"),
+        "description": "Read and change the plan open in Datum Plan: tasks, links, progress, resources, calendars, codes, checks, curves and sheets.",
+        "long_description": "Works with the plan you have open in Datum Plan, on this computer only. Switch it on in Datum Plan (Home › AI Link). Every change shows at once and is one Undo step in Datum Plan; nothing is saved unless you ask.",
+        "author": { "name": "Datum", "url": "https://github.com/Edgar-Mendonca/Datum-Plan" }, "homepage": "https://github.com/Edgar-Mendonca/Datum-Plan", "license": "MIT",
+        "icon": "icon.png", "keywords": ["schedule", "planning", "gantt", "project"],
+        "server": { "type": "binary", "entry_point": bin, "mcp_config": { "command": format!("${{__dirname}}/{bin}"), "args": ["--mcp"] } },
+        "tools": assist::tools().as_array().into_iter().flatten().map(|t| json!({ "name": t["name"], "description": t["description"] })).collect::<Vec<_>>(),
+        "compatibility": { "platforms": [platform] } })
+}
+
+/// Makes `Datum Plan.mcpb` in `dir`: the manifest, the icon and a copy of this program as the bridge.
+/// Claude Desktop installs it with one click (Install), and it keeps working after Datum Plan updates:
+/// the bridge only passes calls on, and asks the open window for the current tool list.
+pub fn extension(dir: &Path) -> Result<PathBuf, String> {
+    use zip::write::SimpleFileOptions;
+    let bin = if cfg!(windows) { "server/datum-plan.exe" } else { "server/datum-plan" };
+    let exe = std::fs::read(std::env::current_exe().map_err(|e| e.to_string())?).map_err(|e| format!("Datum Plan could not read its own program: {e}"))?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let f = dir.join("Datum Plan.mcpb");
+    let tmp = f.with_extension("mcpb.part");
+    let e = |x: zip::result::ZipError| x.to_string();
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&tmp).map_err(|e| e.to_string())?);
+    let o = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for (name, bytes, mode) in [("manifest.json", serde_json::to_vec_pretty(&manifest(bin)).unwrap_or_default(), 0o644), ("icon.png", include_bytes!("../icons/icon.png").to_vec(), 0o644), (bin, exe, 0o755)] {
+        z.start_file(name, o.unix_permissions(mode)).map_err(e)?;
+        z.write_all(&bytes).map_err(|e| e.to_string())?;
+    }
+    z.finish().map_err(e)?;
+    std::fs::rename(&tmp, &f).map_err(|e| e.to_string())?;
+    Ok(f)
+}
+
 // ---------- the bridge (`Datum Plan.exe --mcp`, started by Claude) ----------
 
 /// Passes one tool call to the open window, or says why it cannot.
@@ -180,7 +220,8 @@ pub fn answer(msg: &Value, call: impl Fn(&str, &Value) -> Result<Value, String>)
         "initialize" => Ok(json!({ "protocolVersion": p["protocolVersion"].as_str().unwrap_or("2025-06-18"), "capabilities": { "tools": {} },
             "serverInfo": { "name": "datum-plan", "version": env!("CARGO_PKG_VERSION") }, "instructions": assist::INSTRUCTIONS })),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({ "tools": assist::tools() })),
+        // The open window's list (a newer Datum Plan may have more tools than this copy), else this one's.
+        "tools/list" => Ok(json!({ "tools": call("_tools", &json!({})).ok().filter(Value::is_array).unwrap_or_else(assist::tools) })),
         "tools/call" => Ok(match call(p["name"].as_str().unwrap_or(""), &p["arguments"]) {
             Ok(v) => json!({ "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }], "isError": false }),
             Err(e) => json!({ "content": [{ "type": "text", "text": e }], "isError": true }),
@@ -243,6 +284,23 @@ mod tests {
         // A wrong key is turned away.
         std::fs::write(&f, json!({ "port": port, "key": "not the key" }).to_string()).unwrap();
         assert!(forward("plan_summary", &json!({})).unwrap_err().contains("key does not match"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn the_extension_holds_a_manifest_the_icon_and_the_bridge() {
+        let dir = std::env::temp_dir().join(format!("dp-mcpb-{}", std::process::id()));
+        let f = extension(&dir).unwrap();
+        let mut z = zip::ZipArchive::new(std::fs::File::open(&f).unwrap()).unwrap();
+        let mut m = String::new();
+        z.by_name("manifest.json").unwrap().read_to_string(&mut m).unwrap();
+        let m: Value = serde_json::from_str(&m).unwrap();
+        let bin = m["server"]["entry_point"].as_str().unwrap().to_string();
+        assert_eq!((m["name"].as_str(), m["server"]["type"].as_str()), (Some("datum-plan"), Some("binary")));
+        assert_eq!(m["server"]["mcp_config"]["command"], format!("${{__dirname}}/{bin}"));
+        assert_eq!(m["server"]["mcp_config"]["args"][0], "--mcp");
+        assert!(m["tools"].as_array().unwrap().len() >= 50);
+        assert!(z.by_name("icon.png").is_ok());
+        assert_eq!(z.by_name(&bin).unwrap().size(), std::fs::metadata(std::env::current_exe().unwrap()).unwrap().len());
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]
