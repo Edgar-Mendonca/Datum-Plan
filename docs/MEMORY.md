@@ -431,6 +431,20 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 | 0.8.2 | Delay analysis 1 | Delay Analysis view: what the plan holds and which methods can run; as-planned v as-built (variances, delay at the finish, critical drivers); windows between snapshots (finish movement, slips critical-first, notes); snapshots keep critical and float; export | ✅ |
 | 0.8.3 | Delay analysis 2 | Time impact analysis (fragnet on a copy), impacted as-planned, collapsed as-built; method chosen by the data available. Delay events register (extensions, holds, fragnets; Add to plan), each method with its basis and fidelity, export | ✅ |
 | 0.8.4 | What-if scenarios | Project › Scenarios: copies saved beside the plan (scenario_of), finish and health against the plan, Compare (change log, ghost bars), Merge… by kind (undoable) | ✅ |
+| 0.12.x | Later (agreed) | Budget and budget-change log, funding; issues raised by thresholds; saved views library (my tables, filters, groups for every plan); resource-constrained optimisation; quality benchmarking; 4D model link once Datum Layout exists | ⬜ |
+| 0.11.2 | Time-location (linear) view | Chainage against time for pipelines, roads, piping runs: each task a line from its start km to its end km | ⬜ |
+| 0.11.1 | Time-scaled logic diagram | Network drawn on the timescale (bars on dates, links as lines), printable | ⬜ |
+| 0.10.3 | Risk: weather | Weather calendars and weather risk (seasonal working-day loss by month) in the Monte Carlo run | ⬜ |
+| 0.10.2 | Risk: probabilistic branching | A risk event with a chance adds its fragnet in some runs only; results show its effect | ⬜ |
+| 0.10.1 | MS Project parity | User exports 5–10 plans as XML from MS Project; dates, float and critical compared task by task; differences fixed and kept as tests (P6 later, no access) | ⬜ |
+| 0.9.9 | Expected finish, scheduling options | Expected Finish per task; more out-of-sequence and lag options | ⬜ |
+| 0.9.8 | Roles | Generic resources (Mechanical Engineer × 2), then Assign a person to a role | ⬜ |
+| 0.9.7 | Detailed work editing | Type hours per day per assignment in Task and Resource Usage (advanced) | ⬜ |
+| 0.9.6 | Work contours (resource curves) | Flat, front-loaded, back-loaded, early peak, late peak, bell, turtle and custom curves per assignment (advanced option) | ⬜ |
+| 0.9.5 | Task Path | Select a task: highlight its driving predecessors, predecessors, driven successors and successors in the Gantt and grid | ⬜ |
+| 0.9.4 | AI Link: 75+ tools | Third set of 25: registers, baselines and compare, reports and exports, print, sheets formatting, dashboards | ⬜ |
+| 0.9.3 | AI Link: 50 tools | Second set of 25: risk register, delay events, scenarios, snapshots, period close, health settings, levelling | ⬜ |
+| 0.9.2 | AI Link: 25 more tools | First set of 25: resources and assignments, calendars and exceptions, activity codes, custom fields, constraints, filters, outline, notes | 🔜 |
 | 0.9.0 | AI Link (Claude) | Home › AI Link: Claude Desktop reads and changes the open plan live (25 MCP tools in `crates/core/src/assist.rs`, link in `src-tauri/src/ai.rs`, dialog `ui/src/ai.tsx`); every change an Undo step; off by default, 127.0.0.1 with a key | ✅ |
 | 0.8.16 | Spelling | Home › Proofing › Spelling (F7): `spell.rs` (spellbook + SCOWL en_GB/en_US Hunspell dictionaries in `crates/core/dict`), dialog `ui/src/spell.tsx`; language and own words in Options | ✅ |
 | 0.8.15 | % decimals, project row baseline % | `Project.pct_decimals` (0–2) for every Pct field (`fields::pct_text`); `Calc.pctf` unrounded summary %; project row has plannedpct/pctvar (leaves, duration-weighted) | ✅ |
@@ -448,6 +462,9 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 | 0.7.4 | Copy Picture, .ods | Report › Copy Picture (task sheet + Gantt as shown), Copy on every chart; .ods export of the task table and both registers | ✅ |
 | 0.7.1 | Hardening | 100k tasks measured and fixed (undo memory budget, no task copy per edit, smaller grid rows, Gantt row map cached), `npm run bench` + `npm run perf:ui`; code signing and the signed updater still deferred by the user | ✅ |
 | 1.0.0 | Stable | — | ⬜ |
+
+### Decided not to build (user, 2026-11-13)
+Multi-user, EPS/OBS server and user rights (Datum Plan stays local, private, one user, no telemetry); .mpp files; Office one-click integration; a VBA-style macro or Python editor (the AI Link does automation in plain words); a cloud version; 4D BIM until Datum Layout can provide the model.
 
 ### Features that go beyond the usual scheduler
 - Weekly/monthly progress reports ✅
@@ -715,6 +732,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 - Then 0.8.16: Spelling (Home › Proofing, F7).
 - Then a CI fix: Rust 1.100's clippy (`needless_range_loop`) failed CI from 0.8.14 on while the local 1.97 passed; four old loops rewritten, and CLAUDE.md now says to run clippy with `cargo +stable` as well.
 - Then a comparison with PlanCraft, the leading desktop schedulers and a work-management tool (user); then 0.9.0: AI Link, Claude working on the open plan through the window (MCP, 25 tools).
+- Then a second comparison (PlanCraft, MS Project, P6, Asta Powerproject, risk tools, TILOS, Phoenix, Spider, Synchro). User agreed the roadmap 0.9.2–0.12 above: AI tools in sets of 25 first (to pass PlanCraft's 76), then Task Path, contours, detailed work editing, roles, expected finish, MS Project parity (the user has MS Project, not P6), risk branching and weather, time-scaled logic and time-location views.
 - Waiting on Datum Plot: Plot cannot read dates yet. The hub's `briefs/PLOT-DATES.md` asks Plot's chat for optional date columns (days since 1970-01-01, `Table.xFormat = "date"`). When a Plot release has it: change `io/dplot.rs` to write X as days since 1970 with `xFormat: "date"` and `xTitle: "Date"` (instead of days from the first date), and name the minimum Plot version in the guide.
 - Next (from the agreed list): all done. Then schedule quality (health trend, ghost bars, logic change log, milestone trend), a shared resource pool, a portfolio dashboard.
 
