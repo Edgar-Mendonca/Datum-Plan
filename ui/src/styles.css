@@ -105,6 +105,10 @@ kbd { font: 10.5px "Segoe UI", sans-serif; color: var(--muted); border: 1px soli
 .row.proj .c { background: var(--panel); }
 .row.sel .c { background: var(--sel); }
 .row.hl .c { background: var(--hl); }
+/* Task Path (Schedule › Paths): driving predecessors, predecessors, driven successors, successors. */
+.row.tp2 .c { background: rgba(217,119,6,.30); } .row.tp3 .c { background: rgba(217,119,6,.11); }
+.row.tp4 .c { background: rgba(124,58,237,.24); } .row.tp5 .c { background: rgba(124,58,237,.09); }
+.pathkey { display: inline-flex; gap: 8px; align-items: center; } .pathkey i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
 .row.sel .c.idc { background: var(--sel2); color: var(--navy); }
 .row.off .c { color: var(--muted); text-decoration: line-through; }
 .row.late .c.nm { color: var(--crit); }

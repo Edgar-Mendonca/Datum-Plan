@@ -1601,6 +1601,17 @@ fn ai_link(app: AppHandle, st: State<St>, on: bool) -> R<serde_json::Value> {
 #[tauri::command]
 fn ai_setup_claude() -> R<String> { ai::setup_claude() }
 
+/// Task Path: where each task stands to the selected one (2 driving predecessor, 3 predecessor,
+/// 4 driven successor, 5 successor), for the tasks on its path only.
+#[tauri::command]
+fn task_path(st: State<St>, uid: u32) -> R<Vec<(u32, u8)>> {
+    let a = st.lock();
+    let p = &a.doc.p;
+    let i = p.idx(uid).ok_or("That task no longer exists.")?;
+    let s = datum_core::sched::schedule(p)?;
+    Ok(datum_core::sched::task_path(&s, i).into_iter().enumerate().filter(|x| x.1 > 1).map(|(j, k)| (p.tasks[j].uid, k)).collect())
+}
+
 /// Add to Claude: makes `Datum Plan.mcpb` in Downloads and opens it, so Claude Desktop shows Install.
 /// Without a program for .mcpb files, shows the file in its folder to drag onto Claude instead.
 #[tauri::command]
@@ -1905,7 +1916,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, export_scurve, scurve_sheet, spell_check, ai_info, ai_link, ai_setup_claude, ai_add_to_claude, sheet_to_plan, share_setup, copy, paste,
+            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, export_scurve, scurve_sheet, spell_check, ai_info, ai_link, ai_setup_claude, ai_add_to_claude, task_path, sheet_to_plan, share_setup, copy, paste,
             query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, scenarios, new_scenario, scenario_compare, scenario_merge, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])

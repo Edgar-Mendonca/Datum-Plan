@@ -10,6 +10,7 @@ import "@fontsource/ibm-plex-mono/latin-500.css";
 import "@fontsource/ibm-plex-mono/latin-600.css";
 import "./styles.css";
 import { initAi, aiOn, aiLink } from "./ai";
+import { pathOn, setPathOn, PATH } from "./path";
 import { invoke, listen, Out, FieldList, Options } from "./api";
 import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut, setThemeRaw, applyTheme } from "./store";
 import { C } from "./cmds";
@@ -87,6 +88,7 @@ const Status = () => {
       <Show when={filter().rules.length}><button class="mode" onClick={() => setFilter(ALL)}>Filter applied: {filter().name || "custom"} ✕</button></Show>
       <span class="muted">{grid().shown} of {grid().total} tasks{sel().length > 1 ? ` · ${sel().length} selected` : ""}</span>
       <span class="muted">{s() ? `${s()!.start} – ${s()!.finish} · ${s()!.dur} · ${(s()!.pct + 0).toFixed(Math.min(2, out()?.project.pct_decimals ?? 0)).replace(/^-(0[.0]*)$/, "$1")}% · ${s()!.cost}` : ""}</span>
+      <Show when={pathOn()}><button class="mode pathkey" title="Task Path: select a task to see what drives it and what it drives. Click to turn it off." onClick={() => setPathOn(false)}>Task Path: <For each={PATH}>{p => <span><i style={{ background: p[2] }} />{p[1]}</span>}</For> ✕</button></Show>
       <Show when={aiOn()}><button class="mode aion" title="AI Link is on: Claude can work on the plan you have open" onClick={() => aiLink()}>✦ Claude linked</button></Show>
       <span class="grow" />
       <span class="vsc">

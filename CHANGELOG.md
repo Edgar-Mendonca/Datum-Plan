@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.6 — 2026-11-13
+
+Task Path, and 7 more tools for Claude (108 in all).
+
+- **Task Path** (Schedule › Paths › Task Path): select a task and Datum Plan colours its path in the task sheet and the Gantt: driving predecessors (the chain that sets its dates, dark orange), other predecessors (light orange), the successors it drives (dark purple) and other successors (light purple). The legend is in the status bar; click it to turn Task Path off. A driving link is one that sets its successor's dates.
+- **Claude** can follow a task's path too (task_path), set the project's details (name, code, client, manager…), add recurring tasks (a weekly meeting), list and apply rules of credit, and set or tick a task's steps (its physical % follows).
+
 ## 0.9.5 — 2026-11-13
 
 AI Link: the last 25 tools of the plan, 101 in all.

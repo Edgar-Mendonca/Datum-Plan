@@ -5,6 +5,7 @@ import { For, Show, JSX, createSignal, createMemo, createEffect, onMount, onClea
 import { setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import { aiOn, aiLink } from "./ai";
+import { pathOn, setPathOn } from "./path";
 import * as D from "./dialogs";
 import * as P2 from "./progress";
 import { Icon } from "./ui";
@@ -286,7 +287,7 @@ export const Ribbon = () => (
       <G l="Outline" h="outline"><S><B i="outdent" l="Outdent" run={C.outdent} /><B i="indent" l="Indent" run={C.indent} /><B i="list" l="Outline Level" dd={e => openMenu(e, outlineMenu())} /></S><S><B i="up" l="Move Up" run={() => C.move(true)} /><B i="down" l="Move Down" run={() => C.move(false)} /></S></G>
       <G l="Tasks" h="tasks"><B big i="manual" l="Manually Schedule" run={() => C.mode(true)} /><B big i="auto" l="Auto Schedule" run={() => C.mode(false)} /><S><B i="split" l="Split" run={C.split} /><B i="inact" l="Inactivate" run={C.inactive} /></S></G>
       <G l="Properties" h="properties"><B big i="info" l="Information" run={C.info} /><S><B i="note" l="Notes" run={C.notes} /><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Add to Timeline" run={C.timeline} /></S></G>
-      <G l="Paths" h="paths"><S><B i="crit" l="Critical Path" run={() => { setShowCrit(true); setFilter(fields().filters.find(f => f.name === "Critical") ?? ALL); }} /><B i="crit" l="Longest Path" run={() => setFilter(fields().filters.find(f => f.name === "Longest Path") ?? ALL)} /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
+      <G l="Paths" h="paths"><S><B i="crit" l="Critical Path" run={() => { setShowCrit(true); setFilter(fields().filters.find(f => f.name === "Critical") ?? ALL); }} /><B i="crit" l="Longest Path" run={() => setFilter(fields().filters.find(f => f.name === "Longest Path") ?? ALL)} /><B i="path" l="Task Path" on={pathOn()} run={() => setPathOn(!pathOn())} title="Task Path: select a task to colour what drives it (orange) and what it drives (purple), in the task sheet and the Gantt" /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
       <G l="Change" h="change"><S><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="search" l="Inspect" run={() => D.inspect(C.ids()[0])} /></S><S><B i="change" l="Global Change" run={C.globalChange} /><B i="opts" l="Schedule Options" run={() => D.scheduleOptions()} /></S></G>
     </Show>
     <Show when={tab() === "progress"}>

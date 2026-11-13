@@ -24,6 +24,7 @@ const DID: Record<string, string> = {
   log_submission: "logged a document submission", set_order: "changed an order", log_expediting: "added an expediting note", clear_baseline: "cleared a baseline",
   add_sheet: "added a sheet", rename_sheet: "renamed a sheet", delete_sheet: "deleted a sheet", format_sheet_cells: "formatted a sheet", set_number_format: "set a number format",
   define_name: "changed a defined name", format_tasks: "formatted tasks", add_dashboard: "added a dashboard", delete_dashboard: "deleted a dashboard", export_plan: "saved a copy to Downloads", export_register: "saved a register to Downloads",
+  set_project_info: "changed the project details", add_recurring_task: "added a recurring task", apply_credit_rule: "gave tasks a rule of credit", set_task_steps: "set a task's steps", mark_step_done: "ticked a step",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
 

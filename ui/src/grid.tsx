@@ -5,6 +5,7 @@ import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, 
 import { Col, Row } from "./api";
 import { toggleSub, grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
 import { C } from "./cmds";
+import { pathMap } from "./path";
 import * as D from "./dialogs";
 import * as F from "./fmt";
 import { parseTsv, transpose, series, clip } from "./cells";
@@ -414,7 +415,7 @@ export const Grid = (p: { width?: number }) => {
           <div class="gbody">
             <For each={visible()}>{([r, k]) => (
               <div class="row" style={{ top: `${k * RH}px`, width: `${total()}px` }}
-                classList={{ sum: r.kind === "summary" || r.kind === "project" || r.kind === "subplan", subp: r.kind === "subplan", subc: !!r.sub && r.kind !== "subplan", grp: r.kind === "group", sel: selSet().has(r.uid), off: r.off, late: r.late, hl: r.hl, proj: r.kind === "project" }}>
+                classList={{ sum: r.kind === "summary" || r.kind === "project" || r.kind === "subplan", subp: r.kind === "subplan", subc: !!r.sub && r.kind !== "subplan", grp: r.kind === "group", sel: selSet().has(r.uid), off: r.off, late: r.late, hl: r.hl, proj: r.kind === "project", [`tp${pathMap().get(r.uid) ?? 0}`]: pathMap().size > 0 && (pathMap().get(r.uid) ?? 0) > 1 }}>
                 <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }} title={r.late ? "Late" : ""}>{r.uid > 0 ? r.id : ""}{r.late && <i class="ind late">!</i>}{r.manual && <i class="ind">✎</i>}{r.uid > 0 && r.ext?.length ? <i class="ind xin" classList={{ moved: r.ext_moved }} title={`Waits for a task in another plan:\n${r.ext.join("\n")}${r.ext_moved ? "\n\nThat plan has moved since: Project › Update Links." : ""}\n(click: go to it, edit or update)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkMenu(e, r.uid)); }}>{r.ext_moved ? "⇠!" : "⇠"}</i> : null}{r.uid > 0 && r.ext_out?.length ? <i class="ind xout" title={`Another plan waits for this task:\n${r.ext_out.join("\n")}\n(click: go to it)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkMenu(e, r.uid)); }}>⇢</i> : null}</div>
                 <For each={grid().cols}>{(c, j) => (
                   <div class="c" classList={{ r: right(c), nm: c.key === "name", ro: !c.edit, in: inRange(k, j()), at: cur().row === k && cur().col === j(), fz: j() === frozen(), fx: !!formulaOf(c.key) }}

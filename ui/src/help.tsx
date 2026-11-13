@@ -46,7 +46,7 @@ export const HELP: Record<string, Topic> = {
   leveling: { t: "Leveling", what: "Moves tasks later where a person or crew has more work than hours, until nobody is overallocated.",
     how: ["Level All levels the whole plan; Level Selection only the selected tasks. A preview shows which tasks move and the new finish before anything changes.", "Clear Leveling undoes the delays leveling added.", "Leveling Options sets the order (standard, by priority, by ID)."] },
   paths: { t: "Critical and longest path", what: "The tasks that decide the finish date: if one of them slips, the project finishes late.",
-    how: ["Critical Path shows only tasks with no float (in red).", "Longest Path shows the chain that drives the finish, counting calendars and constraints.", "Check Schedule runs the quality checks."] },
+    how: ["Critical Path shows only tasks with no float (in red).", "Longest Path shows the chain that drives the finish, counting calendars and constraints.", "Task Path colours the selected task's driving predecessors (dark orange), other predecessors (light orange), driven successors (dark purple) and other successors (light purple) in the task sheet and the Gantt; the legend is in the status bar. A driving link is one that sets its successor's dates.", "Check Schedule runs the quality checks."] },
   change: { t: "Inspect, Global Change and options", what: "Tools for the whole plan.",
     how: ["Inspect shows every field of the selected task.", "Global Change sets a field on many tasks at once, by a rule.", "Schedule Options: what counts as critical, how lags and out-of-sequence progress are treated, the default task type."] },
   // Progress tab

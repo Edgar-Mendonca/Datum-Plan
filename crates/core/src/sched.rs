@@ -442,3 +442,44 @@ impl Sched {
         if p.opts.longest_path { self.lp[i] } else { self.tf[i] <= p.opts.critical_float }
     }
 }
+
+/// Task Path: where each task stands to task `i`. 1 the task itself; 2 a driving predecessor (reached
+/// back through links that drive their successor); 3 another predecessor; 4 a driven successor
+/// (reached forward through driving links); 5 another successor; 0 neither.
+pub fn task_path(s: &Sched, i: usize) -> Vec<u8> {
+    let n = s.es.len();
+    let (mut ins, mut outs) = (vec![vec![]; n], vec![vec![]; n]);
+    for (k, e) in s.edges.iter().enumerate() { outs[e.p].push(k); ins[e.s].push(k); }
+    let walk = |up: bool, driving: bool| {
+        let mut seen = vec![false; n];
+        let mut todo = vec![i];
+        while let Some(j) = todo.pop() {
+            for &k in if up { &ins[j] } else { &outs[j] } {
+                let t = if up { s.edges[k].p } else { s.edges[k].s };
+                if (!driving || s.drive[k]) && !seen[t] { seen[t] = true; todo.push(t) }
+            }
+        }
+        seen
+    };
+    let (dp, p, ds, su) = (walk(true, true), walk(true, false), walk(false, true), walk(false, false));
+    (0..n).map(|j| if j == i { 1 } else if dp[j] { 2 } else if p[j] { 3 } else if ds[j] { 4 } else if su[j] { 5 } else { 0 }).collect()
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+    #[test]
+    fn task_path_tells_driving_from_other_links() {
+        // A (5d) → C, B (2d) → C: A drives C, B does not; C → D drives; E stands apart.
+        let mut p = crate::model::Project::new("Path", chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap());
+        for (name, d) in [("A", 5), ("B", 2), ("C", 3), ("D", 1), ("E", 4)] { let t = p.new_task(name, 0, d * p.day_min); p.tasks.push(t); }
+        let u: Vec<u32> = p.tasks.iter().map(|t| t.uid).collect();
+        let fs = |pred: u32| crate::model::Link { pred, kind: LinkType::FS, lag: 0, pct: false, elapsed: false };
+        p.tasks[2].preds = vec![fs(u[0]), fs(u[1])];
+        p.tasks[3].preds = vec![fs(u[2])];
+        let s = schedule(&p).unwrap();
+        assert_eq!(task_path(&s, 2), vec![2, 3, 1, 4, 0]);
+        assert_eq!(task_path(&s, 1), vec![0, 1, 5, 5, 0], "B drives nothing: C and D are only its successors");
+        assert_eq!(task_path(&s, 3), vec![2, 3, 2, 1, 0]);
+    }
+}

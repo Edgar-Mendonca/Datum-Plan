@@ -130,7 +130,17 @@ pub fn tools() -> Value {
         { "name": "add_dashboard", "description": "Add a dashboard (or replace one of the same name) with tiles: [{\"kind\":\"number\",\"title\":\"SPI\",\"formula\":\"=SPI\",\"size\":3}, {\"kind\":\"ring\",\"title\":\"Progress\",\"formula\":\"=PercentComplete\"}, {\"kind\":\"chart\",\"title\":\"S-curve\",\"plan\":\"scurve\",\"size\":12}, {\"kind\":\"table\",\"title\":\"Late\",\"plan\":\"late\"}, {\"kind\":\"text\",\"text\":\"Notes\"}]. Plan charts: scurve, periodbars, phases, costev, manpower; lists: milestones, late, critical, upcoming, completed. Size 3, 4, 6, 8 or 12 (of 12).", "inputSchema": obj(json!({ "name": { "type": "string" }, "tiles": { "type": "array", "items": { "type": "object" } } }), &["name", "tiles"]) },
         { "name": "delete_dashboard", "description": "Delete one of the plan's dashboards.", "inputSchema": obj(json!({ "name": { "type": "string" } }), &["name"]) },
     ]);
-    let mut all: Vec<Value> = [base, more, third, fourth].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
+    // Task Path, project details, recurring tasks, rules of credit and steps (0.9.6).
+    let fifth = json!([
+        { "name": "task_path", "description": "A task's path: its driving predecessors (the chain that sets its dates), other predecessors, the successors it drives, and other successors.", "inputSchema": obj(json!({ "uid": uid() }), &["uid"]) },
+        { "name": "set_project_info", "description": "The project's details: name, code, description, client, manager, location, company.", "inputSchema": obj(json!({ "name": { "type": "string" }, "code": { "type": "string" }, "description": { "type": "string" }, "client": { "type": "string" }, "manager": { "type": "string" }, "location": { "type": "string" }, "company": { "type": "string" } }), &[]) },
+        { "name": "add_recurring_task", "description": "Add a recurring task (a summary with one occurrence every day, week or month, e.g. a weekly progress meeting) after a task or at the end.", "inputSchema": obj(json!({ "name": { "type": "string" }, "duration": { "type": "string" }, "every": { "type": "string", "enum": ["day", "week", "month"] }, "interval": { "type": "integer" }, "count": { "type": "integer" }, "start": { "type": "string" }, "after_uid": uid() }), &["name", "every", "count", "start"]) },
+        { "name": "list_credit_rules", "description": "The rules of credit (steps of a kind of work and the share of progress each earns): the plan's own and the built-in ones.", "inputSchema": none() },
+        { "name": "apply_credit_rule", "description": "Give tasks the steps of a rule of credit; their progress is then measured by the steps done (physical %).", "inputSchema": obj(json!({ "uids": uids(), "rule": { "type": "string" } }), &["uids", "rule"]) },
+        { "name": "set_task_steps", "description": "A task's steps (name, weight, done), replacing its list; with weights, the steps done set its physical %.", "inputSchema": obj(json!({ "uid": uid(), "steps": { "type": "array", "items": { "type": "object" } } }), &["uid", "steps"]) },
+        { "name": "mark_step_done", "description": "Tick (or untick) one step of a task by its name; the task's physical % follows.", "inputSchema": obj(json!({ "uid": uid(), "step": { "type": "string" }, "done": { "type": "boolean" } }), &["uid", "step"]) },
+    ]);
+    let mut all: Vec<Value> = [base, more, third, fourth, fifth].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
     // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
     for t in &mut all {
         let n = t["name"].as_str().unwrap_or("").to_string();
@@ -245,7 +255,8 @@ pub fn changes(name: &str) -> bool {
         | "set_risk" | "delete_risk" | "set_delay_event" | "delete_delay_event" | "add_fragnet" | "take_snapshot" | "set_health_settings" | "level_resources" | "clear_levelling"
         | "update_project" | "mark_on_track" | "split_task" | "save_interim" | "set_constraint_log_item"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
-        | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard" | "undo" | "redo")
+        | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
+        | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
 }
 
 fn s<'a>(a: &'a Value, k: &str) -> Option<&'a str> { a[k].as_str().filter(|x| !x.trim().is_empty()) }
@@ -1072,6 +1083,63 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             apply(doc, Op::Ui { key: "dashboards".into(), value: json!(list) })?;
             Ok(json!({ "dashboards": list.len() }))
         }
+        "task_path" => {
+            let i = doc.p.idx(u(a, "uid")?).ok_or("No task with that uid.")?;
+            let sc = crate::sched::schedule(&doc.p)?;
+            let path = crate::sched::task_path(&sc, i);
+            let list = |k: u8| (0..path.len()).filter(|&j| path[j] == k).map(|j| json!({ "uid": doc.p.tasks[j].uid, "id": j + 1, "name": doc.p.tasks[j].name })).collect::<Vec<_>>();
+            Ok(json!({ "task": doc.p.tasks[i].name, "driving_predecessors": list(2), "predecessors": list(3), "driven_successors": list(4), "successors": list(5) }))
+        }
+        "set_project_info" => {
+            let mut ops = vec![];
+            for k in ["name", "code", "description", "client", "manager", "location", "company"] {
+                if let Some(v) = a.get(k).filter(|v| !v.is_null()) { ops.push(Op::ProjectSet { field: k.into(), value: json!(txt(v).trim()) }) }
+            }
+            if ops.is_empty() { return Err("Give name, code, description, client, manager, location or company.".into()) }
+            if a.get("name").is_some_and(|v| txt(v).trim().is_empty()) { return Err("A project needs a name.".into()) }
+            apply(doc, Op::Batch(ops))?;
+            Ok(json!({ "name": doc.p.name, "client": doc.p.client, "manager": doc.p.manager }))
+        }
+        "add_recurring_task" => {
+            let at = match a["after_uid"].as_u64() { Some(x) => doc.p.idx(x as u32).ok_or("No task with after_uid.")? + 1, None => doc.p.tasks.len() };
+            let every = s(a, "every").filter(|e| ["day", "week", "month"].contains(e)).ok_or("every is day, week or month.")?.to_string();
+            let start = parse::date_in(s(a, "start").ok_or("start is needed (YYYY-MM-DD).")?, fmt)?;
+            let first = doc.p.next_uid;
+            apply(doc, Op::Recurring { at, name: s(a, "name").ok_or("name is needed.")?.trim().into(), dur: s(a, "duration").unwrap_or("1d").into(), every,
+                interval: a["interval"].as_u64().unwrap_or(1).clamp(1, 365) as u32, count: a["count"].as_u64().unwrap_or(0).min(10_000) as u32, start: start.to_string() })?;
+            Ok(json!({ "summary_uid": first, "occurrences": doc.p.tasks.iter().filter(|t| t.uid > first).count() }))
+        }
+        "list_credit_rules" => {
+            let f = |r: &CreditRule, kind: &str| json!({ "name": r.name, "kind": kind, "steps": r.steps.iter().map(|(n, w)| json!({ "step": n, "weight": w })).collect::<Vec<_>>() });
+            Ok(json!(doc.p.credit.iter().map(|r| f(r, "plan")).chain(progress::credit_library().iter().map(|r| f(r, "built-in"))).collect::<Vec<_>>()))
+        }
+        "apply_credit_rule" => {
+            let uids = uid_list(a, "uids")?;
+            let r = s(a, "rule").ok_or("rule is needed (see list_credit_rules).")?;
+            let name = doc.p.credit.iter().map(|x| x.name.clone()).chain(progress::credit_library().into_iter().map(|x| x.name)).find(|n| n.eq_ignore_ascii_case(r.trim())).ok_or_else(|| format!("No rule of credit called {r}."))?;
+            apply(doc, Op::ApplyCredit { uids: uids.clone(), rule: name.clone() })?;
+            Ok(json!({ "rule": name, "tasks": uids.len() }))
+        }
+        "set_task_steps" | "mark_step_done" => {
+            let uid = u(a, "uid")?;
+            let i = doc.p.idx(uid).ok_or("No task with that uid.")?;
+            let steps: Vec<Step> = if name == "set_task_steps" {
+                a["steps"].as_array().ok_or("steps is needed: [{\"name\":\"Fabricated\",\"weight\":60,\"done\":false}].")?.iter().map(|x| {
+                    let n = s(x, "name").ok_or("Each step needs a name.")?.trim().to_string();
+                    let w = x["weight"].as_f64().unwrap_or(0.0);
+                    if !(0.0..=1e6).contains(&w) { return Err("A weight is from 0 up.".to_string()) }
+                    Ok(Step { name: n, weight: w, done: x["done"].as_bool() == Some(true) })
+                }).collect::<Result<_, String>>()?
+            } else {
+                let st = s(a, "step").ok_or("step is needed (its name).")?;
+                let mut v = doc.p.tasks[i].steps.clone();
+                v.iter_mut().find(|x| x.name.eq_ignore_ascii_case(st.trim())).ok_or_else(|| format!("This task has no step called {st}."))?.done = a["done"].as_bool() != Some(false);
+                v
+            };
+            apply(doc, Op::TaskList { uid, field: "steps".into(), value: json!(steps) })?;
+            let t = &doc.p.tasks[i];
+            Ok(json!({ "steps": t.steps.iter().map(|x| json!({ "name": x.name, "weight": x.weight, "done": x.done })).collect::<Vec<_>>(), "physical_pct": t.phys }))
+        }
         "apply_operation" => {
             let op = serde_json::from_value(a["operation"].clone()).map_err(|e| format!("Not an operation ({e}). See list_operations."))?;
             apply(doc, op)?;
@@ -1132,6 +1200,28 @@ mod tests {
         assert!(run(&mut doc, "get_tasks", json!({ "fields": ["nosuchfield"] })).unwrap_err().contains("list_fields"));
         run(&mut doc, "set_status_date", json!({ "date": "2026-11-13" })).unwrap();
         assert_eq!(doc.p.status, Some(d(2026, 11, 13)));
+    }
+    #[test]
+    fn task_path_project_details_recurring_tasks_and_steps() {
+        let mut doc = plan();
+        assert!(tools().as_array().unwrap().len() >= 108);
+        let t: Vec<u64> = run(&mut doc, "get_tasks", json!({ "filter": "not_started" })).unwrap()["tasks"].as_array().unwrap().iter().map(|x| x["uid"].as_u64().unwrap()).collect();
+        let linked = t.iter().copied().find(|&u| !run(&mut doc, "task_path", json!({ "uid": u })).unwrap()["driving_predecessors"].as_array().unwrap().is_empty()).expect("a task with a driving predecessor");
+        let p = run(&mut doc, "task_path", json!({ "uid": linked })).unwrap();
+        assert!(p["driving_predecessors"][0]["name"].is_string());
+        run(&mut doc, "set_project_info", json!({ "client": "Acme Utilities", "manager": "A. Planner" })).unwrap();
+        assert_eq!(doc.p.client, "Acme Utilities");
+        assert!(run(&mut doc, "set_project_info", json!({ "name": " " })).is_err());
+        let n = doc.p.tasks.len();
+        let r = run(&mut doc, "add_recurring_task", json!({ "name": "Progress meeting", "duration": "2h", "every": "week", "count": 4, "start": "2026-11-16" })).unwrap();
+        assert_eq!((doc.p.tasks.len(), r["occurrences"].as_u64()), (n + 5, Some(4)));
+        assert!(run(&mut doc, "list_credit_rules", json!({})).unwrap().as_array().unwrap().iter().any(|r| r["name"] == "Document"));
+        run(&mut doc, "apply_credit_rule", json!({ "uids": [t[0]], "rule": "document" })).unwrap();
+        let s = run(&mut doc, "mark_step_done", json!({ "uid": t[0], "step": "drafted" })).unwrap();
+        assert_eq!(s["physical_pct"], 50);
+        let s = run(&mut doc, "set_task_steps", json!({ "uid": t[1], "steps": [{ "name": "Cut", "weight": 1, "done": true }, { "name": "Weld", "weight": 3 }] })).unwrap();
+        assert_eq!(s["physical_pct"], 25);
+        assert!(run(&mut doc, "mark_step_done", json!({ "uid": t[1], "step": "Paint" })).is_err());
     }
     #[test]
     fn registers_baselines_sheets_formats_and_dashboards() {

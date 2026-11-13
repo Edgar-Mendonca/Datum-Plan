@@ -5,6 +5,7 @@ import { Row, fmtDay, iso, dateDay } from "./api";
 import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick, ghost, pane } from "./store";
 import { RH } from "./grid";
 import { C } from "./cmds";
+import { pathMap, pathColor } from "./path";
 
 export const [showCrit, setShowCrit] = pane("show-crit", true);
 export const [showBase, setShowBase] = pane("show-base", false);
@@ -156,10 +157,11 @@ export const Gantt = () => {
     if (pd >= 6) { ctx.fillStyle = K.off; for (let d = d0() + Math.floor(body.scrollLeft / pd); X(d) < w; d++) if (off(d)) ctx.fillRect(X(d), 0, pd, h); }
     const a = Math.floor(top / RH), b = Math.min(rows.length, a + Math.ceil(h / RH) + 1);
     if (K.grid) { ctx.fillStyle = K.grid; for (let i = a; i <= b; i++) ctx.fillRect(0, (i + 1) * RH - top - 1, w, 1); }
-    const ss = new Set(sel());
+    const ss = new Set(sel()), tp = pathMap();
     for (let i = a; i < b; i++) {
       const r = rows[i];
       if (ss.has(r.uid)) { ctx.fillStyle = "rgba(47,111,207,.09)"; ctx.fillRect(0, i * RH - top, w, RH); }
+      else if (pathColor(tp.get(r.uid))) { ctx.fillStyle = pathColor(tp.get(r.uid))!; ctx.fillRect(0, i * RH - top, w, RH); }
       else if (r.hl) { ctx.fillStyle = "rgba(242,178,51,.14)"; ctx.fillRect(0, i * RH - top, w, RH); }
     }
     const line = (d: number, color: string, dash: number[]) => { ctx.strokeStyle = color; ctx.setLineDash(dash); ctx.beginPath(); ctx.moveTo(Math.round(X(d)) + 0.5, 0); ctx.lineTo(Math.round(X(d)) + 0.5, h); ctx.stroke(); ctx.setLineDash([]); };
@@ -345,7 +347,7 @@ export const Gantt = () => {
     ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up);
     document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-range", range); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
   });
-  createEffect(() => { themeTick(); out(); grid(); sel(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); ghost(); draw(); });
+  createEffect(() => { themeTick(); out(); grid(); sel(); pathMap(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); ghost(); draw(); });
 
   return (
     <div class="chart">
