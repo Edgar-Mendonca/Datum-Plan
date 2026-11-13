@@ -436,7 +436,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 | 0.11.1 | Time-scaled logic diagram | Network drawn on the timescale (bars on dates, links as lines), printable | ⬜ |
 | 0.10.3 | Risk: weather | Weather calendars and weather risk (seasonal working-day loss by month) in the Monte Carlo run | ⬜ |
 | 0.10.2 | Risk: probabilistic branching | A risk event with a chance adds its fragnet in some runs only; results show its effect | ⬜ |
-| 0.10.1 | MS Project parity | User exports 5–10 plans as XML from MS Project; dates, float and critical compared task by task; differences fixed and kept as tests (P6 later, no access) | ⬜ |
+| 0.10.1 | Parity with the user's desktop scheduler | User exports 5–10 plans as Project XML from the desktop scheduler they use at work; dates, float and critical compared task by task; differences fixed and kept as tests (the enterprise scheduler later: no access) | ⬜ |
 | 0.9.9 | Expected finish, scheduling options | Expected Finish per task; more out-of-sequence and lag options | ⬜ |
 | 0.9.8 | Roles | Generic resources (Mechanical Engineer × 2), then Assign a person to a role | ⬜ |
 | 0.9.7 | Detailed work editing | Type hours per day per assignment in Task and Resource Usage (advanced) | ⬜ |
@@ -732,7 +732,7 @@ Multi-user, EPS/OBS server and user rights (Datum Plan stays local, private, one
 - Then 0.8.16: Spelling (Home › Proofing, F7).
 - Then a CI fix: Rust 1.100's clippy (`needless_range_loop`) failed CI from 0.8.14 on while the local 1.97 passed; four old loops rewritten, and CLAUDE.md now says to run clippy with `cargo +stable` as well.
 - Then a comparison with PlanCraft, the leading desktop schedulers and a work-management tool (user); then 0.9.0: AI Link, Claude working on the open plan through the window (MCP, 25 tools).
-- Then a second comparison (PlanCraft, MS Project, P6, Asta Powerproject, risk tools, TILOS, Phoenix, Spider, Synchro). User agreed the roadmap 0.9.2–0.12 above: AI tools in sets of 25 first (to pass PlanCraft's 76), then Task Path, contours, detailed work editing, roles, expected finish, MS Project parity (the user has MS Project, not P6), risk branching and weather, time-scaled logic and time-location views.
+- Then a second comparison (PlanCraft, the leading desktop and enterprise schedulers, construction, risk, quality, linear and 4D tools). User agreed the roadmap 0.9.2–0.12 above: AI tools in sets of 25 first (to pass PlanCraft's 76), then Task Path, contours, detailed work editing, roles, expected finish, parity with the desktop scheduler the user has at work (no access to the enterprise one), risk branching and weather, time-scaled logic and time-location views.
 - Waiting on Datum Plot: Plot cannot read dates yet. The hub's `briefs/PLOT-DATES.md` asks Plot's chat for optional date columns (days since 1970-01-01, `Table.xFormat = "date"`). When a Plot release has it: change `io/dplot.rs` to write X as days since 1970 with `xFormat: "date"` and `xTitle: "Date"` (instead of days from the first date), and name the minimum Plot version in the guide.
 - Next (from the agreed list): all done. Then schedule quality (health trend, ghost bars, logic change log, milestone trend), a shared resource pool, a portfolio dashboard.
 
