@@ -70,7 +70,43 @@ pub fn tools() -> Value {
         { "name": "redo", "description": "Redo the change undone last.", "inputSchema": none() },
         { "name": "save_plan", "description": "Save the plan shown to its file. Only when the user asks for it.", "inputSchema": none() },
     ]);
-    match (base, more) { (Value::Array(mut v), Value::Array(m)) => { v.extend(m); Value::Array(v) } _ => Value::Null }
+    // Risks, delays, snapshots and reports, health settings, levelling, updating (0.9.4).
+    let ids = |what: &str| json!({ "type": "array", "items": { "type": "integer" }, "description": format!("{what} uids, from get_tasks") });
+    let third = json!([
+        { "name": "list_risks", "description": "The risk register: id, name, cause, probability and impact (1–5), score, owner, response, status, kind, linked tasks, and the schedule delay in working days (with its range and own chance) used by schedule_risk.", "inputSchema": none() },
+        { "name": "set_risk", "description": "Add a risk (no id) or change one (id). Fields: name, cause, prob and impact (1–5), owner, response, status (Open, Closed…), kind (Threat, Opportunity), task_uids, days (delay on each linked task when it occurs), pct (own chance %), days_min, days_max.", "inputSchema": obj(json!({ "id": { "type": "integer" }, "name": { "type": "string" }, "cause": { "type": "string" }, "prob": { "type": "integer" }, "impact": { "type": "integer" }, "owner": { "type": "string" }, "response": { "type": "string" }, "status": { "type": "string" }, "kind": { "type": "string" }, "task_uids": ids("Task"), "days": { "type": "number" }, "pct": { "type": "number" }, "days_min": { "type": "number" }, "days_max": { "type": "number" } }), &[]) },
+        { "name": "delete_risk", "description": "Remove a risk from the register. Ask the user first.", "inputSchema": obj(json!({ "id": { "type": "integer" } }), &["id"]) },
+        { "name": "list_delay_events", "description": "The delay events for delay analysis: what happened, when, and what it added (extra working days on tasks, tasks held to a date, new activities).", "inputSchema": none() },
+        { "name": "set_delay_event", "description": "Add a delay event (no id) or change one: name, date, description, on (counted in the analyses), extend [{\"uid\":12,\"days\":5}], hold [{\"uid\":14,\"date\":\"2027-01-10\"}], frag [{\"name\":\"Redesign\",\"days\":10,\"after\":[12],\"before\":[14]}].", "inputSchema": obj(json!({ "id": { "type": "integer" }, "name": { "type": "string" }, "date": { "type": "string" }, "description": { "type": "string" }, "on": { "type": "boolean" }, "extend": { "type": "array" }, "hold": { "type": "array" }, "frag": { "type": "array" } }), &[]) },
+        { "name": "delete_delay_event", "description": "Remove a delay event. Ask the user first.", "inputSchema": obj(json!({ "id": { "type": "integer" } }), &["id"]) },
+        { "name": "add_fragnet", "description": "Put a delay event's new activities into the plan, linked as the event says.", "inputSchema": obj(json!({ "id": { "type": "integer" } }), &["id"]) },
+        { "name": "delay_analysis", "description": "Delay analysis on the plan's data: available (what the plan holds and which methods can run), apab (as-planned against as-built), windows (between snapshots), tia (time impact), iap (impacted as-planned), cab (collapsed as-built). It measures; it does not say who is responsible.", "inputSchema": obj(json!({ "method": { "type": "string", "enum": ["available", "apab", "windows", "tia", "iap", "cab"] } }), &["method"]) },
+        { "name": "list_snapshots", "description": "The snapshots (period records): date, label, comment, finish, % complete, cost and health score.", "inputSchema": none() },
+        { "name": "take_snapshot", "description": "Record the plan as it stands at the status date (closes a reporting period), with a label and comment.", "inputSchema": obj(json!({ "label": { "type": "string" }, "comment": { "type": "string" } }), &[]) },
+        { "name": "period_report", "description": "The progress report for a week or month (the latest at the status date, or the one ending on a date): planned and actual %, finish and its variance, SPI, CPI, tasks completed, started, slipped and coming up, milestones, progress by WBS.", "inputSchema": obj(json!({ "period": { "type": "string", "enum": ["week", "month"] }, "end": { "type": "string" } }), &[]) },
+        { "name": "milestone_trend", "description": "Each milestone's forecast over the snapshots and today, against its baseline: which milestones keep slipping.", "inputSchema": none() },
+        { "name": "earned_value", "description": "Earned value at the status date: PV, EV, AC, BAC, SV, CV, SPI, CPI, and earned schedule (SPI(t), SV(t) in working days, forecast finish).", "inputSchema": none() },
+        { "name": "get_health_settings", "description": "The schedule check limits (percent allowed, high float, long duration, long lag, minimum index) and each check's weight in the health score, with the current score.", "inputSchema": none() },
+        { "name": "set_health_settings", "description": "Change check limits ({\"high_float\":44,\"pct\":5}) and weights ({\"logic\":3,\"resources\":0}) of the health score.", "inputSchema": obj(json!({ "limits": { "type": "object" }, "weights": { "type": "object" } }), &[]) },
+        { "name": "level_preview", "description": "What resource levelling would do (all tasks, or some), without changing anything: tasks that move, the finish before and after, over-allocated days before and after.", "inputSchema": obj(json!({ "uids": ids("Task") }), &[]) },
+        { "name": "level_resources", "description": "Level resources (all tasks, or some): delays tasks so no one is booked over capacity. Run level_preview first and ask the user.", "inputSchema": obj(json!({ "uids": ids("Task") }), &[]) },
+        { "name": "clear_levelling", "description": "Remove the levelling delays (all tasks, or some).", "inputSchema": obj(json!({ "uids": ids("Task") }), &[]) },
+        { "name": "update_project", "description": "Update Project: mark work complete as scheduled through a date, or (reschedule) move unfinished work to start after it.", "inputSchema": obj(json!({ "through": { "type": "string" }, "reschedule": { "type": "boolean" } }), &["through"]) },
+        { "name": "mark_on_track", "description": "Mark tasks on track: progress as scheduled up to the status date.", "inputSchema": obj(json!({ "uids": uids() }), &["uids"]) },
+        { "name": "split_task", "description": "Split a task: a pause (gap, like 3d) after some of its work (after, like 2d).", "inputSchema": obj(json!({ "uid": uid(), "after": { "type": "string" }, "gap": { "type": "string" } }), &["uid", "after", "gap"]) },
+        { "name": "save_interim", "description": "Save the current start and finish of every task as interim plan 1–10 (Start1/Finish1 …), a lighter record than a baseline.", "inputSchema": obj(json!({ "n": { "type": "integer" } }), &["n"]) },
+        { "name": "list_constraint_log", "description": "The constraint log of the look-ahead: what must be in place before a task can start (drawings, materials, permits…), its owner, need date and status.", "inputSchema": none() },
+        { "name": "set_constraint_log_item", "description": "Add (no id) or change an entry of the constraint log: uid (the task held up), kind, text, owner, need (date), status (Open, Closed); remove deletes it.", "inputSchema": obj(json!({ "id": { "type": "integer" }, "uid": uid(), "kind": { "type": "string" }, "text": { "type": "string" }, "owner": { "type": "string" }, "need": { "type": "string" }, "status": { "type": "string" }, "remove": { "type": "boolean" } }), &[]) },
+        { "name": "resource_usage", "description": "Hours or cost per week or month, by resource or by task (over-allocated periods marked), or people per period by trade (by: trade).", "inputSchema": obj(json!({ "by": { "type": "string", "enum": ["resource", "task", "trade"] }, "what": { "type": "string", "enum": ["work", "cost"] }, "unit": { "type": "string", "enum": ["week", "month"] } }), &[]) },
+    ]);
+    let mut all: Vec<Value> = [base, more, third].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
+    // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
+    for t in &mut all {
+        let n = t["name"].as_str().unwrap_or("").to_string();
+        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "switch_plan" | "save_plan"),
+            "destructiveHint": n.starts_with("delete_") || matches!(n.as_str(), "set_baseline" | "save_plan" | "apply_operation"), "openWorldHint": false });
+    }
+    Value::Array(all)
 }
 
 /// What the assistant is told when it connects.
@@ -78,11 +114,52 @@ pub const INSTRUCTIONS: &str = "You are connected to the Datum Plan window the u
 Read before you change: plan_summary, get_tasks (uids identify tasks), get_task. Change only with the tools; each change is one Undo step the user sees at once. \
 Dates are YYYY-MM-DD. Durations like 5d, 3w, 4h. Ask before deleting tasks, setting a baseline or saving; never save unless asked.";
 
+/// Ready-made requests the assistant can offer (MCP prompts): name, description, arguments.
+pub fn prompts() -> Value {
+    let arg = |n: &str, d: &str, req: bool| json!({ "name": n, "description": d, "required": req });
+    json!([
+        { "name": "plan_project", "description": "Build a plan from a goal: phases, tasks, durations, links and resources.", "arguments": [arg("goal", "What the project must deliver", true), arg("start", "Start date (YYYY-MM-DD)", false), arg("team", "People or crews available, e.g. 'Ana (design), 2 welders'", false)] },
+        { "name": "status_report", "description": "A short status report of the plan shown: progress, finish against baseline, late and critical work, risks.", "arguments": [arg("period", "week or month", false)] },
+        { "name": "schedule_review", "description": "Review the schedule's quality and propose fixes (missing logic, constraints, float, lags), without changing it.", "arguments": [] },
+    ])
+}
+
+/// The text of a prompt with its arguments filled in.
+pub fn prompt(name: &str, a: &Value) -> Result<String, String> {
+    let g = |k: &str| a[k].as_str().map(str::trim).filter(|x| !x.is_empty());
+    Ok(match name {
+        "plan_project" => format!("Build a plan in Datum Plan for: {}.{}{} Read plan_summary first. Add phases as summary tasks and their tasks with realistic durations (add_tasks, indent_tasks), link them (link_tasks), add milestones, add and assign resources (add_resources, assign_resource). Then run check_schedule, fix what fails, and tell me the finish date and the critical path.",
+            g("goal").ok_or("goal is needed.")?, g("start").map(|s| format!(" Start on {s}.")).unwrap_or_default(), g("team").map(|s| format!(" Team: {s}.")).unwrap_or_default()),
+        "status_report" => format!("Write a short status report of the plan open in Datum Plan for this {}: use plan_summary, period_report, earned_value, get_tasks (late, critical) and list_risks. Progress against plan, the finish against the baseline, what slipped and why, what comes next, and the top risks. Change nothing.", g("period").unwrap_or("month")),
+        "schedule_review" => "Review the schedule open in Datum Plan: run check_schedule and get_tasks, then list each problem (missing logic, hard constraints, high or negative float, long lags, out-of-sequence progress) with the tasks involved and the fix you propose. Change nothing until I agree.".into(),
+        x => return Err(format!("No prompt called {x}.")),
+    })
+}
+
+/// Turns day numbers (days since 1970-01-01) under the given keys into dates, anywhere in `v`.
+fn dates(v: &mut Value, keys: &[&str]) {
+    match v {
+        Value::Object(m) => for (k, x) in m.iter_mut() {
+            if keys.contains(&k.as_str()) {
+                if let Some(d) = x.as_i64() { *x = json!(crate::delay::date(d)); continue }
+                if let Some(a) = x.as_array_mut() { for y in a.iter_mut() { if let Some(d) = y.as_i64() { *y = json!(crate::delay::date(d)) } } continue }
+            }
+            dates(x, keys)
+        },
+        Value::Array(a) => for x in a { dates(x, keys) },
+        _ => {}
+    }
+}
+/// A date from an instant (minutes; a finish is the end of its last minute).
+fn inst(t: i64) -> String { crate::cal::date_of((t - 1).max(0)).to_string() }
+
 /// Does a tool change the plan?
 pub fn changes(name: &str) -> bool {
     matches!(name, "add_tasks" | "set_task_fields" | "link_tasks" | "unlink_tasks" | "delete_tasks" | "update_progress" | "set_status_date" | "set_baseline" | "set_sheet_cells" | "apply_operation"
         | "add_resources" | "set_resource_fields" | "delete_resources" | "assign_resource" | "unassign_resource" | "add_calendar" | "set_calendar" | "delete_calendar"
-        | "define_code" | "set_task_codes" | "define_custom_field" | "delete_custom_field" | "set_constraint" | "set_deadline" | "indent_tasks" | "outdent_tasks" | "move_tasks" | "set_task_notes" | "undo" | "redo")
+        | "define_code" | "set_task_codes" | "define_custom_field" | "delete_custom_field" | "set_constraint" | "set_deadline" | "indent_tasks" | "outdent_tasks" | "move_tasks" | "set_task_notes"
+        | "set_risk" | "delete_risk" | "set_delay_event" | "delete_delay_event" | "add_fragnet" | "take_snapshot" | "set_health_settings" | "level_resources" | "clear_levelling"
+        | "update_project" | "mark_on_track" | "split_task" | "save_interim" | "set_constraint_log_item" | "undo" | "redo")
 }
 
 fn s<'a>(a: &'a Value, k: &str) -> Option<&'a str> { a[k].as_str().filter(|x| !x.trim().is_empty()) }
@@ -528,6 +605,197 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             apply(doc, Op::Set { uid, field: "notes".into(), value: v })?;
             Ok(json!({ "notes": doc.p.tasks[i].notes }))
         }
+        "list_risks" => Ok(json!(doc.p.risks.iter().map(|r| json!({ "id": r.id, "name": r.name, "cause": r.cause, "prob": r.prob, "impact": r.impact, "score": r.prob as u32 * r.impact as u32,
+            "owner": r.owner, "response": r.response, "status": r.status, "kind": r.kind, "days": r.days, "pct": r.pct, "days_min": r.days_min, "days_max": r.days_max,
+            "tasks": r.tasks.iter().filter_map(|u| doc.p.idx(*u).map(|i| json!({ "uid": u, "id": i + 1, "name": doc.p.tasks[i].name }))).collect::<Vec<_>>() })).collect::<Vec<_>>())),
+        "set_risk" => {
+            let id = a["id"].as_u64().unwrap_or(0) as u32;
+            let mut r = if id == 0 { Risk { prob: 3, impact: 3, status: "Open".into(), kind: "Threat".into(), ..Default::default() } } else { doc.p.risks.iter().find(|r| r.id == id).cloned().ok_or("No risk with that id; see list_risks.")? };
+            for k in ["name", "cause", "owner", "response", "status", "kind"] {
+                if let Some(v) = a.get(k).filter(|v| !v.is_null()).map(txt) {
+                    let v = v.trim().to_string();
+                    match k { "name" => r.name = v, "cause" => r.cause = v, "owner" => r.owner = v, "response" => r.response = v, "status" => r.status = v, _ => r.kind = v }
+                }
+            }
+            let score = |k: &str, d: u8| -> Result<u8, String> { match a[k].as_u64() { Some(x) if (1..=5).contains(&x) => Ok(x as u8), Some(_) => Err(format!("{k} is from 1 to 5.")), None => Ok(d) } };
+            (r.prob, r.impact) = (score("prob", r.prob)?, score("impact", r.impact)?);
+            for (k, f) in [("days", &mut r.days), ("pct", &mut r.pct), ("days_min", &mut r.days_min), ("days_max", &mut r.days_max)] {
+                if let Some(x) = a[k].as_f64() { if !(0.0..=100_000.0).contains(&x) || (k == "pct" && x > 100.0) { return Err(format!("{k} is out of range.")) } *f = x }
+            }
+            if a.get("task_uids").is_some() { r.tasks = uid_list(a, "task_uids").unwrap_or_default(); if let Some(u) = r.tasks.iter().find(|u| doc.p.idx(**u).is_none()) { return Err(format!("No task with uid {u}.")) } }
+            if r.name.trim().is_empty() { return Err("A risk needs a name.".into()) }
+            apply(doc, Op::Risk { id, risk: Some(r) })?;
+            Ok(json!({ "risk": if id == 0 { doc.p.risks.iter().map(|r| r.id).max().unwrap_or(0) } else { id } }))
+        }
+        "delete_risk" => {
+            let id = a["id"].as_u64().ok_or("id is needed (from list_risks).")? as u32;
+            if !doc.p.risks.iter().any(|r| r.id == id) { return Err("No risk with that id.".into()) }
+            apply(doc, Op::Risk { id, risk: None })?;
+            Ok(json!({ "deleted": id }))
+        }
+        "list_delay_events" => {
+            let p = &doc.p;
+            let name = |u: &u32| p.idx(*u).map(|i| p.tasks[i].name.clone()).unwrap_or_default();
+            Ok(json!(p.delays.iter().map(|e| json!({ "id": e.id, "name": e.name, "date": e.date.map(|d| d.to_string()), "description": e.description, "on": e.on,
+                "extend": e.extend.iter().map(|(u, m)| json!({ "uid": u, "task": name(u), "days": *m as f64 / p.day_min.max(1) as f64 })).collect::<Vec<_>>(),
+                "hold": e.hold.iter().map(|(u, d)| json!({ "uid": u, "task": name(u), "date": d.to_string() })).collect::<Vec<_>>(),
+                "frag": e.frag.iter().map(|f| json!({ "name": f.name, "days": f.dur as f64 / p.day_min.max(1) as f64, "after": f.after, "before": f.before })).collect::<Vec<_>>() })).collect::<Vec<_>>()))
+        }
+        "set_delay_event" => {
+            let id = a["id"].as_u64().unwrap_or(0) as u32;
+            let p = &doc.p;
+            let mut e = if id == 0 { DelayEvent { on: true, ..Default::default() } } else { p.delays.iter().find(|e| e.id == id).cloned().ok_or("No delay event with that id; see list_delay_events.")? };
+            if let Some(v) = s(a, "name") { e.name = v.trim().into() }
+            if let Some(v) = a.get("description").map(txt) { e.description = v }
+            if let Some(v) = a["on"].as_bool() { e.on = v }
+            if let Some(v) = s(a, "date") { e.date = Some(parse::date_in(v, fmt)?) }
+            let mins = |x: &Value| -> Result<i64, String> { x.as_f64().filter(|d| (0.0..=100_000.0).contains(d)).map(|d| (d * p.day_min as f64).round() as i64).ok_or_else(|| "days is a number from 0 up.".to_string()) };
+            let task = |x: &Value| -> Result<u32, String> { x["uid"].as_u64().map(|u| u as u32).filter(|u| p.idx(*u).is_some()).ok_or_else(|| "Each entry needs the uid of a task in the plan.".to_string()) };
+            if let Some(v) = a["extend"].as_array() { e.extend = v.iter().map(|x| Ok((task(x)?, mins(&x["days"])?))).collect::<Result<_, String>>()? }
+            if let Some(v) = a["hold"].as_array() { e.hold = v.iter().map(|x| Ok((task(x)?, parse::date_in(s(x, "date").ok_or("Each hold needs a date.")?, fmt)?))).collect::<Result<_, String>>()? }
+            if let Some(v) = a["frag"].as_array() {
+                let list = |x: &Value| -> Vec<u32> { x.as_array().map(|v| v.iter().filter_map(|u| u.as_u64().map(|u| u as u32)).collect()).unwrap_or_default() };
+                e.frag = v.iter().map(|x| Ok(FragTask { name: s(x, "name").ok_or("Each new activity needs a name.")?.trim().into(), dur: mins(&x["days"])?, after: list(&x["after"]), before: list(&x["before"]) })).collect::<Result<_, String>>()?;
+            }
+            if e.name.is_empty() { return Err("A delay event needs a name.".into()) }
+            apply(doc, Op::Delay { id, ev: Some(e) })?;
+            Ok(json!({ "event": if id == 0 { doc.p.delays.iter().map(|e| e.id).max().unwrap_or(0) } else { id } }))
+        }
+        "delete_delay_event" | "add_fragnet" => {
+            let id = a["id"].as_u64().ok_or("id is needed (from list_delay_events).")? as u32;
+            if !doc.p.delays.iter().any(|e| e.id == id) { return Err("No delay event with that id.".into()) }
+            apply(doc, if name == "add_fragnet" { Op::DelayFrag { id } } else { Op::Delay { id, ev: None } })?;
+            Ok(json!({ "event": id }))
+        }
+        "delay_analysis" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            let mut v = match s(a, "method").unwrap_or("available") {
+                "available" => json!(crate::delay::available(&c)),
+                "apab" => json!(crate::delay::apab(&c)),
+                "windows" => json!(crate::delay::windows(&c)),
+                "tia" => json!(crate::delay::tia(&c)?),
+                "iap" => json!(crate::delay::iap(&c)?),
+                "cab" => json!(crate::delay::cab(&c)?),
+                m => return Err(format!("No method {m}: available, apab, windows, tia, iap or cab.")),
+            };
+            dates(&mut v, &["bs", "bf", "s", "f", "planned_finish", "finish", "finish_before", "finish_after", "was", "now", "start_finish", "end_finish", "before", "after"]);
+            Ok(v)
+        }
+        "list_snapshots" => Ok(json!(doc.p.snapshots.iter().map(|x| json!({ "date": x.date.map(|d| d.to_string()), "label": x.label, "comment": x.comment, "finish": inst(x.finish),
+            "complete_pct": (x.pct * 100.0).round() / 100.0, "cost": x.cost, "health": x.health })).collect::<Vec<_>>())),
+        "take_snapshot" => {
+            if doc.p.status.is_none() { return Err("Set the status date first (set_status_date).".into()) }
+            apply(doc, Op::Snapshot { label: s(a, "label").unwrap_or("").into(), comment: s(a, "comment").unwrap_or("").into() })?;
+            Ok(json!({ "snapshots": doc.p.snapshots.len() }))
+        }
+        "period_report" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            let end = s(a, "end").map(|x| parse::date_in(x, fmt)).transpose()?.map(|d| crate::cal::at(d).div_euclid(crate::cal::DAY));
+            let mut v = json!(report::period_report(&c, if s(a, "period") == Some("week") { "week" } else { "month" }, end));
+            if let Some(h) = v["hours"].as_array_mut() { for x in h { if let Some(d) = x[0].as_i64() { x[0] = json!(crate::delay::date(d)) } } }
+            dates(&mut v, &["from", "to", "prev_from"]);
+            Ok(v)
+        }
+        "milestone_trend" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            Ok(json!(report::milestone_trend(&c).iter().map(|t| json!({ "uid": t.uid, "name": t.name, "baseline": t.baseline.map(crate::delay::date),
+                "forecasts": t.points.iter().map(|(at, f)| json!({ "on": crate::delay::date(*at), "finish": crate::delay::date(*f) })).collect::<Vec<_>>() })).collect::<Vec<_>>()))
+        }
+        "earned_value" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            let leaf = |i: &usize| !c.s.summary[*i] && !c.s.off[*i];
+            let sum = |v: &[f64]| (0..v.len()).filter(leaf).map(|i| v[i]).sum::<f64>();
+            let (pv, ev, ac, bac) = (sum(&c.ev.pv), sum(&c.ev.ev), sum(&c.ev.ac), sum(&c.ev.bac));
+            let r2 = |x: f64| (x * 100.0).round() / 100.0;
+            let es = progress::earned_schedule(&c);
+            Ok(json!({ "status_date": doc.p.status.map(|d| d.to_string()), "pv": r2(pv), "ev": r2(ev), "ac": r2(ac), "bac": r2(bac), "sv": r2(ev - pv), "cv": r2(ev - ac),
+                "spi": (pv > 0.0).then(|| r2(ev / pv)), "cpi": (ac > 0.0).then(|| r2(ev / ac)), "eac": (ev > 0.0 && ac > 0.0).then(|| r2(bac / (ev / ac))),
+                "earned_schedule": es.map(|e| json!({ "spi_t": r2(e.spi_t), "sv_t_days": r2(e.sv_t), "planned_finish": inst(e.planned_finish), "forecast_finish": inst(e.forecast_finish) })) }))
+        }
+        "get_health_settings" => {
+            let h = &doc.p.health;
+            let sc = check::health(&Calc::new(&doc.p, fmt, today));
+            Ok(json!({ "limits": h.limits, "weights": check::WEIGHTS.iter().map(|(k, _)| (k.to_string(), json!(check::weight(h, k)))).collect::<serde_json::Map<_, _>>(), "score": sc.score, "grade": sc.grade }))
+        }
+        "set_health_settings" => {
+            let mut h = doc.p.health.clone();
+            if let Some(m) = a["limits"].as_object() {
+                let mut l = serde_json::to_value(&h.limits).map_err(|e| e.to_string())?;
+                for (k, v) in m { if l.get(k).is_none() { return Err(format!("No limit {k}: pct, high_float, high_dur, long_lag, index.")) } l[k] = v.clone() }
+                h.limits = serde_json::from_value(l).map_err(|e| format!("Limits are numbers: {e}"))?;
+            }
+            for (k, v) in a["weights"].as_object().into_iter().flatten() {
+                if !check::WEIGHTS.iter().any(|w| w.0 == k) { return Err(format!("No check {k}; see get_health_settings.")) }
+                h.weights.insert(k.clone(), v.as_f64().filter(|x| (0.0..=100.0).contains(x)).ok_or("A weight is a number from 0 to 100.")?);
+            }
+            apply(doc, Op::Health { h })?;
+            Ok(json!({ "score": check::health(&Calc::new(&doc.p, fmt, today)).score }))
+        }
+        "level_preview" => {
+            let only: Vec<u32> = uid_list(a, "uids").unwrap_or_default();
+            let r = crate::level::preview(&doc.p, &only)?;
+            Ok(json!({ "finish": inst(r.finish), "new_finish": inst(r.new_finish), "over_allocated_days_before": r.over_before, "over_allocated_days_after": r.over_after,
+                "moved": r.moved.iter().take(200).map(|m| json!({ "uid": m.uid, "name": m.name, "start": crate::cal::date_of(m.start).to_string(), "new_start": crate::cal::date_of(m.new_start).to_string(), "finish": inst(m.finish), "new_finish": inst(m.new_finish) })).collect::<Vec<_>>(), "moved_count": r.moved.len() }))
+        }
+        "level_resources" | "clear_levelling" => {
+            let uids: Vec<u32> = uid_list(a, "uids").unwrap_or_default();
+            apply(doc, Op::Level { uids, clear: name == "clear_levelling" })?;
+            Ok(summary(&Calc::new(&doc.p, fmt, today)))
+        }
+        "update_project" => {
+            let d = parse::date_in(s(a, "through").ok_or("through is needed (YYYY-MM-DD).")?, fmt)?;
+            apply(doc, Op::UpdateProject { through: d.to_string(), reschedule: a["reschedule"].as_bool() == Some(true) })?;
+            Ok(summary(&Calc::new(&doc.p, fmt, today)))
+        }
+        "mark_on_track" => {
+            if doc.p.status.is_none() { return Err("Set the status date first (set_status_date).".into()) }
+            let uids = uid_list(a, "uids")?;
+            apply(doc, Op::MarkOnTrack { uids: uids.clone() })?;
+            Ok(json!({ "tasks": uids.len() }))
+        }
+        "split_task" => {
+            let uid = u(a, "uid")?;
+            let m = |k: &str| -> Result<i64, String> { parse::dur(s(a, k).ok_or_else(|| format!("{k} is needed, like 2d."))?, doc.p.day_min).map(|x| x.0) };
+            apply(doc, Op::Split { uid, after: m("after")?, gap: m("gap")? })?;
+            Ok(json!({ "split": uid }))
+        }
+        "save_interim" => {
+            let n = a["n"].as_u64().filter(|n| (1..=10).contains(n)).ok_or("n is from 1 to 10.")? as u8;
+            apply(doc, Op::Interim { n })?;
+            Ok(json!({ "saved_as": format!("Start{n} and Finish{n}") }))
+        }
+        "list_constraint_log" => Ok(json!(doc.p.log.iter().map(|x| json!({ "id": x.id, "uid": x.uid, "task": doc.p.idx(x.uid).map(|i| doc.p.tasks[i].name.clone()), "kind": x.kind, "text": x.text,
+            "owner": x.owner, "need": x.need.map(|d| d.to_string()), "status": x.status })).collect::<Vec<_>>())),
+        "set_constraint_log_item" => {
+            let id = a["id"].as_u64().unwrap_or(0) as u32;
+            let old = doc.p.log.iter().find(|x| x.id == id).cloned();
+            if id != 0 && old.is_none() { return Err("No entry with that id; see list_constraint_log.".into()) }
+            if a["remove"].as_bool() == Some(true) { if id == 0 { return Err("id is needed to remove an entry.".into()) } apply(doc, Op::Log { id, item: None })?; return Ok(json!({ "removed": id })) }
+            let mut x = old.unwrap_or_default();
+            if let Some(v) = a["uid"].as_u64() { x.uid = v as u32 }
+            for k in ["kind", "text", "owner", "status"] { if let Some(v) = a.get(k).filter(|v| !v.is_null()).map(txt) { match k { "kind" => x.kind = v, "text" => x.text = v, "owner" => x.owner = v, _ => x.status = v } } }
+            if let Some(v) = a.get("need").map(txt) { x.need = if v.trim().is_empty() { None } else { Some(parse::date_in(&v, fmt)?) } }
+            apply(doc, Op::Log { id, item: Some(x) })?;
+            Ok(json!({ "entry": if id == 0 { doc.p.log.iter().map(|x| x.id).max().unwrap_or(0) } else { id } }))
+        }
+        "resource_usage" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            let unit = if s(a, "unit") == Some("week") { "week" } else { "month" };
+            let r1 = |x: f64| (x * 10.0).round() / 10.0;
+            if s(a, "by") == Some("trade") {
+                let m = progress::manpower(&c, unit);
+                return Ok(json!({ "unit": "people", "periods": m.buckets.iter().map(|d| crate::delay::date(*d)).collect::<Vec<_>>(),
+                    "trades": m.trades.iter().map(|t| json!({ "trade": t.name, "planned": t.planned.iter().map(|x| r1(*x)).collect::<Vec<_>>(), "forecast": t.forecast.iter().map(|x| x.map(r1)).collect::<Vec<_>>() })).collect::<Vec<_>>() }))
+            }
+            let g = report::usage(&c, if s(a, "by") == Some("task") { "task" } else { "resource" }, if s(a, "what") == Some("cost") { "cost" } else { "work" }, unit);
+            Ok(json!({ "unit": g.unit, "periods": g.buckets.iter().map(|d| crate::delay::date(*d)).collect::<Vec<_>>(),
+                "rows": g.rows.iter().take(300).map(|r| json!({ "name": r.name, "total": r1(r.total), "values": r.vals.iter().map(|x| r1(*x)).collect::<Vec<_>>(), "over": r.over.iter().any(|x| *x) })).collect::<Vec<_>>() }))
+        }
         "apply_operation" => {
             let op = serde_json::from_value(a["operation"].clone()).map_err(|e| format!("Not an operation ({e}). See list_operations."))?;
             apply(doc, op)?;
@@ -588,6 +856,67 @@ mod tests {
         assert!(run(&mut doc, "get_tasks", json!({ "fields": ["nosuchfield"] })).unwrap_err().contains("list_fields"));
         run(&mut doc, "set_status_date", json!({ "date": "2026-11-13" })).unwrap();
         assert_eq!(doc.p.status, Some(d(2026, 11, 13)));
+    }
+    #[test]
+    fn risks_delays_snapshots_health_levelling_and_updates() {
+        let mut doc = plan();
+        let names: Vec<String> = tools().as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect();
+        assert!(names.len() >= 76, "{} tools", names.len());
+        assert!(tools().as_array().unwrap().iter().all(|t| t["annotations"]["readOnlyHint"].is_boolean()));
+        let t: Vec<u64> = run(&mut doc, "get_tasks", json!({ "filter": "not_started" })).unwrap()["tasks"].as_array().unwrap().iter().map(|x| x["uid"].as_u64().unwrap()).collect();
+        let (a, b) = (t[0], t[1]);
+        // Risk register.
+        let r = run(&mut doc, "set_risk", json!({ "name": "Late vendor drawings", "prob": 4, "impact": 3, "task_uids": [a], "days": 10 })).unwrap()["risk"].as_u64().unwrap();
+        assert!(run(&mut doc, "set_risk", json!({ "id": r, "prob": 9 })).unwrap_err().contains("1 to 5"));
+        run(&mut doc, "set_risk", json!({ "id": r, "status": "Closed" })).unwrap();
+        let l = run(&mut doc, "list_risks", json!({})).unwrap();
+        assert_eq!((l[0]["score"].as_u64(), l[0]["status"].as_str(), l[0]["tasks"][0]["uid"].as_u64()), (Some(12), Some("Closed"), Some(a)));
+        run(&mut doc, "delete_risk", json!({ "id": r })).unwrap();
+        assert!(doc.p.risks.is_empty());
+        // Delay events and their fragnet.
+        let e = run(&mut doc, "set_delay_event", json!({ "name": "Client change", "date": "2026-11-20", "extend": [{ "uid": a, "days": 3 }], "frag": [{ "name": "Redesign", "days": 5, "after": [a], "before": [b] }] })).unwrap()["event"].as_u64().unwrap();
+        assert_eq!(run(&mut doc, "list_delay_events", json!({})).unwrap()[0]["extend"][0]["days"], 3.0);
+        let n = doc.p.tasks.len();
+        run(&mut doc, "add_fragnet", json!({ "id": e })).unwrap();
+        assert_eq!(doc.p.tasks.len(), n + 1, "the new activity is in the plan");
+        assert!(run(&mut doc, "delay_analysis", json!({ "method": "available" })).unwrap()["methods"].as_array().unwrap().len() >= 2);
+        assert!(run(&mut doc, "delay_analysis", json!({ "method": "nope" })).is_err());
+        run(&mut doc, "delete_delay_event", json!({ "id": e })).unwrap();
+        // Status, snapshots, reports and earned value.
+        assert!(run(&mut doc, "take_snapshot", json!({})).unwrap_err().contains("status date"));
+        run(&mut doc, "set_baseline", json!({})).unwrap();
+        run(&mut doc, "set_status_date", json!({ "date": "2026-11-20" })).unwrap();
+        run(&mut doc, "mark_on_track", json!({ "uids": [a] })).unwrap();
+        run(&mut doc, "take_snapshot", json!({ "label": "Week 3" })).unwrap();
+        assert_eq!(run(&mut doc, "list_snapshots", json!({})).unwrap()[0]["label"], "Week 3");
+        let pr = run(&mut doc, "period_report", json!({ "period": "week" })).unwrap();
+        assert!(pr["from"].as_str().unwrap().starts_with("2026-"), "{}", pr["from"]);
+        assert!(run(&mut doc, "milestone_trend", json!({})).unwrap().is_array());
+        let ev = run(&mut doc, "earned_value", json!({})).unwrap();
+        assert!(ev["bac"].as_f64().is_some() && ev["status_date"] == "2026-11-20", "{ev}");
+        // Health settings.
+        run(&mut doc, "set_health_settings", json!({ "limits": { "high_float": 30 }, "weights": { "resources": 1 } })).unwrap();
+        let h = run(&mut doc, "get_health_settings", json!({})).unwrap();
+        assert_eq!((h["limits"]["high_float"].as_f64(), h["weights"]["resources"].as_f64()), (Some(30.0), Some(1.0)));
+        assert!(run(&mut doc, "set_health_settings", json!({ "weights": { "nosuch": 1 } })).is_err());
+        // Levelling, Update Project, split, interim, the constraint log and usage.
+        assert!(run(&mut doc, "level_preview", json!({})).unwrap()["finish"].is_string());
+        run(&mut doc, "level_resources", json!({})).unwrap();
+        run(&mut doc, "clear_levelling", json!({})).unwrap();
+        run(&mut doc, "update_project", json!({ "through": "2026-11-20" })).unwrap();
+        let long = { let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 13)); (0..doc.p.tasks.len()).find(|&i| !c.s.summary[i] && doc.p.tasks[i].pct == 0 && doc.p.tasks[i].dur >= 3 * doc.p.day_min).unwrap() };
+        let lu = doc.p.tasks[long].uid;
+        run(&mut doc, "split_task", json!({ "uid": lu, "after": "1d", "gap": "2d" })).unwrap();
+        assert_eq!(doc.p.tasks[long].splits.len(), 1);
+        run(&mut doc, "save_interim", json!({ "n": 1 })).unwrap();
+        assert!(doc.p.tasks[0].custom.contains_key("start1"));
+        let li = run(&mut doc, "set_constraint_log_item", json!({ "uid": b, "kind": "Material", "text": "Pipe spools on site", "need": "2026-12-01" })).unwrap()["entry"].as_u64().unwrap();
+        assert_eq!(run(&mut doc, "list_constraint_log", json!({})).unwrap()[0]["status"], "Open");
+        run(&mut doc, "set_constraint_log_item", json!({ "id": li, "remove": true })).unwrap();
+        assert!(doc.p.log.is_empty());
+        assert!(run(&mut doc, "resource_usage", json!({ "by": "resource", "unit": "week" })).unwrap()["periods"][0].is_string());
+        assert!(run(&mut doc, "resource_usage", json!({ "by": "trade" })).unwrap()["trades"].is_array());
+        assert!(prompt("status_report", &json!({})).unwrap().contains("month") && prompt("nope", &json!({})).is_err());
     }
     #[test]
     fn resources_calendars_codes_fields_filters_and_outline() {

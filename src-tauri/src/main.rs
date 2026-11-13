@@ -1612,7 +1612,9 @@ fn ai_add_to_claude(app: AppHandle) -> R<serde_json::Value> {
         use std::os::windows::process::CommandExt;
         let known = std::process::Command::new("reg").args(["query", "HKCR\\.mcpb"]).creation_flags(0x0800_0000).output().is_ok_and(|o| o.status.success());
         known && std::process::Command::new("explorer").arg(&f).spawn().is_ok()
-            || { let _ = std::process::Command::new("explorer").arg(format!("/select,{}", f.display())).spawn(); false }
+            // Explorer reads /select,"path" itself: passed as one argument, a path with spaces (C:\Users\First Last) would be
+            // quoted whole and Explorer would open Documents instead.
+            || { let _ = std::process::Command::new("explorer").raw_arg(format!("/select,\"{}\"", f.display())).spawn(); false }
     };
     #[cfg(not(windows))]
     let opened = std::process::Command::new(if cfg!(target_os = "macos") { "open" } else { "xdg-open" }).arg(&f).spawn().is_ok();

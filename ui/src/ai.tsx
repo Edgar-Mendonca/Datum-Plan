@@ -17,6 +17,9 @@ const DID: Record<string, string> = {
   add_calendar: "added a calendar", set_calendar: "changed a calendar", delete_calendar: "deleted a calendar", define_code: "changed an activity code", set_task_codes: "coded tasks",
   define_custom_field: "set up a custom field", delete_custom_field: "removed a custom field", set_constraint: "set a constraint", set_deadline: "set a deadline",
   indent_tasks: "indented tasks", outdent_tasks: "outdented tasks", move_tasks: "moved tasks", set_task_notes: "wrote a note",
+  set_risk: "changed the risk register", delete_risk: "removed a risk", set_delay_event: "changed a delay event", delete_delay_event: "removed a delay event", add_fragnet: "added a delay event's activities",
+  take_snapshot: "took a snapshot", set_health_settings: "changed the health settings", level_resources: "levelled resources", clear_levelling: "cleared levelling",
+  update_project: "updated progress through a date", mark_on_track: "marked tasks on track", split_task: "split a task", save_interim: "saved an interim plan", set_constraint_log_item: "changed the constraint log",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
 
@@ -59,7 +62,7 @@ export const aiLink = () => openDialog(() => {
             <b>3</b><div><div class="t">Ask Claude</div><div class="muted">In Claude Desktop, check Settings › Extensions shows Datum Plan switched on, then start a new chat: <i>“What plan is open in Datum Plan, and what is its finish date?”</i></div></div>
           </div>
           <details class="ailink-more">
-            <summary>Other ways: Claude's settings file, or Claude Code</summary>
+            <summary>Other ways: Claude's settings file, Claude Code, or another AI app</summary>
             <p class="muted">Write Datum Plan into Claude Desktop's settings file{x().claude_config ? ` (${x().claude_config})` : ""}, with a backup; close Claude Desktop first, then open it again: <button class="btn sm" onClick={setup}>{x().claude_set ? "Write again" : "Write settings"}</button></p>
             <p class="muted">Or by hand: add this to {x().claude_config ?? "claude_desktop_config.json"} (Settings › Developer › Edit Config):</p>
             <pre>{x().snippet}</pre>
@@ -67,6 +70,9 @@ export const aiLink = () => openDialog(() => {
             <p class="muted">Claude Code (in a terminal):</p>
             <pre>{`claude mcp add datum-plan -- "${x().exe}" --mcp`}</pre>
             <button class="btn sm" onClick={() => copy(`claude mcp add datum-plan -- "${x().exe}" --mcp`, "The command")}>Copy</button>
+            <p class="muted">Another AI app on this computer that can use local MCP servers (tools): add a server with this command and the argument <code>--mcp</code>. Datum Plan is made and tested for Claude; other apps may work differently.</p>
+            <pre>{`"${x().exe}" --mcp`}</pre>
+            <button class="btn sm" onClick={() => copy(`"${x().exe}" --mcp`, "The command")}>Copy</button>
           </details>
         </>}</Show>
       </div>

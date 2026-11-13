@@ -33,8 +33,15 @@ pub fn settings_dir() -> Option<PathBuf> {
 }
 fn link_file() -> Option<PathBuf> { settings_dir().map(|d| d.join("ai-link.json")) }
 
-/// Claude Desktop's settings file.
+/// Claude Desktop's settings file. On Windows, Claude Desktop installed as a packaged app keeps it in
+/// its own folder (%LOCALAPPDATA%\Packages\Claude_…\LocalCache\Roaming\Claude), not in %APPDATA%.
 pub fn claude_config() -> Option<PathBuf> {
+    if cfg!(windows) {
+        let packages = std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("Packages"));
+        let own = packages.and_then(|d| std::fs::read_dir(d).ok()).into_iter().flatten().flatten()
+            .find(|e| e.file_name().to_string_lossy().starts_with("Claude_")).map(|e| e.path().join("LocalCache").join("Roaming").join("Claude"));
+        if let Some(d) = own.filter(|d| d.is_dir()) { return Some(d.join("claude_desktop_config.json")) }
+    }
     let home = std::env::var_os(if cfg!(windows) { "APPDATA" } else { "HOME" }).map(PathBuf::from)?;
     Some(if cfg!(windows) { home.join("Claude") } else if cfg!(target_os = "macos") { home.join("Library/Application Support/Claude") } else { home.join(".config/Claude") }.join("claude_desktop_config.json"))
 }
@@ -217,9 +224,13 @@ pub fn answer(msg: &Value, call: impl Fn(&str, &Value) -> Result<Value, String>)
     let id = msg.get("id")?.clone();
     let p = &msg["params"];
     let result = match msg["method"].as_str().unwrap_or("") {
-        "initialize" => Ok(json!({ "protocolVersion": p["protocolVersion"].as_str().unwrap_or("2025-06-18"), "capabilities": { "tools": {} },
+        "initialize" => Ok(json!({ "protocolVersion": p["protocolVersion"].as_str().unwrap_or("2025-06-18"), "capabilities": { "tools": {}, "prompts": {} },
             "serverInfo": { "name": "datum-plan", "version": env!("CARGO_PKG_VERSION") }, "instructions": assist::INSTRUCTIONS })),
         "ping" => Ok(json!({})),
+        "prompts/list" => Ok(json!({ "prompts": assist::prompts() })),
+        "prompts/get" => assist::prompt(p["name"].as_str().unwrap_or(""), &p["arguments"])
+            .map(|t| json!({ "messages": [{ "role": "user", "content": { "type": "text", "text": t } }] }))
+            .map_err(|e| json!({ "code": -32602, "message": e })),
         // The open window's list (a newer Datum Plan may have more tools than this copy), else this one's.
         "tools/list" => Ok(json!({ "tools": call("_tools", &json!({})).ok().filter(Value::is_array).unwrap_or_else(assist::tools) })),
         "tools/call" => Ok(match call(p["name"].as_str().unwrap_or(""), &p["arguments"]) {
@@ -254,10 +265,17 @@ mod tests {
         assert_eq!(init["result"]["serverInfo"]["name"], "datum-plan");
         assert!(answer(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), |_, _| Ok(json!(null))).is_none());
         let list = answer(&json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }), |_, _| Ok(json!(null))).unwrap();
-        assert!(list["result"]["tools"].as_array().unwrap().len() >= 50);
+        assert!(list["result"]["tools"].as_array().unwrap().len() >= 76);
         let off = answer(&json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "plan_summary", "arguments": {} } }), |_, _| Err("closed".into())).unwrap();
         assert_eq!(off["result"]["isError"], true);
         assert_eq!(answer(&json!({ "jsonrpc": "2.0", "id": 4, "method": "nope" }), |_, _| Ok(json!(null))).unwrap()["error"]["code"], -32601);
+        // Ready-made requests, and tools marked as reading only or changing the plan.
+        let pr = answer(&json!({ "jsonrpc": "2.0", "id": 5, "method": "prompts/get", "params": { "name": "plan_project", "arguments": { "goal": "a pump station" } } }), |_, _| Ok(json!(null))).unwrap();
+        assert!(pr["result"]["messages"][0]["content"]["text"].as_str().unwrap().contains("a pump station"));
+        assert!(answer(&json!({ "jsonrpc": "2.0", "id": 6, "method": "prompts/get", "params": { "name": "plan_project", "arguments": {} } }), |_, _| Ok(json!(null))).unwrap()["error"].is_object());
+        let tools = list["result"]["tools"].as_array().unwrap();
+        let ann = |n: &str| tools.iter().find(|t| t["name"] == n).unwrap()["annotations"].clone();
+        assert_eq!((ann("get_tasks")["readOnlyHint"].as_bool(), ann("add_tasks")["readOnlyHint"].as_bool(), ann("delete_tasks")["destructiveHint"].as_bool()), (Some(true), Some(false), Some(true)));
     }
     #[test]
     fn claude_changes_the_open_plan_through_the_bridge() {

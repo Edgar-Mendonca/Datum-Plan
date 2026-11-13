@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.4 — 2026-11-13
+
+AI Link: 25 more tools for Claude (76 in all), fewer questions, and ready-made requests.
+
+- **Risks and delays**: read and change the risk register; add, change and remove delay events, put an event's new activities into the plan, and run the delay analyses (as-planned against as-built, windows, time impact, impacted as-planned, collapsed as-built).
+- **Reporting**: snapshots (read, take one at the status date), the weekly or monthly progress report, the milestone trend, earned value with earned schedule, hours, cost or people per period (by resource, task or trade).
+- **Health, levelling and updating**: read and change the health score's limits and weights; preview, level and clear levelling; Update Project through a date, mark tasks on track, split a task, save an interim plan; the look-ahead's constraint log.
+- **Each tool says whether it only reads or changes the plan** (and which ones delete), so Claude can tell safe reads from changes when it asks you.
+- **Ready-made requests** for Claude (MCP prompts): Plan a project (from a goal, start date and team), Status report, Schedule review.
+- **Add to Claude** now opens Downloads with the extension selected (a user name with a space opened Documents instead).
+- **Writing Claude's settings file** finds Claude Desktop's own folder when it is installed as a packaged Windows app (it wrote to a file that Claude Desktop never read).
+- The AI Link dialog shows the command for other AI apps that can use local tools (made and tested for Claude).
+
 ## 0.9.3 — 2026-11-13
 
 AI Link: add Datum Plan to Claude with one click.
