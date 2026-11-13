@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.16 — 2026-11-13
+
+- **Spelling** (Home › Proofing, F7) checks the spelling of task names, notes, text custom fields and the text in every sheet, in English (UK or US). Each unknown word shows in its text with suggestions, and the task is selected: Change, Change All (Undo takes them back), Ignore, Ignore All, and Add to Dictionary (your own words, kept on this computer). Acronyms (HAZOP), codes with digits (PX-200B) and web or e-mail addresses are left alone. The dictionaries come from the SCOWL word lists (licences in `crates/core/dict`).
+
 ## 0.8.15 — 2026-11-13
 
 - **The project summary row shows Baseline % Complete and % Complete Variance** for the whole plan (the same duration-weighted figures as the dashboard). Its % Complete is now weighted the same way.

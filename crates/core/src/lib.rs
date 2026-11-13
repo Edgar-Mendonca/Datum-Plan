@@ -27,6 +27,7 @@ pub mod procure;
 pub mod setupshare;
 pub mod sheetmove;
 pub mod sheetx;
+pub mod spell;
 pub mod templates;
 pub mod tutorial;
 

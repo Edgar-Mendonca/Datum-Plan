@@ -187,6 +187,8 @@ export const HELP: Record<string, Topic> = {
       "Everything follows the plan as it changes. Print / PDF prints the dashboard shown."],
     tip: "A Number can turn green or red by a rule, for example green when SPI ≥ 1." },
   esched: { t: "Earned schedule", what: "When the plan expected the progress made so far. If you have done what was planned by day 40 on day 50, you are 10 days behind; SPI(t) is 40 ÷ 50 = 0.8, and at that pace the finish moves out in proportion." },
+  spelling: { t: "Spelling", what: "Checks the spelling of task names, notes, text custom fields and the text in sheets, in English (UK or US). Acronyms (HAZOP), codes with digits (PX-200B) and web or e-mail addresses are left alone.",
+    how: ["Home › Spelling (F7) goes through the unknown words one by one and selects the task.", "Change or Change All writes the word you pick (Undo takes it back); Ignore All leaves the word for this check; Add to Dictionary keeps it as a word of yours on this computer.", "Choose English (UK) or English (US) at the bottom of the dialog."] },
   scurves: { t: "S-curves", what: "Cumulative progress over time: planned, actual and forecast. Weighted by duration, cost, hours or physical %.",
     how: ["Pick Weekly or Monthly and what to weigh by.", "The table under the chart gives the numbers."] },
 };

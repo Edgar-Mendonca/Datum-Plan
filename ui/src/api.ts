@@ -116,7 +116,7 @@ export interface Trend { uid: number; name: string; points: [number, number][]; 
 export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean; driving: boolean; lag: string }[]; cols: number; rows: number; bands?: { name: string; row: number; rows: number }[] }
 export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }
 export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; pool?: string; setupPanel: boolean; theme: string; colourSafe?: boolean;
-  openLast: boolean; startView: string; manualDefault: boolean; weekEnd: number; monthEnd: number; paper: string; landscape: boolean }
+  openLast: boolean; startView: string; manualDefault: boolean; weekEnd: number; monthEnd: number; paper: string; landscape: boolean; spellLang?: string; dictionary?: string[] }
 
 /** Days since 1970-01-01 (local) to a Date at local midnight + fraction. */
 export const dayDate = (d: number) => { const x = new Date(1970, 0, 1); x.setDate(x.getDate() + Math.floor(d)); x.setMinutes(Math.round((d - Math.floor(d)) * 1440)); return x; };

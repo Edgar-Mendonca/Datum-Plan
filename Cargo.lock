@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "datum-cli"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "chrono",
  "datum-core",
@@ -590,7 +590,7 @@ dependencies = [
 
 [[package]]
 name = "datum-core"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "calamine",
  "cfb",
@@ -605,12 +605,13 @@ dependencies = [
  "rust_xlsxwriter",
  "serde",
  "serde_json",
+ "spellbook",
  "zip",
 ]
 
 [[package]]
 name = "datum-plan"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3274,6 +3275,16 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "spellbook"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d204abcbdf8e88729306a8d0ca01a79d8a49969fe1f84696909d6dbc4321c1a"
+dependencies = [
+ "foldhash",
+ "hashbrown 0.17.1",
 ]
 
 [[package]]

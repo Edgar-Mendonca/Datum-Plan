@@ -134,6 +134,7 @@ const App = () => {
     else if (ctrl && k === "z" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) { e.preventDefault(); C.undo(); }
     else if (ctrl && k === "y" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) { e.preventDefault(); C.redo(); }
     else if (e.key === "F1") { e.preventDefault(); D.shortcuts(); }
+    else if (e.key === "F7" && out()) { e.preventDefault(); import("./spell").then(m => m.spelling()); }
     else if (e.key === "Escape" && backstage() && out()) setBackstage(null);
   };
   return (

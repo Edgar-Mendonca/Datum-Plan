@@ -1194,3 +1194,18 @@ svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-siz
 
 /* A merged range being edited shows only the editor */
 .sheetgrid .mcell.editing > * { visibility: hidden; }
+
+/* Spelling dialog */
+.spell { min-width: 460px; display: flex; flex-direction: column; gap: 6px; }
+.spell > p.muted { display: flex; margin: 0; }
+.spell label { font-size: 11px; color: var(--muted); }
+.spell-text { border: 1px solid var(--line); background: var(--bg2); padding: 8px 10px; min-height: 40px; max-height: 120px; overflow: auto; white-space: pre-wrap; line-height: 1.5; }
+.spell-text mark { background: transparent; color: var(--crit); text-decoration: underline wavy var(--crit); font-weight: 600; }
+.spell-to { width: 100%; }
+.spell-row { display: flex; gap: 10px; }
+.spell-sugg { flex: 1; border: 1px solid var(--line); min-height: 132px; max-height: 160px; overflow: auto; display: flex; flex-direction: column; }
+.spell-sugg button { text-align: left; padding: 4px 8px; }
+.spell-sugg button.on, .spell-sugg button:hover { background: var(--sel, #DCEBFB); }
+.spell-sugg > .muted { padding: 6px 8px; }
+.spell-btns { display: flex; flex-direction: column; gap: 5px; width: 178px; }
+.spell-btns .btn { white-space: nowrap; }

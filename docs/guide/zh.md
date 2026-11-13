@@ -71,7 +71,7 @@ Datum Plan 每次启动时都会检查是否有新版本。有新版本时，标
 ![Datum Plan 主窗口（甘特图视图）。](img/window.png)
 
 1. **File（文件）和功能区选项卡。** **File** 打开文件页面。选项卡依次为 **Home**（开始）、**Schedule**（进度安排）、**Progress**（进度）、**Resource**（资源）、**Report**（报告）、**Project**（项目）、**View**（视图）、**Format**（格式）和 **Help**（帮助）。
-2. **功能区。** 当前选项卡的按钮，按组排列，每组都有 **?** 说明。**Home** 包含任务表和工作表共用的工具（剪贴板、字体、对齐和编辑），以及常用的任务命令（新建任务、降级、升级、任务信息、链接、取消链接、滚动到任务）；这些任务命令在 **Schedule** 上也有。**Gantt Chart Tools › Format** 和 **Sheet Tools › Format** 始终显示在功能区上，点击会打开其对应的视图。
+2. **功能区。** 当前选项卡的按钮，按组排列，每组都有 **?** 说明。**Home** 包含任务表和工作表共用的工具（剪贴板、字体、对齐、编辑和校对）。**Proofing › Spelling**（校对 › 拼写检查，[[F7]]）检查任务名称、备注、文本自定义字段以及所有工作表中文字的英文拼写（英式或美式英语，在对话框底部选择）。它逐个显示未识别的单词并选中对应任务；**Change**（更改）或 **Change All**（全部更改）写入您选择的单词（可用 Undo 撤销），**Ignore**（忽略）和 **Ignore All**（全部忽略）跳过该单词，**Add to Dictionary**（添加到词典）把它作为您自己的单词保存在本机。缩写（如 HAZOP）、带数字的代号（如 PX-200B）以及网址和电子邮件地址不会被检查。Home 还包含常用的任务命令（新建任务、降级、升级、任务信息、链接、取消链接、滚动到任务）；这些任务命令在 **Schedule** 上也有。**Gantt Chart Tools › Format** 和 **Sheet Tools › Format** 始终显示在功能区上，点击会打开其对应的视图。
 3. **侧边栏。** 一键切换各个视图：Setup（设置）、Gantt（甘特图）、Tracking（跟踪甘特图）、Network（网络图）、Calendar（日历）、Task Usage（任务分配状况）、Resources（资源表）、Res. Usage（资源使用状况）、Manpower（人力）、Team（团队规划器）、Sheets（工作表）、Update（更新进度）、Look-ahead（前瞻计划）、Dashboard（仪表板）、Progress（进度报告）、S-Curves（S 曲线）、Reports（报告）、Builder（报告生成器）、Checks（进度检查）、Risks（风险登记册）、Sched. Risk（进度风险分析）和 Portfolio（项目组合）。
 4. **时间线。** 整个项目显示在一条线上。拖动蓝色方框可以滚动甘特图；在任务上点右键选择 **Add to Timeline**（添加到时间线），即可把任务显示在这里。
 5. **任务表。** 用法和电子表格一样：在单元格里输入、选择区域、与其他电子表格互相复制粘贴、向下填充。

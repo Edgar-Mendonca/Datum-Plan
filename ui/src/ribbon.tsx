@@ -228,6 +228,7 @@ const Home = () => {
         <B i="filldown" l="Fill" dd={e => openMenu(e, [{ label: "Down", keys: "Ctrl+D", run: () => (sh() ? A()?.fillDown() : ctrlD()) }, { label: "Right", keys: "Ctrl+R", off: !sh(), run: run("fillRight") }])} />
         <B i="clear" l="Clear" off={!sh()} dd={e => openMenu(e, [{ label: "Clear All", run: () => A()?.clearKind("all") }, { label: "Clear Formats", run: () => A()?.clearKind("formats") }, { label: "Clear Contents", keys: "Delete", run: () => A()?.clearKind("contents") }])} /></S>
       <S><B i="az" l="Sort" dd={e => openMenu(e, sh() ? [{ label: "Sort A to Z", run: () => A()?.sortRows(true) }, { label: "Sort Z to A", run: () => A()?.sortRows(false) }, { label: "Custom Sort…", run: run("customSort") }, "-", { label: "Filter", keys: "Ctrl+Shift+L", on: !!A()?.filtering(), run: run("toggleFilter") }, { label: "Clear Filter", run: run("clearFilter") }] : sortMenu())} /></S></G>
+    <G l="Proofing" h="spelling"><B big i="spell" l="Spelling" run={() => import("./spell").then(m => m.spelling())} title="Check the spelling of task names, notes and sheet text (F7)" /></G>
   </>;
 };
 const SheetCells = () => {
