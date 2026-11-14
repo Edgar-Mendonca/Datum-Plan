@@ -4,7 +4,7 @@
 
 # Datum Plan
 
-**Plan, schedule, track and report your projects, with an AI assistant working beside you.<br>One small, fast, private app for Windows.**
+**Plan, schedule, track and report your projects. Comes with an AI Link.<br>One small, fast, private app for Windows.**
 
 [![Latest release](https://img.shields.io/github/v/release/Edgar-Mendonca/Datum-Plan?label=release&color=0B5CAD)](https://github.com/Edgar-Mendonca/Datum-Plan/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/Edgar-Mendonca/Datum-Plan/ci.yml?label=CI&logo=githubactions&logoColor=white)](https://github.com/Edgar-Mendonca/Datum-Plan/actions/workflows/ci.yml)
