@@ -38,6 +38,9 @@ const DID: Record<string, string> = {
   merge_cells: "merged or unmerged cells", freeze_panes: "froze panes in a sheet", set_sheet_conditional_formatting: "changed a sheet's conditional formatting", set_cell_notes: "wrote cell notes",
   hide_rows_columns: "hid or showed rows or columns", set_sheet_tab: "changed a sheet tab", set_row_heights: "changed row heights", sort_range: "sorted a range", remove_duplicates: "removed duplicate rows",
   place_picture: "placed or removed a picture",
+  link_to_plan: "linked a task to another plan", update_links: "updated the links between plans", new_subplan: "made a new subplan", add_subplan: "added a subplan", remove_subplan: "took a subplan out of the project",
+  open_subplans: "opened the subplans", apply_setup_to_subplans: "gave the master's setup to its subplans", new_scenario: "made a scenario", merge_scenario: "merged a scenario into the plan",
+  set_pool_plan: "chose the resource pool", take_from_pool: "took the pool's resources", import_plan: "imported a plan",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.13 — 2026-11-14
+
+AI Link, batch 4 of 5: many plans (182 tools).
+
+- **Links between plans**: list_plan_links (which task waits for which, and whether the other plan moved; also who waits for this plan), list_link_targets, link_to_plan (type and lag, elapsed too; dates brought in at once), update_links (this plan or every open plan).
+- **Projects**: list_subplans, new_subplan, add_subplan, remove_subplan (the file is kept), open_subplans, apply_setup_to_subplans.
+- **What-if**: list_scenarios, new_scenario, compare_scenario, merge_scenario (by kind of change, one Undo step).
+- **Across plans**: compare_plans (with a .dplan, .xml or .xer file), portfolio (every plan of the workspace folder with its figures), resource_pool (hours by plan and the periods over capacity), set_pool_plan, take_from_pool.
+- **Import**: import_plan opens a plan from another scheduling program's file in a new tab, with the import notes.
+
 ## 0.9.12 — 2026-11-14
 
 AI Link, batch 3 of 5: Sheets in full (162 tools).

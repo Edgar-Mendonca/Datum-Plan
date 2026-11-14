@@ -205,12 +205,37 @@ pub fn tools() -> Value {
         { "name": "list_pictures", "description": "The plan's picture library (logos and images): id, name, role (client, us, vendor…), and where each is placed on sheets.", "inputSchema": none() },
         { "name": "place_picture", "description": "Place a library picture on a sheet at a cell (width and height in px, or fit inside the cell or merged range), or remove the picture at a cell.", "inputSchema": obj(json!({ "name": sheet(), "picture": { "type": "integer" }, "cell": { "type": "string" }, "width": { "type": "integer" }, "height": { "type": "integer" }, "fit": { "type": "boolean" }, "remove": { "type": "boolean" } }), &["name", "cell"]) },
     ]);
-    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window, setup, sheets].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
+    // Many plans (0.9.13): the window runs these too, as they read and write other plan files.
+    let path = |what: &str| json!({ "type": "string", "description": what });
+    let plan_ref = || json!({ "description": "A tab number (list_plans), an open plan's name, or a .dplan file" });
+    let many = json!([
+        { "name": "list_plan_links", "description": "The shown plan's links to tasks in other plans: which task waits for which, the type and lag, and whether the other plan moved since the last update (state changed); also the tasks in other open plans that wait for this plan.", "inputSchema": none() },
+        { "name": "list_link_targets", "description": "Without plan: the other open plans to link to. With plan: that plan's tasks (uid, code, name, dates) to pick a task_uid for link_to_plan.", "inputSchema": obj(json!({ "plan": plan_ref() }), &[]) },
+        { "name": "link_to_plan", "description": "Make a task of the shown plan wait for tasks in other plans (Link to Plan): links [{\"plan\":1,\"task_uid\":7,\"type\":\"FS\",\"lag\":\"2d\"}] (lag +7ed is elapsed days). Replaces the task's links to other plans (append adds); an empty list removes them. Both plans must be saved. Their dates are brought in at once.", "inputSchema": obj(json!({ "uid": uid(), "links": { "type": "array", "items": { "type": "object" } }, "append": { "type": "boolean" } }), &["uid", "links"]) },
+        { "name": "update_links", "description": "Bring links to other plans up to date (Update Links): the shown plan, or with all every open plan. Plans that are not open are read from their files and left as they are.", "inputSchema": obj(json!({ "all": { "type": "boolean" } }), &[]) },
+        { "name": "list_subplans", "description": "Whether the shown plan is a master, a subplan or a plan on its own, and a master's subplans: file, level, found, tab if open, start, finish, % complete, tasks.", "inputSchema": none() },
+        { "name": "new_subplan", "description": "A new subplan of the shown master: saved next to it with its calendars and currency, added to its list (at a position, level 0 = top) and opened in a tab. The master must be saved.", "inputSchema": obj(json!({ "name": { "type": "string" }, "level": { "type": "integer" }, "at": { "type": "integer" } }), &["name"]) },
+        { "name": "add_subplan", "description": "Make a saved plan (a .dplan path) a subplan of the shown master. Only when the user asks.", "inputSchema": obj(json!({ "path": path("The .dplan file") }), &["path"]) },
+        { "name": "remove_subplan", "description": "Take a subplan (its name or file) out of the shown master's project; its file is kept as it is. Ask the user first.", "inputSchema": obj(json!({ "file": { "type": "string" } }), &["file"]) },
+        { "name": "open_subplans", "description": "Open every subplan of the shown master in tabs (the master stays shown); says which files were not found.", "inputSchema": none() },
+        { "name": "apply_setup_to_subplans", "description": "Give the shown master's setup to its open subplans (Apply Setup to Subplans): parts from details, logos, print, calendars, currency, periods, codes, modules; tabs (default every open subplan). Each subplan can undo it.", "inputSchema": obj(json!({ "parts": { "type": "array", "items": { "type": "string" } }, "tabs": { "type": "array", "items": { "type": "integer" } } }), &["parts"]) },
+        { "name": "list_scenarios", "description": "The what-if scenarios of the shown plan (copies saved next to it): name, file, finish, variance in days against the plan, health, tasks, open.", "inputSchema": none() },
+        { "name": "new_scenario", "description": "A new what-if scenario: a copy of the shown (saved) plan saved next to it as \"Plan - Name.dplan\" and opened in a tab, to change freely.", "inputSchema": obj(json!({ "name": { "type": "string" } }), &["name"]) },
+        { "name": "compare_scenario", "description": "What a scenario (name or file) changes against its plan: each change (added, deleted, name, duration, links, constraints, progress, dates) and the finish before and after.", "inputSchema": obj(json!({ "scenario": { "type": "string" } }), &["scenario"]) },
+        { "name": "merge_scenario", "description": "Take chosen kinds of change from a scenario into its plan (the plan must be shown): kinds from tasks, names, dur, links, constraints, calendars, resources, progress. One Undo step. Ask the user first.", "inputSchema": obj(json!({ "scenario": { "type": "string" }, "kinds": { "type": "array", "items": { "type": "string" } } }), &["scenario", "kinds"]) },
+        { "name": "compare_plans", "description": "Compare the shown plan (Now) with another plan file (Was: .dplan, .xml or .xer), task by unique ID: added, deleted, names, durations, links, constraints, progress, dates, and the finish variance.", "inputSchema": obj(json!({ "path": path("The other plan's file") }), &["path"]) },
+        { "name": "portfolio", "description": "Every plan in the workspace folder (or the folder given) with its headline figures: start, finish, finish variance, % complete, cost, SPI, CPI, late and critical tasks, and register status.", "inputSchema": obj(json!({ "folder": { "type": "string" } }), &[]) },
+        { "name": "resource_pool", "description": "The shared resource pool across the workspace's plans: each resource's hours by plan, the periods (day, week or month) it is over capacity, and its peak load (1 = full).", "inputSchema": obj(json!({ "unit": { "type": "string", "enum": ["day", "week", "month"] } }), &[]) },
+        { "name": "set_pool_plan", "description": "Choose the plan (a .dplan path) whose resources are the shared pool; empty for none.", "inputSchema": obj(json!({ "path": path("The pool plan's file") }), &["path"]) },
+        { "name": "take_from_pool", "description": "The shown plan's resources take the pool plan's rates, units and calendars (matched by name); add also brings the pool's other resources.", "inputSchema": obj(json!({ "add": { "type": "boolean" } }), &[]) },
+        { "name": "import_plan", "description": "Open a plan from another scheduling program's file (.xml, .xer, .mpp, .json) in a new tab, with the import notes. Only when the user asks, with the path they give.", "inputSchema": obj(json!({ "path": path("The file to import") }), &["path"]) },
+    ]);
+    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window, setup, sheets, many].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
     // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
     for t in &mut all {
         let n = t["name"].as_str().unwrap_or("").to_string();
-        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "save_plan" | "export_plan" | "export_register" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan"),
-            "destructiveHint": n.starts_with("delete_") || n == "remove_duplicates" || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "save_plan_as" | "close_plan" | "apply_operation"), "openWorldHint": false });
+        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "save_plan" | "export_plan" | "export_register" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan") && !MANY_PLANS_CHANGE.contains(&n.as_str()),
+            "destructiveHint": n.starts_with("delete_") || n == "remove_duplicates" || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "save_plan_as" | "close_plan" | "apply_operation" | "merge_scenario" | "remove_subplan"), "openWorldHint": false });
     }
     Value::Array(all)
 }
@@ -219,11 +244,18 @@ pub fn tools() -> Value {
 pub const WINDOW_TOOLS: [&str; 22] = ["list_plans", "switch_plan", "save_plan", "export_plan", "export_register", "get_view", "show_view", "use_table", "filter_view", "group_view", "sort_view",
     "outline_view", "select_task", "zoom_view", "gantt_options", "task_path_view", "show_panes", "list_templates", "new_plan", "open_plan", "save_plan_as", "close_plan"];
 
+/// Many plans: the window runs these (they read and write other plan files), and those that change something.
+pub const MANY_PLANS: [&str; 20] = ["list_plan_links", "list_link_targets", "link_to_plan", "update_links", "list_subplans", "new_subplan", "add_subplan", "remove_subplan", "open_subplans",
+    "apply_setup_to_subplans", "list_scenarios", "new_scenario", "compare_scenario", "merge_scenario", "compare_plans", "portfolio", "resource_pool", "set_pool_plan", "take_from_pool", "import_plan"];
+pub const MANY_PLANS_CHANGE: [&str; 12] = ["link_to_plan", "update_links", "new_subplan", "add_subplan", "remove_subplan", "open_subplans", "apply_setup_to_subplans", "new_scenario", "merge_scenario",
+    "set_pool_plan", "take_from_pool", "import_plan"];
+
 /// What the assistant is told when it connects.
 pub const INSTRUCTIONS: &str = "You are connected to the Datum Plan window the user has open: a project schedule (CPM) with tasks, links, resources, baselines, progress and sheets. \
 Read before you change: plan_summary, get_tasks (uids identify tasks), get_task. Change only with the tools; each change is one Undo step the user sees at once. \
 Dates are YYYY-MM-DD. Durations like 5d, 3w, 4h. Ask before deleting tasks, setting a baseline or saving; never save unless asked. \
 Work on Datum Plan only through these tools: do not control its window through the screen, and do not start or install another copy of Datum Plan (a second copy takes over the link). \
+With several plans open, list_plans and switch_plan choose the plan; links between plans, subplans, scenarios, compare, the portfolio and the resource pool have their own tools. \
 If a tool says the link is off, ask the user to turn the AI Link off and on in Datum Plan (Home › AI Link), then try again.";
 
 /// Ready-made requests the assistant can offer (MCP prompts): name, description, arguments.
@@ -1710,16 +1742,18 @@ mod tests {
     fn the_window_tools_are_listed_and_marked() {
         let t = tools();
         let names: Vec<&str> = t.as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
-        for w in WINDOW_TOOLS { assert!(names.contains(&w), "{w} is not listed") }
+        for w in WINDOW_TOOLS.iter().chain(&MANY_PLANS) { assert!(names.contains(w), "{w} is not listed") }
+        for w in MANY_PLANS_CHANGE { assert!(MANY_PLANS.contains(&w)) }
         let ann = |n: &str| t.as_array().unwrap().iter().find(|x| x["name"] == n).unwrap()["annotations"].clone();
         assert_eq!((ann("show_view")["readOnlyHint"].as_bool(), ann("open_plan")["readOnlyHint"].as_bool(), ann("close_plan")["destructiveHint"].as_bool()), (Some(true), Some(false), Some(true)));
+        assert_eq!((ann("portfolio")["readOnlyHint"].as_bool(), ann("link_to_plan")["readOnlyHint"].as_bool(), ann("merge_scenario")["destructiveHint"].as_bool()), (Some(true), Some(false), Some(true)));
     }
     #[test]
     fn every_listed_tool_answers_or_says_what_it_needs() {
         let mut doc = plan();
         for t in tools().as_array().unwrap() {
             let n = t["name"].as_str().unwrap();
-            if WINDOW_TOOLS.contains(&n) { continue } // the window's own
+            if WINDOW_TOOLS.contains(&n) || MANY_PLANS.contains(&n) { continue } // the window's own
             let r = run(&mut doc, n, json!({}));
             assert!(r.is_ok() || r.as_ref().unwrap_err().len() > 5, "{n}: {r:?}");
             assert!(!r.as_ref().is_err_and(|e| e.starts_with("Unknown tool")), "{n} is listed but neither the engine nor the window runs it");

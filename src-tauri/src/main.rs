@@ -521,20 +521,20 @@ async fn import_workbook(app: AppHandle, st: State<'_, St>) -> R<Option<(Out, Ve
 /// The ticked parts of the shown plan's setup (a master's) given to the open plans in `tabs`
 /// (its subplans): each keeps its own name, code, description and pictures, and undoes it on its own.
 #[tauri::command]
-fn share_setup(st: State<St>, parts: Vec<String>, tabs: Vec<usize>) -> R<(Out, String)> {
-    let mut a = st.lock();
+fn share_setup(st: State<St>, parts: Vec<String>, tabs: Vec<usize>) -> R<(Out, String)> { share_setup_in(&mut st.lock(), parts, tabs) }
+fn share_setup_in(a: &mut App, parts: Vec<String>, tabs: Vec<usize>) -> R<(Out, String)> {
     if parts.is_empty() || tabs.is_empty() { return Err("Tick at least one part and one subplan.".into()) }
     let from = Box::new(a.doc.p.clone());
     let cur = a.cur as i64;
     // Only this master's own subplans take its setup.
-    let subs: Vec<usize> = tab_list(&a).iter().enumerate().filter(|(_, t)| t.role == "sub" && t.group == cur).map(|(k, _)| k).collect();
+    let subs: Vec<usize> = tab_list(a).iter().enumerate().filter(|(_, t)| t.role == "sub" && t.group == cur).map(|(k, _)| k).collect();
     let mut names = vec![];
     for &k in tabs.iter().filter(|k| subs.contains(k)) {
-        apply_at(&mut a, k, Op::AdoptSetup { from: from.clone(), parts: parts.clone() })?;
-        names.push(docs(&a)[k].p.name.clone());
+        apply_at(a, k, Op::AdoptSetup { from: from.clone(), parts: parts.clone() })?;
+        names.push(docs(a)[k].p.name.clone());
     }
     if names.is_empty() { return Err("Open the subplans first (Project › Subplans › Open All).".into()) }
-    Ok((out(&a), format!("Setup given to {}: {}. Save them to keep it; each can undo it on its own.", if names.len() == 1 { "1 plan".into() } else { format!("{} plans", names.len()) }, names.join(", "))))
+    Ok((out(a), format!("Setup given to {}: {}. Save them to keep it; each can undo it on its own.", if names.len() == 1 { "1 plan".into() } else { format!("{} plans", names.len()) }, names.join(", "))))
 }
 
 /// Moves or copies sheet `k` of the plan shown into the open plan in tab `to` (a master's sheet into
@@ -972,11 +972,11 @@ fn scenario_base(a: &App) -> R<PathBuf> {
 
 /// The scenarios of the shown plan (or of the plan the shown scenario belongs to), beside it in its folder.
 #[tauri::command]
-fn scenarios(st: State<St>) -> R<(String, String, Vec<ScenarioCard>)> {
-    let a = st.lock();
-    let base = scenario_base(&a)?;
+fn scenarios(st: State<St>) -> R<(String, String, Vec<ScenarioCard>)> { scenarios_in(&st.lock()) }
+fn scenarios_in(a: &App) -> R<(String, String, Vec<ScenarioCard>)> {
+    let base = scenario_base(a)?;
     let file = links::file_name(&base.display().to_string()).to_string();
-    let open: Vec<PathBuf> = docs(&a).iter().filter_map(|d| d.path.clone()).collect();
+    let open: Vec<PathBuf> = docs(a).iter().filter_map(|d| d.path.clone()).collect();
     let bp = if a.doc.path.as_ref() == Some(&base) { a.doc.p.clone() } else { match io::import(&base)? { io::Imported::Plan(p, _) => *p, _ => return Err("The plan was not found.".into()) } };
     let bc = Calc::new(&bp, &a.opts.date_fmt, today());
     let pc = &bc.s.cals[bp.calendars.iter().position(|c| c.name == bp.calendar).unwrap_or(0)];
@@ -996,8 +996,8 @@ fn scenarios(st: State<St>) -> R<(String, String, Vec<ScenarioCard>)> {
 
 /// A new scenario: a copy of the shown plan saved beside it as "Plan - Name.dplan", opened in a tab.
 #[tauri::command]
-fn new_scenario(app: AppHandle, st: State<St>, name: String) -> R<Out> {
-    let mut a = st.lock();
+fn new_scenario(app: AppHandle, st: State<St>, name: String) -> R<Out> { new_scenario_in(&app, &mut st.lock(), name) }
+fn new_scenario_in(app: &AppHandle, a: &mut App, name: String) -> R<Out> {
     if !a.doc.p.scenario_of.is_empty() { return Err("This is a scenario: open its plan to make another.".into()) }
     let here = a.doc.path.clone().ok_or("Save the plan first: its scenarios are saved next to it.")?;
     let name = name.trim().chars().filter(|c| !"\\/:*?\"<>|".contains(*c)).collect::<String>();
@@ -1010,16 +1010,16 @@ fn new_scenario(app: AppHandle, st: State<St>, name: String) -> R<Out> {
     let p = datum_core::scenario::make(&a.doc.p, &name, links::file_name(&here.display().to_string()));
     let mut d = Doc::new(p);
     d.save(&path)?;
-    remember(&app, &path);
-    add_tab(&mut a, d);
-    Ok(out(&a))
+    remember(app, &path);
+    add_tab(a, d);
+    Ok(out(a))
 }
 
 /// What a scenario changes against its plan (Was = the plan, Now = the scenario), with ghost bars of the plan.
 #[tauri::command]
-fn scenario_compare(st: State<St>, path: String) -> R<report::Changes> {
-    let a = st.lock();
-    let base = scenario_base(&a)?;
+fn scenario_compare(st: State<St>, path: String) -> R<report::Changes> { scenario_compare_in(&st.lock(), path) }
+fn scenario_compare_in(a: &App, path: String) -> R<report::Changes> {
+    let base = scenario_base(a)?;
     let load = |p: &Path| -> R<Project> { if a.doc.path.as_deref() == Some(p) { Ok(a.doc.p.clone()) } else { match io::import(p)? { io::Imported::Plan(x, _) => Ok(*x), _ => Err("Not a plan.".into()) } } };
     let (bp, sp) = (load(&base)?, load(Path::new(&path))?);
     Ok(report::changes(&Calc::new(&bp, &a.opts.date_fmt, today()), &Calc::new(&sp, &a.opts.date_fmt, today())))
@@ -1027,13 +1027,13 @@ fn scenario_compare(st: State<St>, path: String) -> R<report::Changes> {
 
 /// Takes the chosen kinds of change from a scenario into its plan (the shown tab must be the plan).
 #[tauri::command]
-fn scenario_merge(st: State<St>, path: String, kinds: Vec<String>) -> R<Out> {
-    let mut a = st.lock();
+fn scenario_merge(st: State<St>, path: String, kinds: Vec<String>) -> R<Out> { scenario_merge_in(&mut st.lock(), path, kinds) }
+fn scenario_merge_in(a: &mut App, path: String, kinds: Vec<String>) -> R<Out> {
     if !a.doc.p.scenario_of.is_empty() { return Err("Open the plan (not the scenario) to merge into it.".into()) }
     let sp = match io::import(Path::new(&path))? { io::Imported::Plan(p, _) => *p, _ => return Err("Not a plan.".into()) };
     let k = a.cur;
-    apply_at(&mut a, k, Op::Merge { from: Box::new(sp), kinds })?;
-    Ok(out(&a))
+    apply_at(a, k, Op::Merge { from: Box::new(sp), kinds })?;
+    Ok(out(a))
 }
 
 /// Compares the open plan with another plan file.
@@ -1045,9 +1045,12 @@ async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, report:
         io::Imported::Table(_) => return Err("Compare needs a plan file (.dplan, .xml or .xer).".into()),
     };
     let a = st.lock();
-    let fmt = a.opts.date_fmt.clone();
-    let changes = report::changes(&Calc::new(&old, &fmt, today()), &calc(&a));
-    Ok(Some((path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), changes)))
+    Ok(Some((path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), compare_with(&a, old))))
+}
+
+/// What changed from `old` (Was) to the plan shown (Now).
+fn compare_with(a: &App, old: Project) -> report::Changes {
+    report::changes(&Calc::new(&old, &a.opts.date_fmt, today()), &calc(a))
 }
 
 /// Every plan in the workspace folder with its headline figures (portfolio view).
@@ -1063,17 +1066,23 @@ async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String
             let _ = doc::write_atomic(&f, serde_json::to_string(&a.opts).unwrap_or_default().as_bytes());
         }
     }
-    let fmt = st.lock().opts.date_fmt.clone();
-    std::fs::read_dir(&folder).map_err(|e| format!("Could not read {folder}: {e}"))?;
-    let rel = |f: &Path| f.parent().and_then(|d| d.strip_prefix(&folder).ok()).map(|d| d.display().to_string().replace(['\\', '/'], " › ")).unwrap_or_default();
-    let cards = workspace_plans(&st.lock(), &folder).into_iter().map(|(f, d)| {
+    let cards = workspace_cards(&st.lock(), &folder)?;
+    Ok((folder, cards))
+}
+
+/// The portfolio's cards: every plan of a folder with its headline figures.
+fn workspace_cards(a: &App, folder: &str) -> R<Vec<datum_core::portfolio::Card>> {
+    let fmt = a.opts.date_fmt.clone();
+    std::fs::read_dir(folder).map_err(|e| format!("Could not read {folder}: {e}"))?;
+    let rel = |f: &Path| f.parent().and_then(|d| d.strip_prefix(folder).ok()).map(|d| d.display().to_string().replace(['\\', '/'], " › ")).unwrap_or_default();
+    let cards = workspace_plans(a, folder).into_iter().map(|(f, d)| {
         let path = f.display().to_string();
         match d {
             Ok(p) => datum_core::portfolio::card(&p, &fmt, today(), path, rel(&f)),
             Err(e) => datum_core::portfolio::Card { path, folder: rel(&f), name: f.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), error: Some(e), ..Default::default() },
         }
     }).collect();
-    Ok((folder, cards))
+    Ok(cards)
 }
 
 /// The plans of the workspace folder (subfolders are the EPS levels), as open in a tab when they
@@ -1103,11 +1112,11 @@ fn workspace_plans(a: &App, folder: &str) -> Vec<(PathBuf, Result<Project, Strin
 struct PoolView { folder: String, pool: String, view: datum_core::portfolio::Pool }
 
 #[tauri::command]
-fn pool_view(st: State<St>, unit: String) -> R<PoolView> {
-    let a = st.lock();
+fn pool_view(st: State<St>, unit: String) -> R<PoolView> { pool_view_in(&st.lock(), unit) }
+fn pool_view_in(a: &App, unit: String) -> R<PoolView> {
     let folder = a.opts.workspace.clone();
     if folder.is_empty() { return Err("Choose the workspace folder first (Portfolio › Choose folder…).".into()) }
-    let plans: Vec<(PathBuf, Project)> = workspace_plans(&a, &folder).into_iter().filter_map(|(f, p)| p.ok().map(|p| (f, p))).collect();
+    let plans: Vec<(PathBuf, Project)> = workspace_plans(a, &folder).into_iter().filter_map(|(f, p)| p.ok().map(|p| (f, p))).collect();
     let pool = plans.iter().find(|(f, _)| f.display().to_string() == a.opts.pool).map(|(_, p)| p);
     let list: Vec<(String, &Project)> = plans.iter().filter(|(f, _)| f.display().to_string() != a.opts.pool).map(|(_, p)| (p.name.clone(), p)).collect();
     let unit = if ["day", "week", "month"].contains(&unit.as_str()) { unit } else { "week".into() };
@@ -1116,21 +1125,21 @@ fn pool_view(st: State<St>, unit: String) -> R<PoolView> {
 
 /// Chooses the plan whose resources are the pool (empty: none).
 #[tauri::command]
-fn set_pool(app: AppHandle, st: State<St>, path: String) -> R<()> {
-    let mut a = st.lock();
+fn set_pool(app: AppHandle, st: State<St>, path: String) -> R<()> { set_pool_in(&app, &mut st.lock(), path) }
+fn set_pool_in(app: &AppHandle, a: &mut App, path: String) -> R<()> {
     a.opts.pool = path;
-    if let Some(f) = options_file(&app) { let _ = doc::write_atomic(&f, serde_json::to_string(&a.opts).unwrap_or_default().as_bytes()); }
+    if let Some(f) = options_file(app) { let _ = doc::write_atomic(&f, serde_json::to_string(&a.opts).unwrap_or_default().as_bytes()); }
     Ok(())
 }
 
 /// The plan shown takes the pool plan's resources (same names; `add` brings the others too).
 #[tauri::command]
-fn pool_take(st: State<St>, add: bool) -> R<(Out, String)> {
-    let mut a = st.lock();
+fn pool_take(st: State<St>, add: bool) -> R<(Out, String)> { pool_take_in(&mut st.lock(), add) }
+fn pool_take_in(a: &mut App, add: bool) -> R<(Out, String)> {
     if a.opts.pool.is_empty() { return Err("Choose the pool plan first (Portfolio › Resource Pool).".into()) }
     let path = PathBuf::from(&a.opts.pool);
     if a.doc.path.as_deref() == Some(path.as_path()) { return Err("This plan is the pool.".into()) }
-    let pool = docs(&a).into_iter().find(|d| d.path.as_deref() == Some(path.as_path())).map(|d| d.p.clone()).map_or_else(|| Doc::open(&path).map(|d| d.p), Ok)?;
+    let pool = docs(a).into_iter().find(|d| d.path.as_deref() == Some(path.as_path())).map(|d| d.p.clone()).map_or_else(|| Doc::open(&path).map(|d| d.p), Ok)?;
     let before = a.doc.p.resources.len();
     let fmt = a.opts.date_fmt.clone();
     let mut probe = a.doc.p.clone();
@@ -1138,7 +1147,7 @@ fn pool_take(st: State<St>, add: bool) -> R<(Out, String)> {
     a.doc.apply(Op::PoolTake { from: pool.resources.clone(), cals: pool.calendars.clone(), add }, &fmt)?;
     let added = a.doc.p.resources.len() - before;
     let who = if up == 1 { "1 resource takes".to_string() } else { format!("{up} resources take") };
-    Ok((out(&a), format!("{who} the pool's rates, units and calendars{}.", if added > 0 { format!("; {added} added from the pool") } else { String::new() })))
+    Ok((out(a), format!("{who} the pool's rates, units and calendars{}.", if added > 0 { format!("; {added} added from the pool") } else { String::new() })))
 }
 
 #[tauri::command]
@@ -1259,8 +1268,8 @@ fn sub_path(master: Option<&Path>, file: &str) -> Option<PathBuf> {
 /// Project › Subplans › New Subplan: a new plan saved next to the master (same calendars and
 /// currency), added to the master's list at position `at` and depth `level`, and shown in a tab.
 #[tauri::command]
-fn new_subplan(app: AppHandle, st: State<St>, name: String, level: u8, at: usize) -> R<Out> {
-    let mut a = st.lock();
+fn new_subplan(app: AppHandle, st: State<St>, name: String, level: u8, at: usize) -> R<Out> { new_subplan_in(&app, &mut st.lock(), name, level, at) }
+fn new_subplan_in(app: &AppHandle, a: &mut App, name: String, level: u8, at: usize) -> R<Out> {
     let here = a.doc.path.clone().ok_or("Save the master plan first, so its subplans can be saved next to it.")?;
     let clean = !a.doc.dirty;
     let folder = here.parent().ok_or("The master plan's folder was not found.")?.to_path_buf();
@@ -1270,21 +1279,21 @@ fn new_subplan(app: AppHandle, st: State<St>, name: String, level: u8, at: usize
     let mut n = 2;
     while path.exists() { path = folder.join(format!("{name} ({n}).dplan")); n += 1; }
     let m = &a.doc.p;
-    let mut p = fresh(&a, Project::new(&name, m.start));
+    let mut p = fresh(a, Project::new(&name, m.start));
     (p.calendars, p.calendar, p.currency, p.day_min) = (m.calendars.clone(), m.calendar.clone(), m.currency.clone(), m.day_min);
     p.master = links::file_name(&here.display().to_string()).to_string();
     p.setup_done = true;
     p.normalize();
     let mut d = Doc::new(p);
     d.save(&path)?;
-    remember(&app, &path);
+    remember(app, &path);
     let mut list = a.doc.p.subplans.clone();
     list.insert(at.min(list.len()), datum_core::SubPlan { file: path.display().to_string(), name, level });
     let k = a.cur;
-    apply_at(&mut a, k, Op::Subplans { list })?;
-    save_if_clean(&mut a, k, clean)?;
-    add_tab(&mut a, d);
-    Ok(out(&a))
+    apply_at(a, k, Op::Subplans { list })?;
+    save_if_clean(a, k, clean)?;
+    add_tab(a, d);
+    Ok(out(a))
 }
 
 /// Project › Subplans › Add Existing: a saved plan becomes a subplan of the shown master.
@@ -1292,66 +1301,70 @@ fn new_subplan(app: AppHandle, st: State<St>, name: String, level: u8, at: usize
 async fn add_subplan(app: AppHandle, st: State<'_, St>) -> R<Option<Out>> {
     if st.lock().doc.path.is_none() { return Err("Save the master plan first.".into()) }
     let Some(path) = pick(&app, "Datum Plan", &["dplan"]) else { return Ok(None) };
-    let mut a = st.lock();
-    let here = a.doc.path.clone().unwrap_or_default();
+    Ok(Some(add_subplan_in(&app, &mut st.lock(), path)?))
+}
+
+/// A saved plan becomes a subplan of the shown master (the window's picker or the AI Link).
+fn add_subplan_in(app: &AppHandle, a: &mut App, path: PathBuf) -> R<Out> {
+    let here = a.doc.path.clone().ok_or("Save the master plan first.")?;
     if path == here { return Err("A plan cannot be its own subplan.".into()) }
     let master = links::file_name(&here.display().to_string()).to_string();
-    let k = match tab_of(&a, &path.display().to_string()) {
+    let k = match tab_of(a, &path.display().to_string()) {
         Some(k) => k,
         None => {
             let d = Doc::open(&path)?;
-            add_tab(&mut a, d);
+            add_tab(a, d);
             let k = a.cur;
-            if let Some(m) = tab_of(&a, &here.display().to_string()) { show_tab(&mut a, m) }
+            if let Some(m) = tab_of(a, &here.display().to_string()) { show_tab(a, m) }
             k
         }
     };
-    let sub = docs(&a)[k];
+    let sub = docs(a)[k];
     if !sub.p.subplans.is_empty() { return Err(format!("“{}” is a master plan itself; a project has one master.", sub.p.name)) }
     let item = datum_core::SubPlan { file: path.display().to_string(), name: sub.p.name.clone(), level: 0 };
     let sub_clean = !sub.dirty;
-    apply_at(&mut a, k, Op::Master { file: master })?;
-    save_if_clean(&mut a, k, sub_clean)?;
+    apply_at(a, k, Op::Master { file: master })?;
+    save_if_clean(a, k, sub_clean)?;
     let mut list = a.doc.p.subplans.clone();
     list.push(item);
     let m = a.cur;
     let clean = !a.doc.dirty;
-    apply_at(&mut a, m, Op::Subplans { list })?;
-    save_if_clean(&mut a, m, clean)?;
-    regroup(&mut a);
-    remember(&app, &path);
-    Ok(Some(out(&a)))
+    apply_at(a, m, Op::Subplans { list })?;
+    save_if_clean(a, m, clean)?;
+    regroup(a);
+    remember(app, &path);
+    Ok(out(a))
 }
 
 /// Takes a plan out of the shown master's project (its file stays as it is; an open one forgets its master).
 #[tauri::command]
-fn remove_subplan(st: State<St>, file: String) -> R<Out> {
-    let mut a = st.lock();
+fn remove_subplan(st: State<St>, file: String) -> R<Out> { remove_subplan_in(&mut st.lock(), file) }
+fn remove_subplan_in(a: &mut App, file: String) -> R<Out> {
     let key = links::file_name(&file).to_lowercase();
     let list: Vec<_> = a.doc.p.subplans.iter().filter(|s| links::file_name(&s.file).to_lowercase() != key).cloned().collect();
     let m = a.cur;
-    apply_at(&mut a, m, Op::Subplans { list })?;
-    if let Some(k) = tab_of(&a, &file).filter(|&k| k != m) { apply_at(&mut a, k, Op::Master { file: String::new() })? }
-    regroup(&mut a);
-    Ok(out(&a))
+    apply_at(a, m, Op::Subplans { list })?;
+    if let Some(k) = tab_of(a, &file).filter(|&k| k != m) { apply_at(a, k, Op::Master { file: String::new() })? }
+    regroup(a);
+    Ok(out(a))
 }
 
 /// Opens every subplan of the shown master that is not open yet (the master stays shown); says which were not found.
 #[tauri::command]
-fn open_subplans(app: AppHandle, st: State<St>) -> (Out, Vec<String>) {
-    let mut a = st.lock();
+fn open_subplans(app: AppHandle, st: State<St>) -> (Out, Vec<String>) { open_subplans_in(&app, &mut st.lock()) }
+fn open_subplans_in(app: &AppHandle, a: &mut App) -> (Out, Vec<String>) {
     let here = a.doc.path.clone();
     let list = a.doc.p.subplans.clone();
     let mut missing = vec![];
     for sp in &list {
-        if tab_of(&a, &sp.file).is_some() { continue }
+        if tab_of(a, &sp.file).is_some() { continue }
         match sub_path(here.as_deref(), &sp.file).map(|p| Doc::open(&p).map(|d| (p, d))) {
-            Some(Ok((p, d))) => { remember(&app, &p); add_tab(&mut a, d) }
+            Some(Ok((p, d))) => { remember(app, &p); add_tab(a, d) }
             _ => missing.push(sp.name.clone()),
         }
     }
-    if let Some(m) = here.as_ref().and_then(|h| tab_of(&a, &h.display().to_string())) { show_tab(&mut a, m) }
-    (out(&a), missing)
+    if let Some(m) = here.as_ref().and_then(|h| tab_of(a, &h.display().to_string())) { show_tab(a, m) }
+    (out(a), missing)
 }
 
 /// Closes several tabs at once (the window asks about unsaved changes first): a project's tabs.
@@ -1377,12 +1390,12 @@ fn close_tabs(app: AppHandle, st: State<St>, ks: Vec<usize>) -> Out {
 struct SubRow { file: String, name: String, level: u8, found: bool, open: bool, tab: i64, start: i64, finish: i64, pct: f64, tasks: usize }
 
 #[tauri::command]
-fn subplan_rows(st: State<St>) -> Vec<SubRow> {
-    let a = st.lock();
+fn subplan_rows(st: State<St>) -> Vec<SubRow> { subplan_rows_in(&st.lock()) }
+fn subplan_rows_in(a: &App) -> Vec<SubRow> {
     let here = a.doc.path.clone();
     a.doc.p.subplans.iter().map(|sp| {
-        let tab = tab_of(&a, &sp.file);
-        let p = match tab { Some(k) => Some(docs(&a)[k].p.clone()), None => sub_path(here.as_deref(), &sp.file).and_then(|p| Doc::open(&p).ok()).map(|d| d.p) };
+        let tab = tab_of(a, &sp.file);
+        let p = match tab { Some(k) => Some(docs(a)[k].p.clone()), None => sub_path(here.as_deref(), &sp.file).and_then(|p| Doc::open(&p).ok()).map(|d| d.p) };
         let mut row = SubRow { file: sp.file.clone(), name: sp.name.clone(), level: sp.level, found: p.is_some(), open: tab.is_some(), tab: tab.map_or(-1, |k| k as i64), start: 0, finish: 0, pct: 0.0, tasks: 0 };
         if let Some(p) = p {
             row.name = p.name.clone();
@@ -1472,12 +1485,12 @@ fn link_targets(st: State<St>) -> Vec<Target> {
 
 /// Every link of the shown plan to other plans, and whether the other plan has moved since.
 #[tauri::command]
-fn link_states(st: State<St>) -> Vec<links::LinkState> {
-    let a = st.lock();
+fn link_states(st: State<St>) -> Vec<links::LinkState> { link_states_in(&st.lock()) }
+fn link_states_in(a: &App) -> Vec<links::LinkState> {
     let here = a.doc.path.clone();
     let mut cache: HashMap<String, Option<(Project, Option<datum_core::sched::Sched>)>> = HashMap::new();
     links::states(&a.doc.p, &mut |x| {
-        let e = cache.entry(x.file.clone()).or_insert_with(|| linked_plan(&a, &x.file, here.as_deref()).map(|(_, p)| { let s = datum_core::sched::schedule(&p).ok(); (p, s) }));
+        let e = cache.entry(x.file.clone()).or_insert_with(|| linked_plan(a, &x.file, here.as_deref()).map(|(_, p)| { let s = datum_core::sched::schedule(&p).ok(); (p, s) }));
         let (p, s) = e.as_ref().ok_or("the file was not found")?;
         let i = p.idx(x.uid).ok_or("the task is no longer in that plan")?;
         let s = s.as_ref().ok_or("that plan cannot be scheduled")?;
@@ -1489,16 +1502,16 @@ fn link_states(st: State<St>) -> Vec<links::LinkState> {
 /// open are read from their files (and left unchanged). Plans may link both ways; the dates are
 /// passed round until they settle.
 #[tauri::command]
-fn update_links(st: State<St>, all: bool) -> R<(Out, String)> {
-    let mut a = st.lock();
+fn update_links(st: State<St>, all: bool) -> R<(Out, String)> { update_links_in(&mut st.lock(), all) }
+fn update_links_in(a: &mut App, all: bool) -> R<(Out, String)> {
     // Plans are told apart by their full path (two folders may hold plans of the same name).
-    let open: Vec<(String, Project, Option<PathBuf>)> = docs(&a).iter().map(|d| (d.path.as_ref().map(|p| p.display().to_string()).unwrap_or_default(), d.p.clone(), d.path.clone())).collect();
+    let open: Vec<(String, Project, Option<PathBuf>)> = docs(a).iter().map(|d| (d.path.as_ref().map(|p| p.display().to_string()).unwrap_or_default(), d.p.clone(), d.path.clone())).collect();
     let mut set: Vec<(String, Project)> = open.iter().map(|(f, p, _)| (f.clone(), p.clone())).collect();
     // Closed plans that the open ones link to.
     for (_, p, here) in &open {
         for x in p.tasks.iter().flat_map(|t| &t.ext) {
             if !set.iter().any(|(f, _)| f.eq_ignore_ascii_case(&x.file)) {
-                if let Some((_, p)) = linked_plan(&a, &x.file, here.as_deref()) { set.push((x.file.clone(), p)) }
+                if let Some((_, p)) = linked_plan(a, &x.file, here.as_deref()) { set.push((x.file.clone(), p)) }
             }
         }
     }
@@ -1519,7 +1532,7 @@ fn update_links(st: State<St>, all: bool) -> R<(Out, String)> {
         else if changed == 0 { format!("All {total} links are up to date.") }
         else { format!("Updated {changed} {} ({passes} {}).", if changed == 1 { "task's links" } else { "tasks' links" }, if passes == 1 { "pass" } else { "passes" }) };
     let msg = if missing.is_empty() { msg } else { format!("{msg} Not found: {}.", missing.join("; ")) };
-    Ok((out(&a), msg))
+    Ok((out(a), msg))
 }
 
 /// File › New › Tutorial: a small fit-out that uses every view, with a note on each (unsaved, in a new tab).
@@ -1935,6 +1948,57 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    /// The many-plans commands the AI Link shares with the window: links, subplans, scenarios,
+    /// compare and the portfolio, on the linked example saved in a folder.
+    #[test]
+    fn many_plans_links_subplans_scenarios_compare_and_portfolio() {
+        let dir = std::env::temp_dir().join(format!("dp-many-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut ds = vec![];
+        for (f, p) in templates::linked_example(chrono::NaiveDate::from_ymd_opt(2027, 1, 4).unwrap()) { let mut d = Doc::new(p); d.save(&dir.join(&f)).unwrap(); ds.push(d) }
+        let n = ds.len();
+        let mut it = ds.into_iter();
+        let doc = it.next().unwrap();
+        let mut a = App { doc, others: std::iter::once(None).chain(it.map(Some)).collect(), cur: 0, opts: Options::default(), clip: vec![], table: None, files: HashMap::new() };
+        let rows = subplan_rows_in(&a);
+        assert_eq!(rows.len(), n - 1);
+        assert!(rows.iter().all(|r| r.found && r.open && r.finish > r.start), "every subplan found and scheduled");
+        // Links between plans: brought up to date, then all ok.
+        update_links_in(&mut a, true).unwrap();
+        let ext: usize = docs(&a).iter().map(|d| d.p.tasks.iter().map(|t| t.ext.len()).sum::<usize>()).sum();
+        assert!(ext > 0, "the example links its plans");
+        for k in 0..n { show_tab(&mut a, k); assert!(link_states_in(&a).iter().all(|x| x.state == "ok"), "tab {k}") }
+        // The AI Link names a plan by tab, name or file.
+        show_tab(&mut a, 0);
+        let (f1, p1) = ai::plan_ref(&a, &serde_json::json!(1)).unwrap();
+        assert_eq!((ai::plan_ref(&a, &serde_json::json!(p1.name.to_uppercase())).unwrap().0, p1.name.clone()), (f1.clone(), docs(&a)[1].p.name.clone()));
+        assert!(ai::plan_ref(&a, &serde_json::json!("nowhere.dplan")).is_err());
+        // A scenario next to the plan: listed, compared and merged back.
+        let base = a.doc.path.clone().unwrap();
+        let mut sp = datum_core::scenario::make(&a.doc.p, "Faster", links::file_name(&base.display().to_string()));
+        let uid = sp.tasks.iter().find(|t| t.dur > 0).unwrap().uid;
+        let i = sp.idx(uid).unwrap();
+        sp.tasks[i].dur *= 2;
+        let sfile = dir.join("scenario - Faster.dplan");
+        Doc::new(sp).save(&sfile).unwrap();
+        let (_, _, cards) = scenarios_in(&a).unwrap();
+        assert_eq!(cards.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Faster"]);
+        let ch = scenario_compare_in(&a, cards[0].path.clone()).unwrap();
+        assert!(ch.items.iter().any(|c| c.uid == uid && c.kind == "Duration"));
+        let was = a.doc.p.tasks[a.doc.p.idx(uid).unwrap()].dur;
+        scenario_merge_in(&mut a, cards[0].path.clone(), vec!["dur".into()]).unwrap();
+        assert_eq!(a.doc.p.tasks[a.doc.p.idx(uid).unwrap()].dur, was * 2);
+        // Compare with the saved file: the merged duration shows.
+        let old = Doc::open(&base).unwrap().p;
+        assert!(compare_with(&a, old).items.iter().any(|c| c.uid == uid && c.kind == "Duration"));
+        // The portfolio reads every plan in the folder.
+        let cards = workspace_cards(&a, &dir.display().to_string()).unwrap();
+        assert_eq!(cards.len(), n + 1);
+        assert!(cards.iter().all(|c| c.error.is_none()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     #[test]
     fn only_the_projects_own_pages_open() {
         for ok in ["https://github.com/Edgar-Mendonca/Datum-Plan", "https://github.com/Edgar-Mendonca/Datum-Plan/issues/new", "https://github.com/Edgar-Mendonca/Datum-Plan/releases"] {

@@ -2,7 +2,7 @@
 
 Every command in Datum Plan should have an AI Link tool, so the assistant never has to work on the screen. This list maps each ribbon group and view to its tools. ✅ has a tool · 🔜 planned (batch and version) · — no tool, on purpose.
 
-Tools: 162 (0.9.12). The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`) are run by `src-tauri/src/ai.rs`.
+Tools: 182 (0.9.13). The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`; other plan files, `assist::MANY_PLANS`) are run by `src-tauri/src/ai.rs`.
 
 ## Batches
 
@@ -11,8 +11,8 @@ Tools: 162 (0.9.12). The engine's tools are in `crates/core/src/assist.rs`; the 
 | 1 | 0.9.10 | Drive the window: views, tables, filter, group, sort, outline, select, zoom, Gantt options, Task Path, panes, new/open/save as/close plans, what the window shows | ✅ |
 | 2 | 0.9.11 | Project setup and details: settings (start, calendar, hours per day, currency), schedule options, reporting periods, baseline lock, column titles, percent decimals, modules, bar colours, conditional formatting, report notes, task expenses/documents/notebook, resource rates/availability/leave, rules of credit, spelling, find and replace | ✅ |
 | 3 | 0.9.12 | Sheets in full: insert and delete rows and columns, move sheets, merge, freeze panes, conditional formatting, cell notes, hide rows and columns, tab colour, sort a range, remove duplicates, pictures, row heights | ✅ |
-| 4 | 0.9.13 | Many plans: links between plans, linked plans and what moved, update links, subplans, apply setup to subplans, scenarios, compare projects, portfolio, resource pool | 🔜 |
-| 5 | 0.9.14 | Print and reports: page setup, a view as PDF in Downloads, report builder, progress report notes | ⬜ |
+| 4 | 0.9.13 | Many plans: links between plans, linked plans and what moved, update links, subplans, apply setup to subplans, scenarios, compare projects, portfolio, resource pool, import | ✅ |
+| 5 | 0.9.14 | Print and reports: page setup, a view as PDF in Downloads, report builder, progress report notes | 🔜 |
 
 ## Home
 
@@ -52,7 +52,7 @@ Tools: 162 (0.9.12). The engine's tools are in `crates/core/src/assist.rs`; the 
 | Group | Command | Tool |
 |---|---|---|
 | View | Resource Sheet, Team Planner | ✅ list_resources, show_view |
-| Assignments | Assign Resources, Resource Pool, Resource Usage, Resource Graph | ✅ assign_resource, resource_usage, show_view; Resource Pool 🔜 4 |
+| Assignments | Assign Resources, Resource Pool, Resource Usage, Resource Graph | ✅ assign_resource, resource_usage, show_view, resource_pool, set_pool_plan, take_from_pool |
 | Insert | Add Resource | ✅ add_resources |
 | Level | Level All, Level Selection, Clear Leveling, Leveling Options | ✅ level_preview, level_resources, clear_levelling, set_schedule_options (levelling options) |
 
@@ -62,7 +62,7 @@ Tools: 162 (0.9.12). The engine's tools are in `crates/core/src/assist.rs`; the 
 |---|---|---|
 | View Reports | Dashboard, Progress Report, S-Curves, Report Builder | ✅ show_view, period_report, progress_curve, list_dashboards; Report Builder 🔜 5 |
 | Health | Check Schedule, Risks, Schedule Risk, Delay Analysis, Milestone Trend | ✅ check_schedule, list_risks, schedule_risk, delay_analysis, milestone_trend |
-| Portfolio | Portfolio, Compare Projects | 🔜 4 |
+| Portfolio | Portfolio, Compare Projects | ✅ portfolio, compare_plans |
 | Export | Print / PDF, Page Setup, Export, Copy Picture | ✅ export_plan, export_register; Print and Page Setup 🔜 5; Copy Picture — |
 
 ## Project
@@ -71,8 +71,8 @@ Tools: 162 (0.9.12). The engine's tools are in `crates/core/src/assist.rs`; the 
 |---|---|---|
 | Properties | Project Information, Custom Fields, Activity Codes, Change Working Time, Pictures, Project Setup | ✅ set_project_info, define_custom_field, define_code, set_calendar, set_project_settings (start, calendar, hours per day, currency), set_task_expenses, set_task_documents, set_task_notebook, set_resource_rates, set_resource_availability, set_resource_leave, list_pictures, place_picture |
 | Schedule | Set Baseline, Update Project, Reporting Periods, Check Schedule | ✅ set_baseline, update_project, check_schedule, set_reporting_periods, set_period_notes |
-| Linked Plans | Link to Plan, Linked Plans, Update Links, Subplans, Apply Setup to Subplans | 🔜 4 |
-| What-if | Scenarios | 🔜 4 |
+| Linked Plans | Link to Plan, Linked Plans, Update Links, Subplans, Apply Setup to Subplans | ✅ list_link_targets, link_to_plan, list_plan_links, update_links, list_subplans, new_subplan, add_subplan, remove_subplan, open_subplans, apply_setup_to_subplans |
+| What-if | Scenarios | ✅ list_scenarios, new_scenario, compare_scenario, merge_scenario |
 | Modules | Modules, Contract, Documents, Procurement | ✅ contract_status, set_contract…, document_register…, procurement_status…, set_modules |
 
 ## View
@@ -106,7 +106,7 @@ Tools: 162 (0.9.12). The engine's tools are in `crates/core/src/assist.rs`; the 
 | Command | Tool |
 |---|---|
 | New, Open, Save, Save As, Close | ✅ new_plan, list_templates, open_plan, save_plan, save_plan_as, close_plan |
-| Import | 🔜 4 |
+| Import | ✅ import_plan (plan files; a table needs its columns matched in the window) |
 | Export | ✅ export_plan |
 | Print | 🔜 5 |
 | Options (the app's own settings), Help, Check for Updates, GitHub | — |

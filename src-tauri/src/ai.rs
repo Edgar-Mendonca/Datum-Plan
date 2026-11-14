@@ -9,7 +9,7 @@
 //! Claude learns about Datum Plan from an extension file (`Datum Plan.mcpb`, made by `extension`):
 //! one click on Install in Claude Desktop, no settings to edit. Writing Claude's settings file
 //! (`setup_claude`) is the fallback.
-use super::{add_tab, backup_old, close_at, docs, fresh, guard, out, regroup, remember, show_tab, tab_list, today, St};
+use super::{add_tab, backup_old, close_at, docs, fresh, guard, out, regroup, remember, show_tab, tab_list, today, App, St};
 use datum_core::{doc::Doc, fields::Calc, query::{builtin_filters, Filter, Rule}};
 use datum_core::assist;
 use serde_json::{json, Value};
@@ -24,6 +24,174 @@ use tauri::{AppHandle, Emitter, Manager};
 const IDENT: &str = "com.edgarmendonca.datumplan";
 /// A request larger than this is refused (a long add_tasks list is far below it).
 const MAX_LINE: u64 = 8 << 20;
+
+/// A plan the assistant names: a tab number, an open plan's name or file, or a .dplan file on disk.
+pub(crate) fn plan_ref(ap: &App, v: &Value) -> Result<(String, datum_core::Project), String> {
+    let ds = docs(ap);
+    let hit = match v {
+        Value::Number(n) => n.as_u64().and_then(|k| ds.get(k as usize).copied()),
+        Value::String(s) => ds.iter().find(|d| d.p.name.eq_ignore_ascii_case(s.trim()) || d.path.as_ref().is_some_and(|p| p.display().to_string().eq_ignore_ascii_case(s.trim()))).copied(),
+        _ => return Err("plan is a tab number (list_plans), an open plan's name, or a .dplan file.".into()),
+    };
+    if let Some(d) = hit { return Ok((d.path.as_ref().ok_or("That plan is not saved yet: a link names the other plan's file, so ask the user to save it first.")?.display().to_string(), d.p.clone())) }
+    let path = PathBuf::from(v.as_str().unwrap_or("").trim());
+    if !path.is_file() { return Err(format!("No open plan or file {v}; see list_plans.")) }
+    Ok((path.display().to_string(), Doc::open(&path)?.p))
+}
+
+/// What changed between two plans, for the assistant (at most 300 lines).
+fn changes_json(c: datum_core::report::Changes) -> Value {
+    let more = c.items.len().saturating_sub(300);
+    json!({ "finish_was": c.finish[0], "finish_now": c.finish[1], "finish_variance": c.finish_var, "counts": c.counts, "changes": c.items.into_iter().take(300).collect::<Vec<_>>(), "more": more })
+}
+
+/// Many plans (0.9.13): links between plans, subplans, scenarios, compare, portfolio, pool, import.
+fn many(app: &AppHandle, ap: &mut App, name: &str, a: &Value) -> Result<Value, String> {
+    use datum_core::cal::date_of;
+    let d0 = |m: i64| date_of(m).to_string();
+    let d1 = |m: i64| date_of(m - 1).to_string();
+    let txt = |k: &str| a[k].as_str().map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| format!("{k} is needed."));
+    match name {
+        "list_plan_links" => {
+            let day = ap.doc.p.day_min;
+            let links: Vec<Value> = super::link_states_in(ap).into_iter().map(|x| json!({ "uid": x.uid, "task": x.task, "waits_for": datum_core::links::label(&x.link, day), "file": x.link.file, "other_uid": x.link.uid,
+                "type": datum_core::links::kind_lag(&x.link, day), "state": x.state, "other_start": x.now_start.map(d0), "other_finish": x.now_finish.map(d1) })).collect();
+            let ds = docs(ap);
+            let waiting: Vec<Value> = super::waited_on(ap).into_iter().flat_map(|(uid, v)| v.into_iter().map(move |(k, label, other)| (uid, k, label, other)))
+                .map(|(uid, k, label, other)| json!({ "uid": uid, "tab": k, "plan": ds[k].p.name, "their_uid": other, "link": label })).collect();
+            Ok(json!({ "links": links, "waiting_on_this_plan": waiting, "note": "state changed = the other plan moved since the last update_links." }))
+        }
+        "list_link_targets" => {
+            if a["plan"].is_null() {
+                return Ok(json!(docs(ap).iter().enumerate().filter(|(k, _)| *k != ap.cur).map(|(k, d)| json!({ "tab": k, "name": d.p.name, "file": d.path.as_ref().map(|p| p.display().to_string()) })).collect::<Vec<_>>()));
+            }
+            let (file, p) = plan_ref(ap, &a["plan"])?;
+            let s = datum_core::sched::schedule(&p).ok();
+            let tasks: Vec<Value> = p.tasks.iter().enumerate().map(|(i, t)| json!({ "uid": t.uid, "code": t.code, "name": t.name, "level": t.level, "summary": s.as_ref().is_some_and(|s| s.summary[i]),
+                "start": s.as_ref().map(|s| d0(s.es[i])), "finish": s.as_ref().map(|s| d1(s.ef[i])) })).collect();
+            Ok(json!({ "plan": p.name, "file": file, "tasks": tasks }))
+        }
+        "link_to_plan" => {
+            let uid = a["uid"].as_u64().ok_or("uid is needed.")? as u32;
+            let i = ap.doc.p.idx(uid).ok_or("No task with that uid.")?;
+            let here = ap.doc.path.clone().ok_or("Save this plan first: the other plan finds it by its file.")?;
+            let mut list = if a["append"].as_bool() == Some(true) { ap.doc.p.tasks[i].ext.clone() } else { vec![] };
+            for x in a["links"].as_array().ok_or("links is needed (a list; empty removes them).")? {
+                let (file, p) = plan_ref(ap, &x["plan"])?;
+                if std::path::Path::new(&file) == here { return Err("That is this plan: use link_tasks for links inside it.".into()) }
+                let other = x["task_uid"].as_u64().ok_or("Each link needs task_uid (list_link_targets).")? as u32;
+                let k = p.idx(other).ok_or_else(|| format!("{} has no task {other}; see list_link_targets.", p.name))?;
+                let kind = serde_json::from_value(json!(x["type"].as_str().unwrap_or("FS"))).map_err(|_| "type is FS, SS, FF or SF.".to_string())?;
+                let (mut lag, pct, mut el) = datum_core::parse::lag(x["lag"].as_str().unwrap_or(""), ap.doc.p.day_min)?;
+                if pct { return Err("A link to another plan takes a lag in time (2d, 7ed), not a percent.".into()) }
+                if x["elapsed"].as_bool() == Some(true) && !el { lag = lag * 1440 / ap.doc.p.day_min.max(1); el = true }
+                list.retain(|y: &datum_core::ExtLink| !(y.uid == other && y.file.eq_ignore_ascii_case(&file)));
+                list.push(datum_core::ExtLink { file, uid: other, kind, lag, elapsed: el, plan: p.name.clone(), code: p.tasks[k].code.clone(), name: p.tasks[k].name.clone(), start: 0, finish: 0 });
+            }
+            let fmt = ap.opts.date_fmt.clone();
+            ap.doc.apply(datum_core::doc::Op::ExtSet { uid, links: list.clone() }, &fmt)?;
+            let msg = super::update_links_in(ap, false).map(|x| x.1).unwrap_or_default();
+            Ok(json!({ "linked": list.len(), "update": msg }))
+        }
+        "update_links" => Ok(json!({ "result": super::update_links_in(ap, a["all"].as_bool().unwrap_or(false))?.1 })),
+        "list_subplans" => {
+            let role = if !ap.doc.p.subplans.is_empty() { "master" } else if !ap.doc.p.master.is_empty() { "subplan" } else { "plan" };
+            let rows: Vec<Value> = super::subplan_rows_in(ap).into_iter().map(|r| json!({ "name": r.name, "file": r.file, "level": r.level, "found": r.found, "tab": (r.tab >= 0).then_some(r.tab),
+                "start": (r.finish > 0).then(|| d0(r.start)), "finish": (r.finish > 0).then(|| d1(r.finish)), "pct": (r.pct * 10.0).round() / 10.0, "tasks": r.tasks })).collect();
+            Ok(json!({ "this_plan": role, "master": ap.doc.p.master, "subplans": rows }))
+        }
+        "new_subplan" => {
+            if !ap.doc.p.master.is_empty() { return Err("This plan is a subplan: show its master (switch_plan) to add one.".into()) }
+            let at = a["at"].as_u64().map_or(usize::MAX, |x| x as usize);
+            super::new_subplan_in(app, ap, txt("name")?.to_string(), a["level"].as_u64().unwrap_or(0).min(8) as u8, at)?;
+            Ok(json!({ "opened": ap.doc.p.name, "tab": ap.cur }))
+        }
+        "add_subplan" => {
+            if !ap.doc.p.master.is_empty() { return Err("This plan is a subplan: show its master (switch_plan) first.".into()) }
+            let path = plan_path(a)?;
+            if !path.is_file() { return Err(format!("There is no file {}.", path.display())) }
+            super::add_subplan_in(app, ap, path)?;
+            Ok(json!({ "subplans": ap.doc.p.subplans.len() }))
+        }
+        "remove_subplan" => {
+            let f = txt("file")?;
+            let key = datum_core::links::file_name(f).to_lowercase();
+            let sp = ap.doc.p.subplans.iter().find(|s| datum_core::links::file_name(&s.file).to_lowercase() == key || s.name.eq_ignore_ascii_case(f)).cloned().ok_or("No such subplan; see list_subplans.")?;
+            super::remove_subplan_in(ap, sp.file)?;
+            Ok(json!({ "removed": sp.name, "note": "Its file is kept as it was." }))
+        }
+        "open_subplans" => {
+            if ap.doc.p.subplans.is_empty() { return Err("This plan has no subplans.".into()) }
+            let (_, missing) = super::open_subplans_in(app, ap);
+            Ok(json!({ "open": tab_list(ap).len(), "not_found": missing }))
+        }
+        "apply_setup_to_subplans" => {
+            let parts: Vec<String> = a["parts"].as_array().ok_or("parts is needed.")?.iter().filter_map(|x| x.as_str().map(String::from)).collect();
+            let tabs: Vec<usize> = match a["tabs"].as_array() { Some(t) => t.iter().filter_map(|x| x.as_u64().map(|k| k as usize)).collect(), None => (0..tab_list(ap).len()).collect() };
+            Ok(json!({ "result": super::share_setup_in(ap, parts, tabs)?.1 }))
+        }
+        "list_scenarios" => {
+            let (plan, finish, cards) = super::scenarios_in(ap)?;
+            Ok(json!({ "plan": plan, "finish": finish, "scenarios": cards.iter().map(|c| json!({ "name": c.name, "file": c.path, "finish": c.finish, "variance_days": c.var, "health": c.health, "tasks": c.tasks, "open": c.open })).collect::<Vec<_>>() }))
+        }
+        "new_scenario" => {
+            super::new_scenario_in(app, ap, txt("name")?.to_string())?;
+            Ok(json!({ "opened": ap.doc.p.name, "tab": ap.cur, "note": "The scenario is a copy saved next to the plan; change it freely, then compare_scenario and merge_scenario from the plan." }))
+        }
+        "compare_scenario" | "merge_scenario" => {
+            let s = txt("scenario")?;
+            let path = super::scenarios_in(ap)?.2.into_iter().find(|c| c.name.eq_ignore_ascii_case(s) || c.path.eq_ignore_ascii_case(s)).map(|c| c.path).ok_or("No such scenario; see list_scenarios.")?;
+            if name == "compare_scenario" { return Ok(changes_json(super::scenario_compare_in(ap, path)?)) }
+            let kinds: Vec<String> = a["kinds"].as_array().ok_or("kinds is needed.")?.iter().filter_map(|x| x.as_str().map(String::from)).collect();
+            if let Some(k) = kinds.iter().find(|k| !datum_core::scenario::KINDS.iter().any(|(x, _)| x == k)) { return Err(format!("Unknown kind {k}: {}.", datum_core::scenario::KINDS.map(|x| x.0).join(", "))) }
+            super::scenario_merge_in(ap, path, kinds)?;
+            Ok(json!({ "merged": s }))
+        }
+        "compare_plans" => {
+            let path = PathBuf::from(txt("path")?);
+            let old = match datum_core::io::import(&path)? { datum_core::io::Imported::Plan(p, _) => *p, _ => return Err("Compare needs a plan file (.dplan, .xml or .xer).".into()) };
+            Ok(changes_json(super::compare_with(ap, old)))
+        }
+        "portfolio" => {
+            let folder = a["folder"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from).unwrap_or_else(|| ap.opts.workspace.clone());
+            if folder.is_empty() { return Err("No workspace folder yet: give folder, or ask the user to choose one (Report › Portfolio).".into()) }
+            let cards = super::workspace_cards(ap, &folder)?;
+            let cards: Vec<Value> = cards.into_iter().map(|c| { let mut v = serde_json::to_value(c).unwrap_or_default(); if let Some(o) = v.as_object_mut() { for k in ["s", "f", "bf"] { o.remove(k); } } v }).collect();
+            Ok(json!({ "folder": folder, "plans": cards }))
+        }
+        "resource_pool" => {
+            let unit = a["unit"].as_str().unwrap_or("week").to_string();
+            let v = super::pool_view_in(ap, unit)?;
+            let b = &v.view.buckets;
+            let rows: Vec<Value> = v.view.rows.iter().map(|r| json!({ "name": r.name, "group": r.group, "in_pool": r.in_pool, "periods_over": r.over, "peak_load": (r.peak * 100.0).round() / 100.0,
+                "hours_by_plan": v.view.plans.iter().zip(&r.plans).map(|(n, h)| (n.clone(), json!((h.iter().sum::<f64>() * 10.0).round() / 10.0))).collect::<serde_json::Map<_, _>>(),
+                "over": (0..b.len()).filter(|&j| r.load[j] > r.cap[j] + 1e-6).take(20).map(|j| json!({ "from": date_of(b[j] * 1440).to_string(), "hours": (r.load[j] * 10.0).round() / 10.0, "capacity": (r.cap[j] * 10.0).round() / 10.0 })).collect::<Vec<_>>() })).collect();
+            Ok(json!({ "folder": v.folder, "pool_plan": v.pool, "plans": v.view.plans, "resources": rows }))
+        }
+        "set_pool_plan" => {
+            let path = a["path"].as_str().map(str::trim).unwrap_or("").to_string();
+            if !path.is_empty() && !Path::new(&path).is_file() { return Err(format!("There is no file {path}.")) }
+            super::set_pool_in(app, ap, path.clone())?;
+            Ok(json!({ "pool": path }))
+        }
+        "take_from_pool" => Ok(json!({ "result": super::pool_take_in(ap, a["add"].as_bool().unwrap_or(false))?.1 })),
+        "import_plan" => {
+            let path = PathBuf::from(txt("path")?);
+            if !path.is_file() { return Err(format!("There is no file {}.", path.display())) }
+            match datum_core::io::import(&path)? {
+                datum_core::io::Imported::Plan(p, notes) => {
+                    let p = fresh(ap, *p);
+                    let mut d = Doc::new(p);
+                    d.dirty = true;
+                    add_tab(ap, d);
+                    Ok(json!({ "opened": ap.doc.p.name, "tab": ap.cur, "notes": notes }))
+                }
+                _ => Err("That file is a table: its columns must be matched by the user (File › Import).".into()),
+            }
+        }
+        _ => Err(format!("Unknown tool {name}.")),
+    }
+}
 
 /// The settings folder (the same one Tauri uses for options.json), found without the app running.
 pub fn settings_dir() -> Option<PathBuf> {
@@ -310,6 +478,7 @@ fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                 ap.doc.save(&p)?;
                 Ok(json!({ "saved": p.display().to_string() }))
             }
+            n if assist::MANY_PLANS.contains(&n) => many(app, &mut ap, n, a),
             _ => {
                 let fmt = ap.opts.date_fmt.clone();
                 let r = assist::call(&mut ap.doc, &fmt, today(), name, a);
@@ -317,7 +486,7 @@ fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                 r
             }
         });
-        let shown = (r.is_ok() && (assist::changes(name) || matches!(name, "switch_plan" | "save_plan" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan"))).then(|| out(&ap));
+        let shown = (r.is_ok() && (assist::changes(name) || matches!(name, "switch_plan" | "save_plan" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan") || assist::MANY_PLANS_CHANGE.contains(&name))).then(|| out(&ap));
         (r, shown)
     };
     if let Some(o) = shown { let _ = app.emit("ai-change", json!({ "out": o, "tool": name })); }

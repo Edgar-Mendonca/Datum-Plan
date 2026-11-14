@@ -11,7 +11,7 @@
 [![Downloads](https://img.shields.io/github/downloads/Edgar-Mendonca/Datum-Plan/total?color=0B5CAD)](https://github.com/Edgar-Mendonca/Datum-Plan/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B5CAD)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](https://github.com/Edgar-Mendonca/Datum-Plan/releases/latest)
-[![AI Link: MCP](https://img.shields.io/badge/AI_Link-MCP_%C2%B7_162_tools-D97757)](#ai-link-an-assistant-works-on-your-plan)
+[![AI Link: MCP](https://img.shields.io/badge/AI_Link-MCP_%C2%B7_182_tools-D97757)](#ai-link-an-assistant-works-on-your-plan)
 [![Rust](https://img.shields.io/badge/Rust-engine-B7410E?logo=rust&logoColor=white)](crates/core)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
 
@@ -30,7 +30,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 
 | | |
 |---|---|
-| 🤖 **AI Link: an assistant works on your plan** | Ask in plain words: *"Add a 3-day pump test after task 24 and link handover to it"*, *"Which tasks are late and why?"*, *"Write this month's status report"*. **162 tools**, one-click setup, every change shown at once and undone with Ctrl+Z. |
+| 🤖 **AI Link: an assistant works on your plan** | Ask in plain words: *"Add a 3-day pump test after task 24 and link handover to it"*, *"Which tasks are late and why?"*, *"Write this month's status report"*. **182 tools**, one-click setup, every change shown at once and undone with Ctrl+Z. |
 | 🧭 **Task Path** | Click a task: its driving predecessors, other predecessors, driven successors and other successors light up in the sheet and the Gantt. |
 | ⚖️ **Delay analysis built in** | As-planned against as-built, windows between snapshots, time impact, impacted as-planned and collapsed as-built, on the data your plan already holds, with delay events and fragnets. |
 | 📑 **Registers in the plan** | The contract (dates with delay damages, payment milestones), the vendor document register (review cycle, return codes, transmittals) and procurement (orders, expediting, float to need), each tied to tasks and progress (Project › Modules switches them on). |
@@ -52,7 +52,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 The assistant reads before it changes, keeps to the plan's rules (a locked baseline stays locked) and never saves unless you ask. Each change is one Undo step with a note saying what it did. New tools arrive with each Datum Plan update; nothing needs installing again.
 
 <details>
-<summary><b>The 162 tools</b></summary>
+<summary><b>The 182 tools</b></summary>
 
 | Area | The assistant can |
 |---|---|
