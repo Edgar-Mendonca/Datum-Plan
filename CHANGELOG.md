@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.10 — 2026-11-14
+
+AI Link, batch 1 of 5: the assistant drives the window (127 tools).
+
+- **What the window shows**: get_view (the view, table, filter, grouping, sort, outline level and selected tasks), show_view (any view), use_table, filter_view (any filter or rules, or highlight), group_view, sort_view, outline_view (a level, or expand or collapse all), select_task (selects and scrolls to it, showing it when a filter or a collapsed summary hides it), zoom_view (in, out, entire project), gantt_options (critical, slack, late, labels, baseline bars and which baseline), task_path_view, show_panes (details and its tab, timeline). These change only what you see, never the plan.
+- **Plans and files**: list_templates, new_plan (blank or from a template), open_plan, save_plan_as (an existing file only with overwrite) and close_plan (a plan with unsaved changes only with discard).
+- **Tools added later reach the assistant** without installing the extension again: the extension now says it gets its tool list from Datum Plan. Install it once more after this update (AI Link › Add to Claude Desktop, drag the file into Claude Desktop › Settings › Extensions).
+- docs/AI-TOOLS.md lists every command of the window with its tool, and the four batches still to come.
+
 ## 0.9.9 — 2026-11-14
 
 The AI Link stays connected, and the assistant can change the task sheet's columns (110 tools).

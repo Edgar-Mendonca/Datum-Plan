@@ -142,15 +142,39 @@ pub fn tools() -> Value {
         { "name": "set_task_steps", "description": "A task's steps (name, weight, done), replacing its list; with weights, the steps done set its physical %.", "inputSchema": obj(json!({ "uid": uid(), "steps": { "type": "array", "items": { "type": "object" } } }), &["uid", "steps"]) },
         { "name": "mark_step_done", "description": "Tick (or untick) one step of a task by its name; the task's physical % follows.", "inputSchema": obj(json!({ "uid": uid(), "step": { "type": "string" }, "done": { "type": "boolean" } }), &["uid", "step"]) },
     ]);
-    let mut all: Vec<Value> = [base, more, third, fourth, fifth].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
+    // The window: what it shows, and its plans (0.9.10). The window runs these (src-tauri/src/ai.rs).
+    let window = json!([
+        { "name": "get_view", "description": "What the user is looking at in Datum Plan: the view, table, filter, grouping, sort, outline level and the selected tasks.", "inputSchema": none() },
+        { "name": "show_view", "description": "Show a view: gantt, tracking, network, calendar, timeline, taskusage, relations, sheets, ressheet, resusage, resgraph, team, dashboard, progress, scurve, reports, builder, checks, risks, simrisk, delay, lookahead, manpower, portfolio, contract, documents, procurement, update, setup.", "inputSchema": obj(json!({ "view": { "type": "string" } }), &["view"]) },
+        { "name": "use_table", "description": "Show a table (set of columns) in the task sheet: Entry, Schedule, Tracking, Cost, Work, Variance, Earned Value, Summary, Baseline, or one saved with the plan.", "inputSchema": obj(json!({ "table": { "type": "string" } }), &["table"]) },
+        { "name": "filter_view", "description": "Filter the task sheet and Gantt in the window: a filter name from list_filters, or rules like filter_tasks; highlight shows matches without hiding the rest; clear shows all tasks.", "inputSchema": obj(json!({ "name": { "type": "string" }, "rules": { "type": "array", "items": { "type": "object" } }, "highlight": { "type": "boolean" }, "clear": { "type": "boolean" } }), &[]) },
+        { "name": "group_view", "description": "Group the task sheet by fields (outermost first), e.g. [\"code:Area\",\"res\"]; an empty list removes the grouping.", "inputSchema": obj(json!({ "fields": { "type": "array", "items": { "type": "string" } } }), &["fields"]) },
+        { "name": "sort_view", "description": "Sort the task sheet by fields, e.g. [{\"field\":\"finish\",\"desc\":false}]; an empty list goes back to plan order.", "inputSchema": obj(json!({ "fields": { "type": "array", "items": { "type": "object" } } }), &["fields"]) },
+        { "name": "outline_view", "description": "Show outline levels up to a level (1 = top summaries only; 0 = all), or expand or collapse every summary.", "inputSchema": obj(json!({ "level": { "type": "integer" }, "all": { "type": "string", "enum": ["expand", "collapse"] } }), &[]) },
+        { "name": "select_task", "description": "Select a task in the window and scroll the sheet and the Gantt to it (shows it if a filter or a collapsed summary hides it).", "inputSchema": obj(json!({ "uid": uid() }), &["uid"]) },
+        { "name": "zoom_view", "description": "Zoom the Gantt or a sheet: in, out, or entire (the whole project on screen).", "inputSchema": obj(json!({ "to": { "type": "string", "enum": ["in", "out", "entire"] } }), &["to"]) },
+        { "name": "gantt_options", "description": "What the Gantt shows: critical (red critical bars), slack, late (late bars), labels, baseline_bars, and which baseline (0–10) the bars compare with. Only the ones given change.", "inputSchema": obj(json!({ "critical": { "type": "boolean" }, "slack": { "type": "boolean" }, "late": { "type": "boolean" }, "labels": { "type": "boolean" }, "baseline_bars": { "type": "boolean" }, "baseline": { "type": "integer" } }), &[]) },
+        { "name": "task_path_view", "description": "Turn Task Path on or off in the window (colours the selected task's driving predecessors, predecessors, driven successors and successors); with a uid it selects that task.", "inputSchema": obj(json!({ "on": { "type": "boolean" }, "uid": uid() }), &["on"]) },
+        { "name": "show_panes", "description": "Show or hide the details pane (with its tab: general, status, resources, predecessors, successors, codes, steps, notebook, expenses, docs, custom, risks, notes) and the timeline.", "inputSchema": obj(json!({ "details": { "type": "boolean" }, "tab": { "type": "string" }, "timeline": { "type": "boolean" } }), &[]) },
+        { "name": "list_templates", "description": "The templates a new plan can start from (id, name, what it holds).", "inputSchema": none() },
+        { "name": "new_plan", "description": "Open a new plan in a new tab: blank, or from a template id (list_templates).", "inputSchema": obj(json!({ "template": { "type": "string" } }), &[]) },
+        { "name": "open_plan", "description": "Open a .dplan file in a new tab (or show it when it is open already). Only when the user asks, with the path they give.", "inputSchema": obj(json!({ "path": { "type": "string" } }), &["path"]) },
+        { "name": "save_plan_as", "description": "Save the plan shown to a new .dplan file. Only when the user asks; an existing file is replaced only with overwrite true.", "inputSchema": obj(json!({ "path": { "type": "string" }, "overwrite": { "type": "boolean" } }), &["path"]) },
+        { "name": "close_plan", "description": "Close a plan's tab (by tab number from list_plans; default the one shown). A plan with unsaved changes closes only with discard true; ask the user first.", "inputSchema": obj(json!({ "tab": { "type": "integer" }, "discard": { "type": "boolean" } }), &[]) },
+    ]);
+    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
     // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
     for t in &mut all {
         let n = t["name"].as_str().unwrap_or("").to_string();
-        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "switch_plan" | "save_plan" | "export_plan" | "export_register"),
-            "destructiveHint": n.starts_with("delete_") || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "apply_operation"), "openWorldHint": false });
+        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "save_plan" | "export_plan" | "export_register" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan"),
+            "destructiveHint": n.starts_with("delete_") || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "save_plan_as" | "close_plan" | "apply_operation"), "openWorldHint": false });
     }
     Value::Array(all)
 }
+
+/// The tools the window runs itself (its tabs, files and what it shows); `call` does not know them.
+pub const WINDOW_TOOLS: [&str; 22] = ["list_plans", "switch_plan", "save_plan", "export_plan", "export_register", "get_view", "show_view", "use_table", "filter_view", "group_view", "sort_view",
+    "outline_view", "select_task", "zoom_view", "gantt_options", "task_path_view", "show_panes", "list_templates", "new_plan", "open_plan", "save_plan_as", "close_plan"];
 
 /// What the assistant is told when it connects.
 pub const INSTRUCTIONS: &str = "You are connected to the Datum Plan window the user has open: a project schedule (CPM) with tasks, links, resources, baselines, progress and sheets. \
@@ -1193,13 +1217,22 @@ mod tests {
     fn run(doc: &mut Doc, name: &str, a: Value) -> Result<Value, String> { call(doc, "%d-%b-%y", d(2026, 11, 13), name, &a) }
 
     #[test]
+    fn the_window_tools_are_listed_and_marked() {
+        let t = tools();
+        let names: Vec<&str> = t.as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+        for w in WINDOW_TOOLS { assert!(names.contains(&w), "{w} is not listed") }
+        let ann = |n: &str| t.as_array().unwrap().iter().find(|x| x["name"] == n).unwrap()["annotations"].clone();
+        assert_eq!((ann("show_view")["readOnlyHint"].as_bool(), ann("open_plan")["readOnlyHint"].as_bool(), ann("close_plan")["destructiveHint"].as_bool()), (Some(true), Some(false), Some(true)));
+    }
+    #[test]
     fn every_listed_tool_answers_or_says_what_it_needs() {
         let mut doc = plan();
         for t in tools().as_array().unwrap() {
             let n = t["name"].as_str().unwrap();
-            if matches!(n, "list_plans" | "switch_plan" | "save_plan" | "export_plan" | "export_register") { continue } // the window's own
+            if WINDOW_TOOLS.contains(&n) { continue } // the window's own
             let r = run(&mut doc, n, json!({}));
             assert!(r.is_ok() || r.as_ref().unwrap_err().len() > 5, "{n}: {r:?}");
+            assert!(!r.as_ref().is_err_and(|e| e.starts_with("Unknown tool")), "{n} is listed but neither the engine nor the window runs it");
         }
     }
     #[test]

@@ -1,10 +1,13 @@
 // AI Link (Home › AI Link): Claude works on the plan open in this window. The engine has the tools
 // (crates/core/src/assist.rs); the window switches the link on, sets up Claude Desktop, and shows
 // Claude's changes as they happen (each one an Undo step).
-import { Show, createSignal } from "solid-js";
-import { call, openDialog, opts, refresh, setOpts, setOut, table, toast, useTable } from "./store";
+import { Show, createSignal, createEffect, createRoot } from "solid-js";
+import { ALL, call, filter, group, level, openDialog, opts, refresh, sel, setBaseline, setCollapsed, setDetails, setDetailsTab, setFilter, setGroup, setLevel, setOpts, setOut, setSort, setTimeline, sort, table, toast, useTable, view, View } from "./store";
+import { C, selectUid } from "./cmds";
+import { setShowBase, setShowCrit, setShowLabels, setShowLate, setShowSlack } from "./gantt";
+import { setPathOn } from "./path";
 import { Dialog } from "./ui";
-import { Out, listen } from "./api";
+import { Filter, Out, invoke as _i, listen } from "./api";
 
 type Info = { on: boolean; exe: string; claude_config: string | null; claude_set: boolean; snippet: string };
 export const [aiOn, setAiOn] = createSignal(false);
@@ -25,6 +28,7 @@ const DID: Record<string, string> = {
   add_sheet: "added a sheet", rename_sheet: "renamed a sheet", delete_sheet: "deleted a sheet", format_sheet_cells: "formatted a sheet", set_number_format: "set a number format",
   define_name: "changed a defined name", format_tasks: "formatted tasks", add_dashboard: "added a dashboard", delete_dashboard: "deleted a dashboard", export_plan: "saved a copy to Downloads", export_register: "saved a register to Downloads",
   set_project_info: "changed the project details", add_recurring_task: "added a recurring task", apply_credit_rule: "gave tasks a rule of credit", set_task_steps: "set a task's steps", mark_step_done: "ticked a step",
+  new_plan: "opened a new plan", open_plan: "opened a plan", save_plan_as: "saved the plan as a new file", close_plan: "closed a plan",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
 
@@ -38,6 +42,48 @@ export const initAi = async () => {
     if (p.tool === "set_columns" || p.tool === "undo" || p.tool === "redo") useTable(table());
     toast(`AI Link: the assistant ${DID[p.tool] ?? "changed the plan"}. Undo (Ctrl+Z) takes it back.`, true);
   });
+  // What the assistant asks the window to show (it changes the view only, never the plan).
+  listen("ai-ui", async (p: { action: string; a: any }) => {
+    const a = p.a, later = (f: () => void) => setTimeout(f, 250);
+    switch (p.action) {
+      case "view": C.view(a as View); break;
+      case "table": useTable(a); break;
+      case "filter": setFilter((a as Filter).rules.length ? a : ALL); break;
+      case "group": setGroup(a); break;
+      case "sort": setSort(a); break;
+      case "level": setLevel(a); break;
+      case "collapse": setCollapsed(a); break;
+      case "select": {
+        if (!["gantt", "tracking", "taskusage", "network", "calendar"].includes(view())) C.view("gantt");
+        selectUid(a);
+        // Hidden by a filter, an outline level or a collapsed summary: show all, then select.
+        if (!sel().includes(a)) { setFilter(ALL); setLevel(0); setCollapsed([]); await refresh(); later(() => { selectUid(a); C.scrollTo(); }); } else later(() => C.scrollTo());
+        break;
+      }
+      case "zoom": a === "in" ? C.zoomIn() : a === "out" ? C.zoomOut() : C.fit(); break;
+      case "gantt": {
+        if (a.critical !== undefined) setShowCrit(!!a.critical);
+        if (a.slack !== undefined) setShowSlack(!!a.slack);
+        if (a.late !== undefined) setShowLate(!!a.late);
+        if (a.labels !== undefined) setShowLabels(!!a.labels);
+        if (a.baseline_bars !== undefined) setShowBase(!!a.baseline_bars);
+        if (typeof a.baseline === "number") { setBaseline(a.baseline); setShowBase(true); }
+        break;
+      }
+      case "path": setPathOn(!!a.on); if (a.uid) selectUid(a.uid); break;
+      case "panes": {
+        if (typeof a.details === "boolean") setDetails(a.details);
+        if (a.tab) { setDetails(true); setDetailsTab(a.tab); }
+        if (typeof a.timeline === "boolean") setTimeline(a.timeline);
+        break;
+      }
+    }
+  });
+  // The window tells the AI Link what it shows, for the assistant's get_view.
+  createRoot(() => createEffect(() => {
+    const s = { view: view(), table: table(), filter: filter().name, filter_rules: filter().rules, group: group(), sort: sort(), outline_level: level(), selected: sel().slice(0, 50) };
+    _i("ai_view_state", { state: s }).catch(() => {});
+  }));
 };
 
 export const aiLink = () => openDialog(() => {

@@ -9,7 +9,8 @@
 //! Claude learns about Datum Plan from an extension file (`Datum Plan.mcpb`, made by `extension`):
 //! one click on Install in Claude Desktop, no settings to edit. Writing Claude's settings file
 //! (`setup_claude`) is the fallback.
-use super::{guard, out, regroup, show_tab, tab_list, today, St};
+use super::{add_tab, backup_old, close_at, docs, fresh, guard, out, regroup, remember, show_tab, tab_list, today, St};
+use datum_core::{doc::Doc, fields::Calc, query::{builtin_filters, Filter, Rule}};
 use datum_core::assist;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -128,6 +129,25 @@ fn serve(s: TcpStream, k: &str, run: &impl Fn(&str, &Value) -> Result<Value, Str
     let _ = writeln!(w, "{reply}");
 }
 
+/// What the window shows, as it last said (for get_view).
+static VIEW: Mutex<Option<Value>> = Mutex::new(None);
+pub fn view_state(v: Value) { if let Ok(mut g) = VIEW.lock() { *g = Some(v) } }
+
+const VIEWS: [&str; 29] = ["setup", "gantt", "tracking", "network", "calendar", "taskusage", "ressheet", "resusage", "resgraph", "team", "dashboard", "reports", "portfolio", "risks", "simrisk", "checks",
+    "lookahead", "manpower", "timeline", "progress", "scurve", "sheets", "update", "relations", "builder", "contract", "documents", "procurement", "delay"];
+const TABLES: [&str; 10] = ["Entry", "Schedule", "Tracking", "Cost", "Work", "Variance", "Earned Value", "Summary", "Baseline", "Activities"];
+const PANES: [&str; 13] = ["general", "status", "resources", "predecessors", "successors", "codes", "steps", "notebook", "expenses", "docs", "custom", "risks", "notes"];
+
+/// Asks the window to change what it shows.
+fn ui(app: &AppHandle, action: &str, a: Value) { let _ = app.emit("ai-ui", json!({ "action": action, "a": a })); }
+
+/// A .dplan path the user gave.
+fn plan_path(a: &Value) -> Result<PathBuf, String> {
+    let p = PathBuf::from(a["path"].as_str().map(str::trim).filter(|x| !x.is_empty()).ok_or("path is needed (a .dplan file).")?);
+    if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("dplan")) { return Err("The path must end in .dplan.".into()) }
+    Ok(p)
+}
+
 /// Runs a tool on the plan shown and tells the window what changed.
 fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
     let st = app.state::<St>();
@@ -141,6 +161,126 @@ fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                 let k = a["tab"].as_u64().map(|k| k as usize).or_else(|| a["name"].as_str().and_then(|n| tabs.iter().position(|t| t.name.eq_ignore_ascii_case(n)))).filter(|&k| k < tabs.len()).ok_or("No such plan; see list_plans.")?;
                 show_tab(&mut ap, k);
                 Ok(json!({ "shown": tabs[k].name }))
+            }
+            "get_view" => Ok(json!({ "plan": tab_list(&ap).get(ap.cur).map(|t| t.name.clone()), "window": VIEW.lock().ok().and_then(|g| g.clone()) })),
+            "show_view" => {
+                let v = a["view"].as_str().filter(|v| VIEWS.contains(v)).ok_or_else(|| format!("view is one of: {}.", VIEWS.join(", ")))?;
+                ui(app, "view", json!(v));
+                Ok(json!({ "shown": v }))
+            }
+            "use_table" => {
+                let t = a["table"].as_str().map(str::trim).ok_or("table is needed.")?;
+                let saved: Vec<String> = ap.doc.p.ui["tables"].as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default();
+                let t = TABLES.iter().map(|x| x.to_string()).chain(saved).find(|x| x.eq_ignore_ascii_case(t)).ok_or_else(|| format!("No table {t}: {}.", TABLES.join(", ")))?;
+                ui(app, "table", json!(t));
+                Ok(json!({ "table": t }))
+            }
+            "filter_view" => {
+                let c = Calc::new(&ap.doc.p, &ap.opts.date_fmt, today());
+                let mut f = if a["clear"].as_bool() == Some(true) { Filter { name: "All Tasks".into(), summaries: true, ..Default::default() } }
+                    else if let Some(r) = a["rules"].as_array().filter(|r| !r.is_empty()) {
+                        let rules: Vec<Rule> = r.iter().map(|x| serde_json::from_value(x.clone()).map_err(|e| format!("A rule is {{field, test, value}}: {e}"))).collect::<Result<_, _>>()?;
+                        if let Some(x) = rules.iter().find(|x| c.key_of(&x.field).is_none()) { return Err(format!("No field \"{}\"; see list_fields.", x.field)) }
+                        Filter { name: "Assistant's filter".into(), rules, summaries: true, highlight: false }
+                    } else {
+                        let n = a["name"].as_str().ok_or("Give a filter name, rules, or clear.")?;
+                        let saved: Vec<Filter> = serde_json::from_value(ap.doc.p.ui["filters"].clone()).unwrap_or_default();
+                        builtin_filters().into_iter().chain(saved).find(|x| x.name.eq_ignore_ascii_case(n)).ok_or_else(|| format!("No filter called {n}; see list_filters."))?
+                    };
+                if let Some(h) = a["highlight"].as_bool() { f.highlight = h }
+                let name = f.name.clone();
+                ui(app, "filter", serde_json::to_value(&f).map_err(|e| e.to_string())?);
+                Ok(json!({ "filter": name }))
+            }
+            "group_view" | "sort_view" => {
+                let c = Calc::new(&ap.doc.p, &ap.opts.date_fmt, today());
+                let key = |x: &str| c.key_of(x).ok_or_else(|| format!("No field \"{x}\"; see list_fields."));
+                let list = a["fields"].as_array().ok_or("fields is needed (a list; empty clears it).")?;
+                if name == "group_view" {
+                    let keys = list.iter().map(|x| key(x.as_str().unwrap_or(""))).collect::<Result<Vec<_>, _>>()?;
+                    ui(app, "group", json!(keys));
+                    Ok(json!({ "grouped_by": keys }))
+                } else {
+                    let keys = list.iter().map(|x| Ok(json!([key(x["field"].as_str().or(x.as_str()).unwrap_or(""))?, x["desc"].as_bool().unwrap_or(false)]))).collect::<Result<Vec<_>, String>>()?;
+                    ui(app, "sort", json!(keys));
+                    Ok(json!({ "sorted_by": keys }))
+                }
+            }
+            "outline_view" => {
+                if let Some(all) = a["all"].as_str() {
+                    if !matches!(all, "expand" | "collapse") { return Err("all is expand or collapse.".into()) }
+                    let sums: Vec<u32> = if all == "collapse" { (0..ap.doc.p.tasks.len()).filter(|&i| ap.doc.p.is_summary(i)).map(|i| ap.doc.p.tasks[i].uid).collect() } else { vec![] };
+                    ui(app, "collapse", json!(sums));
+                    return Ok(json!({ "summaries": all }))
+                }
+                let l = a["level"].as_u64().filter(|l| *l <= 20).ok_or("Give level (0 = all) or all (expand, collapse).")?;
+                ui(app, "level", json!(l));
+                Ok(json!({ "level": l }))
+            }
+            "select_task" => {
+                let uid = a["uid"].as_u64().ok_or("uid is needed.")? as u32;
+                ap.doc.p.idx(uid).ok_or("No task with that uid.")?;
+                ui(app, "select", json!(uid));
+                Ok(json!({ "selected": uid }))
+            }
+            "zoom_view" => {
+                let to = a["to"].as_str().filter(|t| matches!(*t, "in" | "out" | "entire")).ok_or("to is in, out or entire.")?;
+                ui(app, "zoom", json!(to));
+                Ok(json!({ "zoom": to }))
+            }
+            "gantt_options" => {
+                if let Some(b) = a["baseline"].as_u64() { if b > 10 { return Err("baseline is 0 to 10.".into()) } }
+                let o: serde_json::Map<String, Value> = ["critical", "slack", "late", "labels", "baseline_bars", "baseline"].iter().filter_map(|k| a.get(*k).filter(|v| !v.is_null()).map(|v| (k.to_string(), v.clone()))).collect();
+                if o.is_empty() { return Err("Give critical, slack, late, labels, baseline_bars or baseline.".into()) }
+                ui(app, "gantt", Value::Object(o.clone()));
+                Ok(Value::Object(o))
+            }
+            "task_path_view" => {
+                if let Some(u) = a["uid"].as_u64() { ap.doc.p.idx(u as u32).ok_or("No task with that uid.")?; }
+                ui(app, "path", json!({ "on": a["on"].as_bool().unwrap_or(true), "uid": a["uid"] }));
+                Ok(json!({ "task_path": a["on"].as_bool().unwrap_or(true) }))
+            }
+            "show_panes" => {
+                if let Some(t) = a["tab"].as_str() { if !PANES.contains(&t) { return Err(format!("tab is one of: {}.", PANES.join(", "))) } }
+                ui(app, "panes", json!({ "details": a["details"], "tab": a["tab"], "timeline": a["timeline"] }));
+                Ok(json!({ "panes": "changed" }))
+            }
+            "list_templates" => Ok(json!(datum_core::templates::TEMPLATES.iter().map(|t| json!({ "id": t.id, "name": t.name, "about": t.desc })).collect::<Vec<_>>())),
+            "new_plan" => {
+                let p = match a["template"].as_str().filter(|x| !x.is_empty()) {
+                    Some(id) => datum_core::templates::build(datum_core::templates::TEMPLATES.iter().find(|t| t.id.eq_ignore_ascii_case(id)).ok_or("No such template; see list_templates.")?, super::next_monday()),
+                    None => datum_core::Project::new("Project1", today()),
+                };
+                let p = fresh(&ap, p);
+                add_tab(&mut ap, Doc::new(p));
+                Ok(json!({ "opened": ap.doc.p.name, "tab": ap.cur }))
+            }
+            "open_plan" => {
+                let path = plan_path(a)?;
+                if !path.is_file() { return Err(format!("There is no file {}.", path.display())) }
+                let same = |d: &Doc| d.path.as_ref().is_some_and(|x| x == &path || x.canonicalize().ok() == path.canonicalize().ok());
+                if let Some(k) = docs(&ap).iter().position(|d| same(d)) { show_tab(&mut ap, k); return Ok(json!({ "shown": k })) }
+                backup_old(&path);
+                let d = Doc::open(&path)?;
+                remember(app, &path);
+                add_tab(&mut ap, d);
+                Ok(json!({ "opened": ap.doc.p.name, "tab": ap.cur }))
+            }
+            "save_plan_as" => {
+                let path = plan_path(a)?;
+                if !path.parent().is_some_and(|d| d.as_os_str().is_empty() || d.is_dir()) { return Err("That folder does not exist.".into()) }
+                if path.exists() && a["overwrite"].as_bool() != Some(true) { return Err(format!("{} exists already: ask the user, then use overwrite true.", path.display())) }
+                ap.doc.save(&path)?;
+                remember(app, &path);
+                Ok(json!({ "saved": path.display().to_string() }))
+            }
+            "close_plan" => {
+                let k = a["tab"].as_u64().map(|k| k as usize).unwrap_or(ap.cur);
+                let d = *docs(&ap).get(k).ok_or("No such tab; see list_plans.")?;
+                if d.dirty && a["discard"].as_bool() != Some(true) { return Err("That plan has unsaved changes: ask the user to save it, or to close it without saving (discard true).".into()) }
+                let n = d.p.name.clone();
+                close_at(app, &mut ap, k);
+                Ok(json!({ "closed": n }))
             }
             "export_plan" | "export_register" => {
                 let dir = app.path().download_dir().map_err(|_| "No Downloads folder.")?;
@@ -177,7 +317,7 @@ fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                 r
             }
         });
-        let shown = (r.is_ok() && (assist::changes(name) || matches!(name, "switch_plan" | "save_plan"))).then(|| out(&ap));
+        let shown = (r.is_ok() && (assist::changes(name) || matches!(name, "switch_plan" | "save_plan" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan"))).then(|| out(&ap));
         (r, shown)
     };
     if let Some(o) = shown { let _ = app.emit("ai-change", json!({ "out": o, "tool": name })); }
@@ -219,6 +359,8 @@ fn manifest(bin: &str) -> Value {
         "icon": "icon.png", "keywords": ["schedule", "planning", "gantt", "project"],
         "server": { "type": "binary", "entry_point": bin, "mcp_config": { "command": format!("${{__dirname}}/{bin}"), "args": ["--mcp"] } },
         "tools": assist::tools().as_array().into_iter().flatten().map(|t| json!({ "name": t["name"], "description": t["description"] })).collect::<Vec<_>>(),
+        // Newer Datum Plan versions add tools: the client takes the list the server gives, not only these.
+        "tools_generated": true, "prompts_generated": true,
         "compatibility": { "platforms": [platform] } })
 }
 
@@ -358,6 +500,7 @@ mod tests {
         assert_eq!(m["server"]["mcp_config"]["command"], format!("${{__dirname}}/{bin}"));
         assert_eq!(m["server"]["mcp_config"]["args"][0], "--mcp");
         assert!(m["tools"].as_array().unwrap().len() >= 50);
+        assert_eq!(m["tools_generated"], true, "tools added by later versions reach the assistant");
         assert!(z.by_name("icon.png").is_ok());
         assert_eq!(z.by_name(&bin).unwrap().size(), std::fs::metadata(std::env::current_exe().unwrap()).unwrap().len());
         let _ = std::fs::remove_dir_all(&dir);
