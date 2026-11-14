@@ -316,8 +316,59 @@ fn plan_path(a: &Value) -> Result<PathBuf, String> {
     Ok(p)
 }
 
+/// A free file name in `dir` for `stem.ext` (characters Windows refuses left out; "(2)" and on when taken).
+fn download_file(dir: &Path, stem: &str, ext: &str) -> PathBuf {
+    let base: String = stem.chars().map(|c| if c.is_alphanumeric() || " -_().".contains(c) { c } else { ' ' }).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ").chars().take(100).collect();
+    let mut f = dir.join(format!("{base}.{ext}"));
+    for n in 2..1000 { if !f.exists() { break } f = dir.join(format!("{base} ({n}).{ext}")) }
+    f
+}
+
+/// The PDF the window is writing for the assistant: its file, and the call waiting for it.
+type PdfJob = (PathBuf, std::sync::mpsc::Sender<Result<(), String>>);
+static PDF: Mutex<Option<PdfJob>> = Mutex::new(None);
+
+/// Whether the window may write this PDF (only the file the assistant asked for).
+pub fn pdf_asked(path: &Path) -> bool { PDF.lock().ok().and_then(|g| g.as_ref().map(|j| j.0 == path)).unwrap_or(false) }
+
+/// The window has written the PDF (or could not).
+pub fn pdf_done(path: &Path, r: Result<(), String>) {
+    if let Ok(mut g) = PDF.lock() { if g.as_ref().is_some_and(|j| j.0 == path) { if let Some((_, tx)) = g.take() { let _ = tx.send(r); } } }
+}
+
+/// save_view_pdf: the window lays the view out with the page setup and writes it to Downloads.
+/// The plan is not locked while the window works (it saves the page setup as it prints).
+fn view_pdf(app: &AppHandle, a: &Value) -> Result<Value, String> {
+    if cfg!(not(windows)) { return Err("Saving a PDF through the AI Link works on Windows; ask the user to use File › Print › Save as PDF.".into()) }
+    let v = a["view"].as_str().filter(|v| !v.is_empty());
+    if let Some(v) = v { if !VIEWS.contains(&v) { return Err(format!("view is one of: {}.", VIEWS.join(", "))) } }
+    let (plan, report) = {
+        let st = app.state::<St>();
+        let ap = st.lock();
+        let report = match a["report"].as_str().filter(|r| !r.is_empty()) {
+            Some(r) => Some(ap.doc.p.ui["reports"].as_array().and_then(|l| l.iter().position(|x| x["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(r)))).ok_or("No such report; see list_reports.")?),
+            None => None,
+        };
+        (ap.doc.p.name.clone(), report)
+    };
+    let what = match (a["report"].as_str().filter(|_| report.is_some()), v) { (Some(r), _) => r.to_string(), (None, Some(v)) => v.to_string(), _ => VIEW.lock().ok().and_then(|g| g.as_ref().and_then(|x| x["view"].as_str().map(String::from))).unwrap_or_else(|| "view".into()) };
+    let dir = app.path().download_dir().map_err(|_| "No Downloads folder.")?;
+    let path = download_file(&dir, &format!("{plan} - {what}"), "pdf");
+    let (tx, rx) = std::sync::mpsc::channel();
+    *PDF.lock().map_err(|_| "The PDF could not start.")? = Some((path.clone(), tx));
+    ui(app, "pdf", json!({ "view": v, "report": report, "path": path.display().to_string() }));
+    let r = rx.recv_timeout(Duration::from_secs(240));
+    if let Ok(mut g) = PDF.lock() { g.take(); }
+    match r {
+        Ok(Ok(())) => Ok(json!({ "saved": path.display().to_string() })),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err("The window did not finish the PDF in time; is Datum Plan busy with a dialog?".into()),
+    }
+}
+
 /// Runs a tool on the plan shown and tells the window what changed.
 fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
+    if name == "save_view_pdf" { return view_pdf(app, a) }
     let st = app.state::<St>();
     let (r, shown) = {
         let mut ap = st.lock();
@@ -329,6 +380,12 @@ fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                 let k = a["tab"].as_u64().map(|k| k as usize).or_else(|| a["name"].as_str().and_then(|n| tabs.iter().position(|t| t.name.eq_ignore_ascii_case(n)))).filter(|&k| k < tabs.len()).ok_or("No such plan; see list_plans.")?;
                 show_tab(&mut ap, k);
                 Ok(json!({ "shown": tabs[k].name }))
+            }
+            "show_report" => {
+                let n = a["name"].as_str().ok_or("name is needed.")?;
+                let k = ap.doc.p.ui["reports"].as_array().and_then(|l| l.iter().position(|x| x["name"].as_str().is_some_and(|y| y.eq_ignore_ascii_case(n)))).ok_or("No such report; see list_reports.")?;
+                ui(app, "report", json!(k));
+                Ok(json!({ "shown": n }))
             }
             "get_view" => Ok(json!({ "plan": tab_list(&ap).get(ap.cur).map(|t| t.name.clone()), "window": VIEW.lock().ok().and_then(|g| g.clone()) })),
             "show_view" => {
@@ -453,8 +510,7 @@ fn run(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
             "export_plan" | "export_register" => {
                 let dir = app.path().download_dir().map_err(|_| "No Downloads folder.")?;
                 let p = &ap.doc.p;
-                let clean = |s: &str| s.chars().map(|c| if c.is_alphanumeric() || " -_().".contains(c) { c } else { ' ' }).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ");
-                let file = |stem: &str, ext: &str| { let base = clean(stem).chars().take(100).collect::<String>(); let mut f = dir.join(format!("{base}.{ext}")); for n in 2..1000 { if !f.exists() { break } f = dir.join(format!("{base} ({n}).{ext}")) } f };
+                let file = |stem: &str, ext: &str| download_file(&dir, stem, ext);
                 let fmt = ap.opts.date_fmt.clone();
                 let f = if name == "export_plan" {
                     let ext = a["format"].as_str().filter(|x| ["xlsx", "ods", "csv", "xml", "xer", "pmxml", "mpx", "json", "html", "ics"].contains(x)).ok_or("format is xlsx, ods, csv, xml, xer, pmxml, mpx, json, html or ics.")?;

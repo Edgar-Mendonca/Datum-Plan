@@ -640,6 +640,14 @@ const settle = async (flow: boolean) => {
   await Promise.all([...document.querySelectorAll<HTMLImageElement>("#printroot img")].map(i => i.decode().catch(() => {})));
   await Promise.race([new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))), new Promise(r => setTimeout(r, 300))]);
 };
+/** The pages are ready to print (File › Print must be open: it holds the printed copy). */
+export const printReady = () => pkind() === "flow" || pagesNow() > 0;
+/** AI Link › save_view_pdf: the pages written to the file the assistant asked for. */
+export const pdfFor = async (path: string) => {
+  const job = await startJob(); if (!job) throw new Error("Nothing to print in this view.");
+  await settle(job.flow);
+  try { await invoke("ai_pdf", { path, wMm: job.G.pw, hMm: job.G.ph, margins: job.flow ? [...ps.margins] : [0, 0, 0, 0], error: null }); } finally { job.end(); }
+};
 /** Print…: the print window, for a printer (or its own Save as PDF). */
 export const printNow = async () => {
   const job = await startJob(); if (!job) return;

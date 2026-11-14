@@ -143,6 +143,8 @@ const SectionView = (p: { s: Section; unit: string; base: string; live: boolean;
 };
 // The report and period chosen live outside the page: the printed copy is another instance and must show the same.
 const [bk, setK] = createSignal(0), [unit, setUnit] = createSignal("week");
+/** Shows the Report Builder's report number `k` (AI Link). */
+export const showReport = (k: number) => setK(k);
 export const ReportBuilder = () => {
   const reports = () => (P().ui?.reports ?? []) as Report[];
   const k = () => Math.min(bk(), Math.max(0, reports().length - 1));

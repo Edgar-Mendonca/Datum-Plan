@@ -2,7 +2,7 @@
 // (crates/core/src/assist.rs); the window switches the link on, sets up Claude Desktop, and shows
 // Claude's changes as they happen (each one an Undo step).
 import { Show, createSignal, createEffect, createRoot } from "solid-js";
-import { ALL, call, filter, group, level, openDialog, opts, refresh, sel, setBaseline, setCollapsed, setDetails, setDetailsTab, setFilter, setGroup, setLevel, setOpts, setOut, setSort, setTimeline, sort, table, toast, useTable, view, View } from "./store";
+import { ALL, call, filter, setBackstage, group, level, openDialog, opts, refresh, sel, setBaseline, setCollapsed, setDetails, setDetailsTab, setFilter, setGroup, setLevel, setOpts, setOut, setSort, setTimeline, sort, table, toast, useTable, view, View } from "./store";
 import { C, selectUid } from "./cmds";
 import { setShowBase, setShowCrit, setShowLabels, setShowLate, setShowSlack } from "./gantt";
 import { setPathOn } from "./path";
@@ -40,6 +40,7 @@ const DID: Record<string, string> = {
   place_picture: "placed or removed a picture",
   link_to_plan: "linked a task to another plan", update_links: "updated the links between plans", new_subplan: "made a new subplan", add_subplan: "added a subplan", remove_subplan: "took a subplan out of the project",
   open_subplans: "opened the subplans", apply_setup_to_subplans: "gave the master's setup to its subplans", new_scenario: "made a scenario", merge_scenario: "merged a scenario into the plan",
+  set_page_setup: "changed the page setup", set_report: "saved a report", delete_report: "deleted a report",
   set_pool_plan: "chose the resource pool", take_from_pool: "took the pool's resources", import_plan: "imported a plan",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
@@ -83,6 +84,24 @@ export const initAi = async () => {
         break;
       }
       case "path": setPathOn(!!a.on); if (a.uid) selectUid(a.uid); break;
+      case "report": C.view("builder"); (await import("./tools")).showReport(a); break;
+      case "pdf": {
+        // Lays the view out in File › Print (which holds the printed copy), then writes the asked file.
+        const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+        try {
+          if (typeof a.report === "number") { C.view("builder"); (await import("./tools")).showReport(a.report); } else if (a.view) C.view(a.view);
+          await wait(400);
+          setBackstage("print");
+          const m = await import("./print");
+          for (let i = 0; i < 40 && !m.printReady(); i++) await wait(250);
+          if (!m.printReady()) throw new Error("Nothing to print in this view.");
+          await m.pdfFor(a.path);
+          toast(`AI Link: the assistant saved ${a.path}`, true);
+        } catch (e) {
+          _i("ai_pdf", { path: a.path, wMm: 0, hMm: 0, margins: [0, 0, 0, 0], error: String((e as Error)?.message ?? e) }).catch(() => {});
+        } finally { setBackstage(null); }
+        break;
+      }
       case "panes": {
         if (typeof a.details === "boolean") setDetails(a.details);
         if (a.tab) { setDetails(true); setDetailsTab(a.tab); }

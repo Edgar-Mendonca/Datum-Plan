@@ -432,6 +432,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await ui("view", "network"); await p.waitForTimeout(400);
     check("…shows another view", await p.evaluate(() => !!document.querySelector('.side button[title="Network"].on, .side button[title="Network"].act, .side button.on[title="Network"]')) || (await p.$$(".netwrap, .network, canvas.net")).length > 0);
     check("…and the window tells the AI Link what it shows", await p.evaluate(() => window.__calls.some(c => c[0] === "ai_view_state" && c[1]?.state?.view === "network")));
+    // 0.9.14: save_view_pdf lays the Gantt out in File › Print and writes the asked file, then goes back.
+    await ui("pdf", { view: "gantt", report: null, path: "C:/Users/me/Downloads/Plan - gantt.pdf" });
+    for (let i = 0; i < 40 && !(await p.evaluate(() => window.__calls.some(c => c[0] === "ai_pdf"))); i++) await p.waitForTimeout(250);
+    { const c = await p.evaluate(() => window.__calls.filter(c => c[0] === "ai_pdf").pop()?.[1]);
+      check("The assistant saves the Gantt as a PDF: laid out at the paper size and written to the asked file", !!c && c.path.endsWith("Plan - gantt.pdf") && c.error === null && c.wMm > 100 && c.hMm > 100);
+      await p.waitForTimeout(300);
+      check("…and File › Print closes again", !(await p.$(".pprev"))); }
     await ui("view", "scurve"); await p.waitForTimeout(300); }
   // 0.8.16: Home › Spelling (F7): one unknown word at a time, Change writes the word picked.
   await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(150);

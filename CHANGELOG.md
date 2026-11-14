@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.14 — 2026-11-14
+
+AI Link, batch 5 of 5: print and reports (190 tools). Every command in the window now has a tool.
+
+- **Page setup**: get_page_setup, set_page_setup (paper, orientation, margins, pages wide, font, date range, timescale, title, subtitle, legend, footer, and pictures at the top from the plan's library).
+- **PDF**: save_view_pdf lays a view (or a Report Builder report) out with the page setup and saves it as a PDF in Downloads, as File › Print › Save as PDF does (Windows).
+- **Report Builder**: list_reports, set_report (sections: key figures, S-curve, progress per period, by phase, cost and earned value, manpower, task tables with your columns and filter, completed, look-ahead, milestones, behind baseline, notes, text, page breaks), delete_report, show_report.
+- **Progress report notes**: get_period_notes reads the notes of each week or month (set_period_notes writes them).
+
 ## 0.9.13 — 2026-11-14
 
 AI Link, batch 4 of 5: many plans (182 tools).

@@ -2,7 +2,7 @@
 
 Every command in Datum Plan should have an AI Link tool, so the assistant never has to work on the screen. This list maps each ribbon group and view to its tools. ✅ has a tool · 🔜 planned (batch and version) · — no tool, on purpose.
 
-Tools: 182 (0.9.13). The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`; other plan files, `assist::MANY_PLANS`) are run by `src-tauri/src/ai.rs`.
+Tools: 190 (0.9.14). Every command has a tool; the — rows are left out on purpose. The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`; other plan files, `assist::MANY_PLANS`) are run by `src-tauri/src/ai.rs`.
 
 ## Batches
 
@@ -12,7 +12,7 @@ Tools: 182 (0.9.13). The engine's tools are in `crates/core/src/assist.rs`; the 
 | 2 | 0.9.11 | Project setup and details: settings (start, calendar, hours per day, currency), schedule options, reporting periods, baseline lock, column titles, percent decimals, modules, bar colours, conditional formatting, report notes, task expenses/documents/notebook, resource rates/availability/leave, rules of credit, spelling, find and replace | ✅ |
 | 3 | 0.9.12 | Sheets in full: insert and delete rows and columns, move sheets, merge, freeze panes, conditional formatting, cell notes, hide rows and columns, tab colour, sort a range, remove duplicates, pictures, row heights | ✅ |
 | 4 | 0.9.13 | Many plans: links between plans, linked plans and what moved, update links, subplans, apply setup to subplans, scenarios, compare projects, portfolio, resource pool, import | ✅ |
-| 5 | 0.9.14 | Print and reports: page setup, a view as PDF in Downloads, report builder, progress report notes | 🔜 |
+| 5 | 0.9.14 | Print and reports: page setup, a view as PDF in Downloads, report builder, progress report notes | ✅ |
 
 ## Home
 
@@ -44,7 +44,7 @@ Tools: 182 (0.9.13). The engine's tools are in `crates/core/src/assist.rs`; the 
 | Update | Mark on Track, Update Tasks, Update Project | ✅ mark_on_track, update_progress, update_project |
 | Period | Update Progress, Look-ahead, Status Date, Reporting Periods | ✅ update_project, lookahead, set_status_date, set_reporting_periods |
 | Baselines | Set Baseline, Store Snapshot, Show Baseline, Tracking Gantt, Lock | ✅ set_baseline, take_snapshot, gantt_options, show_view, set_baseline_lock |
-| Progress Reports | Progress Report, S-Curves, Manpower, Dashboard | ✅ period_report, progress_curve, resource_usage (trade), show_view |
+| Progress Reports | Progress Report, S-Curves, Manpower, Dashboard | ✅ period_report, progress_curve, resource_usage (trade), show_view, set_period_notes, get_period_notes |
 | Measure | Rules of Credit | ✅ list_credit_rules, apply_credit_rule, define_credit_rule |
 
 ## Resource
@@ -60,10 +60,10 @@ Tools: 182 (0.9.13). The engine's tools are in `crates/core/src/assist.rs`; the 
 
 | Group | Command | Tool |
 |---|---|---|
-| View Reports | Dashboard, Progress Report, S-Curves, Report Builder | ✅ show_view, period_report, progress_curve, list_dashboards; Report Builder 🔜 5 |
+| View Reports | Dashboard, Progress Report, S-Curves, Report Builder | ✅ show_view, period_report, progress_curve, list_dashboards, list_reports, set_report, delete_report, show_report |
 | Health | Check Schedule, Risks, Schedule Risk, Delay Analysis, Milestone Trend | ✅ check_schedule, list_risks, schedule_risk, delay_analysis, milestone_trend |
 | Portfolio | Portfolio, Compare Projects | ✅ portfolio, compare_plans |
-| Export | Print / PDF, Page Setup, Export, Copy Picture | ✅ export_plan, export_register; Print and Page Setup 🔜 5; Copy Picture — |
+| Export | Print / PDF, Page Setup, Export, Copy Picture | ✅ export_plan, export_register, get_page_setup, set_page_setup, save_view_pdf; Print to a printer and Copy Picture — (the user chooses the printer; the assistant reads the plan) |
 
 ## Project
 
@@ -108,5 +108,5 @@ Tools: 182 (0.9.13). The engine's tools are in `crates/core/src/assist.rs`; the 
 | New, Open, Save, Save As, Close | ✅ new_plan, list_templates, open_plan, save_plan, save_plan_as, close_plan |
 | Import | ✅ import_plan (plan files; a table needs its columns matched in the window) |
 | Export | ✅ export_plan |
-| Print | 🔜 5 |
+| Print | ✅ save_view_pdf (a PDF in Downloads), get_page_setup, set_page_setup; a printer — (the user picks it) |
 | Options (the app's own settings), Help, Check for Updates, GitHub | — |

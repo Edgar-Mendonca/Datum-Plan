@@ -230,18 +230,29 @@ pub fn tools() -> Value {
         { "name": "take_from_pool", "description": "The shown plan's resources take the pool plan's rates, units and calendars (matched by name); add also brings the pool's other resources.", "inputSchema": obj(json!({ "add": { "type": "boolean" } }), &[]) },
         { "name": "import_plan", "description": "Open a plan from another scheduling program's file (.xml, .xer, .mpp, .json) in a new tab, with the import notes. Only when the user asks, with the path they give.", "inputSchema": obj(json!({ "path": path("The file to import") }), &["path"]) },
     ]);
-    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window, setup, sheets, many].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
+    // Print and reports (0.9.14).
+    let print = json!([
+        { "name": "get_page_setup", "description": "The plan's page setup for printing and PDFs (paper, orientation, margins, pages wide, font, date range, header and footer), and the paper sizes.", "inputSchema": none() },
+        { "name": "set_page_setup", "description": "Change the page setup (only the keys given): paper (A4, A3, A5, A2, A1, Letter, Legal, Tabloid), landscape, margins [top,right,bottom,left] mm, fit (pages wide), scale (%), font (pt), range (all or dates) with from and to (YYYY-MM-DD), unit (auto, day, week, month, quarter), wrap, notes, grid, idCol, repeat (headings on every page), legend (every, last, none), legendText, titleOn, title, titleSize, subtitle, footer: fPrinted, fTime, fPage, fStatus, fCompany, fRev, fText; subs (shown, collapsed, expanded, none). header_pictures {\"left\":[\"company\"],\"right\":[3]} places pictures (list_pictures ids) at the top.", "inputSchema": obj(json!({ "setup": { "type": "object" }, "header_pictures": { "type": "object" } }), &[]) },
+        { "name": "list_reports", "description": "The plan's own reports (Report Builder): each report's name and sections, and the kinds of section.", "inputSchema": none() },
+        { "name": "set_report", "description": "Add or replace a Report Builder report: name and sections [{\"kind\":\"kpis\"},{\"kind\":\"scurve\",\"unit\":\"month\"},{\"kind\":\"table\",\"title\":\"Critical tasks\",\"cols\":[\"code\",\"name\",\"finish\",\"tf\"],\"filter\":\"Critical\"},{\"kind\":\"text\",\"title\":\"Summary\",\"text\":\"…\"}]. Kinds: kpis, scurve, periodbars, phases, costev, manpower, table, completed, lookahead, milestones, behind, notes, text, break. rename_from renames.", "inputSchema": obj(json!({ "name": { "type": "string" }, "sections": { "type": "array", "items": { "type": "object" } }, "rename_from": { "type": "string" } }), &["name", "sections"]) },
+        { "name": "delete_report", "description": "Delete a Report Builder report by name. Ask the user first.", "inputSchema": obj(json!({ "name": { "type": "string" } }), &["name"]) },
+        { "name": "get_period_notes", "description": "The progress report notes written for each week or month: summary, progress, issues, actions, look-ahead (set_period_notes writes them).", "inputSchema": obj(json!({ "period": { "type": "string", "enum": ["week", "month"] } }), &[]) },
+        { "name": "show_report", "description": "Show a Report Builder report (by name) in the window.", "inputSchema": obj(json!({ "name": { "type": "string" } }), &["name"]) },
+        { "name": "save_view_pdf", "description": "Save a view as a PDF in the user's Downloads folder, laid out with the plan's page setup, exactly as File › Print › Save as PDF: the view shown, or view (gantt, tracking, network, calendar, sheets, dashboard, progress, scurve, reports, …), or report (a Report Builder report's name). Windows only. Returns the file's path.", "inputSchema": obj(json!({ "view": { "type": "string" }, "report": { "type": "string" } }), &[]) },
+    ]);
+    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window, setup, sheets, many, print].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
     // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
     for t in &mut all {
         let n = t["name"].as_str().unwrap_or("").to_string();
-        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "save_plan" | "export_plan" | "export_register" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan") && !MANY_PLANS_CHANGE.contains(&n.as_str()),
+        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "save_plan" | "export_plan" | "export_register" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan" | "save_view_pdf") && !MANY_PLANS_CHANGE.contains(&n.as_str()),
             "destructiveHint": n.starts_with("delete_") || n == "remove_duplicates" || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "save_plan_as" | "close_plan" | "apply_operation" | "merge_scenario" | "remove_subplan"), "openWorldHint": false });
     }
     Value::Array(all)
 }
 
 /// The tools the window runs itself (its tabs, files and what it shows); `call` does not know them.
-pub const WINDOW_TOOLS: [&str; 22] = ["list_plans", "switch_plan", "save_plan", "export_plan", "export_register", "get_view", "show_view", "use_table", "filter_view", "group_view", "sort_view",
+pub const WINDOW_TOOLS: [&str; 24] = ["show_report", "save_view_pdf", "list_plans", "switch_plan", "save_plan", "export_plan", "export_register", "get_view", "show_view", "use_table", "filter_view", "group_view", "sort_view",
     "outline_view", "select_task", "zoom_view", "gantt_options", "task_path_view", "show_panes", "list_templates", "new_plan", "open_plan", "save_plan_as", "close_plan"];
 
 /// Many plans: the window runs these (they read and write other plan files), and those that change something.
@@ -249,6 +260,13 @@ pub const MANY_PLANS: [&str; 20] = ["list_plan_links", "list_link_targets", "lin
     "apply_setup_to_subplans", "list_scenarios", "new_scenario", "compare_scenario", "merge_scenario", "compare_plans", "portfolio", "resource_pool", "set_pool_plan", "take_from_pool", "import_plan"];
 pub const MANY_PLANS_CHANGE: [&str; 12] = ["link_to_plan", "update_links", "new_subplan", "add_subplan", "remove_subplan", "open_subplans", "apply_setup_to_subplans", "new_scenario", "merge_scenario",
     "set_pool_plan", "take_from_pool", "import_plan"];
+
+/// Paper sizes the window prints on.
+pub const PAPERS: [&str; 8] = ["A4", "A3", "A5", "A2", "A1", "Letter", "Legal", "Tabloid"];
+/// The Report Builder's sections: kind and default title (as `ui/src/tools.tsx` KINDS).
+pub const REPORT_KINDS: [(&str, &str); 14] = [("kpis", "Key figures"), ("scurve", "S-curve"), ("periodbars", "Progress per period"), ("phases", "Progress by phase"), ("costev", "Cost and earned value"),
+    ("manpower", "Manpower histogram"), ("table", "Task table"), ("completed", "Completed this period"), ("lookahead", "Look-ahead"), ("milestones", "Milestones"),
+    ("behind", "Behind baseline"), ("notes", "Period notes"), ("text", "Text"), ("break", "Page break")];
 
 /// What the assistant is told when it connects.
 pub const INSTRUCTIONS: &str = "You are connected to the Datum Plan window the user has open: a project schedule (CPM) with tasks, links, resources, baselines, progress and sheets. \
@@ -380,6 +398,7 @@ pub fn changes(name: &str) -> bool {
         | "set_resource_leave" | "define_credit_rule" | "find_replace"
         | "insert_rows_columns" | "delete_rows_columns" | "shift_cells" | "move_sheet" | "merge_cells" | "freeze_panes" | "set_sheet_conditional_formatting" | "set_cell_notes"
         | "hide_rows_columns" | "set_sheet_tab" | "set_row_heights" | "sort_range" | "remove_duplicates" | "place_picture"
+        | "set_page_setup" | "set_report" | "delete_report"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
         | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
         | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
@@ -906,6 +925,90 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             let note = PeriodNote { kind: kind.into(), end: Some(end), summary: g("summary", &old.summary), progress: g("progress", &old.progress), issues: g("issues", &old.issues), actions: g("actions", &old.actions), look_ahead: g("look_ahead", &old.look_ahead), photos: old.photos };
             apply(doc, Op::Note { note })?;
             Ok(json!({ "period": kind, "end": end.to_string() }))
+        }
+        "get_period_notes" => {
+            let want = s(a, "period");
+            Ok(json!(doc.p.notes.iter().filter(|n| want.is_none_or(|w| w == n.kind)).map(|n| json!({ "period": n.kind, "end": n.end.map(|d| d.to_string()), "summary": n.summary, "progress": n.progress,
+                "issues": n.issues, "actions": n.actions, "look_ahead": n.look_ahead, "photos": n.photos.len() })).collect::<Vec<_>>()))
+        }
+        "get_page_setup" => Ok(json!({ "page": doc.p.ui.get("page").cloned().unwrap_or(json!({})), "papers": PAPERS,
+            "note": "Keys not saved use the window's defaults: A4 landscape, margins [12,10,12,10] mm (top, right, bottom, left), 1 page wide, font 10, a title with the plan's name, printed date and page number at the bottom." })),
+        "set_page_setup" => {
+            let mut pg = doc.p.ui.get("page").cloned().filter(Value::is_object).unwrap_or(json!({}));
+            let o = pg.as_object_mut().ok_or("The page setup is not readable.")?;
+            for (k, v) in a["setup"].as_object().into_iter().flatten() {
+                let ok = match k.as_str() {
+                    "paper" => v.as_str().is_some_and(|p| PAPERS.contains(&p)),
+                    "landscape" | "wrap" | "notes" | "grid" | "idCol" | "titleOn" | "fPrinted" | "fTime" | "fPage" | "fStatus" | "fCompany" | "repeat" | "fitCols" | "fitText" => v.is_boolean(),
+                    "margins" => v.as_array().is_some_and(|m| m.len() == 4 && m.iter().all(|x| x.as_f64().is_some_and(|x| (0.0..=60.0).contains(&x)))),
+                    "fit" => v.as_u64().is_some_and(|x| (1..=20).contains(&x)),
+                    "scale" => v.as_f64().is_some_and(|x| (10.0..=400.0).contains(&x)),
+                    "font" => v.as_f64().is_some_and(|x| (5.0..=24.0).contains(&x)),
+                    "titleSize" => v.as_f64().is_some_and(|x| (8.0..=48.0).contains(&x)),
+                    "range" => matches!(v.as_str(), Some("all" | "dates")),
+                    "from" | "to" => v.as_str().is_some_and(|d| d.is_empty() || parse::date(d).is_ok()),
+                    "legend" => matches!(v.as_str(), Some("every" | "last" | "none")),
+                    "unit" => matches!(v.as_str(), Some("auto" | "day" | "week" | "month" | "quarter")),
+                    "subs" => matches!(v.as_str(), Some("shown" | "collapsed" | "expanded" | "none")),
+                    "title" | "subtitle" | "legendText" | "fRev" | "fText" => v.is_string(),
+                    _ => return Err(format!("Unknown page setup key {k}; see set_page_setup.")),
+                };
+                if !ok { return Err(format!("{k} cannot be {v}.")) }
+                o.insert(k.clone(), v.clone());
+            }
+            if let Some(h) = a["header_pictures"].as_object() {
+                let mut pics = o.get("pics").cloned().filter(|p| p.as_array().is_some_and(|x| x.len() == 3)).unwrap_or(json!([[{ "v": "@company", "h": 40 }], [], []]));
+                for (i, side) in ["left", "centre", "right"].into_iter().enumerate() {
+                    let Some(list) = h.get(side).or_else(|| (side == "centre").then(|| h.get("center")).flatten()) else { continue };
+                    let v = list.as_array().ok_or("Each side of header_pictures is a list.")?.iter().map(|x| {
+                        if x.as_str() == Some("company") { return Ok(json!({ "v": "@company", "h": 40 })) }
+                        let id = x.as_u64().ok_or("A header picture is a picture id (list_pictures) or \"company\".")?;
+                        if !doc.p.pictures.iter().any(|p| p.id as u64 == id) { return Err(format!("No picture {id}; see list_pictures.")) }
+                        Ok(json!({ "v": format!("@pic:{id}"), "h": 40 }))
+                    }).collect::<Result<Vec<_>, String>>()?;
+                    pics[i] = json!(v);
+                }
+                o.insert("pics".into(), pics);
+                o.insert("hf".into(), json!("simple"));
+            }
+            if o.is_empty() { return Err("Give setup (keys to change) or header_pictures.".into()) }
+            apply(doc, Op::Ui { key: "page".into(), value: pg })?;
+            Ok(json!({ "page": doc.p.ui["page"] }))
+        }
+        "list_reports" => Ok(json!({ "reports": doc.p.ui.get("reports").cloned().unwrap_or(json!([])), "section_kinds": REPORT_KINDS.iter().map(|(k, l)| json!({ "kind": k, "title": l })).collect::<Vec<_>>() })),
+        "set_report" | "delete_report" => {
+            let rn = s(a, "name").map(str::trim).filter(|x| !x.is_empty()).ok_or("name is needed.")?;
+            let mut list = doc.p.ui.get("reports").and_then(Value::as_array).cloned().unwrap_or_default();
+            let at = |l: &[Value], n: &str| l.iter().position(|x| x["name"].as_str().is_some_and(|y| y.eq_ignore_ascii_case(n)));
+            if name == "delete_report" {
+                let k = at(&list, rn).ok_or("No such report; see list_reports.")?;
+                list.remove(k);
+            } else {
+                let c = Calc::new(&doc.p, fmt, today);
+                let saved: Vec<Filter> = serde_json::from_value(doc.p.ui["filters"].clone()).unwrap_or_default();
+                let mut secs = vec![];
+                for x in a["sections"].as_array().filter(|v| !v.is_empty()).ok_or("sections is needed (a list).")? {
+                    let kind = x["kind"].as_str().and_then(|k| REPORT_KINDS.iter().find(|r| r.0 == k)).ok_or_else(|| format!("kind is one of: {}.", REPORT_KINDS.map(|r| r.0).join(", ")))?;
+                    let mut o = serde_json::Map::new();
+                    o.insert("kind".into(), json!(kind.0));
+                    o.insert("title".into(), json!(x["title"].as_str().filter(|t| !t.trim().is_empty()).unwrap_or(kind.1)));
+                    if let Some(t) = x["text"].as_str() { o.insert("text".into(), json!(t)); }
+                    if let Some(cols) = x["cols"].as_array().or(x["columns"].as_array()) {
+                        let keys = cols.iter().map(|f| { let f = f.as_str().unwrap_or(""); c.key_of(f).ok_or_else(|| format!("No field \"{f}\"; see list_fields.")) }).collect::<Result<Vec<_>, _>>()?;
+                        o.insert("cols".into(), json!(keys));
+                    }
+                    if let Some(f) = x["filter"].as_str().filter(|f| !f.is_empty()) {
+                        let f = builtin_filters().into_iter().chain(saved.iter().cloned()).find(|y| y.name.eq_ignore_ascii_case(f)).ok_or_else(|| format!("No filter {f}; see list_filters."))?;
+                        o.insert("filter".into(), json!(f.name));
+                    }
+                    if let Some(u) = x["unit"].as_str() { if !matches!(u, "week" | "month") { return Err("unit is week or month.".into()) } o.insert("unit".into(), json!(u)); }
+                    secs.push(Value::Object(o));
+                }
+                let rep = json!({ "name": rn, "sections": secs });
+                match at(&list, s(a, "rename_from").unwrap_or(rn)) { Some(k) => list[k] = rep, None => list.push(rep) }
+            }
+            apply(doc, Op::Ui { key: "reports".into(), value: json!(list) })?;
+            Ok(json!({ "reports": list.iter().map(|x| x["name"].clone()).collect::<Vec<_>>() }))
         }
         "set_task_expenses" | "set_task_documents" | "set_task_notebook" => {
             let uid = u(a, "uid")?;
@@ -1737,6 +1840,37 @@ mod tests {
         assert_eq!(run(&mut doc, "list_pictures", json!({})).unwrap()[0]["placed"][0], "Vendors!E1");
         run(&mut doc, "place_picture", json!({ "name": "Vendors", "cell": "E1", "remove": true })).unwrap();
         assert!(doc.p.sheets[0].images.is_empty());
+    }
+    #[test]
+    fn page_setup_reports_and_period_notes() {
+        let mut doc = plan();
+        run(&mut doc, "set_page_setup", json!({ "setup": { "paper": "A3", "landscape": true, "margins": [10, 8, 10, 8], "fit": 2, "subtitle": "Rev B", "fPage": true, "range": "dates", "from": "2027-01-04", "to": "2027-03-31" } })).unwrap();
+        let pg = &run(&mut doc, "get_page_setup", json!({})).unwrap()["page"];
+        assert_eq!((pg["paper"].as_str(), pg["fit"].as_u64(), pg["subtitle"].as_str()), (Some("A3"), Some(2), Some("Rev B")));
+        for bad in [json!({ "paper": "B9" }), json!({ "margins": [1, 2] }), json!({ "colour": "red" }), json!({ "from": "someday" })] {
+            assert!(run(&mut doc, "set_page_setup", json!({ "setup": bad })).is_err(), "{bad}");
+        }
+        doc.apply(Op::Picture { id: 0, pic: Some(Picture { id: 0, name: "Client logo".into(), role: "client".into(), data: "data:image/png;base64,AAAA".into() }) }, "%d-%b-%y").unwrap();
+        let pid = doc.p.pictures[0].id;
+        run(&mut doc, "set_page_setup", json!({ "header_pictures": { "left": ["company"], "right": [pid] } })).unwrap();
+        assert_eq!(doc.p.ui["page"]["pics"][2][0]["v"], format!("@pic:{pid}"));
+        assert_eq!(doc.p.ui["page"]["paper"], "A3", "earlier keys stay");
+        assert!(run(&mut doc, "set_page_setup", json!({ "header_pictures": { "left": [999] } })).is_err());
+        // Reports: added, renamed, checked and deleted.
+        run(&mut doc, "set_report", json!({ "name": "Weekly", "sections": [{ "kind": "kpis" }, { "kind": "table", "title": "Late", "cols": ["Name", "finish"], "filter": "critical" }, { "kind": "text", "text": "All well." }] })).unwrap();
+        let r = &doc.p.ui["reports"][0];
+        assert_eq!((r["sections"][0]["title"].as_str(), r["sections"][1]["cols"][0].as_str(), r["sections"][1]["filter"].as_str()), (Some("Key figures"), Some("name"), Some("Critical")));
+        run(&mut doc, "set_report", json!({ "name": "Weekly client", "rename_from": "Weekly", "sections": [{ "kind": "scurve", "unit": "month" }] })).unwrap();
+        assert_eq!((doc.p.ui["reports"].as_array().unwrap().len(), doc.p.ui["reports"][0]["name"].as_str()), (1, Some("Weekly client")));
+        assert!(run(&mut doc, "set_report", json!({ "name": "X", "sections": [{ "kind": "pie" }] })).is_err());
+        assert!(run(&mut doc, "set_report", json!({ "name": "X", "sections": [{ "kind": "table", "filter": "No such" }] })).is_err());
+        assert_eq!(run(&mut doc, "list_reports", json!({})).unwrap()["section_kinds"].as_array().unwrap().len(), 14);
+        run(&mut doc, "delete_report", json!({ "name": "weekly client" })).unwrap();
+        assert!(doc.p.ui["reports"].as_array().unwrap().is_empty());
+        // Period notes read back.
+        run(&mut doc, "set_period_notes", json!({ "period": "week", "end": "2027-01-08", "summary": "Good week." })).unwrap();
+        assert_eq!(run(&mut doc, "get_period_notes", json!({ "period": "week" })).unwrap()[0]["summary"], "Good week.");
+        assert!(run(&mut doc, "get_period_notes", json!({ "period": "month" })).unwrap().as_array().unwrap().is_empty());
     }
     #[test]
     fn the_window_tools_are_listed_and_marked() {
