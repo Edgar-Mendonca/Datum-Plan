@@ -1,6 +1,7 @@
 // Screenshots for the guide (docs/guide/img): the built window (ui/dist) with a plan in progress
 // (cargo run -p datum-core --example dump guide > tests_ui/guide_fixture.json) behind the mocked
 // bridge, with numbered markers drawn on the page. Run: npm run build:ui && node tests_ui/guide_shots.cjs
+// README=1 takes the README's pictures instead (docs/images): some of the same views, without markers.
 const { chromium } = require("playwright");
 const fs = require("fs"), http = require("http"), path = require("path");
 const root = path.join(__dirname, "../ui/dist"), out = path.join(__dirname, "../docs/guide/img");
@@ -15,6 +16,8 @@ const srv = http.createServer((q, r) => {
   await new Promise(ok => srv.listen(0, ok));
   const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
   const page = async fx => { const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
+  // The README's pictures: no first-run tip, and the Gantt without the empty details pane.
+  if (process.env.README) await p.addInitScript(() => { localStorage.setItem("guide-hint", "1"); localStorage.setItem("pane-details", "0"); });
   await p.addInitScript(f => {
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "Northwind Engineering", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "0.5.3", checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
@@ -63,10 +66,14 @@ const srv = http.createServer((q, r) => {
     }
   }, marks);
   /** `clip`: only part of the window (x, y, width, height), or a selector to frame with a margin. */
+  const README = process.env.README ? { window: "gantt", tracking: "tracking", network: "network", risk: "risk", dashboards: "dashboards", sheets: "sheets", scurve: "scurve", lookahead: "lookahead" } : null;
+  if (README) await p.addStyleTag({ content: ".toast, .toasts { display: none !important }" });
   const shot = async (name, marks = [], clip) => {
+    if (README && !README[name]) return;
+    if (README) { marks = []; name = README[name]; }
     await mark(marks); await wait(150);
     if (typeof clip === "string") clip = await p.evaluate(s => { const r = document.querySelector(s).getBoundingClientRect(); return { x: Math.max(0, r.x - 24), y: Math.max(0, r.y - 24), width: r.width + 48, height: r.height + 48 }; }, clip);
-    await p.screenshot({ path: path.join(out, `${name}.png`), clip });
+    await p.screenshot({ path: path.join(README ? path.join(__dirname, "../docs/images") : out, `${name}.png`), clip });
     await mark([]); console.log("shot", name);
   };
   const TOP = { x: 0, y: 0, width: 1440, height: 250 };
