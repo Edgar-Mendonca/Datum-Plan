@@ -470,7 +470,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 | 1.0.0 | Stable | — | ⬜ |
 
 ### Decided not to build (user, 2026-11-13)
-Multi-user, EPS/OBS server and user rights (Datum Plan stays local, private, one user, no telemetry); .mpp files; Office one-click integration; a VBA-style macro or Python editor (the AI Link does automation in plain words); a cloud version; 4D BIM until Datum Layout can provide the model.
+Multi-user, EPS/OBS server and user rights (Datum Plan stays local, private, one user, no telemetry); .mpp files; Office one-click integration; a VBA-style macro or Python editor (the AI Link does automation in plain words); a cloud version; 4D BIM until Datum Layout can provide the model. A chat panel inside Datum Plan driven by the user's Claude Code login (user, 2026-11-14): Anthropic's legal and compliance page does not permit third-party apps to offer Claude.ai login or route requests through plan credentials; running Claude Code inside a product needs the Commercial Terms, so it is not a clear yes. The AI Link stays MCP through Claude Desktop or Claude Code; a built-in panel only with each user's own API key, or with Anthropic's written permission.
 
 ### Features that go beyond the usual scheduler
 - Weekly/monthly progress reports ✅
