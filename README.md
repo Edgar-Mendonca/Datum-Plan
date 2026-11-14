@@ -4,14 +4,14 @@
 
 # Datum Plan
 
-**Plan, schedule, track and report your projects, with Claude working beside you.<br>One small, fast, private app for Windows.**
+**Plan, schedule, track and report your projects, with an AI assistant working beside you.<br>One small, fast, private app for Windows.**
 
 [![Latest release](https://img.shields.io/github/v/release/Edgar-Mendonca/Datum-Plan?label=release&color=0B5CAD)](https://github.com/Edgar-Mendonca/Datum-Plan/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/Edgar-Mendonca/Datum-Plan/ci.yml?label=CI&logo=githubactions&logoColor=white)](https://github.com/Edgar-Mendonca/Datum-Plan/actions/workflows/ci.yml)
 [![Downloads](https://img.shields.io/github/downloads/Edgar-Mendonca/Datum-Plan/total?color=0B5CAD)](https://github.com/Edgar-Mendonca/Datum-Plan/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B5CAD)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?logo=windows&logoColor=white)](https://github.com/Edgar-Mendonca/Datum-Plan/releases/latest)
-[![AI Link: Claude](https://img.shields.io/badge/AI_Link-Claude_%C2%B7_108_tools-D97757)](#claude-works-on-your-plan-ai-link)
+[![AI Link: MCP](https://img.shields.io/badge/AI_Link-MCP_%C2%B7_108_tools-D97757)](#ai-link-an-assistant-works-on-your-plan)
 [![Rust](https://img.shields.io/badge/Rust-engine-B7410E?logo=rust&logoColor=white)](crates/core)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
 
@@ -30,7 +30,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 
 | | |
 |---|---|
-| 🤖 **Claude works on your plan** | Ask in plain words in Claude Desktop: *"Add a 3-day pump test after task 24 and link handover to it"*, *"Which tasks are late and why?"*, *"Write this month's status report"*. **108 tools**, one-click setup, every change shown at once and undone with Ctrl+Z. |
+| 🤖 **AI Link: an assistant works on your plan** | Ask in plain words: *"Add a 3-day pump test after task 24 and link handover to it"*, *"Which tasks are late and why?"*, *"Write this month's status report"*. **108 tools**, one-click setup, every change shown at once and undone with Ctrl+Z. |
 | 🧭 **Task Path** | Click a task: its driving predecessors, other predecessors, driven successors and other successors light up in the sheet and the Gantt. |
 | ⚖️ **Delay analysis built in** | As-planned against as-built, windows between snapshots, time impact, impacted as-planned and collapsed as-built, on the data your plan already holds, with delay events and fragnets. |
 | 📑 **Registers in the plan** | The contract (dates with delay damages, payment milestones), the vendor document register (review cycle, return codes, transmittals) and procurement (orders, expediting, float to need), each tied to tasks and progress (Project › Modules switches them on). |
@@ -41,20 +41,20 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 | 🔄 **Files that travel** | XER written for the version the receiver runs (codes, custom fields, steps, notes), Project XML, PMXML, MPX, workbooks with formulas; every import ends with a report that checks each task's dates against the file. |
 | 🔒 **Local and private** | Plans are `.dplan` files on your computer. No sign-in, no cloud, no telemetry. The only network call is the update check (and the AI Link, only on this computer, only while you switch it on). |
 
-## Claude works on your plan (AI Link)
+## AI Link: an assistant works on your plan
 
-**Home › AI Link** lets Claude, in the Claude Desktop app with your own Claude account, read and change the plan you have open, live. No API key is needed.
+**Home › AI Link** connects an AI assistant on your computer to the plan you have open, through the Model Context Protocol (MCP), and lets it read and change the plan live. For now it links to Claude Desktop, with your own account; no API key is needed.
 
-1. **Turn on.** Only Claude on this computer can reach the plan (127.0.0.1), with a key that changes each time.
-2. **Add to Claude.** Datum Plan makes a Claude Desktop extension and opens it: click **Install**. Nothing to edit.
-3. **Ask.** Start a new chat in Claude Desktop.
+1. **Turn on.** Only an assistant on this computer can reach the plan (127.0.0.1), with a key that changes each time.
+2. **Add the link to your assistant.** One click makes an extension and opens it: click **Install**. Nothing to edit.
+3. **Ask.** Start a new chat in the assistant.
 
-Claude reads before it changes, keeps to the plan's rules (a locked baseline stays locked) and never saves unless you ask. Each change is one Undo step with a note saying what Claude did. New tools reach Claude with each Datum Plan update; nothing needs installing again.
+The assistant reads before it changes, keeps to the plan's rules (a locked baseline stays locked) and never saves unless you ask. Each change is one Undo step with a note saying what it did. New tools arrive with each Datum Plan update; nothing needs installing again.
 
 <details>
 <summary><b>The 108 tools</b></summary>
 
-| Area | Claude can |
+| Area | The assistant can |
 |---|---|
 | Plans | list open plans, switch, save (when asked), undo, redo |
 | Reading | plan summary, tasks with any filter and fields, one task in full, fields, sheets |
@@ -74,7 +74,7 @@ Claude reads before it changes, keeps to the plan's rules (a locked baseline sta
 
 </details>
 
-Datum Plan's link is a standard MCP server, so other AI apps that run local tools can use it too (the command is in the AI Link dialog); it is made and tested for Claude. `datum-cli mcp` also works on plan files without the window.
+The link is a standard MCP server: other AI apps that run local MCP tools may work with it too (the command is in the AI Link dialog). `datum-cli mcp` also works on plan files without the window.
 
 ## Everything else, in one window
 
@@ -138,7 +138,7 @@ The **Datum Plan Guide** walks through everything step by step, with pictures: [
 2. Type task names, durations (`5d`, `2w`, `0` for a milestone) and predecessors (`3`, `4SS+2d`).
 3. Indent tasks to build the outline; assign people in the Resource Names column (`Design Engineer[50%]`).
 4. **Progress › Set Baseline**, then record progress as work happens and open the **Tracking Gantt**.
-5. **Report › Dashboard** or **File › Print** to share it, or ask Claude: *"Write a short status report."*
+5. **Report › Dashboard** or **File › Print** to share it, or ask the AI Link: *"Write a short status report."*
 
 ## Roadmap
 
@@ -184,4 +184,4 @@ Found a bug or have an idea? [Open an issue](https://github.com/Edgar-Mendonca/D
 
 MIT © 2026 Edgar Mendonca. Third-party notices are in [NOTICE](NOTICE).
 
-Product and file-format names are trademarks of their owners and are used only to describe file compatibility. Claude is a product of Anthropic; Datum Plan is not made by or affiliated with Anthropic.
+Product and file-format names are trademarks of their owners and are used only to describe file compatibility.

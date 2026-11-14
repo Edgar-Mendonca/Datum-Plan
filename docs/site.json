@@ -53,10 +53,11 @@
   ],
   "screenshots": [
     "docs/images/gantt.png",
-    "docs/images/tracking.png",
+    "docs/images/dashboards.png",
+    "docs/images/sheets.png",
     "docs/images/risk.png",
-    "docs/images/network.png",
-    "docs/images/dashboard.png"
+    "docs/images/scurve.png",
+    "docs/images/tracking.png"
   ],
   "roadmap": [
     {
