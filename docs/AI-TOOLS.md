@@ -2,15 +2,15 @@
 
 Every command in Datum Plan should have an AI Link tool, so the assistant never has to work on the screen. This list maps each ribbon group and view to its tools. ✅ has a tool · 🔜 planned (batch and version) · — no tool, on purpose.
 
-Tools: 127 (0.9.10). The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`) are run by `src-tauri/src/ai.rs`.
+Tools: 147 (0.9.11). The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`) are run by `src-tauri/src/ai.rs`.
 
 ## Batches
 
 | Batch | Version | Theme | Status |
 |---|---|---|---|
 | 1 | 0.9.10 | Drive the window: views, tables, filter, group, sort, outline, select, zoom, Gantt options, Task Path, panes, new/open/save as/close plans, what the window shows | ✅ |
-| 2 | 0.9.11 | Project setup and details: start date, project calendar, hours per day, baseline lock, column titles, bar styles, conditional formatting, modules, period notes, task notebook/expenses/documents, resource rates/availability/leave, resource pool, rules of credit, spelling | 🔜 |
-| 3 | 0.9.12 | Sheets in full: insert and delete rows and columns, move sheets, merge, freeze panes, conditional formatting, cell notes, hide rows and columns, tab colour, sort a range, remove duplicates, pictures | ⬜ |
+| 2 | 0.9.11 | Project setup and details: settings (start, calendar, hours per day, currency), schedule options, reporting periods, baseline lock, column titles, percent decimals, modules, bar colours, conditional formatting, report notes, task expenses/documents/notebook, resource rates/availability/leave, rules of credit, spelling, find and replace | ✅ |
+| 3 | 0.9.12 | Sheets in full: insert and delete rows and columns, move sheets, merge, freeze panes, conditional formatting, cell notes, hide rows and columns, tab colour, sort a range, remove duplicates, pictures | 🔜 |
 | 4 | 0.9.13 | Many plans: links between plans, linked plans and what moved, update links, subplans, apply setup to subplans, scenarios, compare projects, portfolio | ⬜ |
 | 5 | 0.9.14 | Print and reports: page setup, a view as PDF in Downloads, report builder, progress report notes | ⬜ |
 
@@ -22,7 +22,7 @@ Tools: 127 (0.9.10). The engine's tools are in `crates/core/src/assist.rs`; the 
 | Font, Alignment | Font, size, bold, colours, alignment | ✅ format_tasks, format_sheet_cells |
 | Tasks | New Task, Outdent, Indent, Information, Link, Unlink, Scroll to Task | ✅ add_tasks, outdent_tasks, indent_tasks, get_task, link_tasks, unlink_tasks, select_task |
 | Editing | Find, Fill, Sort, Clear | ✅ get_tasks (search), set_task_fields, sort_view, set_task_fields |
-| Proofing | Spelling | 🔜 2 |
+| Proofing | Spelling | ✅ check_spelling |
 | AI | AI Link | — (it is the link) |
 
 ## Schedule
@@ -35,26 +35,26 @@ Tools: 127 (0.9.10). The engine's tools are in `crates/core/src/assist.rs`; the 
 | Tasks | Manually / Auto Schedule, Split, Inactivate | ✅ set_task_fields (mode, active), split_task |
 | Properties | Information, Notes, Details, Add to Timeline | ✅ get_task, set_task_notes, show_panes, set_task_fields (timeline) |
 | Paths | Critical Path, Longest Path, Task Path, Check Schedule | ✅ filter_view, get_tasks (critical), task_path, task_path_view, check_schedule |
-| Change | Scroll to Task, Inspect, Global Change, Schedule Options | ✅ select_task, get_task; Global Change and Schedule Options 🔜 2 |
+| Change | Scroll to Task, Inspect, Global Change, Schedule Options | ✅ select_task, get_task; find_replace, set_schedule_options |
 
 ## Progress
 
 | Group | Command | Tool |
 |---|---|---|
 | Update | Mark on Track, Update Tasks, Update Project | ✅ mark_on_track, update_progress, update_project |
-| Period | Update Progress, Look-ahead, Status Date, Reporting Periods | ✅ update_project, lookahead, set_status_date; Reporting Periods 🔜 2 |
-| Baselines | Set Baseline, Store Snapshot, Show Baseline, Tracking Gantt, Lock | ✅ set_baseline, take_snapshot, gantt_options, show_view; Lock 🔜 2 |
+| Period | Update Progress, Look-ahead, Status Date, Reporting Periods | ✅ update_project, lookahead, set_status_date, set_reporting_periods |
+| Baselines | Set Baseline, Store Snapshot, Show Baseline, Tracking Gantt, Lock | ✅ set_baseline, take_snapshot, gantt_options, show_view, set_baseline_lock |
 | Progress Reports | Progress Report, S-Curves, Manpower, Dashboard | ✅ period_report, progress_curve, resource_usage (trade), show_view |
-| Measure | Rules of Credit | ✅ list_credit_rules, apply_credit_rule; define a rule 🔜 2 |
+| Measure | Rules of Credit | ✅ list_credit_rules, apply_credit_rule, define_credit_rule |
 
 ## Resource
 
 | Group | Command | Tool |
 |---|---|---|
 | View | Resource Sheet, Team Planner | ✅ list_resources, show_view |
-| Assignments | Assign Resources, Resource Pool, Resource Usage, Resource Graph | ✅ assign_resource, resource_usage, show_view; Resource Pool 🔜 2 |
+| Assignments | Assign Resources, Resource Pool, Resource Usage, Resource Graph | ✅ assign_resource, resource_usage, show_view; Resource Pool 🔜 4 |
 | Insert | Add Resource | ✅ add_resources |
-| Level | Level All, Level Selection, Clear Leveling, Leveling Options | ✅ level_preview, level_resources, clear_levelling; options 🔜 2 |
+| Level | Level All, Level Selection, Clear Leveling, Leveling Options | ✅ level_preview, level_resources, clear_levelling, set_schedule_options (levelling options) |
 
 ## Report
 
@@ -69,11 +69,11 @@ Tools: 127 (0.9.10). The engine's tools are in `crates/core/src/assist.rs`; the 
 
 | Group | Command | Tool |
 |---|---|---|
-| Properties | Project Information, Custom Fields, Activity Codes, Change Working Time, Pictures, Project Setup | ✅ set_project_info, define_custom_field, define_code, set_calendar; start date and project calendar 🔜 2; Pictures 🔜 3 |
-| Schedule | Set Baseline, Update Project, Reporting Periods, Check Schedule | ✅ set_baseline, update_project, check_schedule; Reporting Periods 🔜 2 |
+| Properties | Project Information, Custom Fields, Activity Codes, Change Working Time, Pictures, Project Setup | ✅ set_project_info, define_custom_field, define_code, set_calendar, set_project_settings (start, calendar, hours per day, currency), set_task_expenses, set_task_documents, set_task_notebook, set_resource_rates, set_resource_availability, set_resource_leave; Pictures 🔜 3 |
+| Schedule | Set Baseline, Update Project, Reporting Periods, Check Schedule | ✅ set_baseline, update_project, check_schedule, set_reporting_periods, set_period_notes |
 | Linked Plans | Link to Plan, Linked Plans, Update Links, Subplans, Apply Setup to Subplans | 🔜 4 |
 | What-if | Scenarios | 🔜 4 |
-| Modules | Modules, Contract, Documents, Procurement | ✅ contract_status, set_contract…, document_register…, procurement_status…; switching modules on 🔜 2 |
+| Modules | Modules, Contract, Documents, Procurement | ✅ contract_status, set_contract…, document_register…, procurement_status…, set_modules |
 
 ## View
 
@@ -88,10 +88,10 @@ Tools: 127 (0.9.10). The engine's tools are in `crates/core/src/assist.rs`; the 
 
 | Group | Command | Tool |
 |---|---|---|
-| Format, Bar Styles, Gantt Chart Style | Bar styles, critical, slack, late, labels, baseline | ✅ gantt_options; bar styles and chart style 🔜 2 |
-| Columns | Insert Column, Formula Column, Columns | ✅ set_columns, define_custom_field (formula) |
-| Conditional Formatting | Rules | 🔜 2 |
-| Percent | Decimals | 🔜 2 |
+| Format, Bar Styles, Gantt Chart Style | Bar styles, critical, slack, late, labels, baseline | ✅ gantt_options, set_bar_colours |
+| Columns | Insert Column, Formula Column, Columns | ✅ set_columns, rename_column, define_custom_field (formula) |
+| Conditional Formatting | Rules | ✅ set_conditional_formatting |
+| Percent | Decimals | ✅ set_percent_decimals |
 
 ## Sheet Tools
 

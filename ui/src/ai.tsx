@@ -29,6 +29,11 @@ const DID: Record<string, string> = {
   define_name: "changed a defined name", format_tasks: "formatted tasks", add_dashboard: "added a dashboard", delete_dashboard: "deleted a dashboard", export_plan: "saved a copy to Downloads", export_register: "saved a register to Downloads",
   set_project_info: "changed the project details", add_recurring_task: "added a recurring task", apply_credit_rule: "gave tasks a rule of credit", set_task_steps: "set a task's steps", mark_step_done: "ticked a step",
   new_plan: "opened a new plan", open_plan: "opened a plan", save_plan_as: "saved the plan as a new file", close_plan: "closed a plan",
+  set_project_settings: "changed the project settings", set_schedule_options: "changed the scheduling options", set_reporting_periods: "changed the reporting periods",
+  set_baseline_lock: "locked or unlocked the baseline", rename_column: "renamed a column", set_percent_decimals: "changed the percent decimals", set_modules: "switched registers on or off",
+  set_bar_colours: "changed the bar colours", set_conditional_formatting: "changed the conditional formatting", set_period_notes: "wrote report notes", set_task_expenses: "set a task's expenses",
+  set_task_documents: "set a task's documents", set_task_notebook: "wrote in a task's notebook", set_resource_rates: "set a resource's rates", set_resource_availability: "set a resource's availability",
+  set_resource_leave: "changed a resource's leave", define_credit_rule: "changed a rule of credit", find_replace: "replaced text in tasks",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
 

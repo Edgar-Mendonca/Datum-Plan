@@ -162,7 +162,31 @@ pub fn tools() -> Value {
         { "name": "save_plan_as", "description": "Save the plan shown to a new .dplan file. Only when the user asks; an existing file is replaced only with overwrite true.", "inputSchema": obj(json!({ "path": { "type": "string" }, "overwrite": { "type": "boolean" } }), &["path"]) },
         { "name": "close_plan", "description": "Close a plan's tab (by tab number from list_plans; default the one shown). A plan with unsaved changes closes only with discard true; ask the user first.", "inputSchema": obj(json!({ "tab": { "type": "integer" }, "discard": { "type": "boolean" } }), &[]) },
     ]);
-    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
+    // Project setup and details (0.9.11).
+    let rid2 = || json!({ "type": "integer", "description": "The resource's uid, from list_resources" });
+    let setup = json!([
+        { "name": "get_project_settings", "description": "The project's settings: name, start, status date, project calendar, hours per day, new-task mode, currency, scheduling options, reporting periods, modules, percent decimals, baseline lock.", "inputSchema": none() },
+        { "name": "set_project_settings", "description": "Change the project's name, start (YYYY-MM-DD), status date, project calendar (a name from list_calendars), hours per day, new tasks manual (true/false), or currency ({\"code\":\"EUR\",\"symbol\":\"€\",\"decimals\":2,\"after\":true}).", "inputSchema": obj(json!({ "name": { "type": "string" }, "start": { "type": "string" }, "status": { "type": "string" }, "calendar": { "type": "string" }, "hours_per_day": { "type": "number" }, "manual": { "type": "boolean" }, "currency": { "type": "object" } }), &[]) },
+        { "name": "set_schedule_options", "description": "Scheduling options: retained (logic for out-of-sequence progress; false = progress override), critical_float_days (critical when total float ≤ this), longest_path (critical = longest path), float_paths (0–20), open_ends_critical, level_within_slack, level_split, level_order (Standard, IdOnly, Priority), effort_default, task_type_default (FixedUnits, FixedDuration, FixedWork), from_finish with finish_date, res_cals (resource calendars drive task dates), lag_cal (Successor, Predecessor, Project, Elapsed).", "inputSchema": obj(json!({ "options": { "type": "object" } }), &["options"]) },
+        { "name": "set_reporting_periods", "description": "Reporting periods: week_end (0 Monday … 6 Sunday), month_end (0 = the month's last day, or a day 1–31), weight of progress (duration, cost, work, physical).", "inputSchema": obj(json!({ "week_end": { "type": "integer" }, "month_end": { "type": "integer" }, "weight": { "type": "string" } }), &[]) },
+        { "name": "set_baseline_lock", "description": "Lock or unlock the baseline dates for typing (they open locked). Ask the user before unlocking.", "inputSchema": obj(json!({ "locked": { "type": "boolean" } }), &["locked"]) },
+        { "name": "rename_column", "description": "Give a column (field key or name) its own title in the task sheet, e.g. text1 → Vendor; an empty title gives back the field's name.", "inputSchema": obj(json!({ "column": { "type": "string" }, "title": { "type": "string" } }), &["column", "title"]) },
+        { "name": "set_percent_decimals", "description": "Decimals shown for percentages in the task sheet (0, 1 or 2).", "inputSchema": obj(json!({ "decimals": { "type": "integer" } }), &["decimals"]) },
+        { "name": "set_modules", "description": "Switch the plan's registers on or off: contract (dates, delay damages, payments), documents (vendor document register), procurement (orders and expediting). Only the ones given change.", "inputSchema": obj(json!({ "contract": { "type": "boolean" }, "documents": { "type": "boolean" }, "procurement": { "type": "boolean" } }), &[]) },
+        { "name": "set_bar_colours", "description": "Gantt bar colours (#RRGGBB): fill (task bar), edge (outline and progress), cfill (critical bar), crit (critical outline), sum (summaries and milestones). Only the ones given change.", "inputSchema": obj(json!({ "fill": { "type": "string" }, "edge": { "type": "string" }, "cfill": { "type": "string" }, "crit": { "type": "string" }, "sum": { "type": "string" } }), &[]) },
+        { "name": "set_conditional_formatting", "description": "Colour task-sheet cells by their value: rules [{\"column\":\"tf\",\"test\":\"<\",\"value\":\"0\",\"color\":\"#C0392B\",\"fill\":\"\",\"bold\":true}]; tests <, >, =, !=, contains, empty, any. Replaces the rules (append adds them).", "inputSchema": obj(json!({ "rules": { "type": "array", "items": { "type": "object" } }, "append": { "type": "boolean" } }), &["rules"]) },
+        { "name": "set_period_notes", "description": "The narrative of a progress report: period (week or month) ending on a date, with summary, progress, issues, actions and look_ahead texts.", "inputSchema": obj(json!({ "period": { "type": "string", "enum": ["week", "month"] }, "end": { "type": "string" }, "summary": { "type": "string" }, "progress": { "type": "string" }, "issues": { "type": "string" }, "actions": { "type": "string" }, "look_ahead": { "type": "string" } }), &["period", "end"]) },
+        { "name": "set_task_expenses", "description": "A task's expenses (replaces them): [{\"name\":\"Crane hire\",\"category\":\"Equipment\",\"vendor\":\"…\",\"planned\":12000,\"actual\":0,\"accrual\":\"Prorated\"}] (accrual Start, Prorated, End).", "inputSchema": obj(json!({ "uid": uid(), "expenses": { "type": "array", "items": { "type": "object" } } }), &["uid", "expenses"]) },
+        { "name": "set_task_documents", "description": "A task's documents (replaces them): [{\"title\":\"GA drawing\",\"path\":\"…\",\"status\":\"Approved\",\"deliverable\":true}].", "inputSchema": obj(json!({ "uid": uid(), "docs": { "type": "array", "items": { "type": "object" } } }), &["uid", "docs"]) },
+        { "name": "set_task_notebook", "description": "A task's notebook pages (replaces them): [{\"topic\":\"Method\",\"text\":\"…\"}].", "inputSchema": obj(json!({ "uid": uid(), "topics": { "type": "array", "items": { "type": "object" } } }), &["uid", "topics"]) },
+        { "name": "set_resource_rates", "description": "A resource's cost rates over time in a rate table (A–E; A by default): [{\"from\":\"2027-01-01\",\"std\":85,\"ovt\":120,\"per_use\":0}] (from empty = from the start).", "inputSchema": obj(json!({ "resource_uid": rid2(), "table": { "type": "string" }, "rates": { "type": "array", "items": { "type": "object" } } }), &["resource_uid", "rates"]) },
+        { "name": "set_resource_availability", "description": "A resource's maximum units over time: [{\"from\":\"2027-01-01\",\"to\":\"2027-03-31\",\"max\":3}] (3 = three people); replaces the list.", "inputSchema": obj(json!({ "resource_uid": rid2(), "periods": { "type": "array", "items": { "type": "object" } } }), &["resource_uid", "periods"]) },
+        { "name": "set_resource_leave", "description": "A resource's own leave and holidays: add [{\"name\":\"Leave\",\"from\":\"2026-12-20\",\"to\":\"2026-12-24\"}], remove by name.", "inputSchema": obj(json!({ "resource_uid": rid2(), "add": { "type": "array", "items": { "type": "object" } }, "remove": { "type": "array", "items": { "type": "string" } } }), &["resource_uid"]) },
+        { "name": "define_credit_rule", "description": "Add or change a rule of credit (weighted steps that measure physical progress): steps [{\"name\":\"Pulled\",\"weight\":50},…]; rename_from renames; remove deletes it.", "inputSchema": obj(json!({ "name": { "type": "string" }, "steps": { "type": "array", "items": { "type": "object" } }, "rename_from": { "type": "string" }, "remove": { "type": "boolean" } }), &["name"]) },
+        { "name": "check_spelling", "description": "Unknown words in task names, notes, text fields and sheets, with suggestions (en-GB or en-US). Fix them with set_task_fields or set_sheet_cells.", "inputSchema": obj(json!({ "lang": { "type": "string", "enum": ["en-GB", "en-US"] } }), &[]) },
+        { "name": "find_replace", "description": "Replace text in task names (or notes) across the plan, like Global Change: find, replace, in (name or notes), match_case. One Undo step; returns how many tasks changed.", "inputSchema": obj(json!({ "find": { "type": "string" }, "replace": { "type": "string" }, "in": { "type": "string", "enum": ["name", "notes"] }, "match_case": { "type": "boolean" } }), &["find", "replace"]) },
+    ]);
+    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window, setup].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
     // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
     for t in &mut all {
         let n = t["name"].as_str().unwrap_or("").to_string();
@@ -277,6 +301,16 @@ fn entry_columns(p: &Project) -> Vec<(String, i32)> {
     if !p.columns.is_empty() { return p.columns.clone() }
     [("mode", 34), ("name", 260), ("dur", 74), ("start", 92), ("finish", 92), ("preds", 90), ("res", 140)].iter().map(|(k, w)| (k.to_string(), *w)).collect()
 }
+/// A colour like #C0392B, or nothing.
+fn colour(v: &Value, k: &str) -> Result<Option<String>, String> {
+    let Some(t) = v.get(k).filter(|x| !x.is_null()).map(txt) else { return Ok(None) };
+    let t = t.trim().to_string();
+    if t.is_empty() || (t.len() == 7 && t.starts_with('#') && t[1..].chars().all(|c| c.is_ascii_hexdigit())) { Ok(Some(t)) } else { Err(format!("{k} is a colour like #C0392B.")) }
+}
+/// A JSON list of `T` from the given objects (unknown keys refused), dates read as YYYY-MM-DD.
+fn list_of<T: serde::Serialize + serde::de::DeserializeOwned + Default>(v: &Value, what: &str) -> Result<Vec<T>, String> {
+    v.as_array().ok_or_else(|| format!("{what} is a list."))?.iter().map(|x| patch(&T::default(), x, &[])).collect()
+}
 /// A date from an instant (minutes; a finish is the end of its last minute).
 fn inst(t: i64) -> String { crate::cal::date_of((t - 1).max(0)).to_string() }
 
@@ -287,6 +321,9 @@ pub fn changes(name: &str) -> bool {
         | "define_code" | "set_task_codes" | "define_custom_field" | "delete_custom_field" | "set_constraint" | "set_deadline" | "indent_tasks" | "outdent_tasks" | "move_tasks" | "set_task_notes" | "set_columns"
         | "set_risk" | "delete_risk" | "set_delay_event" | "delete_delay_event" | "add_fragnet" | "take_snapshot" | "set_health_settings" | "level_resources" | "clear_levelling"
         | "update_project" | "mark_on_track" | "split_task" | "save_interim" | "set_constraint_log_item"
+        | "set_project_settings" | "set_schedule_options" | "set_reporting_periods" | "set_baseline_lock" | "rename_column" | "set_percent_decimals" | "set_modules" | "set_bar_colours"
+        | "set_conditional_formatting" | "set_period_notes" | "set_task_expenses" | "set_task_documents" | "set_task_notebook" | "set_resource_rates" | "set_resource_availability"
+        | "set_resource_leave" | "define_credit_rule" | "find_replace"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
         | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
         | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
@@ -725,6 +762,179 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             let n = a["rows"].as_u64().unwrap_or(1).clamp(1, 200) as usize;
             apply(doc, Op::Batch(vec![Op::Move { uids: uids.clone(), up }; n]))?;
             Ok(json!({ "moved": uids.len(), "rows": n }))
+        }
+        "get_project_settings" => {
+            let p = &doc.p;
+            Ok(json!({ "name": p.name, "start": p.start.to_string(), "status_date": p.status.map(|d| d.to_string()), "calendar": p.calendar, "hours_per_day": p.day_min as f64 / 60.0,
+                "new_tasks_manual": p.manual_default, "currency": p.currency, "schedule_options": p.opts, "critical_float_days": p.opts.critical_float as f64 / p.day_min.max(1) as f64,
+                "reporting_periods": p.periods, "modules": p.modules, "percent_decimals": p.pct_decimals, "baseline_locked": !p.baseline_unlocked }))
+        }
+        "set_project_settings" => {
+            let p = &doc.p;
+            let mut ops = vec![Op::Project { name: s(a, "name").unwrap_or(&p.name).into(), start: s(a, "start").map(String::from).unwrap_or_else(|| p.start.to_string()),
+                status: a.get("status").map(txt).unwrap_or_else(|| p.status.map(|d| d.to_string()).unwrap_or_default()),
+                calendar: s(a, "calendar").map(|c| p.calendars.iter().find(|x| x.name.eq_ignore_ascii_case(c)).map(|x| x.name.clone()).unwrap_or_else(|| c.into())).unwrap_or_else(|| p.calendar.clone()),
+                day_hours: a["hours_per_day"].as_f64().unwrap_or(p.day_min as f64 / 60.0), manual_default: a["manual"].as_bool().unwrap_or(p.manual_default) }];
+            if a["currency"].is_object() { ops.push(Op::ProjectSet { field: "currency".into(), value: serde_json::to_value(patch(&p.currency, &a["currency"], &[])?).map_err(|e| e.to_string())? }) }
+            apply(doc, Op::Batch(ops))?;
+            Ok(summary(&Calc::new(&doc.p, fmt, today)))
+        }
+        "set_schedule_options" => {
+            let mut o = a["options"].as_object().cloned().ok_or("options is needed, like {\"res_cals\":true}.")?;
+            if let Some(d) = o.remove("critical_float_days") { o.insert("critical_float".into(), json!((d.as_f64().ok_or("critical_float_days is a number.")? * doc.p.day_min as f64).round() as i64)); }
+            if let Some(f) = o.get("finish_date").and_then(Value::as_str).map(String::from) { o.insert("finish_date".into(), json!(parse::date_in(&f, fmt)?.to_string())); }
+            if o.get("float_paths").and_then(Value::as_u64).is_some_and(|n| n > 20) { return Err("float_paths is 0 to 20.".into()) }
+            let opts = patch(&doc.p.opts, &Value::Object(o), &[])?;
+            apply(doc, Op::ProjectSet { field: "opts".into(), value: serde_json::to_value(&opts).map_err(|e| e.to_string())? })?;
+            Ok(json!(doc.p.opts))
+        }
+        "set_reporting_periods" => {
+            let mut p = doc.p.periods.clone();
+            if let Some(w) = a["week_end"].as_u64() { if w > 6 { return Err("week_end is 0 (Monday) to 6 (Sunday).".into()) } p.week_end = w as u8 }
+            if let Some(m) = a["month_end"].as_u64() { if m > 31 { return Err("month_end is 0 to 31.".into()) } p.month_end = m as u8 }
+            if let Some(w) = s(a, "weight") { if !["duration", "cost", "work", "physical"].contains(&w) { return Err("weight is duration, cost, work or physical.".into()) } p.weight = w.into() }
+            apply(doc, Op::ProjectSet { field: "periods".into(), value: serde_json::to_value(&p).map_err(|e| e.to_string())? })?;
+            Ok(json!(doc.p.periods))
+        }
+        "set_baseline_lock" => {
+            let locked = a["locked"].as_bool().ok_or("locked is true or false.")?;
+            apply(doc, Op::BaselineLock { unlocked: !locked })?;
+            Ok(json!({ "baseline_locked": locked }))
+        }
+        "rename_column" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            let k = c.key_of(s(a, "column").ok_or("column is needed.")?).ok_or("No such field; see list_fields.")?;
+            let t = a.get("title").map(txt).unwrap_or_default();
+            apply(doc, Op::Title { key: k.clone(), title: t.clone() })?;
+            Ok(json!({ "column": k, "title": t }))
+        }
+        "set_percent_decimals" => {
+            let d = a["decimals"].as_u64().filter(|d| *d <= 2).ok_or("decimals is 0, 1 or 2.")?;
+            apply(doc, Op::ProjectSet { field: "pct_decimals".into(), value: json!(d) })?;
+            Ok(json!({ "percent_decimals": d }))
+        }
+        "set_modules" => {
+            let mut on = doc.p.modules.clone();
+            for k in ["contract", "documents", "procurement"] {
+                if let Some(b) = a[k].as_bool() { on.retain(|x| x != k); if b { on.push(k.into()) } }
+            }
+            apply(doc, Op::Modules { on })?;
+            Ok(json!({ "modules": doc.p.modules }))
+        }
+        "set_bar_colours" => {
+            let mut g = if doc.p.ui["gantt"].is_object() { doc.p.ui["gantt"].clone() } else { json!({ "fill": "#A9CAF6", "edge": "#2F6FCF", "cfill": "#F2B0B0", "crit": "#C73B3B", "sum": "#0C1A2B", "grid": false }) };
+            let mut n = 0;
+            for k in ["fill", "edge", "cfill", "crit", "sum"] { if let Some(c) = colour(a, k)?.filter(|c| !c.is_empty()) { g[k] = json!(c); n += 1 } }
+            if n == 0 { return Err("Give fill, edge, cfill, crit or sum.".into()) }
+            g["name"] = json!("Custom");
+            apply(doc, Op::Ui { key: "gantt".into(), value: g.clone() })?;
+            Ok(g)
+        }
+        "set_conditional_formatting" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            let mut list: Vec<Value> = if a["append"].as_bool() == Some(true) { doc.p.ui["cf"].as_array().cloned().unwrap_or_default() } else { vec![] };
+            for r in a["rules"].as_array().ok_or("rules is a list (empty clears them).")? {
+                let key = c.key_of(s(r, "column").ok_or("Each rule needs a column.")?).ok_or("No such field; see list_fields.")?;
+                let test = s(r, "test").unwrap_or("=");
+                if !["<", ">", "=", "!=", "contains", "empty", "any"].contains(&test) { return Err("test is <, >, =, !=, contains, empty or any.".into()) }
+                list.push(json!({ "key": key, "test": test, "value": r.get("value").map(txt).unwrap_or_default(), "color": colour(r, "color")?.unwrap_or_default(), "bg": colour(r, "fill")?.unwrap_or_default(), "bold": r["bold"].as_bool().unwrap_or(false) }));
+            }
+            apply(doc, Op::Ui { key: "cf".into(), value: json!(list) })?;
+            Ok(json!({ "rules": list.len() }))
+        }
+        "set_period_notes" => {
+            let end = parse::date_in(s(a, "end").ok_or("end is needed (the period's last day).")?, fmt)?;
+            let kind = match s(a, "period") { Some("week") => "week", Some("month") => "month", _ => return Err("period is week or month.".into()) };
+            let old = doc.p.notes.iter().find(|n| n.kind == kind && n.end == Some(end)).cloned().unwrap_or_default();
+            let g = |k: &str, o: &String| a.get(k).map(txt).unwrap_or_else(|| o.clone());
+            let note = PeriodNote { kind: kind.into(), end: Some(end), summary: g("summary", &old.summary), progress: g("progress", &old.progress), issues: g("issues", &old.issues), actions: g("actions", &old.actions), look_ahead: g("look_ahead", &old.look_ahead), photos: old.photos };
+            apply(doc, Op::Note { note })?;
+            Ok(json!({ "period": kind, "end": end.to_string() }))
+        }
+        "set_task_expenses" | "set_task_documents" | "set_task_notebook" => {
+            let uid = u(a, "uid")?;
+            doc.p.idx(uid).ok_or("No task with that uid.")?;
+            let (field, value) = match name {
+                "set_task_expenses" => ("expenses", serde_json::to_value(list_of::<Expense>(&a["expenses"], "expenses")?)),
+                "set_task_documents" => ("docs", serde_json::to_value(list_of::<DocRef>(&a["docs"], "docs")?)),
+                _ => ("notebook", serde_json::to_value(list_of::<NoteTopic>(&a["topics"], "topics")?)),
+            };
+            apply(doc, Op::TaskList { uid, field: field.into(), value: value.map_err(|e| e.to_string())? })?;
+            Ok(json!({ "task": uid, field: true }))
+        }
+        "set_resource_rates" | "set_resource_availability" | "set_resource_leave" => {
+            let uid = u(a, "resource_uid")?;
+            let k = doc.p.res_idx(uid).ok_or("No resource with that uid.")?;
+            let r = &doc.p.resources[k];
+            let date = |x: &Value, f: &str| -> Result<Option<NaiveDate>, String> { s(x, f).map(|d| parse::date_in(d, fmt)).transpose() };
+            let (field, value) = match name {
+                "set_resource_rates" => {
+                    let t = s(a, "table").unwrap_or("A").trim().to_uppercase();
+                    let n = "ABCDE".find(t.as_str()).filter(|_| t.len() == 1).ok_or("table is A, B, C, D or E.")?;
+                    let rates = a["rates"].as_array().ok_or("rates is a list.")?.iter().map(|x| Ok(Rate { from: date(x, "from")?, std: x["std"].as_f64().unwrap_or(0.0), ovt: x["ovt"].as_f64().unwrap_or(0.0), per_use: x["per_use"].as_f64().unwrap_or(0.0) })).collect::<Result<Vec<_>, String>>()?;
+                    if rates.iter().any(|x| x.std < 0.0 || x.ovt < 0.0 || x.per_use < 0.0) { return Err("Rates are from 0 up.".into()) }
+                    let mut tables = r.tables.clone();
+                    if tables.len() <= n { tables.resize(n + 1, vec![]) }
+                    tables[n] = rates;
+                    ("tables", serde_json::to_value(tables))
+                }
+                "set_resource_availability" => {
+                    let av = a["periods"].as_array().ok_or("periods is a list.")?.iter().map(|x| Ok(Avail { from: date(x, "from")?, to: date(x, "to")?, max: x["max"].as_f64().filter(|m| (0.0..=1000.0).contains(m)).ok_or("max is the units available, like 3 for three people.")? })).collect::<Result<Vec<_>, String>>()?;
+                    ("avail", serde_json::to_value(av))
+                }
+                _ => {
+                    let gone: Vec<String> = a["remove"].as_array().into_iter().flatten().map(|x| txt(x).to_lowercase()).collect();
+                    let mut ex: Vec<Exception> = r.exceptions.iter().filter(|e| !gone.contains(&e.name.to_lowercase())).cloned().collect();
+                    for x in a["add"].as_array().into_iter().flatten() {
+                        let from = date(x, "from")?.ok_or("Each leave needs from (YYYY-MM-DD).")?;
+                        let to = date(x, "to")?.unwrap_or(from);
+                        if to < from { return Err("Leave ends before it starts.".into()) }
+                        ex.push(Exception { name: s(x, "name").unwrap_or("Leave").into(), from, to, hours: vec![] });
+                    }
+                    ("exceptions", serde_json::to_value(ex))
+                }
+            };
+            apply(doc, Op::ResJson { uid, field: field.into(), value: value.map_err(|e| e.to_string())? })?;
+            Ok(json!({ "resource": doc.p.resources[k].name, field: true }))
+        }
+        "define_credit_rule" => {
+            let n = s(a, "name").ok_or("name is needed.")?.trim().to_string();
+            let from = s(a, "rename_from").map(|x| x.trim().to_string()).or_else(|| doc.p.credit.iter().find(|r| r.name.eq_ignore_ascii_case(&n)).map(|r| r.name.clone()));
+            if a["remove"].as_bool() == Some(true) {
+                let old = from.ok_or_else(|| format!("No rule called {n}."))?;
+                apply(doc, Op::Credit { old: Some(old.clone()), rule: None })?;
+                return Ok(json!({ "removed": old }))
+            }
+            let steps: Vec<(String, f64)> = a["steps"].as_array().ok_or("steps is needed: [{\"name\":\"Pulled\",\"weight\":50}].")?.iter().map(|x| (s(x, "name").unwrap_or("").trim().to_string(), x["weight"].as_f64().unwrap_or(0.0))).filter(|x| !x.0.is_empty()).collect();
+            if steps.iter().any(|x| x.1 < 0.0) { return Err("Weights are from 0 up.".into()) }
+            apply(doc, Op::Credit { old: from, rule: Some(CreditRule { name: n.clone(), steps }) })?;
+            Ok(json!({ "rule": n }))
+        }
+        "check_spelling" => {
+            let lang = if s(a, "lang") == Some("en-US") { "en-US" } else { "en-GB" };
+            let all = crate::spell::check(&doc.p, lang, &[]);
+            Ok(json!({ "unknown_words": all.len(), "words": all.iter().take(200).map(|x| json!({ "uid": x.uid, "sheet": x.sheet.and_then(|k| doc.p.sheets.get(k)).map(|s| s.name.clone()), "where": x.place, "field": x.field, "word": x.word, "suggestions": x.suggestions })).collect::<Vec<_>>() }))
+        }
+        "find_replace" => {
+            let f = a.get("find").map(txt).filter(|x| !x.is_empty()).ok_or("find is needed.")?;
+            let r = a.get("replace").map(txt).unwrap_or_default();
+            let field = if s(a, "in") == Some("notes") { "notes" } else { "name" };
+            let case = a["match_case"].as_bool() == Some(true);
+            let rep = |t: &str| -> Option<String> {
+                if case { return t.contains(&f).then(|| t.replace(&f, &r)) }
+                let lower = t.to_lowercase();
+                let fl = f.to_lowercase();
+                if !lower.contains(&fl) { return None }
+                let (mut out, mut i) = (String::new(), 0);
+                while let Some(j) = lower[i..].find(&fl) { out.push_str(&t[i..i + j]); out.push_str(&r); i += j + fl.len(); }
+                out.push_str(&t[i..]);
+                Some(out)
+            };
+            let ops: Vec<Op> = doc.p.tasks.iter().filter_map(|t| rep(if field == "name" { &t.name } else { &t.notes }).map(|v| Op::Set { uid: t.uid, field: field.into(), value: v })).collect();
+            if ops.is_empty() { return Ok(json!({ "changed": 0 })) }
+            let n = ops.len();
+            apply(doc, Op::Batch(ops))?;
+            Ok(json!({ "changed": n }))
         }
         "get_columns" => {
             let c = Calc::new(&doc.p, fmt, today);
@@ -1216,6 +1426,63 @@ mod tests {
     fn plan() -> Doc { Doc::new(crate::templates::build(&crate::templates::TEMPLATES[0], d(2026, 11, 2))) }
     fn run(doc: &mut Doc, name: &str, a: Value) -> Result<Value, String> { call(doc, "%d-%b-%y", d(2026, 11, 13), name, &a) }
 
+    #[test]
+    fn project_setup_details_resources_rules_and_text() {
+        let mut doc = plan();
+        let t: Vec<u64> = run(&mut doc, "get_tasks", json!({ "filter": "not_started" })).unwrap()["tasks"].as_array().unwrap().iter().map(|x| x["uid"].as_u64().unwrap()).collect();
+        let a = t[0];
+        // Project settings and options.
+        run(&mut doc, "add_calendar", json!({ "name": "Six days", "week": { "sat": "08:00-12:00, 13:00-17:00" } })).unwrap();
+        run(&mut doc, "set_project_settings", json!({ "start": "2026-12-01", "calendar": "six days", "hours_per_day": 10, "currency": { "code": "EUR", "symbol": "€" } })).unwrap();
+        let g = run(&mut doc, "get_project_settings", json!({})).unwrap();
+        assert_eq!((g["start"].as_str(), g["calendar"].as_str(), g["hours_per_day"].as_f64(), g["currency"]["code"].as_str()), (Some("2026-12-01"), Some("Six days"), Some(10.0), Some("EUR")));
+        assert!(run(&mut doc, "set_project_settings", json!({ "calendar": "nosuch" })).is_err());
+        run(&mut doc, "set_schedule_options", json!({ "options": { "critical_float_days": 2, "res_cals": true, "level_order": "Priority" } })).unwrap();
+        assert_eq!((doc.p.opts.critical_float, doc.p.opts.res_cals), (2 * doc.p.day_min, true));
+        assert!(run(&mut doc, "set_schedule_options", json!({ "options": { "nosuch": 1 } })).is_err());
+        run(&mut doc, "set_reporting_periods", json!({ "week_end": 3, "weight": "cost" })).unwrap();
+        assert_eq!((doc.p.periods.week_end, doc.p.periods.weight.as_str()), (3, "cost"));
+        run(&mut doc, "set_baseline_lock", json!({ "locked": false })).unwrap();
+        assert!(doc.p.baseline_unlocked);
+        run(&mut doc, "rename_column", json!({ "column": "text1", "title": "Vendor" })).unwrap();
+        assert_eq!(doc.p.titles["c:text1"], "Vendor");
+        run(&mut doc, "set_percent_decimals", json!({ "decimals": 1 })).unwrap();
+        run(&mut doc, "set_modules", json!({ "procurement": true })).unwrap();
+        assert_eq!(doc.p.modules, ["procurement"]);
+        // Looks: bar colours and conditional formatting.
+        run(&mut doc, "set_bar_colours", json!({ "crit": "#AA0000" })).unwrap();
+        assert_eq!(doc.p.ui["gantt"]["crit"], "#AA0000");
+        assert!(run(&mut doc, "set_bar_colours", json!({ "fill": "blue" })).is_err());
+        run(&mut doc, "set_conditional_formatting", json!({ "rules": [{ "column": "Total Slack", "test": "<", "value": "0", "color": "#C0392B", "bold": true }] })).unwrap();
+        assert_eq!(doc.p.ui["cf"][0]["key"], "tf");
+        // Report notes, task lists, resources, rules of credit.
+        run(&mut doc, "set_period_notes", json!({ "period": "month", "end": "2026-12-31", "summary": "Design on track.", "issues": "Late vendor data." })).unwrap();
+        assert_eq!(doc.p.notes[0].issues, "Late vendor data.");
+        run(&mut doc, "set_task_expenses", json!({ "uid": a, "expenses": [{ "name": "Crane hire", "planned": 12000, "accrual": "Start" }] })).unwrap();
+        run(&mut doc, "set_task_documents", json!({ "uid": a, "docs": [{ "title": "GA drawing", "deliverable": true }] })).unwrap();
+        run(&mut doc, "set_task_notebook", json!({ "uid": a, "topics": [{ "topic": "Method", "text": "Lift at night." }] })).unwrap();
+        let ia = doc.p.idx(a as u32).unwrap();
+        assert_eq!((doc.p.tasks[ia].expenses[0].planned, doc.p.tasks[ia].docs[0].deliverable, doc.p.tasks[ia].notebook[0].topic.as_str()), (12000.0, true, "Method"));
+        assert!(run(&mut doc, "set_task_expenses", json!({ "uid": a, "expenses": [{ "nosuch": 1 }] })).is_err());
+        let r = run(&mut doc, "add_resources", json!({ "resources": [{ "name": "Rigger" }] })).unwrap()["added"][0]["uid"].as_u64().unwrap();
+        run(&mut doc, "set_resource_rates", json!({ "resource_uid": r, "rates": [{ "std": 50 }, { "from": "2027-01-01", "std": 55, "ovt": 80 }] })).unwrap();
+        run(&mut doc, "set_resource_availability", json!({ "resource_uid": r, "periods": [{ "from": "2027-01-01", "to": "2027-03-31", "max": 3 }] })).unwrap();
+        run(&mut doc, "set_resource_leave", json!({ "resource_uid": r, "add": [{ "name": "Leave", "from": "2026-12-20", "to": "2026-12-24" }] })).unwrap();
+        let k = doc.p.res_idx(r as u32).unwrap();
+        assert_eq!((doc.p.resources[k].tables[0].len(), doc.p.resources[k].avail[0].max, doc.p.resources[k].exceptions.len()), (2, 3.0, 1));
+        run(&mut doc, "set_resource_leave", json!({ "resource_uid": r, "remove": ["leave"] })).unwrap();
+        assert!(doc.p.resources[k].exceptions.is_empty());
+        run(&mut doc, "define_credit_rule", json!({ "name": "Cable", "steps": [{ "name": "Pulled", "weight": 50 }, { "name": "Terminated", "weight": 30 }, { "name": "Tested", "weight": 20 }] })).unwrap();
+        run(&mut doc, "apply_credit_rule", json!({ "uids": [a], "rule": "Cable" })).unwrap();
+        run(&mut doc, "define_credit_rule", json!({ "name": "Cable", "remove": true })).unwrap();
+        assert!(doc.p.credit.is_empty());
+        // Text: spelling and find and replace.
+        run(&mut doc, "set_task_fields", json!({ "uid": a, "fields": { "name": "Recieve drawings" } })).unwrap();
+        let sp = run(&mut doc, "check_spelling", json!({ "lang": "en-GB" })).unwrap();
+        assert!(sp["words"].as_array().unwrap().iter().any(|w| w["word"] == "Recieve"), "{sp}");
+        let n = run(&mut doc, "find_replace", json!({ "find": "recieve", "replace": "Receive" })).unwrap()["changed"].as_u64().unwrap();
+        assert_eq!((n, doc.p.tasks[ia].name.as_str()), (1, "Receive drawings"));
+    }
     #[test]
     fn the_window_tools_are_listed_and_marked() {
         let t = tools();

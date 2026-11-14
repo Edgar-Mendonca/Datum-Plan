@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "datum-cli"
-version = "0.9.10"
+version = "0.9.11"
 dependencies = [
  "chrono",
  "datum-core",
@@ -590,7 +590,7 @@ dependencies = [
 
 [[package]]
 name = "datum-core"
-version = "0.9.10"
+version = "0.9.11"
 dependencies = [
  "calamine",
  "cfb",
@@ -611,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "datum-plan"
-version = "0.9.10"
+version = "0.9.11"
 dependencies = [
  "base64 0.22.1",
  "chrono",

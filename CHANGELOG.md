@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.11 — 2026-11-14
+
+AI Link, batch 2 of 5: project setup and details (147 tools).
+
+- **Project and scheduling**: get_project_settings, set_project_settings (name, start, status date, project calendar, hours per day, new-task mode, currency), set_schedule_options (out-of-sequence logic, critical float, longest path, float paths, levelling options, task type, scheduling from the finish, resource calendars, lag calendar), set_reporting_periods, set_baseline_lock, set_percent_decimals, set_modules (contract, documents, procurement).
+- **Looks**: rename_column (a column's own title), set_bar_colours, set_conditional_formatting.
+- **Details**: set_period_notes (the narrative of a weekly or monthly report), set_task_expenses, set_task_documents, set_task_notebook, set_resource_rates (rate tables A–E over time), set_resource_availability, set_resource_leave, define_credit_rule.
+- **Text**: check_spelling (UK or US English, with suggestions), find_replace (in task names or notes, one Undo step).
+
 ## 0.9.10 — 2026-11-14
 
 AI Link, batch 1 of 5: the assistant drives the window (127 tools).
