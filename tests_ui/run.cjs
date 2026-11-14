@@ -418,8 +418,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ribbon button:has-text('AI Link')"); await p.waitForTimeout(400);
   check("Home › AI Link opens its three steps", (await p.$$(".dlg .ailink-step")).length === 3);
   await p.click(".dlg .ailink-step button:text-is('Turn on')"); await p.waitForTimeout(300);
-  check("…Turn on switches the link on and the status bar says Claude is linked", (await p.evaluate(() => window.__calls.some(c => c[0] === "ai_link" && c[1]?.on === true))) && !!(await p.$(".aion")));
-  await p.click(".dlg .ailink-step button:text-is('Add to Claude')"); await p.waitForTimeout(300);
+  check("…Turn on switches the link on and the status bar says the AI Link is on", (await p.evaluate(() => window.__calls.some(c => c[0] === "ai_link" && c[1]?.on === true))) && !!(await p.$(".aion")));
+  await p.click(".dlg .ailink-step button:text-is('Add to Claude Desktop')"); await p.waitForTimeout(300);
   check("…Add to Claude makes the extension and says where it is when Claude did not open it (0.9.3)", (await p.evaluate(() => window.__calls.some(c => c[0] === "ai_add_to_claude"))) && (await p.$$eval(".dlg .ailink-step", s => s[1].textContent)).includes("Datum Plan.mcpb"));
   await p.click(".dlg .ailink-more summary"); await p.click(".dlg .ailink-more button:text-is('Write settings')"); await p.waitForTimeout(300);
   check("…the settings file is still there as the other way", await p.evaluate(() => window.__calls.some(c => c[0] === "ai_setup_claude")));

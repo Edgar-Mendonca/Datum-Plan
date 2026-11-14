@@ -89,7 +89,7 @@ const Status = () => {
       <span class="muted">{grid().shown} of {grid().total} tasks{sel().length > 1 ? ` · ${sel().length} selected` : ""}</span>
       <span class="muted">{s() ? `${s()!.start} – ${s()!.finish} · ${s()!.dur} · ${(s()!.pct + 0).toFixed(Math.min(2, out()?.project.pct_decimals ?? 0)).replace(/^-(0[.0]*)$/, "$1")}% · ${s()!.cost}` : ""}</span>
       <Show when={pathOn()}><button class="mode pathkey" title="Task Path: select a task to see what drives it and what it drives. Click to turn it off." onClick={() => setPathOn(false)}>Task Path: <For each={PATH}>{p => <span><i style={{ background: p[2] }} />{p[1]}</span>}</For> ✕</button></Show>
-      <Show when={aiOn()}><button class="mode aion" title="AI Link is on: Claude can work on the plan you have open" onClick={() => aiLink()}>✦ Claude linked</button></Show>
+      <Show when={aiOn()}><button class="mode aion" title="AI Link is on: your AI assistant can work on the plan you have open" onClick={() => aiLink()}>✦ AI Link on</button></Show>
       <span class="grow" />
       <span class="vsc">
         <button title="Gantt Chart" onClick={() => C.view("gantt")}><Icon n="gantt" /></button><button title="Task Usage" onClick={() => C.view("taskusage")}><Icon n="table" /></button>

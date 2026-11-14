@@ -35,7 +35,7 @@ export const initAi = async () => {
   listen("ai-change", async (p: { out: Out; tool: string }) => {
     setOut(p.out);
     await refresh();
-    toast(`Claude ${DID[p.tool] ?? "changed the plan"}. Undo (Ctrl+Z) takes it back.`, true);
+    toast(`AI Link: the assistant ${DID[p.tool] ?? "changed the plan"}. Undo (Ctrl+Z) takes it back.`, true);
   });
 };
 
@@ -43,28 +43,28 @@ export const aiLink = () => openDialog(() => {
   const [i, setI] = createSignal<Info | null>(null);
   const [busy, setBusy] = createSignal(false);
   const load = async () => { const x = await call<Info>("ai_info"); if (x) { setI(x); setAiOn(x.on); } };
-  const turn = async (on: boolean) => { setBusy(true); const x = await call<Info>("ai_link", { on }); setBusy(false); if (x) { setI(x); setAiOn(x.on); setOpts({ ...opts(), aiLink: x.on }); toast(on ? "AI Link on: Claude can work on the plan you have open." : "AI Link off.", true); } };
+  const turn = async (on: boolean) => { setBusy(true); const x = await call<Info>("ai_link", { on }); setBusy(false); if (x) { setI(x); setAiOn(x.on); setOpts({ ...opts(), aiLink: x.on }); toast(on ? "AI Link on: your AI assistant can work on the plan you have open." : "AI Link off.", true); } };
   const [added, setAdded] = createSignal<{ file: string; opened: boolean } | null>(null);
   const add = async () => { setBusy(true); const x = await call<{ file: string; opened: boolean }>("ai_add_to_claude"); setBusy(false); if (x) { setAdded(x); toast(x.opened ? "Claude Desktop is asking to install Datum Plan: click Install." : "Drag Datum Plan.mcpb onto Claude Desktop › Settings › Extensions.", true); } };
   const setup = async () => { const f = await call<string>("ai_setup_claude"); if (f) { toast(`Claude Desktop knows Datum Plan now (${f}). Restart Claude Desktop once.`, true); load(); } };
   const copy = (t: string, what: string) => navigator.clipboard?.writeText(t).then(() => toast(`${what} copied.`, true));
   load();
   return (
-    <Dialog title="AI Link: Claude" help="ailink" cancel="Close">
+    <Dialog title="AI Link" help="ailink" cancel="Close">
       <div class="ailink">
-        <p>Ask Claude, in Claude Desktop, to read or change the plan you have open here: <i>“Add a 3-day pump test after task 24 and link handover to it”</i>, <i>“Which tasks are late and why?”</i>. You see each change at once, and <b>Undo</b> takes it back. No API key is needed: Claude uses your own Claude account.</p>
+        <p>Ask your AI assistant to read or change the plan you have open here: <i>“Add a 3-day pump test after task 24 and link handover to it”</i>, <i>“Which tasks are late and why?”</i>. You see each change at once, and <b>Undo</b> takes it back. The AI Link works with Claude Desktop (and Claude Code) through MCP, with your own account: no API key is needed.</p>
         <Show when={i()}>{x => <>
           <div class="ailink-step" classList={{ done: x().on }}>
-            <b>1</b><div><div class="t">Switch the AI Link on</div><div class="muted">Only Claude on this computer can reach it, with a key that changes each time. Datum Plan never saves your file unless you ask.</div></div>
+            <b>1</b><div><div class="t">Switch the AI Link on</div><div class="muted">Only an assistant on this computer can reach it, with a key that changes each time. Datum Plan never saves your file unless you ask.</div></div>
             <button class="btn" classList={{ pri: !x().on }} disabled={busy()} onClick={() => turn(!x().on)}>{x().on ? "Turn off" : "Turn on"}</button>
           </div>
           <div class="ailink-step" classList={{ done: !!added() || x().claude_set }}>
             <b>2</b><div><div class="t">Add Datum Plan to Claude Desktop</div><div class="muted">Once. Claude Desktop opens and asks to install Datum Plan: click <b>Install</b>. Nothing to edit.
               <Show when={added()}>{a => <> {a().opened ? "" : <>If Claude did not open, drag <b>Datum Plan.mcpb</b> (shown in its folder, {a().file}) onto Claude Desktop › Settings › Extensions.</>}</>}</Show></div></div>
-            <button class="btn" classList={{ pri: x().on && !added() }} disabled={busy()} onClick={add}>Add to Claude</button>
+            <button class="btn" classList={{ pri: x().on && !added() }} disabled={busy()} onClick={add}>Add to Claude Desktop</button>
           </div>
           <div class="ailink-step">
-            <b>3</b><div><div class="t">Ask Claude</div><div class="muted">In Claude Desktop, check Settings › Extensions shows Datum Plan switched on, then start a new chat: <i>“What plan is open in Datum Plan, and what is its finish date?”</i></div></div>
+            <b>3</b><div><div class="t">Ask</div><div class="muted">In Claude Desktop, check Settings › Extensions shows Datum Plan switched on, then start a new chat: <i>“What plan is open in Datum Plan, and what is its finish date?”</i></div></div>
           </div>
           <details class="ailink-more">
             <summary>Other ways: Claude's settings file, Claude Code, or another AI app</summary>
@@ -75,7 +75,7 @@ export const aiLink = () => openDialog(() => {
             <p class="muted">Claude Code (in a terminal):</p>
             <pre>{`claude mcp add datum-plan -- "${x().exe}" --mcp`}</pre>
             <button class="btn sm" onClick={() => copy(`claude mcp add datum-plan -- "${x().exe}" --mcp`, "The command")}>Copy</button>
-            <p class="muted">Another AI app on this computer that can use local MCP servers (tools): add a server with this command and the argument <code>--mcp</code>. Datum Plan is made and tested for Claude; other apps may work differently.</p>
+            <p class="muted">Another AI app on this computer that can use local MCP servers (tools): add a server with this command and the argument <code>--mcp</code>. The AI Link is made and tested with Claude Desktop and Claude Code; other apps may work differently.</p>
             <pre>{`"${x().exe}" --mcp`}</pre>
             <button class="btn sm" onClick={() => copy(`"${x().exe}" --mcp`, "The command")}>Copy</button>
           </details>

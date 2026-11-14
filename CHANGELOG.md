@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.7 — 2026-11-14
+
+The AI Link's own labels in general words.
+
+- The ribbon group is **AI** (was Claude), the status bar says **AI Link on** (was Claude linked), the dialog is **AI Link**, and the button says **Add to Claude Desktop**. The app names Claude Desktop and Claude Code only where it means those apps, as the apps the AI Link works with.
+- Notes after a change say what the assistant did.
+
 ## 0.9.6 — 2026-11-13
 
 Task Path, and 7 more tools for Claude (108 in all).

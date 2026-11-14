@@ -656,12 +656,12 @@ To share resources between plans, keep one plan whose Resource Sheet lists them 
 - **Send an XER.** **File › Export › XER** asks which version to write for: choose the version the receiving program runs, or an older one (a program cannot open a file written for a newer version). The file carries the WBS, activities, relationships, calendars, resources and assignments, activity codes, custom fields, steps and notes. A report then lists what went in and anything the format could not hold, such as baselines. Activity IDs must be unique in an XER: a repeated ID gets "-2".
 - **Recovery.** Datum Plan keeps a recovery copy as you work (**File › Options** sets how often). If it ever closes before you save, it offers to recover your work the next time it starts.
 
-## Work with Claude: AI Link
+## AI Link: an AI assistant works on your plan
 
-**Home › AI Link** lets Claude, in the Claude Desktop app, read and change the plan you have open, while you watch. You ask in plain words; Claude does it in Datum Plan. No API key is needed: Claude uses your own Claude account.
+**Home › AI Link** lets an AI assistant on your computer read and change the plan you have open, while you watch, through the Model Context Protocol (MCP). It works with the Claude Desktop app (and Claude Code), with your own account; no API key is needed. You ask in plain words; the assistant does it in Datum Plan.
 
-1. **Turn on.** Home › AI Link › **Turn on**. Only Claude on this computer can reach the plan, with a key that changes each time; nothing listens while it is off. The status bar shows **Claude linked**. It stays on for the next start until you turn it off.
-2. **Add to Claude** (once). Datum Plan makes a Claude extension, **Datum Plan.mcpb**, in your Downloads folder and opens it: Claude Desktop asks to install Datum Plan, and you click **Install**. Nothing to edit. If Claude Desktop does not open, the file is shown in its folder: drag it onto Claude Desktop › Settings › Extensions. The extension keeps working after Datum Plan updates. (Other ways, under the dialog's last section: write Claude Desktop's settings file, or the command for Claude Code.)
+1. **Turn on.** Home › AI Link › **Turn on**. Only an assistant on this computer can reach the plan, with a key that changes each time; nothing listens while it is off. The status bar shows **AI Link on**. It stays on for the next start until you turn it off.
+2. **Add to Claude Desktop** (once). Datum Plan makes a Claude extension, **Datum Plan.mcpb**, in your Downloads folder and opens it: Claude Desktop asks to install Datum Plan, and you click **Install**. Nothing to edit. If Claude Desktop does not open, the file is shown in its folder: drag it onto Claude Desktop › Settings › Extensions. The extension keeps working after Datum Plan updates. (Other ways, under the dialog's last section: write Claude Desktop's settings file, or the command for Claude Code.)
 3. **Ask.** In Claude Desktop, Settings › Extensions shows Datum Plan switched on. Start a new chat and ask, for example: *"What plan is open in Datum Plan, and what is its finish date?"* Claude asks before it uses each tool the first time: choose **Always allow** for the tools you are happy with.
 
 Then ask anything about the plan shown, for example:

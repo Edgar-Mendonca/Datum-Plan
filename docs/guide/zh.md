@@ -656,12 +656,12 @@ S 曲线右上角的 **Format**（格式）设置计划中所有 S 曲线的外�
 - **发送 XER 文件。** **File › Export › XER** 会先询问要按哪个版本写出：请选择接收方软件所用的版本或更早的版本（软件无法打开按更新版本写出的文件）。文件包含 WBS、作业、逻辑关系、日历、资源及其分配、作业代码、自定义字段、步骤和备注。导出后会显示一份报告，列出写入的内容以及该格式无法保存的内容（例如基线）。XER 中的作业 ID 必须唯一：重复的 ID 会加上“-2”。
 - **恢复。** Datum Plan 在您工作时会自动保存恢复副本（在 **File › Options** 中设置频率）。如果软件在保存前意外关闭，下次启动时会提示恢复您的工作。
 
-## 与 Claude 协作：AI Link
+## AI Link：AI 助手处理您的计划
 
-**Home › AI Link**（AI 链接）让 Claude Desktop 应用中的 Claude 读取并修改您当前打开的计划，修改过程您可以实时看到。您用日常语言提出要求，Claude 在 Datum Plan 中完成。无需 API 密钥：Claude 使用您自己的 Claude 账户。
+**Home › AI Link**（AI 链接）通过模型上下文协议（MCP）让您电脑上的 AI 助手读取并修改您当前打开的计划，修改过程您可以实时看到。它适用于 Claude Desktop 应用（以及 Claude Code），使用您自己的账户，无需 API 密钥。您用日常语言提出要求，助手在 Datum Plan 中完成。
 
-1. **打开链接。** Home › AI Link › **Turn on**（打开）。只有本机上的 Claude 能访问计划，且每次使用不同的密钥；关闭时不监听任何连接。状态栏显示 **Claude linked**。下次启动时保持打开，直到您关闭为止。
-2. **Add to Claude**（添加到 Claude，只需一次）。Datum Plan 会在"下载"文件夹中生成一个 Claude 扩展 **Datum Plan.mcpb** 并打开它：Claude Desktop 会询问是否安装 Datum Plan，点击 **Install**（安装）即可，无需编辑任何文件。如果 Claude Desktop 没有打开，该文件会在其文件夹中显示：将它拖到 Claude Desktop › Settings › Extensions 即可。Datum Plan 更新后扩展仍可继续使用。（对话框最后一部分还提供其他方式：写入 Claude Desktop 的设置文件，或 Claude Code 的命令。）
+1. **打开链接。** Home › AI Link › **Turn on**（打开）。只有本机上的助手能访问计划，且每次使用不同的密钥；关闭时不监听任何连接。状态栏显示 **AI Link on**。下次启动时保持打开，直到您关闭为止。
+2. **Add to Claude Desktop**（添加到 Claude Desktop，只需一次）。Datum Plan 会在"下载"文件夹中生成一个 Claude 扩展 **Datum Plan.mcpb** 并打开它：Claude Desktop 会询问是否安装 Datum Plan，点击 **Install**（安装）即可，无需编辑任何文件。如果 Claude Desktop 没有打开，该文件会在其文件夹中显示：将它拖到 Claude Desktop › Settings › Extensions 即可。Datum Plan 更新后扩展仍可继续使用。（对话框最后一部分还提供其他方式：写入 Claude Desktop 的设置文件，或 Claude Code 的命令。）
 3. **提问。** 在 Claude Desktop 中，Settings › Extensions 显示 Datum Plan 已开启。新建对话并提问，例如：*"Datum Plan 中打开的是哪个计划？完工日期是哪天？"* Claude 第一次使用每个工具前会征求同意：对您放心的工具选择 **Always allow**（始终允许）。
 
 之后即可就当前显示的计划提出任何要求，例如：
