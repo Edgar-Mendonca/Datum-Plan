@@ -2,7 +2,7 @@
 // (crates/core/src/assist.rs); the window switches the link on, sets up Claude Desktop, and shows
 // Claude's changes as they happen (each one an Undo step).
 import { Show, createSignal } from "solid-js";
-import { call, openDialog, opts, refresh, setOpts, setOut, toast } from "./store";
+import { call, openDialog, opts, refresh, setOpts, setOut, table, toast, useTable } from "./store";
 import { Dialog } from "./ui";
 import { Out, listen } from "./api";
 
@@ -16,7 +16,7 @@ const DID: Record<string, string> = {
   add_resources: "added resources", set_resource_fields: "changed a resource", delete_resources: "deleted resources", assign_resource: "assigned a resource", unassign_resource: "removed a resource from tasks",
   add_calendar: "added a calendar", set_calendar: "changed a calendar", delete_calendar: "deleted a calendar", define_code: "changed an activity code", set_task_codes: "coded tasks",
   define_custom_field: "set up a custom field", delete_custom_field: "removed a custom field", set_constraint: "set a constraint", set_deadline: "set a deadline",
-  indent_tasks: "indented tasks", outdent_tasks: "outdented tasks", move_tasks: "moved tasks", set_task_notes: "wrote a note",
+  indent_tasks: "indented tasks", outdent_tasks: "outdented tasks", move_tasks: "moved tasks", set_task_notes: "wrote a note", set_columns: "changed the task sheet's columns",
   set_risk: "changed the risk register", delete_risk: "removed a risk", set_delay_event: "changed a delay event", delete_delay_event: "removed a delay event", add_fragnet: "added a delay event's activities",
   take_snapshot: "took a snapshot", set_health_settings: "changed the health settings", level_resources: "levelled resources", clear_levelling: "cleared levelling",
   update_project: "updated progress through a date", mark_on_track: "marked tasks on track", split_task: "split a task", save_interim: "saved an interim plan", set_constraint_log_item: "changed the constraint log",
@@ -35,6 +35,7 @@ export const initAi = async () => {
   listen("ai-change", async (p: { out: Out; tool: string }) => {
     setOut(p.out);
     await refresh();
+    if (p.tool === "set_columns" || p.tool === "undo" || p.tool === "redo") useTable(table());
     toast(`AI Link: the assistant ${DID[p.tool] ?? "changed the plan"}. Undo (Ctrl+Z) takes it back.`, true);
   });
 };

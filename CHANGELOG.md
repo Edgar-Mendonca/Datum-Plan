@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.9 — 2026-11-14
+
+The AI Link stays connected, and the assistant can change the task sheet's columns (110 tools).
+
+- **Columns** (get_columns, set_columns): *"Add Baseline Start and Baseline Finish after Finish"* shows them in the task sheet at once, by field name or key; columns can be hidden again. Before, the assistant had no tool for this and fell back to working on the screen.
+- **The link no longer drops when a second copy of Datum Plan opens.** A second copy (started by hand, or by an assistant using the screen) took over the link and removed it when it closed; the first window then said "AI Link on" while the assistant could not reach it. Now a window removes only its own link details, and puts them back within two seconds if another copy removed them.
+- **The assistant is told** to work on Datum Plan only through its tools: not to control the window through the screen, not to start another copy, and to ask you to turn the AI Link off and on if it cannot reach it.
+- The guide: turn off Claude Desktop's ability to use your computer if you want it to work only through the AI Link.
+
 ## 0.9.8 — 2026-11-14
 
 - **AI Link › Add to Claude Desktop** says what really happens: Datum Plan saves Datum Plan.mcpb in Downloads and shows it; drag it onto Claude Desktop › Settings › Extensions and click Install. (Claude Desktop opens it by itself only on some computers.) The guide says the same, and not to ask the assistant to do the install.

@@ -63,6 +63,8 @@ pub fn tools() -> Value {
         { "name": "indent_tasks", "description": "Indent tasks one level: they become subtasks of the task above.", "inputSchema": obj(json!({ "uids": uids() }), &["uids"]) },
         { "name": "outdent_tasks", "description": "Outdent tasks one level.", "inputSchema": obj(json!({ "uids": uids() }), &["uids"]) },
         { "name": "move_tasks", "description": "Move tasks (with their subtasks) up or down by some rows.", "inputSchema": obj(json!({ "uids": uids(), "direction": { "type": "string", "enum": ["up", "down"] }, "rows": { "type": "integer" } }), &["uids", "direction"]) },
+        { "name": "get_columns", "description": "The columns of the task sheet (Entry table), in order, with their width; hidden ones say so.", "inputSchema": none() },
+        { "name": "set_columns", "description": "Show columns in the task sheet (Entry table), by field key or name from list_fields, e.g. [\"Baseline Start\",\"b0finish\"], placed after a column (after) or at the end; or hide columns. The window shows the change at once.", "inputSchema": obj(json!({ "show": { "type": "array", "items": { "type": "string" } }, "after": { "type": "string" }, "hide": { "type": "array", "items": { "type": "string" } } }), &[]) },
         { "name": "set_task_notes", "description": "Write a task's notes, or add a line to them (append).", "inputSchema": obj(json!({ "uid": uid(), "notes": { "type": "string" }, "append": { "type": "boolean" } }), &["uid", "notes"]) },
         { "name": "list_operations", "description": "Every named operation the engine has (with an example), for apply_operation.", "inputSchema": none() },
         { "name": "apply_operation", "description": "Any other change, as one named operation (see list_operations). A failed operation changes nothing.", "inputSchema": obj(json!({ "operation": { "type": "object" } }), &["operation"]) },
@@ -153,7 +155,9 @@ pub fn tools() -> Value {
 /// What the assistant is told when it connects.
 pub const INSTRUCTIONS: &str = "You are connected to the Datum Plan window the user has open: a project schedule (CPM) with tasks, links, resources, baselines, progress and sheets. \
 Read before you change: plan_summary, get_tasks (uids identify tasks), get_task. Change only with the tools; each change is one Undo step the user sees at once. \
-Dates are YYYY-MM-DD. Durations like 5d, 3w, 4h. Ask before deleting tasks, setting a baseline or saving; never save unless asked.";
+Dates are YYYY-MM-DD. Durations like 5d, 3w, 4h. Ask before deleting tasks, setting a baseline or saving; never save unless asked. \
+Work on Datum Plan only through these tools: do not control its window through the screen, and do not start or install another copy of Datum Plan (a second copy takes over the link). \
+If a tool says the link is off, ask the user to turn the AI Link off and on in Datum Plan (Home › AI Link), then try again.";
 
 /// Ready-made requests the assistant can offer (MCP prompts): name, description, arguments.
 pub fn prompts() -> Value {
@@ -244,6 +248,11 @@ fn sheet_k(p: &Project, a: &Value) -> Result<usize, String> {
     let n = s(a, "name").ok_or("name is needed (the sheet; see get_sheet).")?;
     p.sheets.iter().position(|x| x.name.eq_ignore_ascii_case(n.trim())).ok_or_else(|| format!("No sheet called {n}."))
 }
+/// The task sheet's columns (the Entry table): the plan's own, or the window's first layout.
+fn entry_columns(p: &Project) -> Vec<(String, i32)> {
+    if !p.columns.is_empty() { return p.columns.clone() }
+    [("mode", 34), ("name", 260), ("dur", 74), ("start", 92), ("finish", 92), ("preds", 90), ("res", 140)].iter().map(|(k, w)| (k.to_string(), *w)).collect()
+}
 /// A date from an instant (minutes; a finish is the end of its last minute).
 fn inst(t: i64) -> String { crate::cal::date_of((t - 1).max(0)).to_string() }
 
@@ -251,7 +260,7 @@ fn inst(t: i64) -> String { crate::cal::date_of((t - 1).max(0)).to_string() }
 pub fn changes(name: &str) -> bool {
     matches!(name, "add_tasks" | "set_task_fields" | "link_tasks" | "unlink_tasks" | "delete_tasks" | "update_progress" | "set_status_date" | "set_baseline" | "set_sheet_cells" | "apply_operation"
         | "add_resources" | "set_resource_fields" | "delete_resources" | "assign_resource" | "unassign_resource" | "add_calendar" | "set_calendar" | "delete_calendar"
-        | "define_code" | "set_task_codes" | "define_custom_field" | "delete_custom_field" | "set_constraint" | "set_deadline" | "indent_tasks" | "outdent_tasks" | "move_tasks" | "set_task_notes"
+        | "define_code" | "set_task_codes" | "define_custom_field" | "delete_custom_field" | "set_constraint" | "set_deadline" | "indent_tasks" | "outdent_tasks" | "move_tasks" | "set_task_notes" | "set_columns"
         | "set_risk" | "delete_risk" | "set_delay_event" | "delete_delay_event" | "add_fragnet" | "take_snapshot" | "set_health_settings" | "level_resources" | "clear_levelling"
         | "update_project" | "mark_on_track" | "split_task" | "save_interim" | "set_constraint_log_item"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
@@ -692,6 +701,31 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             let n = a["rows"].as_u64().unwrap_or(1).clamp(1, 200) as usize;
             apply(doc, Op::Batch(vec![Op::Move { uids: uids.clone(), up }; n]))?;
             Ok(json!({ "moved": uids.len(), "rows": n }))
+        }
+        "get_columns" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            Ok(json!(entry_columns(&doc.p).iter().map(|(k, w)| json!({ "key": k, "name": c.name(k), "width": w.abs(), "hidden": *w < 0 })).collect::<Vec<_>>()))
+        }
+        "set_columns" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            let key = |x: &Value| -> Result<String, String> { let n = txt(x); c.key_of(&n).ok_or_else(|| format!("No field \"{n}\"; see list_fields.")) };
+            let mut cols = entry_columns(&doc.p);
+            for k in a["hide"].as_array().into_iter().flatten().map(key).collect::<Result<Vec<_>, _>>()? {
+                if k == "name" { return Err("The Task Name column stays.".into()) }
+                if let Some(x) = cols.iter_mut().find(|x| x.0 == k) { x.1 = -x.1.abs() }
+            }
+            let show = a["show"].as_array().into_iter().flatten().map(key).collect::<Result<Vec<_>, _>>()?;
+            let mut at = match s(a, "after") { Some(x) => { let k = key(&json!(x))?; cols.iter().position(|c| c.0 == k).ok_or_else(|| format!("{x} is not a column of the task sheet."))? + 1 } None => cols.len() };
+            for k in show {
+                match cols.iter().position(|x| x.0 == k) {
+                    Some(i) if s(a, "after").is_none() => cols[i].1 = cols[i].1.abs(),
+                    Some(i) => { let mut x = cols.remove(i); x.1 = x.1.abs(); if i < at { at -= 1 } cols.insert(at, x); at += 1 }
+                    None => { cols.insert(at.min(cols.len()), (k, 100)); at += 1 }
+                }
+            }
+            if a["show"].as_array().is_none_or(|v| v.is_empty()) && a["hide"].as_array().is_none_or(|v| v.is_empty()) { return Err("Give show or hide, a list of fields.".into()) }
+            apply(doc, Op::Columns { cols: cols.clone() })?;
+            Ok(json!(cols.iter().filter(|x| x.1 > 0).map(|x| x.0.clone()).collect::<Vec<_>>()))
         }
         "set_task_notes" => {
             let uid = u(a, "uid")?;
@@ -1396,6 +1430,14 @@ mod tests {
         assert_eq!((doc.p.tasks[ib].constraint, doc.p.tasks[ib].cdate, doc.p.tasks[ib].deadline), (Constraint::SNET, Some(d(2027, 1, 4)), Some(d(2027, 2, 1))));
         assert!(run(&mut doc, "set_constraint", json!({ "uids": [b], "type": "MFO" })).is_err(), "a dated constraint needs its date");
         run(&mut doc, "set_task_notes", json!({ "uid": a, "notes": "Vendor confirmed." })).unwrap();
+        // Columns of the task sheet: by name or key, after a column, hidden again.
+        let shown = run(&mut doc, "set_columns", json!({ "show": ["Baseline Start", "b0finish"], "after": "finish" })).unwrap();
+        let v: Vec<&str> = shown.as_array().unwrap().iter().map(|x| x.as_str().unwrap()).collect();
+        let f = v.iter().position(|x| *x == "finish").unwrap();
+        assert_eq!(&v[f..f + 3], ["finish", "b0start", "b0finish"], "{v:?}");
+        run(&mut doc, "set_columns", json!({ "hide": ["b0finish"] })).unwrap();
+        assert!(run(&mut doc, "get_columns", json!({})).unwrap().as_array().unwrap().iter().any(|x| x["key"] == "b0finish" && x["hidden"] == true));
+        assert!(run(&mut doc, "set_columns", json!({ "show": ["nosuch"] })).is_err() && run(&mut doc, "set_columns", json!({ "hide": ["name"] })).is_err());
         assert_eq!(run(&mut doc, "set_task_notes", json!({ "uid": a, "notes": "Crane booked.", "append": true })).unwrap()["notes"], "Vendor confirmed.\nCrane booked.");
         // Filters: by name, and by rules on any field (codes and custom fields too).
         assert!(run(&mut doc, "list_filters", json!({})).unwrap().as_array().unwrap().iter().any(|f| f["name"] == "Critical"));

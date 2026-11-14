@@ -67,12 +67,29 @@ pub fn start(app: &AppHandle) -> Result<(), String> {
     let k = key();
     let f = link_file().ok_or("No settings folder for the AI Link.")?;
     if let Some(d) = f.parent() { let _ = std::fs::create_dir_all(d); }
-    datum_core::doc::write_atomic(&f, json!({ "port": port, "key": k, "pid": std::process::id() }).to_string().as_bytes())?;
+    let mine = json!({ "port": port, "key": k, "pid": std::process::id() }).to_string();
+    datum_core::doc::write_atomic(&f, mine.as_bytes())?;
     let on = Arc::new(AtomicBool::new(true));
     let app2 = app.clone();
     listen(l, k, on.clone(), move |n, a| run(&app2, n, a));
+    keep(f, mine, on.clone());
     *g = Some(Link { port, on });
     Ok(())
+}
+
+/// Keeps the link file while the link is on: another Datum Plan window (a second copy started by
+/// hand, or by an assistant using the screen) may write its own and remove it when it closes; then
+/// this window writes its own again, so the assistant can still reach it.
+fn keep(f: PathBuf, mine: String, on: Arc<AtomicBool>) {
+    std::thread::spawn(move || while on.load(Ordering::SeqCst) {
+        std::thread::sleep(Duration::from_secs(2));
+        if on.load(Ordering::SeqCst) && !f.exists() { let _ = datum_core::doc::write_atomic(&f, mine.as_bytes()); }
+    });
+}
+
+/// Whether the link file is this window's (by its process id).
+fn ours(f: &Path) -> bool {
+    std::fs::read_to_string(f).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).is_some_and(|v| v["pid"].as_u64() == Some(std::process::id() as u64))
 }
 
 /// Switches the link off: forgets the key, removes the file and stops listening.
@@ -81,7 +98,8 @@ pub fn stop() {
         l.on.store(false, Ordering::SeqCst);
         let _ = TcpStream::connect(("127.0.0.1", l.port)); // wakes the listener so it ends
     }
-    if let Some(f) = link_file() { let _ = std::fs::remove_file(f); }
+    // Only this window's file: another window's link stays reachable.
+    if let Some(f) = link_file().filter(|f| ours(f)) { let _ = std::fs::remove_file(f); }
 }
 
 /// Serves tool calls one after the other until `on` goes false.
@@ -230,7 +248,7 @@ pub fn extension(dir: &Path) -> Result<PathBuf, String> {
 
 /// Passes one tool call to the open window, or says why it cannot.
 fn forward(name: &str, args: &Value) -> Result<Value, String> {
-    const OFF: &str = "Datum Plan is not open, or its AI Link is off. Ask the user to open Datum Plan and click Home › AI Link.";
+    const OFF: &str = "Datum Plan is not open, or its AI Link is off. Ask the user to open Datum Plan and click Home › AI Link (off and on again if it says on). Do not use the screen or start another copy of Datum Plan instead.";
     let link: Value = link_file().and_then(|f| std::fs::read_to_string(f).ok()).and_then(|t| serde_json::from_str(&t).ok()).ok_or(OFF)?;
     let port = link["port"].as_u64().filter(|&p| p > 0 && p < 65536).ok_or(OFF)? as u16;
     let mut s = TcpStream::connect_timeout(&std::net::SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_secs(3)).map_err(|_| OFF.to_string())?;
@@ -342,6 +360,26 @@ mod tests {
         assert!(m["tools"].as_array().unwrap().len() >= 50);
         assert!(z.by_name("icon.png").is_ok());
         assert_eq!(z.by_name(&bin).unwrap().size(), std::fs::metadata(std::env::current_exe().unwrap()).unwrap().len());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn a_window_keeps_its_link_file_and_leaves_another_windows_alone() {
+        let dir = std::env::temp_dir().join(format!("dp-keep-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("ai-link.json");
+        let mine = json!({ "port": 1, "key": "k", "pid": std::process::id() }).to_string();
+        let on = Arc::new(AtomicBool::new(true));
+        keep(f.clone(), mine.clone(), on.clone());
+        // Another window wrote its own file: it is not ours, and the keeper leaves it.
+        std::fs::write(&f, json!({ "port": 2, "key": "x", "pid": 1 }).to_string()).unwrap();
+        assert!(!ours(&f));
+        std::thread::sleep(Duration::from_millis(2500));
+        assert!(!ours(&f), "another window's file is left alone");
+        // That window closed and removed it: this window writes its own again.
+        std::fs::remove_file(&f).unwrap();
+        std::thread::sleep(Duration::from_millis(2500));
+        assert!(ours(&f), "the link file is back");
+        on.store(false, Ordering::SeqCst);
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]
