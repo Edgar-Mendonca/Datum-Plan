@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.8 — 2026-11-14
+
+- **AI Link › Add to Claude Desktop** says what really happens: Datum Plan saves Datum Plan.mcpb in Downloads and shows it; drag it onto Claude Desktop › Settings › Extensions and click Install. (Claude Desktop opens it by itself only on some computers.) The guide says the same, and not to ask the assistant to do the install.
+- The two export tools are marked as tools that write (files in Downloads), not as read-only, so Claude Desktop lists them with the tools that change things: 38 read-only, 70 that change the plan or write a file.
+
 ## 0.9.7 — 2026-11-14
 
 The AI Link's own labels in general words.

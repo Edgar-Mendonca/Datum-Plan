@@ -45,7 +45,7 @@ export const aiLink = () => openDialog(() => {
   const load = async () => { const x = await call<Info>("ai_info"); if (x) { setI(x); setAiOn(x.on); } };
   const turn = async (on: boolean) => { setBusy(true); const x = await call<Info>("ai_link", { on }); setBusy(false); if (x) { setI(x); setAiOn(x.on); setOpts({ ...opts(), aiLink: x.on }); toast(on ? "AI Link on: your AI assistant can work on the plan you have open." : "AI Link off.", true); } };
   const [added, setAdded] = createSignal<{ file: string; opened: boolean } | null>(null);
-  const add = async () => { setBusy(true); const x = await call<{ file: string; opened: boolean }>("ai_add_to_claude"); setBusy(false); if (x) { setAdded(x); toast(x.opened ? "Claude Desktop is asking to install Datum Plan: click Install." : "Drag Datum Plan.mcpb onto Claude Desktop › Settings › Extensions.", true); } };
+  const add = async () => { setBusy(true); const x = await call<{ file: string; opened: boolean }>("ai_add_to_claude"); setBusy(false); if (x) { setAdded(x); toast(x.opened ? "Claude Desktop is asking to install Datum Plan: click Install." : "Datum Plan.mcpb is in Downloads: drag it onto Claude Desktop › Settings › Extensions and click Install.", true); } };
   const setup = async () => { const f = await call<string>("ai_setup_claude"); if (f) { toast(`Claude Desktop knows Datum Plan now (${f}). Restart Claude Desktop once.`, true); load(); } };
   const copy = (t: string, what: string) => navigator.clipboard?.writeText(t).then(() => toast(`${what} copied.`, true));
   load();
@@ -59,8 +59,8 @@ export const aiLink = () => openDialog(() => {
             <button class="btn" classList={{ pri: !x().on }} disabled={busy()} onClick={() => turn(!x().on)}>{x().on ? "Turn off" : "Turn on"}</button>
           </div>
           <div class="ailink-step" classList={{ done: !!added() || x().claude_set }}>
-            <b>2</b><div><div class="t">Add Datum Plan to Claude Desktop</div><div class="muted">Once. Claude Desktop opens and asks to install Datum Plan: click <b>Install</b>. Nothing to edit.
-              <Show when={added()}>{a => <> {a().opened ? "" : <>If Claude did not open, drag <b>Datum Plan.mcpb</b> (shown in its folder, {a().file}) onto Claude Desktop › Settings › Extensions.</>}</>}</Show></div></div>
+            <b>2</b><div><div class="t">Add Datum Plan to Claude Desktop</div><div class="muted">Once. Datum Plan saves <b>Datum Plan.mcpb</b> in your Downloads folder and shows it. Open Claude Desktop › Settings › Extensions, drag the file onto that page and click <b>Install</b>. Nothing to edit.
+              <Show when={added()}>{a => <> {a().opened ? "If Claude Desktop opened by itself, just click Install." : <>The file: {a().file}</>}</>}</Show></div></div>
             <button class="btn" classList={{ pri: x().on && !added() }} disabled={busy()} onClick={add}>Add to Claude Desktop</button>
           </div>
           <div class="ailink-step">

@@ -443,10 +443,11 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 | 0.10.3 | Risk: weather | Weather calendars and weather risk (seasonal working-day loss by month) in the Monte Carlo run | ⬜ |
 | 0.10.2 | Risk: probabilistic branching | A risk event with a chance adds its fragnet in some runs only; results show its effect | ⬜ |
 | 0.10.1 | Parity with the user's desktop scheduler | User exports 5–10 plans as Project XML from the desktop scheduler they use at work; dates, float and critical compared task by task; differences fixed and kept as tests (the enterprise scheduler later: no access) | ⬜ |
-| 0.9.11 | Expected finish, scheduling options | Expected Finish per task; more out-of-sequence and lag options | ⬜ |
-| 0.9.10 | Roles | Generic resources (Mechanical Engineer × 2), then Assign a person to a role | ⬜ |
-| 0.9.9 | Detailed work editing | Type hours per day per assignment in Task and Resource Usage (advanced) | ⬜ |
-| 0.9.8 | Work contours (resource curves) | Flat, front-loaded, back-loaded, early peak, late peak, bell, turtle and custom curves per assignment (advanced option) | 🔜 |
+| 0.9.12 | Expected finish, scheduling options | Expected Finish per task; more out-of-sequence and lag options | ⬜ |
+| 0.9.11 | Roles | Generic resources (Mechanical Engineer × 2), then Assign a person to a role | ⬜ |
+| 0.9.10 | Detailed work editing | Type hours per day per assignment in Task and Resource Usage (advanced) | ⬜ |
+| 0.9.9 | Work contours (resource curves) | Flat, front-loaded, back-loaded, early peak, late peak, bell, turtle and custom curves per assignment (advanced option) | 🔜 |
+| 0.9.8 | AI Link install text, export tools | The dialog and guide say to drag Datum Plan.mcpb onto Claude Desktop › Settings › Extensions (it does not open by itself on every computer); export tools not read-only | ✅ |
 | 0.9.7 | AI Link labels | Ribbon group AI, status AI Link on, dialog AI Link, button Add to Claude Desktop: the Claude name only where it means Anthropic's apps (their trademark guidance) | ✅ |
 | 0.9.6 | Task Path | Schedule › Paths › Task Path: the selected task's driving predecessors, predecessors, driven successors and successors coloured in the task sheet and Gantt, legend in the status bar; 7 more AI tools (108) | ✅ |
 | 0.9.5 | AI Link: 101 tools | Third set of 25: contract, document and procurement registers, baselines and variance, sheets (add, rename, delete, format, number formats, names), task formatting, dashboards, exports to Downloads | ✅ |
@@ -747,6 +748,7 @@ Multi-user, EPS/OBS server and user rights (Datum Plan stays local, private, one
 - Then 0.9.5: AI Link set 3, 101 tools (registers, baselines, sheets, formats, dashboards, exports). User asked whether new tools need a reinstall: no (the bridge asks the window for the list).
 - Then 0.9.6: Task Path (Schedule › Paths) and 7 more AI tools (108). A full disk crashed the compiler once (rustc SIGSEGV); `cargo clean` freed 24 GB.
 - Then 0.9.7: the AI Link's labels in general words (AI group, AI Link on, Add to Claude Desktop) after checking Anthropic's legal page: the AI Link (MCP through Claude Desktop or Claude Code) is within the terms; a panel driven by the user's Claude login is not built.
+- Then 0.9.8 (user: Claude Desktop lists only 40 tools; Add to Claude Desktop does not open Claude, only the .mcpb dragged in works; asked in chat, Claude found the repo, downloaded the exe and fell back to screenshots): the 40 were only the read-only group (68 more below); the dialog and guide now say to drag the file, and not to ask the assistant to install; export tools marked as writing.
 - Then the README rewritten (user: "very old, show off our unique features"): a table of what makes Datum Plan different (AI Link with 108 tools, Task Path, delay analysis, registers, sheets and dashboards, risk, health history, linked plans, exchange files, privacy), the AI Link steps and tool list, a picture grid. Its pictures come from `README=1 node tests_ui/guide_shots.cjs` (the guide fixture, no markers, saved to docs/images).
 - Then (user): the README speaks of the AI Link, not Claude or Anthropic, with one line that it links to Claude Desktop through MCP for now; the website's app page shows the new pictures (site.json screenshots: gantt, dashboards, sheets, risk, scurve, tracking; the first four are shown).
 - Waiting on Datum Plot: Plot cannot read dates yet. The hub's `briefs/PLOT-DATES.md` asks Plot's chat for optional date columns (days since 1970-01-01, `Table.xFormat = "date"`). When a Plot release has it: change `io/dplot.rs` to write X as days since 1970 with `xFormat: "date"` and `xTitle: "Date"` (instead of days from the first date), and name the minimum Plot version in the guide.

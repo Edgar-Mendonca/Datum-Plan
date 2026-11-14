@@ -144,7 +144,7 @@ pub fn tools() -> Value {
     // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
     for t in &mut all {
         let n = t["name"].as_str().unwrap_or("").to_string();
-        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "switch_plan" | "save_plan"),
+        t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "switch_plan" | "save_plan" | "export_plan" | "export_register"),
             "destructiveHint": n.starts_with("delete_") || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "apply_operation"), "openWorldHint": false });
     }
     Value::Array(all)
@@ -1228,6 +1228,8 @@ mod tests {
         let mut doc = plan();
         let names: Vec<String> = tools().as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect();
         assert!(names.len() >= 101 && names.iter().collect::<std::collections::HashSet<_>>().len() == names.len(), "{} tools", names.len());
+        let ann = |n: &str| tools().as_array().unwrap().iter().find(|t| t["name"] == n).unwrap()["annotations"]["readOnlyHint"].as_bool();
+        assert_eq!((ann("export_plan"), ann("list_baselines")), (Some(false), Some(true)), "an export writes a file");
         let t: Vec<u64> = run(&mut doc, "get_tasks", json!({ "filter": "not_started" })).unwrap()["tasks"].as_array().unwrap().iter().map(|x| x["uid"].as_u64().unwrap()).collect();
         let (a, b) = (t[0], t[1]);
         // Contract, documents, procurement.
