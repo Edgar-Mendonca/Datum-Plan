@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.12 — 2026-11-14
+
+AI Link, batch 3 of 5: Sheets in full (162 tools).
+
+- **Rows, columns and cells**: insert_rows_columns, delete_rows_columns (formulas on every sheet follow), shift_cells (insert or delete cells, moving the rest down or right), move_sheet.
+- **Looks**: merge_cells, freeze_panes, set_sheet_conditional_formatting (values, text, blanks, duplicates, top and bottom, above average, dates, data bars, colour scales), set_cell_notes, hide_rows_columns, set_sheet_tab (colour, hidden), set_row_heights.
+- **Data**: sort_range (by several columns; formulas, formats and notes move with their rows), remove_duplicates.
+- **Pictures**: list_pictures (the plan's library and where each is placed), place_picture (at a cell, sized or fitted; or removed).
+
 ## 0.9.11 — 2026-11-14
 
 AI Link, batch 2 of 5: project setup and details (147 tools).

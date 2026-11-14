@@ -2,7 +2,7 @@
 
 Every command in Datum Plan should have an AI Link tool, so the assistant never has to work on the screen. This list maps each ribbon group and view to its tools. ✅ has a tool · 🔜 planned (batch and version) · — no tool, on purpose.
 
-Tools: 147 (0.9.11). The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`) are run by `src-tauri/src/ai.rs`.
+Tools: 162 (0.9.12). The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`) are run by `src-tauri/src/ai.rs`.
 
 ## Batches
 
@@ -10,8 +10,8 @@ Tools: 147 (0.9.11). The engine's tools are in `crates/core/src/assist.rs`; the 
 |---|---|---|---|
 | 1 | 0.9.10 | Drive the window: views, tables, filter, group, sort, outline, select, zoom, Gantt options, Task Path, panes, new/open/save as/close plans, what the window shows | ✅ |
 | 2 | 0.9.11 | Project setup and details: settings (start, calendar, hours per day, currency), schedule options, reporting periods, baseline lock, column titles, percent decimals, modules, bar colours, conditional formatting, report notes, task expenses/documents/notebook, resource rates/availability/leave, rules of credit, spelling, find and replace | ✅ |
-| 3 | 0.9.12 | Sheets in full: insert and delete rows and columns, move sheets, merge, freeze panes, conditional formatting, cell notes, hide rows and columns, tab colour, sort a range, remove duplicates, pictures | 🔜 |
-| 4 | 0.9.13 | Many plans: links between plans, linked plans and what moved, update links, subplans, apply setup to subplans, scenarios, compare projects, portfolio | ⬜ |
+| 3 | 0.9.12 | Sheets in full: insert and delete rows and columns, move sheets, merge, freeze panes, conditional formatting, cell notes, hide rows and columns, tab colour, sort a range, remove duplicates, pictures, row heights | ✅ |
+| 4 | 0.9.13 | Many plans: links between plans, linked plans and what moved, update links, subplans, apply setup to subplans, scenarios, compare projects, portfolio, resource pool | 🔜 |
 | 5 | 0.9.14 | Print and reports: page setup, a view as PDF in Downloads, report builder, progress report notes | ⬜ |
 
 ## Home
@@ -69,7 +69,7 @@ Tools: 147 (0.9.11). The engine's tools are in `crates/core/src/assist.rs`; the 
 
 | Group | Command | Tool |
 |---|---|---|
-| Properties | Project Information, Custom Fields, Activity Codes, Change Working Time, Pictures, Project Setup | ✅ set_project_info, define_custom_field, define_code, set_calendar, set_project_settings (start, calendar, hours per day, currency), set_task_expenses, set_task_documents, set_task_notebook, set_resource_rates, set_resource_availability, set_resource_leave; Pictures 🔜 3 |
+| Properties | Project Information, Custom Fields, Activity Codes, Change Working Time, Pictures, Project Setup | ✅ set_project_info, define_custom_field, define_code, set_calendar, set_project_settings (start, calendar, hours per day, currency), set_task_expenses, set_task_documents, set_task_notebook, set_resource_rates, set_resource_availability, set_resource_leave, list_pictures, place_picture |
 | Schedule | Set Baseline, Update Project, Reporting Periods, Check Schedule | ✅ set_baseline, update_project, check_schedule, set_reporting_periods, set_period_notes |
 | Linked Plans | Link to Plan, Linked Plans, Update Links, Subplans, Apply Setup to Subplans | 🔜 4 |
 | What-if | Scenarios | 🔜 4 |
@@ -99,7 +99,7 @@ Tools: 147 (0.9.11). The engine's tools are in `crates/core/src/assist.rs`; the 
 |---|---|
 | Type in cells, formats, number formats, names | ✅ set_sheet_cells, format_sheet_cells, set_number_format, define_name |
 | Add, rename, delete sheets | ✅ add_sheet, rename_sheet, delete_sheet |
-| Insert and delete rows and columns, merge, freeze panes, conditional formatting, notes, hide, tab colour, sort, remove duplicates, pictures | 🔜 3 |
+| Insert and delete rows, columns and cells, move sheets, merge, freeze panes, conditional formatting, notes, hide, tab colour, row heights, sort, remove duplicates, pictures | ✅ insert_rows_columns, delete_rows_columns, shift_cells, move_sheet, merge_cells, freeze_panes, set_sheet_conditional_formatting, set_cell_notes, hide_rows_columns, set_sheet_tab, set_row_heights, sort_range, remove_duplicates, list_pictures, place_picture |
 
 ## File
 

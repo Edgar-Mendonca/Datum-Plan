@@ -34,6 +34,10 @@ const DID: Record<string, string> = {
   set_bar_colours: "changed the bar colours", set_conditional_formatting: "changed the conditional formatting", set_period_notes: "wrote report notes", set_task_expenses: "set a task's expenses",
   set_task_documents: "set a task's documents", set_task_notebook: "wrote in a task's notebook", set_resource_rates: "set a resource's rates", set_resource_availability: "set a resource's availability",
   set_resource_leave: "changed a resource's leave", define_credit_rule: "changed a rule of credit", find_replace: "replaced text in tasks",
+  insert_rows_columns: "inserted rows or columns in a sheet", delete_rows_columns: "deleted rows or columns in a sheet", shift_cells: "moved cells in a sheet", move_sheet: "moved a sheet",
+  merge_cells: "merged or unmerged cells", freeze_panes: "froze panes in a sheet", set_sheet_conditional_formatting: "changed a sheet's conditional formatting", set_cell_notes: "wrote cell notes",
+  hide_rows_columns: "hid or showed rows or columns", set_sheet_tab: "changed a sheet tab", set_row_heights: "changed row heights", sort_range: "sorted a range", remove_duplicates: "removed duplicate rows",
+  place_picture: "placed or removed a picture",
   apply_operation: "changed the plan", undo: "undid a change", redo: "redid a change", switch_plan: "showed another plan", save_plan: "saved the plan",
 };
 

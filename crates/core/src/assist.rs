@@ -186,12 +186,31 @@ pub fn tools() -> Value {
         { "name": "check_spelling", "description": "Unknown words in task names, notes, text fields and sheets, with suggestions (en-GB or en-US). Fix them with set_task_fields or set_sheet_cells.", "inputSchema": obj(json!({ "lang": { "type": "string", "enum": ["en-GB", "en-US"] } }), &[]) },
         { "name": "find_replace", "description": "Replace text in task names (or notes) across the plan, like Global Change: find, replace, in (name or notes), match_case. One Undo step; returns how many tasks changed.", "inputSchema": obj(json!({ "find": { "type": "string" }, "replace": { "type": "string" }, "in": { "type": "string", "enum": ["name", "notes"] }, "match_case": { "type": "boolean" } }), &["find", "replace"]) },
     ]);
-    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window, setup].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
+    // Sheets in full (0.9.12).
+    let sheet = || json!({ "type": "string", "description": "The sheet's name (get_sheet lists them)" });
+    let sheets = json!([
+        { "name": "insert_rows_columns", "description": "Insert whole rows (at a row number) or columns (at a letter) on a sheet; formulas on every sheet follow.", "inputSchema": obj(json!({ "name": sheet(), "what": { "type": "string", "enum": ["rows", "columns"] }, "at": { "type": "string", "description": "Row number like 5, or column letter like C" }, "count": { "type": "integer" } }), &["name", "what", "at"]) },
+        { "name": "delete_rows_columns", "description": "Delete whole rows or columns of a sheet; formulas follow (references to deleted cells become #REF!). Ask the user first.", "inputSchema": obj(json!({ "name": sheet(), "what": { "type": "string", "enum": ["rows", "columns"] }, "at": { "type": "string" }, "count": { "type": "integer" } }), &["name", "what", "at"]) },
+        { "name": "shift_cells", "description": "Insert or delete the cells of a range, moving the cells below (down) or to the right (right) to make room or close the gap.", "inputSchema": obj(json!({ "name": sheet(), "range": { "type": "string" }, "action": { "type": "string", "enum": ["insert", "delete"] }, "direction": { "type": "string", "enum": ["down", "right"] } }), &["name", "range", "action"]) },
+        { "name": "move_sheet", "description": "Move a sheet tab to a position (1 = first).", "inputSchema": obj(json!({ "name": sheet(), "to": { "type": "integer" } }), &["name", "to"]) },
+        { "name": "merge_cells", "description": "Merge a range into one cell (the top-left value shows across it), or unmerge it.", "inputSchema": obj(json!({ "name": sheet(), "range": { "type": "string" }, "unmerge": { "type": "boolean" } }), &["name", "range"]) },
+        { "name": "freeze_panes", "description": "Keep rows at the top and columns at the left in view while scrolling (0 and 0 unfreezes).", "inputSchema": obj(json!({ "name": sheet(), "rows": { "type": "integer" }, "columns": { "type": "integer" } }), &["name"]) },
+        { "name": "set_sheet_conditional_formatting", "description": "Colour sheet cells by their values: rules [{\"range\":\"C2:C50\",\"op\":\"lt\",\"a\":\"0\",\"style\":{\"color\":\"#C0392B\",\"bold\":true}}]. op: gt, ge, lt, le, eq, ne, between, notbetween (a, b); contains, notcontains, begins, ends (a); blank, notblank, dup, unique; top, bottom (a items); above, below (average); date (a: today, thisweek, nextweek, thismonth, past, future…); bar (data bars, style.fill colour); scale (colours a to b). Replaces the sheet's rules (append adds).", "inputSchema": obj(json!({ "name": sheet(), "rules": { "type": "array", "items": { "type": "object" } }, "append": { "type": "boolean" } }), &["name", "rules"]) },
+        { "name": "set_cell_notes", "description": "Notes on sheet cells: {\"B4\":\"Price from the vendor's quote\"}; empty text removes a note.", "inputSchema": obj(json!({ "name": sheet(), "notes": { "type": "object" } }), &["name", "notes"]) },
+        { "name": "hide_rows_columns", "description": "Hide (or with show, show again) rows by number and columns by letter.", "inputSchema": obj(json!({ "name": sheet(), "rows": { "type": "array", "items": { "type": "integer" } }, "columns": { "type": "array", "items": { "type": "string" } }, "show": { "type": "boolean" } }), &["name"]) },
+        { "name": "set_sheet_tab", "description": "A sheet tab's colour (#RRGGBB, empty for none) and whether the tab is hidden.", "inputSchema": obj(json!({ "name": sheet(), "color": { "type": "string" }, "hidden": { "type": "boolean" } }), &["name"]) },
+        { "name": "set_row_heights", "description": "Row heights in pixels: {\"1\":32,\"2\":24}; 0 gives back the normal height.", "inputSchema": obj(json!({ "name": sheet(), "heights": { "type": "object" } }), &["name", "heights"]) },
+        { "name": "sort_range", "description": "Sort the rows of a range by columns: by [{\"column\":\"C\",\"desc\":true},{\"column\":\"A\"}]; header keeps the first row in place. Formulas, formats and notes move with their rows.", "inputSchema": obj(json!({ "name": sheet(), "range": { "type": "string" }, "by": { "type": "array", "items": { "type": "object" } }, "header": { "type": "boolean" } }), &["name", "range", "by"]) },
+        { "name": "remove_duplicates", "description": "Remove rows of a range whose values in the given columns (letters; none = all) repeat an earlier row; header keeps the first row.", "inputSchema": obj(json!({ "name": sheet(), "range": { "type": "string" }, "columns": { "type": "array", "items": { "type": "string" } }, "header": { "type": "boolean" } }), &["name", "range"]) },
+        { "name": "list_pictures", "description": "The plan's picture library (logos and images): id, name, role (client, us, vendor…), and where each is placed on sheets.", "inputSchema": none() },
+        { "name": "place_picture", "description": "Place a library picture on a sheet at a cell (width and height in px, or fit inside the cell or merged range), or remove the picture at a cell.", "inputSchema": obj(json!({ "name": sheet(), "picture": { "type": "integer" }, "cell": { "type": "string" }, "width": { "type": "integer" }, "height": { "type": "integer" }, "fit": { "type": "boolean" }, "remove": { "type": "boolean" } }), &["name", "cell"]) },
+    ]);
+    let mut all: Vec<Value> = [base, more, third, fourth, fifth, window, setup, sheets].into_iter().flat_map(|v| match v { Value::Array(v) => v, _ => vec![] }).collect();
     // How Claude may treat each tool: reading only, or changing something it cannot easily get back.
     for t in &mut all {
         let n = t["name"].as_str().unwrap_or("").to_string();
         t["annotations"] = json!({ "readOnlyHint": !changes(&n) && !matches!(n.as_str(), "save_plan" | "export_plan" | "export_register" | "new_plan" | "open_plan" | "save_plan_as" | "close_plan"),
-            "destructiveHint": n.starts_with("delete_") || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "save_plan_as" | "close_plan" | "apply_operation"), "openWorldHint": false });
+            "destructiveHint": n.starts_with("delete_") || n == "remove_duplicates" || matches!(n.as_str(), "set_baseline" | "clear_baseline" | "save_plan" | "save_plan_as" | "close_plan" | "apply_operation"), "openWorldHint": false });
     }
     Value::Array(all)
 }
@@ -301,6 +320,9 @@ fn entry_columns(p: &Project) -> Vec<(String, i32)> {
     if !p.columns.is_empty() { return p.columns.clone() }
     [("mode", 34), ("name", 260), ("dur", 74), ("start", 92), ("finish", 92), ("preds", 90), ("res", 140)].iter().map(|(k, w)| (k.to_string(), *w)).collect()
 }
+/// A column's index (0-based) from its letter, or a row's (0-based) from its number.
+fn col_at(x: &str) -> Option<u32> { gridcraft_core::CellRef::parse(&format!("{}1", x.trim().to_uppercase())).map(|r| r.col) }
+fn row_at(x: &Value) -> Option<u32> { x.as_u64().or_else(|| x.as_str().and_then(|s| s.trim().parse().ok())).filter(|r| *r >= 1).map(|r| r as u32 - 1) }
 /// A colour like #C0392B, or nothing.
 fn colour(v: &Value, k: &str) -> Result<Option<String>, String> {
     let Some(t) = v.get(k).filter(|x| !x.is_null()).map(txt) else { return Ok(None) };
@@ -324,6 +346,8 @@ pub fn changes(name: &str) -> bool {
         | "set_project_settings" | "set_schedule_options" | "set_reporting_periods" | "set_baseline_lock" | "rename_column" | "set_percent_decimals" | "set_modules" | "set_bar_colours"
         | "set_conditional_formatting" | "set_period_notes" | "set_task_expenses" | "set_task_documents" | "set_task_notebook" | "set_resource_rates" | "set_resource_availability"
         | "set_resource_leave" | "define_credit_rule" | "find_replace"
+        | "insert_rows_columns" | "delete_rows_columns" | "shift_cells" | "move_sheet" | "merge_cells" | "freeze_panes" | "set_sheet_conditional_formatting" | "set_cell_notes"
+        | "hide_rows_columns" | "set_sheet_tab" | "set_row_heights" | "sort_range" | "remove_duplicates" | "place_picture"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
         | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
         | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
@@ -936,6 +960,153 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             apply(doc, Op::Batch(ops))?;
             Ok(json!({ "changed": n }))
         }
+        "insert_rows_columns" | "delete_rows_columns" => {
+            let k = sheet_k(&doc.p, a)?;
+            let cols = match s(a, "what") { Some("columns") => true, Some("rows") => false, _ => return Err("what is rows or columns.".into()) };
+            let at = if cols { s(a, "at").and_then(col_at) } else { row_at(&a["at"]) }.ok_or(if cols { "at is a column letter like C." } else { "at is a row number like 5." })?;
+            let n = a["count"].as_u64().unwrap_or(1).clamp(1, 10_000) as i32;
+            apply(doc, Op::SheetInsert { k, cols, at, count: if name == "insert_rows_columns" { n } else { -n } })?;
+            Ok(json!({ "sheet": doc.p.sheets[k].name, "count": n }))
+        }
+        "shift_cells" => {
+            let k = sheet_k(&doc.p, a)?;
+            let range = s(a, "range").ok_or("range is needed, like B3:D5.")?.to_uppercase();
+            apply(doc, Op::SheetShift { k, range: range.clone(), down: s(a, "direction") != Some("right"), del: s(a, "action") == Some("delete") })?;
+            Ok(json!({ "sheet": doc.p.sheets[k].name, "range": range }))
+        }
+        "move_sheet" => {
+            let k = sheet_k(&doc.p, a)?;
+            let to = a["to"].as_u64().filter(|t| *t >= 1).ok_or("to is a position, 1 for first.")? as usize - 1;
+            apply(doc, Op::SheetMove { from: k, to: to.min(doc.p.sheets.len() - 1) })?;
+            Ok(json!({ "order": doc.p.sheets.iter().map(|x| x.name.clone()).collect::<Vec<_>>() }))
+        }
+        "merge_cells" | "hide_rows_columns" | "set_sheet_tab" | "set_row_heights" | "set_sheet_conditional_formatting" => {
+            let k = sheet_k(&doc.p, a)?;
+            let mut sh = doc.p.sheets[k].clone();
+            match name {
+                "merge_cells" => {
+                    let r = s(a, "range").ok_or("range is needed, like A1:D1.")?.to_uppercase();
+                    let (r0, c0, r1, c1) = sheet_range(&r).ok_or("range is like A1:D1.")?;
+                    let overlaps = |m: &String| sheet_range(m).is_some_and(|(a0, b0, a1, b1)| a0 <= r1 && r0 <= a1 && b0 <= c1 && c0 <= b1);
+                    sh.merges.retain(|m| !overlaps(m));
+                    if a["unmerge"].as_bool() != Some(true) { if (r0, c0) == (r1, c1) { return Err("Merge two or more cells.".into()) } sh.merges.push(r) }
+                }
+                "hide_rows_columns" => {
+                    let show = a["show"].as_bool() == Some(true);
+                    let rows: Vec<u32> = a["rows"].as_array().into_iter().flatten().map(|x| row_at(x).ok_or("Rows are numbers like 5.")).collect::<Result<_, _>>()?;
+                    let cols: Vec<u32> = a["columns"].as_array().into_iter().flatten().map(|x| col_at(&txt(x)).ok_or("Columns are letters like C.")).collect::<Result<_, _>>()?;
+                    for (list, add) in [(&mut sh.hide_rows, rows), (&mut sh.hide_cols, cols)] {
+                        list.retain(|x| !(show && add.contains(x)));
+                        if !show { for x in add { if !list.contains(&x) { list.push(x) } } }
+                        list.sort_unstable();
+                    }
+                }
+                "set_sheet_tab" => {
+                    if let Some(c) = colour(a, "color")? { sh.color = c }
+                    if let Some(h) = a["hidden"].as_bool() { if h && doc.p.sheets.iter().filter(|x| !x.hidden).count() <= 1 && !sh.hidden { return Err("At least one sheet stays shown.".into()) } sh.hidden = h }
+                }
+                "set_row_heights" => for (r, h) in a["heights"].as_object().ok_or("heights is like {\"1\":32}.")? {
+                    let r = row_at(&json!(r)).ok_or("Rows are numbers like 1.")?;
+                    match h.as_u64() { Some(0) => { sh.heights.remove(&r); } Some(h) if h <= 1000 => { sh.heights.insert(r, h as u16); } _ => return Err("A height is 0 to 1000 px.".into()) }
+                },
+                _ => {
+                    if a["append"].as_bool() != Some(true) { sh.cond.clear() }
+                    for x in a["rules"].as_array().ok_or("rules is a list (empty clears them).")? {
+                        let range = s(x, "range").ok_or("Each rule needs a range.")?.to_uppercase();
+                        sheet_range(&range).ok_or("A rule's range is like C2:C50.")?;
+                        let op = s(x, "op").unwrap_or("");
+                        if !COND_OPS.contains(&op) { return Err(format!("op is one of: {}.", COND_OPS.join(", "))) }
+                        let style = if x["style"].is_object() { restyle("", &x["style"])? } else { "f:#FCE4D6".into() };
+                        sh.cond.push(CondRule { range, op: op.into(), a: x.get("a").map(txt).unwrap_or_default(), b: x.get("b").map(txt).unwrap_or_default(), style });
+                    }
+                }
+            }
+            apply(doc, Op::Sheet { k: Some(k), sheet: Some(sh) })?;
+            Ok(json!({ "sheet": doc.p.sheets[k].name }))
+        }
+        "freeze_panes" => {
+            let k = sheet_k(&doc.p, a)?;
+            let n = doc.p.sheets[k].name.clone();
+            let (r, c) = (a["rows"].as_u64().unwrap_or(0).min(200), a["columns"].as_u64().unwrap_or(0).min(50));
+            let mut f = doc.p.ui["freeze"].as_object().cloned().unwrap_or_default();
+            if r == 0 && c == 0 { f.remove(&n); } else { f.insert(n.clone(), json!([r, c])); }
+            apply(doc, Op::Ui { key: "freeze".into(), value: Value::Object(f) })?;
+            Ok(json!({ "sheet": n, "rows": r, "columns": c }))
+        }
+        "set_cell_notes" => {
+            let k = sheet_k(&doc.p, a)?;
+            let cells: Vec<(String, String)> = a["notes"].as_object().ok_or("notes is like {\"B4\":\"…\"}.")?.iter().map(|(c, v)| (c.to_uppercase(), txt(v))).collect();
+            apply(doc, Op::SheetNotes { k, cells })?;
+            Ok(json!({ "notes": doc.p.sheets[k].notes.len() }))
+        }
+        "remove_duplicates" => {
+            let k = sheet_k(&doc.p, a)?;
+            let range = s(a, "range").ok_or("range is needed.")?.to_uppercase();
+            let cols: Vec<u32> = a["columns"].as_array().into_iter().flatten().map(|x| col_at(&txt(x)).ok_or("Columns are letters like C.")).collect::<Result<_, _>>()?;
+            let before = doc.p.sheets[k].cells.len();
+            apply(doc, Op::SheetDedupe { k, range, cols, header: a["header"].as_bool() == Some(true) })?;
+            Ok(json!({ "cells_removed": before.saturating_sub(doc.p.sheets[k].cells.len()) }))
+        }
+        "sort_range" => {
+            let k = sheet_k(&doc.p, a)?;
+            let (r0, c0, r1, c1) = sheet_range(&s(a, "range").ok_or("range is needed, like A1:D20.")?.to_uppercase()).ok_or("range is like A1:D20.")?;
+            let r0 = r0 + a["header"].as_bool().unwrap_or(false) as u32;
+            if r1 <= r0 { return Err("Sort two or more rows.".into()) }
+            let by: Vec<(u32, bool)> = a["by"].as_array().filter(|v| !v.is_empty()).ok_or("by is needed, like [{\"column\":\"C\"}].")?.iter().map(|x| Ok((col_at(s(x, "column").or(x.as_str()).unwrap_or("")).ok_or("A sort column is a letter like C.")?, x["desc"].as_bool().unwrap_or(false)))).collect::<Result<_, String>>()?;
+            let view = sheet::sheet_view(&Calc::new(&doc.p, fmt, today), k).ok_or("That sheet cannot be read.")?;
+            let shown: std::collections::HashMap<&str, (&str, Option<f64>)> = view.cells.iter().map(|x| (x.0.as_str(), (x.2.as_str(), x.4))).collect();
+            let a1 = |r: u32, c: u32| format!("{}{}", sheet::col_name(c), r + 1);
+            let mut rows: Vec<u32> = (r0..=r1).collect();
+            rows.sort_by(|&x, &y| {
+                for &(c, desc) in &by {
+                    let (p, q) = (shown.get(a1(x, c).as_str()).copied().unwrap_or(("", None)), shown.get(a1(y, c).as_str()).copied().unwrap_or(("", None)));
+                    if p.0.is_empty() != q.0.is_empty() { return if p.0.is_empty() { std::cmp::Ordering::Greater } else { std::cmp::Ordering::Less } }
+                    let o = match (p.1, q.1) { (Some(m), Some(n)) => m.total_cmp(&n), _ => p.0.to_lowercase().cmp(&q.0.to_lowercase()) };
+                    if o != std::cmp::Ordering::Equal { return if desc { o.reverse() } else { o } }
+                }
+                x.cmp(&y)
+            });
+            let sh = &doc.p.sheets[k];
+            let (mut cells, mut styles, mut notes, mut fmts) = (vec![], vec![], vec![], std::collections::BTreeMap::<String, Vec<(String, String)>>::new());
+            for (i, &src) in rows.iter().enumerate() {
+                let dst = r0 + i as u32;
+                for c in c0..=c1 {
+                    let (from, to) = (a1(src, c), a1(dst, c));
+                    cells.push((to.clone(), sh.cells.get(&from).map(|f| sheet::shift(f, dst as i64 - src as i64, 0)).unwrap_or_default()));
+                    styles.push((to.clone(), sh.style.get(&from).cloned().unwrap_or_default()));
+                    notes.push((to.clone(), sh.notes.get(&from).cloned().unwrap_or_default()));
+                    fmts.entry(sh.fmt.get(&from).cloned().unwrap_or_default()).or_default().push((to, String::new()));
+                }
+            }
+            let mut ops = vec![Op::SheetCells { k, cells, fmt: None }, Op::SheetStyle { k, cells: styles }, Op::SheetNotes { k, cells: notes }];
+            ops.extend(fmts.into_iter().map(|(f, cells)| Op::SheetCells { k, cells, fmt: Some(f) }));
+            apply(doc, Op::Batch(ops))?;
+            Ok(json!({ "sorted_rows": rows.len() }))
+        }
+        "list_pictures" => {
+            let p = &doc.p;
+            Ok(json!(p.pictures.iter().map(|x| json!({ "id": x.id, "name": x.name, "role": x.role, "kb": x.data.len() * 3 / 4 / 1024,
+                "placed": p.sheets.iter().flat_map(|s| s.images.iter().filter(|i| i.pic == x.id).map(move |i| format!("{}!{}", s.name, i.cell))).collect::<Vec<_>>() })).collect::<Vec<_>>()))
+        }
+        "place_picture" => {
+            let k = sheet_k(&doc.p, a)?;
+            let cell = s(a, "cell").ok_or("cell is needed, like B2.")?.to_uppercase();
+            gridcraft_core::CellRef::parse(&cell).ok_or("cell is like B2.")?;
+            let mut images = doc.p.sheets[k].images.clone();
+            if a["remove"].as_bool() == Some(true) {
+                let n = images.len();
+                images.retain(|i| i.cell != cell);
+                if images.len() == n { return Err(format!("No picture at {cell}.")) }
+            } else {
+                let pic = a["picture"].as_u64().ok_or("picture is needed (an id from list_pictures).")? as u32;
+                if !doc.p.pictures.iter().any(|x| x.id == pic) { return Err("No picture with that id; see list_pictures.".into()) }
+                let dim = |k: &str, d: u64| a[k].as_u64().unwrap_or(d).clamp(8, 4000) as u16;
+                images.retain(|i| i.cell != cell);
+                images.push(SheetImage { pic, cell: cell.clone(), w: dim("width", 160), h: dim("height", 80), fit: a["fit"].as_bool() == Some(true) });
+            }
+            apply(doc, Op::SheetImages { k, images })?;
+            Ok(json!({ "sheet": doc.p.sheets[k].name, "pictures": doc.p.sheets[k].images.len() }))
+        }
         "get_columns" => {
             let c = Calc::new(&doc.p, fmt, today);
             Ok(json!(entry_columns(&doc.p).iter().map(|(k, w)| json!({ "key": k, "name": c.name(k), "width": w.abs(), "hidden": *w < 0 })).collect::<Vec<_>>()))
@@ -1482,6 +1653,58 @@ mod tests {
         assert!(sp["words"].as_array().unwrap().iter().any(|w| w["word"] == "Recieve"), "{sp}");
         let n = run(&mut doc, "find_replace", json!({ "find": "recieve", "replace": "Receive" })).unwrap()["changed"].as_u64().unwrap();
         assert_eq!((n, doc.p.tasks[ia].name.as_str()), (1, "Receive drawings"));
+    }
+    #[test]
+    fn sheets_rows_merges_freeze_rules_notes_sort_and_pictures() {
+        let mut doc = plan();
+        run(&mut doc, "add_sheet", json!({ "name": "Vendors", "cells": { "A1": "Vendor", "B1": "Value", "C1": "Twice",
+            "A2": "Beta", "B2": "300", "C2": "=B2*2", "A3": "Acme", "B3": "100", "C3": "=B3*2", "A4": "Core", "B4": "200", "C4": "=B4*2", "A5": "Acme", "B5": "100", "C5": "=B5*2" } })).unwrap();
+        let k = doc.p.sheets.iter().position(|x| x.name == "Vendors").unwrap();
+        let cell = |d: &Doc, a: &str| d.p.sheets[k].cells.get(a).cloned().unwrap_or_default();
+        // Sort by value, formulas move with their rows.
+        run(&mut doc, "sort_range", json!({ "name": "Vendors", "range": "A1:C5", "header": true, "by": [{ "column": "B", "desc": true }] })).unwrap();
+        assert_eq!((cell(&doc, "A2"), cell(&doc, "C2"), cell(&doc, "A5")), ("Beta".into(), "=B2*2".into(), "Acme".into()));
+        // Duplicates, rows and columns.
+        run(&mut doc, "remove_duplicates", json!({ "name": "Vendors", "range": "A1:C5", "header": true, "columns": ["A", "B"] })).unwrap();
+        assert!(cell(&doc, "A5").is_empty(), "the second Acme row went");
+        run(&mut doc, "insert_rows_columns", json!({ "name": "Vendors", "what": "rows", "at": 2, "count": 1 })).unwrap();
+        assert_eq!((cell(&doc, "A2"), cell(&doc, "A3"), cell(&doc, "C3")), (String::new(), "Beta".into(), "=B3*2".into()));
+        run(&mut doc, "delete_rows_columns", json!({ "name": "Vendors", "what": "rows", "at": "2" })).unwrap();
+        assert_eq!(cell(&doc, "A2"), "Beta");
+        run(&mut doc, "insert_rows_columns", json!({ "name": "Vendors", "what": "columns", "at": "B" })).unwrap();
+        assert_eq!(cell(&doc, "C2"), "300");
+        run(&mut doc, "delete_rows_columns", json!({ "name": "Vendors", "what": "columns", "at": "B" })).unwrap();
+        run(&mut doc, "shift_cells", json!({ "name": "Vendors", "range": "A2:C2", "action": "insert", "direction": "down" })).unwrap();
+        assert_eq!(cell(&doc, "A3"), "Beta");
+        run(&mut doc, "shift_cells", json!({ "name": "Vendors", "range": "A2:C2", "action": "delete" })).unwrap();
+        // Looks: merge, freeze, rules, notes, hide, tab, heights.
+        run(&mut doc, "merge_cells", json!({ "name": "Vendors", "range": "A1:C1" })).unwrap();
+        assert_eq!(doc.p.sheets[k].merges, ["A1:C1"]);
+        run(&mut doc, "merge_cells", json!({ "name": "Vendors", "range": "A1:C1", "unmerge": true })).unwrap();
+        assert!(doc.p.sheets[k].merges.is_empty());
+        run(&mut doc, "freeze_panes", json!({ "name": "Vendors", "rows": 1 })).unwrap();
+        assert_eq!(doc.p.ui["freeze"]["Vendors"], json!([1, 0]));
+        run(&mut doc, "set_sheet_conditional_formatting", json!({ "name": "Vendors", "rules": [{ "range": "B2:B20", "op": "gt", "a": "150", "style": { "fill": "#FCE4D6", "bold": true } }] })).unwrap();
+        assert_eq!(doc.p.sheets[k].cond[0].style, "b;f:#FCE4D6");
+        assert!(run(&mut doc, "set_sheet_conditional_formatting", json!({ "name": "Vendors", "rules": [{ "range": "B2", "op": "nosuch" }] })).is_err());
+        run(&mut doc, "set_cell_notes", json!({ "name": "Vendors", "notes": { "B2": "From the quote." } })).unwrap();
+        assert_eq!(doc.p.sheets[k].notes["B2"], "From the quote.");
+        run(&mut doc, "hide_rows_columns", json!({ "name": "Vendors", "rows": [4], "columns": ["C"] })).unwrap();
+        assert_eq!((doc.p.sheets[k].hide_rows.clone(), doc.p.sheets[k].hide_cols.clone()), (vec![3], vec![2]));
+        run(&mut doc, "hide_rows_columns", json!({ "name": "Vendors", "rows": [4], "show": true })).unwrap();
+        assert!(doc.p.sheets[k].hide_rows.is_empty());
+        run(&mut doc, "set_sheet_tab", json!({ "name": "Vendors", "color": "#2E9D57" })).unwrap();
+        run(&mut doc, "set_row_heights", json!({ "name": "Vendors", "heights": { "1": 32 } })).unwrap();
+        assert_eq!((doc.p.sheets[k].color.as_str(), doc.p.sheets[k].heights[&0]), ("#2E9D57", 32));
+        run(&mut doc, "move_sheet", json!({ "name": "Vendors", "to": 1 })).unwrap();
+        assert_eq!(doc.p.sheets[0].name, "Vendors");
+        // Pictures from the library.
+        doc.apply(Op::Picture { id: 0, pic: Some(Picture { id: 0, name: "Client logo".into(), role: "client".into(), data: "data:image/png;base64,AAAA".into() }) }, "%d-%b-%y").unwrap();
+        let pid = run(&mut doc, "list_pictures", json!({})).unwrap()[0]["id"].as_u64().unwrap();
+        run(&mut doc, "place_picture", json!({ "name": "Vendors", "picture": pid, "cell": "E1", "fit": true })).unwrap();
+        assert_eq!(run(&mut doc, "list_pictures", json!({})).unwrap()[0]["placed"][0], "Vendors!E1");
+        run(&mut doc, "place_picture", json!({ "name": "Vendors", "cell": "E1", "remove": true })).unwrap();
+        assert!(doc.p.sheets[0].images.is_empty());
     }
     #[test]
     fn the_window_tools_are_listed_and_marked() {
