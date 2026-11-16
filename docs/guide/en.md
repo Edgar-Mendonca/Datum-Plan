@@ -202,7 +202,7 @@ To change the baseline, save it again (**Set Baseline** overwrites it; **For: Se
 
 ### The status date
 
-The status date is the day your progress is measured to, for example the last Friday. Set it with **Progress › Status Date**. Work after the status date is planned; work before it should be done.
+The status date is the day your progress is measured to, for example the last Friday. Set it with **Progress › Status Date**. Work after the status date is planned; work before it should be done. The **status bar** at the bottom always shows it in bold (**Status date: 13-Nov-26**), or "not set (today)" when there is none and progress is measured at today's date. It turns amber when it is more than a week old, as a reminder to move it to the end of the last reporting period; click it to change it. Baseline % Complete, % Complete Variance and earned value are measured at it, and their column headings say so when you point at them.
 
 ### Update progress each week
 

@@ -3,7 +3,9 @@
 // AutoFilter buttons and inline header rename.
 import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, untrack, on, JSX } from "solid-js";
 import { Col, Row } from "./api";
-import { toggleSub, grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
+import { out, toggleSub, grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
+/** Columns measured at the status date: their heading says at which date. */
+const MEASURED = ["plannedpct", "pctvar"];
 import { C } from "./cmds";
 import { pathMap } from "./path";
 import * as D from "./dialogs";
@@ -397,7 +399,7 @@ export const Grid = (p: { width?: number }) => {
             <div class="hc idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 2 }} title="Select all" onClick={() => setRanges([{ r0: 0, c0: 0, r1: rows().length - 1, c1: ncols() - 1 }])}>◢</div>
             <For each={grid().cols}>{(c, k) => (
               <div class="hc" classList={{ r: right(c), drop: drag() !== null && drag() !== k(), fx: !!formulaOf(c.key), on: ranges().some(g => k() >= Math.min(g.c0, g.c1) && k() <= Math.max(g.c0, g.c1)), filt: filter().rules.some(r => r.field === c.key) }}
-                style={{ width: `${widths()[k()]}px`, ...sticky(k()), ...(k() <= frozen() ? { "z-index": 2 } : {}) }} title={formulaOf(c.key) ? `${c.name} = ${formulaOf(c.key).replace(/^=/, "")}` : c.name}
+                style={{ width: `${widths()[k()]}px`, ...sticky(k()), ...(k() <= frozen() ? { "z-index": 2 } : {}) }} title={formulaOf(c.key) ? `${c.name} = ${formulaOf(c.key).replace(/^=/, "")}` : MEASURED.includes(c.key) ? `${c.name}: measured at the status date, ${out()?.summary.status || "not set (today)"}` : c.name}
                 draggable={rename() !== k()} onDragStart={() => setDrag(k())} onDragEnd={() => setDrag(null)} onDragOver={e => e.preventDefault()}
                 onDrop={() => { const f = drag(); if (f === null || f === k()) return; const v = [...cols()]; const [m] = v.splice(f, 1); v.splice(k(), 0, m); saveCols(v); setDrag(null); }}
                 onClick={e => colSelect(e, k())} onContextMenu={e => { e.preventDefault(); headMenu(e, k()); }} onDblClick={() => setRename(k())}>

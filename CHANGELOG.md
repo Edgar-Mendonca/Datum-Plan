@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.17 — 2026-11-16
+
+- **The status date in the status bar.** The bar at the bottom always shows **Status date: 13-Nov-26** in bold, or "not set (today)" when progress is measured at today's date. It turns amber when it is more than a week old ("· 11 days old"); a click opens Project Information to change it.
+- **Columns measured at the status date say so.** Pointing at the Baseline % Complete or % Complete Variance heading shows the date they are measured at.
+
 ## 0.9.16 — 2026-11-16
 
 - **Print: wrap long text in every column.** File › Print › Text › **Wrap long text in every column** now wraps any long cell (predecessors, resources, notes, your own text columns) onto up to three lines, not only task names, and the row grows to fit. Column headings wider than their column (such as "% Complete" in a narrow column) take two lines instead of being cut off. With columns as wide as their text, wrapped text columns are kept to a sensible width so the chart keeps its room.

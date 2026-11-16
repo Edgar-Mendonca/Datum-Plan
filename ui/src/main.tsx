@@ -78,6 +78,24 @@ const GanttView = () => {
   );
 };
 
+/** The status date, always in sight: progress, variance and earned value are measured at it.
+ *  Amber when it is more than a week behind today; a click changes it. */
+export const statusAge = (iso: string | null | undefined, today = new Date()) => {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("-").map(Number), t = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((t - Date.UTC(y, m - 1, d)) / 864e5);
+};
+const StatusDate = () => {
+  const age = () => statusAge(P()?.status);
+  const old = () => (age() ?? 0) > 7;
+  return (
+    <Show when={out()}>
+      <button class="mode sdate" classList={{ old: old(), unset: !P().status }} onClick={() => import("./dialogs").then(m => m.projectInfo())}
+        title={P().status ? `Progress, Baseline % Complete, variance and earned value are measured at the status date.${old() ? ` It is ${age()} days old: move it to the end of the last reporting period.` : ""} Click to change it.` : "No status date: progress is measured at today's date. Click to set one."}>
+        Status date: <b>{P().status ? out()!.summary.status : "not set (today)"}</b>{old() ? ` · ${age()} days old` : ""}</button>
+    </Show>
+  );
+};
 const Status = () => {
   const s = () => out()?.summary;
   return (
@@ -89,6 +107,7 @@ const Status = () => {
       <span class="muted">{grid().shown} of {grid().total} tasks{sel().length > 1 ? ` · ${sel().length} selected` : ""}</span>
       <span class="muted">{s() ? `${s()!.start} – ${s()!.finish} · ${s()!.dur} · ${(s()!.pct + 0).toFixed(Math.min(2, out()?.project.pct_decimals ?? 0)).replace(/^-(0[.0]*)$/, "$1")}% · ${s()!.cost}` : ""}</span>
       <Show when={pathOn()}><button class="mode pathkey" title="Task Path: select a task to see what drives it and what it drives. Click to turn it off." onClick={() => setPathOn(false)}>Task Path: <For each={PATH}>{p => <span><i style={{ background: p[2] }} />{p[1]}</span>}</For> ✕</button></Show>
+      <StatusDate />
       <Show when={aiOn()}><button class="mode aion" title="AI Link is on: your AI assistant can work on the plan you have open" onClick={() => aiLink()}>✦ AI Link on</button></Show>
       <span class="grow" />
       <span class="vsc">

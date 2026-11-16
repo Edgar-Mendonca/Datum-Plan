@@ -1226,3 +1226,7 @@ svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-siz
 .ailink-more pre { background: var(--bg2); border: 1px solid var(--line); padding: 8px; font-size: 11px; white-space: pre-wrap; word-break: break-all; margin: 4px 0; }
 .ailink-more summary { cursor: pointer; color: var(--muted); }
 .aion { color: #D97757; font-weight: 600; cursor: pointer; }
+.status .sdate b { color: var(--text); font-weight: 700; }
+.status .sdate.old { background: #FDF0DC; color: #8A5300; }
+.status .sdate.old b { color: #8A5300; }
+.status .sdate.unset b { font-weight: 600; color: var(--text2); }

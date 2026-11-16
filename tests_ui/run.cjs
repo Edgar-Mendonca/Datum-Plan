@@ -167,6 +167,11 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Font group on the Task tab", (await p.$$(".fontg .fb")).length >= 8);
 
   // 5d. Print: Ctrl+P opens the print page with a preview; printing lays out the same pages with the paper size.
+  // 0.9.17: the status date is always in the status bar; a click opens Project Information to change it.
+  check("The status bar shows the status date (or that none is set)", ((await p.textContent(".status .sdate").catch(() => "")) ?? "").includes(fix.state.project.status ? "Status date:" : "Status date: not set (today)"));
+  await p.click(".status .sdate"); await p.waitForTimeout(300);
+  check("…and a click on it opens Project Information, where it is set", ((await p.textContent(".dlg").catch(() => "")) ?? "").includes("Project Information"));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(150);
   await p.keyboard.press("Control+p"); await p.waitForTimeout(400);
   const nprev = (await p.$$(".pprev .ppage")).length;
   // 0.9.15: in the chart, row lines lie under the links, so a link that turns back along a row's edge is not cut.
