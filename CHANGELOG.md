@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.19 — 2026-11-17
+
+One chart engine for the whole app.
+
+- **Every chart in the views and dashboards** (S-curves, progress per period, cost and earned value, manpower, risk, delay analysis, registers, portfolio, milestone trend…) is now drawn by the same vector engine as the charts on sheets: sharp on screen, in print and in PDFs, with clean axes, gridlines and labels, the status date's line and each line's last value at its end.
+- **Format chart** on every chart opens the Format pane: type, stacking, legend, text size, data labels, bar gap, colours, series colours, lines, dashes, markers, smooth lines, trend lines, axis bounds, steps, number formats and gridlines. The look is kept with the plan, per chart; **Back to the standard look** undoes it; saved chart styles apply too.
+- Copy and PNG give the same page-wide picture as before, now from the vector chart. Datum Plot copies are unchanged.
+- In the dark theme, charts take the theme's colours; pictures and print stay light.
+- The old chart library is gone: the app is smaller.
+
 ## 0.9.18 — 2026-11-17
 
 Charts in Sheets, with full control of how they look (193 AI Link tools).

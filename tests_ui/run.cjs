@@ -404,7 +404,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const chosen = await p.$eval(".tbl.look tbody tr:nth-child(2) td:nth-child(2)", e => e.textContent);
   check("+ Add constraint logs one for the chosen task", JSON.stringify(logCall).includes('"Log"') && (await p.textContent(".page")).includes(`to ${chosen}`));
   await p.click('.side button[title="Manpower"]'); await p.waitForTimeout(400);
-  check("Manpower shows people per trade: planned, done, forecast", (await p.$$eval(".page .ptools select option", o => o.map(x => x.textContent))).includes("Engineering") && !!(await p.$(".page canvas")));
+  check("Manpower shows people per trade: planned, done, forecast", (await p.$$eval(".page .ptools select option", o => o.map(x => x.textContent))).includes("Engineering") && !!(await p.$(".page .chartbox svg")));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   await p.click(".tabs > button:text-is('Progress')"); await p.waitForTimeout(100);
   await p.click(".ribbon button:has-text('Rules of Credit')"); await p.waitForTimeout(300);
@@ -419,8 +419,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 0.8.12: S-curves as in a report: period bars and cumulative curves on two axes, data date under the title, Format to change them.
   { const hd = await p.$eval(".chartbox header.center", h => h.textContent).catch(() => "");
     check("an S-curve shows bars per period and cumulative curves, the data date and progress under a centred title", /Data date: .+Planned .+Actual/.test(hd), hd);
-    const leg = await p.evaluate(() => { const c = [...document.querySelectorAll(".chartbox")].find(b => b.querySelector("header.center")); const ch = c && window.Chart ? null : null; return c ? c.querySelector("canvas").height : 0; });
-    check("…drawn on its canvas", leg > 100, String(leg));
+    const leg = await p.evaluate(() => { const c = [...document.querySelectorAll(".chartbox")].find(b => b.querySelector("header.center")); return c ? c.querySelector(".cv svg").getBoundingClientRect().height : 0; });
+    check("…drawn as a vector chart", leg > 100, String(leg));
     await p.click(".chartbox header.center button:has-text('Format')"); await p.waitForTimeout(250);
     check("Format opens the S-curve Format dialog", (await p.textContent(".dlg")).includes("Bars per period"));
     await p.click(".dlg .seg button:has-text('Curves only')"); await p.fill(".dlg input[placeholder^='As each chart']", "Weekly S-curve");
@@ -559,7 +559,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("a dashboard from a template has its tiles", (await tiles()) === 8 && (await p.textContent(".dashtabs .on")) === "Client dashboard", String(await tiles()));
   check("number tiles show what the engine works out", (await p.$$eval(".dnum .v", v => v.map(x => x.textContent))).includes("42"));
   check("dashboards ask the engine for every formula at once", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "dash_eval").pop())).includes("COUNTIF(Tasks[Late],TRUE)"));
-  check("a progress ring and a chart are drawn", !!(await p.$(".dring svg .val")) && !!(await p.$(".dtile.k-chart canvas")));
+  check("a progress ring and a chart are drawn", !!(await p.$(".dring svg .val")) && !!(await p.$(".dtile.k-chart svg")));
   await p.click(".dashbar button:has-text('Edit layout')"); await p.waitForTimeout(150);
   await p.click(".dashbar button:has-text('+ Add tile')"); await p.waitForTimeout(200);
   await p.selectOption(".dlg select >> nth=0", "text"); await p.fill(".dlg textarea", "Steel deliveries start in week 12."); await p.click(".dlg .btn.pri"); await p.waitForTimeout(400);
@@ -591,7 +591,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".charts.wide .chartbox header button:has-text('Datum Plot')"); await p.waitForTimeout(200);
   const toPlot = await p.evaluate(() => window.__calls.filter(c => c[0] === "open_in_plot").pop()?.[1]?.chart);
   check("Datum Plot gets the chart's series, colours and dates", !!toPlot && toPlot.series.length >= 3 && toPlot.series.every(x => x.values.length === toPlot.days.length) && toPlot.days.length === toPlot.labels.length && toPlot.days.length > 2 && /^#/.test(toPlot.series[1].color) && toPlot.units === "%", JSON.stringify(toPlot)?.slice(0, 200));
-  check("charts draw at twice the screen's sharpness", await p.$eval(".charts.wide canvas", c => c.width >= 2 * c.getBoundingClientRect().width - 2));
+  check("charts are drawn as vectors, sharp at any size", await p.$eval(".charts.wide .chartbox .cv svg", c => c.getAttribute("viewBox")?.split(" ").length === 4 && c.querySelectorAll("rect, path").length > 3));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 0.5.5: plans in tabs, links to tasks in other plans, the Linked Plans panel.
@@ -629,7 +629,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("the engine's forecast, days late and status show against it, with a trend line", row.includes("10 d late") && row.includes("Late") && !!(await p.$(".panel.ctr .spark")), row);
   await p.click(".page button:has-text('+ Payment')"); await p.waitForTimeout(250);
   await p.fill(".panel.ctr >> nth=1 >> tbody tr >> nth=0 >> input[type=number] >> nth=0", "100"); await p.press(".panel.ctr >> nth=1 >> tbody tr >> nth=0 >> input[type=number] >> nth=0", "Tab"); await p.waitForTimeout(300);
-  check("payment milestones and the cash-in curve", (await p.textContent(".panel.ctr >> nth=1")).includes("Forecast") && !!(await p.$(".page canvas")) && (await p.textContent(".kpis")).includes("100.0 %"));
+  check("payment milestones and the cash-in curve", (await p.textContent(".panel.ctr >> nth=1")).includes("Forecast") && !!(await p.$(".page .chartbox svg")) && (await p.textContent(".kpis")).includes("100.0 %"));
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-contract.png") });
   await p.click(".tabs > button:text-is('Project')"); await p.click(".ribbon button:has-text('Modules')"); await p.waitForTimeout(250);
   await p.click(".dlg label.chk:has-text('Contract Dates') input"); await p.waitForTimeout(150);
@@ -660,7 +660,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.selectOption(".panel.ctr tbody tr >> nth=0 >> select >> nth=1", "Code 1"); await p.waitForTimeout(250);
   check("the client's return code is picked from the codes in Settings", (await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.log[0].code)) === "Code 1");
   await p.click(".dtabs button:has-text('Progress')"); await p.waitForTimeout(400);
-  check("Progress shows the weighted S-curve, first issues per period and breakdowns", (await p.$$(".page canvas")).length >= 2 && (await p.textContent(".page")).includes("By vendor"));
+  check("Progress shows the weighted S-curve, first issues per period and breakdowns", (await p.$$(".page .chartbox svg")).length >= 2 && (await p.textContent(".page")).includes("By vendor"));
   if (process.env.SHOT) { await p.click(".dtabs button:has-text('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-docs.png") }); }
   await p.click(".tabs > button:text-is('Project')"); await p.click(".ribbon button:has-text('Modules')"); await p.waitForTimeout(250);
   await p.click(".dlg label.chk:has-text('Document Register') input"); await p.waitForTimeout(150);
@@ -694,7 +694,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.selectOption(".panel.ctr .phead select", { index: 1 }); await p.fill(".panel.ctr .phead input[placeholder^='What the vendor said']", "Forging poured, heat treatment next week"); await p.click(".panel.ctr button:has-text('Add note')"); await p.waitForTimeout(300);
   check("the expediting log keeps dated notes per order", (await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Procurement).pop()?.[1].op.Procurement.r.items[0].log[0]?.note)) === "Forging poured, heat treatment next week");
   await p.click(".dtabs button:has-text('Progress')"); await p.waitForTimeout(400);
-  check("Progress shows the weighted S-curve and orders by sub-vendor", !!(await p.$(".page canvas")) && (await p.textContent(".page")).includes("By sub-vendor"));
+  check("Progress shows the weighted S-curve and orders by sub-vendor", !!(await p.$(".page .chartbox svg")) && (await p.textContent(".page")).includes("By sub-vendor"));
   if (process.env.SHOT) { await p.click(".dtabs button:has-text('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-proc.png") }); }
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   // 0.7.2 (from Datum Plot's testers): Enter keeps what was typed; dialogs move; small screens.
@@ -772,7 +772,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
   // 0.8.1: the health score, weights, the change log with ghost bars, and the milestone trend.
   await p.click('.side button[title="Checks"]'); await p.waitForTimeout(500);
-  check("Check Schedule shows the health score with its grade, its trend and each check's weight", (await p.textContent(".kpi.health")).includes("73") && (await p.textContent(".kpi.health")).includes("Fair") && !!(await p.$(".chartbox canvas")) && (await p.textContent(".tbl")).includes("3 · 50%"));
+  check("Check Schedule shows the health score with its grade, its trend and each check's weight", (await p.textContent(".kpi.health")).includes("73") && (await p.textContent(".kpi.health")).includes("Fair") && !!(await p.$(".chartbox svg")) && (await p.textContent(".tbl")).includes("3 · 50%"));
   await p.click("button:has-text('Weights…')"); await p.waitForTimeout(250);
   await p.fill(".dlg input[type=number] >> nth=0", "6"); await p.press(".dlg input[type=number] >> nth=0", "Tab");
   await p.click(".dlg button:has-text('Apply')"); await p.waitForTimeout(300);
@@ -791,7 +791,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("…and shows the other version's bars as ghost bars", (await p.textContent(".dlg")).includes("Hide ghost bars") && (await p.textContent("#toast")).includes("Ghost bars"));
   await p.click(".dlg button:has-text('Hide ghost bars')"); await p.keyboard.press("Escape"); await p.waitForTimeout(200);
   await p.click(".ribbon button:has-text('Milestone Trend')"); await p.waitForTimeout(500);
-  check("Milestone Trend draws each milestone's forecast over the snapshots, and how far it moved", !!(await p.$(".dlg .chartbox canvas")) && (await p.textContent(".dlg tbody")).includes("+5") && (await p.$$(".dlg tbody tr")).length === 2);
+  check("Milestone Trend draws each milestone's forecast over the snapshots, and how far it moved", !!(await p.$(".dlg .chartbox svg")) && (await p.textContent(".dlg tbody")).includes("+5") && (await p.$$(".dlg tbody tr")).length === 2);
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
   // 0.8.4: what-if scenarios: list, compare, merge back by kind, new.
   await p.click(".tabs > button:text-is('Project')"); await p.waitForTimeout(150);
@@ -815,7 +815,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".tabs > button:text-is('Report')"); await p.waitForTimeout(150);
   await p.click(".ribbon button:has-text('Delay Analysis')"); await p.waitForTimeout(500);
   check("Delay Analysis says what the plan holds and which methods can run, each with what it needs", (await p.$$(".mcard")).length === 3 && (await p.$$(".mcard.ok")).length === 2 && (await p.textContent(".methods")).includes("not who is responsible"));
-  check("…as-planned v as-built: the delay at the finish, critical tasks finishing late, and the late tasks", (await p.textContent(".kpis")).includes("+3") && !!(await p.$(".chartbox canvas")) && (await p.$$(".fieldlist tbody tr")).length === 2 && (await p.textContent(".fieldlist tbody")).includes(" A"));
+  check("…as-planned v as-built: the delay at the finish, critical tasks finishing late, and the late tasks", (await p.textContent(".kpis")).includes("+3") && !!(await p.$(".chartbox svg")) && (await p.$$(".fieldlist tbody tr")).length === 2 && (await p.textContent(".fieldlist tbody")).includes(" A"));
   await p.click(".row-tools .seg button:has-text('All')"); await p.waitForTimeout(150);
   check("…all tasks on request", (await p.$$(".fieldlist tbody tr")).length === 3);
   await p.click(".page .seg button:has-text('Windows')"); await p.waitForTimeout(300);
@@ -855,6 +855,15 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.evaluate(() => { window.__calls.length = 0; });
   await p.click(".chartbox header button:has-text('Copy') >> nth=0"); await p.waitForTimeout(400);
   check("every chart has Copy, to paste it as a picture", (await p.evaluate(() => window.__calls.filter(c => c[0] === "copy_picture").length)) === 1);
+  // 0.9.19: a view's chart has Format chart, the same pane as a sheet's charts; its look is kept with the plan by the chart's title.
+  { const t = await p.$eval(".chartbox:not(.bare) header h3 >> nth=0", h => h.firstChild?.textContent ?? "");
+    await p.click(".chartbox:not(.bare) header button:has-text('Format chart') >> nth=0"); await p.waitForTimeout(300);
+    check("Format chart opens the Format pane on a view's chart, without its data fields", !!(await p.$(".chartpane-fixed .chartpane")) && !(await p.$(".chartpane .cfrow:has-text('Categories')")));
+    await p.click(".chartpane .cfchk:has-text('Data labels on every series') input"); await p.waitForTimeout(300);
+    const looks = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Ui?.key === "chartLooks").pop()?.[1].op.Ui.value);
+    check("…and keeps the chart's new look with the plan, by its title", !!looks && looks[t]?.labels === true, JSON.stringify(looks).slice(0, 200));
+    await p.click(".chartpane header .x"); await p.waitForTimeout(150);
+    check("…and closes", !(await p.$(".chartpane-fixed .chartpane"))); }
   const cc = await p.evaluate(() => { const c = window.__calls.filter(x => x[0] === "copy_picture").pop()?.[1]; const v = new DataView(Uint8Array.from(atob(c.dib.slice(0, 64)), ch => ch.charCodeAt(0)).buffer); const png = atob(c.png.split(",")[1].slice(0, 120)); return { w: v.getInt32(4, true), h: v.getInt32(8, true), ppm: v.getInt32(24, true), phys: png.includes("pHYs"), png: c.png }; });
   if (process.env.CHARTPNG) require("fs").writeFileSync(process.env.CHARTPNG, Buffer.from(cc.png.split(",")[1], "base64"));
   check("…drawn page-wide and sharp (2880 px), tagged to paste 16 cm wide", cc.w === 2880 && cc.h > 1300 && Math.abs(cc.ppm - 18000) < 2 && cc.phys, JSON.stringify({ ...cc, png: undefined }));
@@ -869,7 +878,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dtabs button:has-text('Resource Pool')"); await p.waitForTimeout(400);
   check("the resource pool lists each resource's load across the plans, the over-allocated first, as a heat strip", (await p.$$(".pool tbody tr.link")).length === 2 && (await p.textContent(".pool tbody tr.link >> nth=0")).includes("Welder") && (await p.$$(".pool tbody tr.link >> nth=0 >> td.pc")).length === 3 && (await p.textContent(".pool tbody tr.link >> nth=0")).includes("200 %"));
   await p.click(".pool tbody tr.link >> nth=0"); await p.waitForTimeout(400);
-  check("…and a resource opens to its hours by plan against its capacity", !!(await p.$(".pool canvas")));
+  check("…and a resource opens to its hours by plan against its capacity", !!(await p.$(".pool .chartbox svg")));
   await p.selectOption(".page .phead select", { index: 1 }); await p.waitForTimeout(200);
   check("a plan of the workspace can be the pool", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "set_pool").pop()?.[1])) === '{"path":"/work/Gas train/Compressor A.dplan"}');
   await p.click(".page button:has-text('Take resources from the pool')"); await p.waitForTimeout(300);
@@ -1462,7 +1471,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   let job = null;
   await p.exposeFunction("__pdfNow", async () => {
     await p.emulateMedia({ media: "print" });
-    const dom = await p.evaluate(() => ({ canvases: [...document.querySelectorAll("#printroot canvas")].map(c => { if (!c.width) return false; const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 16) if (d[i]) return true; return false; }),
+    const dom = await p.evaluate(() => ({ canvases: [...document.querySelectorAll("#printroot .chartbox .cv svg")].map(c => c.getBoundingClientRect().width > 50 && c.querySelectorAll("rect, path").length > 3),
       wide: [...document.querySelectorAll("#printroot .pflow table")].filter(t => t.getBoundingClientRect().right > document.querySelector("#printroot .pflow").getBoundingClientRect().right + 2).length,
       bg: getComputedStyle(document.querySelector("#printroot .page") ?? document.body).backgroundColor }));
     await p.emulateMedia({ media: null });
@@ -1611,7 +1620,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("every view of an empty plan opens without errors", qerr.length === 0, qerr.join(" | "));
   // Awkward tiles: errors, a deleted sheet, text, pies of negatives and zeros, one point, none, a huge range.
   await ep.click('.side button[title="Dashboard"]'); await ep.waitForTimeout(300); await ep.click('.dashtabs button:text-is("Edge cases")'); await ep.waitForTimeout(800);
-  const tile = t => ep.evaluate(t => { const h = [...document.querySelectorAll(".dtile")].find(x => x.querySelector("h3, .l")?.textContent === t); return h ? { text: h.innerText, canvas: !!h.querySelector(".cv:not(.blank) canvas"), rows: h.querySelectorAll("tbody tr").length } : null; }, t);
+  const tile = t => ep.evaluate(t => { const h = [...document.querySelectorAll(".dtile")].find(x => x.querySelector("h3, .l")?.textContent === t); return h ? { text: h.innerText, canvas: !!h.querySelector(".cv:not(.blank) svg"), rows: h.querySelectorAll("tbody tr").length } : null; }, t);
   const ring = await tile("Ring error"), ringT = await tile("Ring text");
   check("a ring tile on an error shows the error, not 0 %", !!ring && ring.text.includes("#DIV/0!") && !ring.text.includes("0%") && !ringT.text.includes("0%"), JSON.stringify([ring, ringT]));
   const pie = await tile("Pie of negatives");

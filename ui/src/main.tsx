@@ -13,6 +13,7 @@ import { initAi, aiOn, aiLink } from "./ai";
 import { pathOn, setPathOn, PATH } from "./path";
 import { invoke, listen, Out, FieldList, Options } from "./api";
 import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut, setThemeRaw, applyTheme } from "./store";
+import { ChartFormat } from "./charts";
 import { C } from "./cmds";
 import { sheetZoom, setSheetZoom } from "./sheetlayout";
 import { TitleBar, Ribbon, palette } from "./ribbon";
@@ -205,7 +206,7 @@ const App = () => {
       <Status />
       <Show when={backstage()}><Backstage /></Show>
       <For each={dialogs()}>{d => d()}</For>
-      <Menu /><Toast />
+      <Menu /><Toast /><ChartFormat />
     </div>
   );
 };

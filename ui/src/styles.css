@@ -1260,3 +1260,9 @@ svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-siz
 .cfwh input { width: 70px; }
 .cfstyle { display: flex; align-items: center; gap: 8px; }
 .cfstyle b { flex: 1; }
+/* View charts drawn as vectors (0.9.19): colours follow the theme; the Format pane floats on the right. */
+.chartbox .cv svg { position: absolute; inset: 0; }
+:root[data-theme="dark"] .chartbox { --ch-ink: #C3CBD6; --ch-title: #E8EDF3; --ch-grid: #2E3846; --ch-axis: #6B7787; --ch-bg: var(--bg2); --ch-sub: #9AA5B1; }
+.chartpane-fixed .chartpane { position: fixed; top: 64px; bottom: 24px; right: 0; z-index: 60; }
+.chartbox header { flex-wrap: wrap; row-gap: 4px; }
+.chartbox header button { white-space: nowrap; }

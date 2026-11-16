@@ -1,108 +1,36 @@
-// Charts in a clean, modern style: smooth lines with a soft fill, rounded bars, light gridlines,
-// round legend markers and a dark tooltip. Every chart resizes with its box (and for printing),
-// says so when it has nothing to show, and can be saved as a PNG.
-import { onMount, onCleanup, createEffect, on, JSX, Show } from "solid-js";
-import { Chart, registerables, type ChartDataset, type Plugin, type ScriptableContext } from "chart.js";
-import { call, toast, themeTick, P } from "./store";
+// The charts of the views and dashboards, drawn by the same vector engine as the charts on sheets
+// (xchart.tsx): sharp on screen, in print and in PDFs, with the same Format pane. Each chart keeps
+// its look per plan (ui.chartLooks, by title), saved from "Format chart"; Copy and PNG give a
+// page-wide picture with the title, Datum Plot a one-way copy of the values.
+import { createSignal, onCleanup, onMount, JSX, Show } from "solid-js";
+import { Portal } from "solid-js/web";
+import { call, toast, P, act } from "./store";
 import { money, fmtDay } from "./api";
-
-Chart.register(...registerables);
+import { ChartData, ChartDef, Series, XChart, chartCanvas, lookOf, withLook } from "./xchart";
+import { ChartPane } from "./sheetcharts";
 
 /** The chart colours: clear and easy to tell apart. With Options › Colour-blind safe colours they
  * become the Okabe-Ito set, told apart with every common kind of colour-blindness. */
-const STD = { blue: "#3B82F6", orange: "#F59E0B", green: "#10B981", red: "#EF4444", purple: "#8B5CF6", sky: "#38BDF8", yellow: "#EAB308", grey: "#A3ABB8", black: "#1F2937" };
+const STD = { blue: "#2F6FCF", orange: "#E07B24", green: "#2E9D57", red: "#C0392B", purple: "#6D3FC8", sky: "#7FB2E5", yellow: "#D4A017", grey: "#9AA3AF", black: "#1F2937" };
 const SAFE = { blue: "#0072B2", orange: "#E69F00", green: "#009E73", red: "#D55E00", purple: "#CC79A7", sky: "#56B4E9", yellow: "#C9B200", grey: "#A3ABB8", black: "#1F2937" };
 export const COL = { ...STD };
 /** Switches the chart and status colours (the page's `data-cb`) to the colour-blind safe set or back. */
 export const setColourSafe = (on: boolean) => { Object.assign(COL, on ? SAFE : STD); document.documentElement.dataset.cb = on ? "1" : "0"; };
 
-/** While a chart is drawn for a document (Copy, PNG): light colours and a text scale. */
-let doc = 0;
-const LIGHT: Record<string, string> = { "--text": "#1B2733", "--muted": "#4B5563", "--line2": "#E3E8EF", "--line3": "#9AA3AF", "--bg2": "#FFFFFF" };
-const cssv = (n: string) => (doc ? LIGHT[n] ?? "" : getComputedStyle(document.documentElement).getPropertyValue(n).trim());
-/** A font size in px, larger when drawing for a document. */
-const fs = (px: number) => px * (doc || 1);
-
-/** A point's value: a number, or the y of an {x, y} point on a time axis. */
-const yv = (v: unknown): number | null => (v !== null && typeof v === "object" ? (v as { y: number | null }).y : (v as number | null) ?? null);
-/** A marker line with a small label (the status date), and a soft line under the pointer. */
-const lines = (marker: () => number | null | undefined, label: string): Plugin => ({
-  id: "lines",
-  afterDatasetsDraw(ch) {
-    const { ctx, chartArea: a, scales } = ch;
-    const x = scales.x;
-    if (!x) return;
-    const m = marker();
-    ctx.save();
-    if (m !== null && m !== undefined && m >= 0) {
-      const px = x.getPixelForValue(m);
-      ctx.strokeStyle = COL.green; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(px, a.top + 18); ctx.lineTo(px, a.bottom); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.font = `600 ${fs(10)}px 'IBM Plex Sans', sans-serif`;
-      const w = ctx.measureText(label).width + 12;
-      const hh = fs(17);
-      const lx = Math.min(Math.max(px - w / 2, a.left + 2), a.right - w);
-      ctx.fillStyle = COL.green; ctx.beginPath(); ctx.roundRect(lx, a.top, w, hh, hh / 2); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, lx + w / 2, a.top + hh / 2 + 0.5);
-    }
-    const act = ch.tooltip?.getActiveElements?.() ?? [];
-    if (act.length && !(ch.options as { indexAxis?: string }).indexAxis?.startsWith("y")) {
-      const px = act[0].element.x;
-      ctx.strokeStyle = cssv("--line3") || "#ccc"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
-    }
-    ctx.restore();
-  },
-});
-/** The last value of each line, at its end, in the line's colour (as in an engineering report). */
-const ends = (f: () => Fmt | undefined): Plugin => ({
-  id: "ends",
-  afterDatasetsDraw(ch) {
-    const { ctx, chartArea: a } = ch;
-    ctx.save(); ctx.font = `600 ${fs(10.5)}px 'IBM Plex Sans', sans-serif`; ctx.textBaseline = "middle";
-    const used: number[] = [];
-    ch.data.datasets.forEach((d, k) => {
-      if ((d as { type?: string }).type !== "line" || !ch.isDatasetVisible(k)) return;
-      const pts = ch.getDatasetMeta(k).data, vals = d.data as (number | null)[];
-      let i = vals.length - 1; while (i >= 0 && yv(vals[i]) === null) i--;
-      if (i < 0 || !pts[i]) return;
-      const text = fmtv(yv(vals[i]) as number, f()), w = ctx.measureText(text).width;
-      let y = pts[i].y;
-      const gap = fs(13);
-      while (used.some(u => Math.abs(u - y) < gap)) y -= gap;
-      used.push(y);
-      const x = Math.min(pts[i].x + 6, a.right + fs(44) - w);
-      ctx.fillStyle = cssv("--bg2") || "#fff"; ctx.fillRect(x - 2, y - gap / 2, w + 4, gap);
-      ctx.fillStyle = String(d.borderColor ?? "#333"); ctx.fillText(text, x, y);
-    });
-    ctx.restore();
-  },
-});
-/** White (or dark) background so saved pictures are not transparent. */
-const paper: Plugin = { id: "paper", beforeDraw(ch) { const c = ch.ctx; c.save(); c.globalCompositeOperation = "destination-over"; c.fillStyle = cssv("--bg2") || "#fff"; c.fillRect(0, 0, ch.width, ch.height); c.restore(); } };
-/** Fills fade from the line colour to nothing at the bottom of the plot. */
-const fade = (color: string) => (ctx: ScriptableContext<"line">) => {
-  const { chart } = ctx, a = chart.chartArea;
-  if (!a) return color + "30";
-  const g = chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
-  g.addColorStop(0, color + "55"); g.addColorStop(1, color + "04");
-  return g;
-};
-// Charts follow their box when the page is laid out for printing, so nothing is cut off.
-// They draw at twice the screen's sharpness (three times for printing), so lines and text stay crisp in a PDF.
-const live = new Set<Chart>();
-const sharp = (k: number) => live.forEach(c => { c.options.devicePixelRatio = Math.max(k, window.devicePixelRatio || 1); c.resize(); });
-addEventListener("beforeprint", () => sharp(3)); addEventListener("afterprint", () => sharp(2));
-
 export type Fmt = "pct" | "money" | "hours" | "num" | "date";
 export const fmtv = (v: number, f: Fmt = "num") => f === "date" ? fmtDay(v) : f === "pct" ? `${v.toFixed(1)}%` : f === "money" ? money(v, { ...P().currency, decimals: 0 }) : f === "hours" ? `${Math.round(v).toLocaleString()} h` : (Math.round(v * 100) / 100).toLocaleString();
+const FMT: Record<Fmt, string> = { pct: "@pct", money: "@money", hours: "@hours", num: "@num", date: "@day" };
+
+/** One series of a view's chart (the shape the views build with `line` and `bar`). */
+export type DS = { type?: "line" | "bar"; label?: string; data: unknown[]; borderColor?: string; backgroundColor?: string; borderDash?: number[]; borderWidth?: number; fill?: boolean | string; stack?: string; yAxisID?: string; order?: number; tension?: number; cubicInterpolationMode?: string };
+/** A point's value: a number, or the y of an {x, y} point on a time axis. */
+const yv = (v: unknown): number | null => (v !== null && typeof v === "object" ? (v as { y: number | null }).y : (v as number | null) ?? null);
 
 export interface ChartProps {
   title: string;
   type: "line" | "bar" | "doughnut" | "pie";
   labels: string[];
-  datasets: ChartDataset<"line" | "bar", (number | null)[]>[];
+  datasets: DS[];
   y?: string;
   x?: string;
   fmt?: Fmt;
@@ -136,124 +64,51 @@ export interface ChartProps {
   tension?: number;
 }
 
+/** The chart a view describes, as the vector engine draws it (with the plan's saved look over it). */
+const toChart = (p: ChartProps, w: number, h: number, doc = false): { c: ChartDef; d: ChartData } => {
+  const round = p.type === "doughnut" || p.type === "pie", isLine = (d: DS) => d.type === "line" || (!d.type && p.type === "line");
+  const fmt = FMT[p.fmt ?? "num"], pal = Object.values(COL).filter(c => c !== COL.black);
+  const series: Series[] = p.datasets.map(ds => ({
+    name: ds.label ?? "", vals: "", kind: round ? "" : isLine(ds) ? "line" : "column", y2: ds.yAxisID === "y2",
+    color: (isLine(ds) ? ds.borderColor : ds.backgroundColor) || ds.borderColor || "", width: isLine(ds) ? (ds.borderWidth ?? 2.5) * (doc ? 1.15 : 1) : 0,
+    dash: ds.borderDash?.length ? "dash" : "", marker: "none", smooth: (ds.tension ?? p.tension) !== 0, fill: !!ds.fill, colors: round ? p.labels.map((_, i) => pal[i % pal.length]) : undefined,
+  }));
+  const hasLine = p.datasets.some(isLine), mk = p.marker;
+  const c0: ChartDef = {
+    id: 0, cell: "", w, h, kind: round ? p.type : p.horizontal ? "bar" : p.type === "line" && p.datasets.every(isLine) ? "line" : "column", stack: p.stacked ? "stacked" : "", cats: "", series,
+    title: doc ? p.title : "", subtitle: doc ? p.subtitle : undefined, legend: round ? "right" : p.legend ?? "top", font: doc ? 13 : 11, gap: p.horizontal ? 45 : 60, radius: p.radius ?? 2,
+    x: { title: p.x }, y: { title: p.y, fmt, max: p.max ?? null, grid: true }, y2: p.y2 ? { title: p.y2, fmt, min: 0, max: p.y2max ?? null } : {},
+    ends: p.ends !== false && hasLine && !p.horizontal, time: p.time, quiet: true,
+    marker: mk !== null && mk !== undefined && mk >= 0 ? { at: mk, label: p.markerText ?? `${p.markerLabel ?? "Status"}${!p.time && p.labels[mk] ? ` · ${p.labels[mk]}` : ""}` } : null,
+  };
+  const looks = (P()?.ui as { chartLooks?: Record<string, Partial<ChartDef>> } | undefined)?.chartLooks;
+  const c = withLook(c0, looks?.[p.title], true);
+  const d: ChartData = {
+    cats: p.labels, xs: p.days ?? [], cat_fmt: "", names: p.datasets.map(x => x.label ?? ""), fmts: [],
+    vals: p.datasets.map(ds => ds.data.map(yv)),
+    sx: p.time ? p.datasets.map(ds => ds.data.map(q => (q && typeof q === "object" ? (q as { x: number }).x : null))) : undefined,
+    tips: p.time ? p.datasets.map(ds => ds.data.map(q => (q && typeof q === "object" ? (q as { t?: string }).t : undefined))) : undefined,
+  };
+  return { c, d };
+};
+
+/** The chart whose Format pane is open (its title), and its props. */
+const [formatting, setFormatting] = createSignal<ChartProps | null>(null);
+
 export const ChartBox = (p: ChartProps) => {
-  let cv!: HTMLCanvasElement;
-  let ch: Chart | undefined;
+  let box!: HTMLDivElement;
+  const [size, setSize] = createSignal<[number, number]>([600, 300]);
   /** Nothing to draw: no periods, or every value empty or zero (no costs, no hours yet). */
-  const empty = () => !p.labels.length || p.datasets.every(d => d.data.every(v => !yv(v)));
-  /** Draws the chart on the box's canvas, or (`to`) on a canvas of its own for a document. */
-  const build = (first = false, to?: HTMLCanvasElement): Chart | undefined => {
-    const target = to ?? cv;
-    if (!to && ch) { live.delete(ch); ch.destroy(); }
-    const ink = cssv("--text"), muted = cssv("--muted"), grid = cssv("--line2");
-    const font = { family: "'IBM Plex Sans', 'Segoe UI', sans-serif", size: fs(11) };
-    const sharpness = to ? 3 : Math.max(2, window.devicePixelRatio || 1);
-    const axis = (title?: string, isY = false) => ({
-      title: { display: !!title, text: title, color: muted, font: { ...font, weight: 500 as const }, padding: { bottom: 6 } },
-      border: { display: !isY, color: cssv("--line3") || "#9AA3AF", width: 1 },
-      grid: { display: isY, color: grid, drawTicks: false, lineWidth: 1, borderDash: [3, 3] },
-      ticks: { color: muted, font, padding: 8, maxRotation: 0, autoSkipPadding: 18, ...(isY ? { maxTicksLimit: 6, callback: (v: string | number) => fmtv(+v, p.fmt) } : {}) },
-      stacked: p.stacked,
-    });
-    const vAxis = { ...axis(p.y, true), beginAtZero: p.fmt !== "date", ...(p.max !== undefined ? { max: p.max } : {}) };
-    const hAxis: Record<string, unknown> = axis(p.x, false);
-    const t = p.time;
-    if (t) Object.assign(hAxis, { type: "linear", min: t.min, max: t.max, afterBuildTicks: (s: { ticks: { value: number }[] }) => { s.ticks = t.ticksAt.map(value => ({ value })); },
-      ticks: { ...(hAxis.ticks as object), autoSkip: true, maxRotation: t.rotate ? 45 : 0, minRotation: t.rotate ? 45 : 0, callback: (_v: number, i: number) => t.tickLabel(i) } });
-    const right = p.y2 ? { y2: { ...axis(p.y2, true), position: "right", beginAtZero: true, grid: { display: false }, ...(p.y2max !== undefined ? { max: p.y2max } : {}) } } : {};
-    // A horizontal bar chart names every bar (task names), so none may be skipped.
-    if (p.horizontal) hAxis.ticks = { ...(hAxis.ticks as object), autoSkip: false, color: ink };
-    const many = p.labels.length > 40;
-    const round = p.type === "doughnut" || p.type === "pie";
-    if (round) {
-      // One colour per slice, a thin gap between slices, the legend beside the ring.
-      const pal = Object.values(COL).filter(c => c !== COL.black);
-      const bg = cssv("--bg2") || "#fff";
-      const made = new Chart(target, {
-        type: p.type,
-        data: { labels: p.labels, datasets: p.datasets.map(d => ({ ...d, backgroundColor: p.labels.map((_, i) => pal[i % pal.length]), borderColor: bg, borderWidth: 2, hoverOffset: 6 })) as never },
-        options: {
-          responsive: !to, maintainAspectRatio: false, devicePixelRatio: sharpness, animation: first && !to ? { duration: 600, easing: "easeOutQuart" } : false, cutout: p.type === "doughnut" ? "62%" : 0,
-          layout: { padding: 6 },
-          plugins: {
-            legend: { position: "right", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: 7, boxHeight: 7, padding: 10 } },
-            tooltip: { backgroundColor: "rgba(17, 24, 39, 0.92)", cornerRadius: 8, padding: 10, usePointStyle: true, titleFont: { ...font, weight: 600 as const }, bodyFont: font,
-              callbacks: { label: (c: { label: string; parsed: unknown }) => ` ${c.label}: ${fmtv(c.parsed as number, p.fmt)}` } },
-          },
-        } as never,
-        plugins: [paper],
-      });
-      if (to) return made;
-      ch = made;
-      live.add(ch);
-      return ch;
-    }
-    const made = new Chart(target, {
-      type: p.type,
-      data: { labels: p.labels, datasets: (to ? p.datasets.map(d => ({ ...d, borderWidth: (d as { type?: string }).type === "line" || p.type === "line" ? 3 : (d as { borderWidth?: number }).borderWidth })) : p.datasets) as ChartDataset<"line" | "bar", (number | null)[]>[] },
-      options: {
-        responsive: !to, maintainAspectRatio: false, animation: first && !to ? { duration: 600, easing: "easeOutQuart" } : false,
-        indexAxis: p.horizontal ? "y" : "x",
-        interaction: { mode: t ? "x" : "index", intersect: false },
-        layout: { padding: { top: 2, right: p.ends !== false && (p.type === "line" || p.datasets.some(d => (d as { type?: string }).type === "line")) ? fs(48) : 8, left: 2 } },
-        devicePixelRatio: sharpness,
-        elements: {
-          line: { borderWidth: 2.5, tension: p.tension ?? 0.4, cubicInterpolationMode: p.tension === 0 ? "default" : "monotone", borderCapStyle: "round" },
-          point: { radius: 0, hoverRadius: many ? 3 : 5, hitRadius: 10, hoverBorderWidth: 2, hoverBackgroundColor: "#fff" },
-          bar: { borderWidth: 0, borderRadius: p.radius ?? (p.stacked ? 3 : 6), borderSkipped: p.stacked || p.radius !== undefined ? "start" : false },
-        },
-        datasets: { bar: { categoryPercentage: 0.72, barPercentage: 0.88, maxBarThickness: 28 } },
-        scales: (p.horizontal ? { x: vAxis, y: hAxis } : { x: hAxis, y: vAxis, ...right }) as never,
-        plugins: {
-          legend: { position: p.legend ?? "top", align: p.legend === "bottom" ? "center" : "end", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: fs(7), boxHeight: fs(7), padding: fs(14), sort: (a: { datasetIndex?: number }, b: { datasetIndex?: number }) => (a.datasetIndex ?? 0) - (b.datasetIndex ?? 0) } },
-          tooltip: {
-            backgroundColor: "rgba(17, 24, 39, 0.92)", titleColor: "#fff", bodyColor: "#E5E7EB", borderWidth: 0, cornerRadius: 8, padding: 10, boxPadding: 4, caretSize: 6,
-            usePointStyle: true, titleFont: { ...font, weight: 600 as const }, bodyFont: font,
-            callbacks: { ...(t ? { title: (it: { raw: unknown }[]) => { const x = (it[0]?.raw as { x?: number; t?: string } | undefined); return x?.t ?? (x?.x !== undefined ? fmtDay(Math.round(x.x)) : ""); } } : {}),
-              label: (c: { dataset: { label?: string }; parsed: Record<string, number | null> }) => ` ${c.dataset.label}: ${c.parsed[p.horizontal ? "x" : "y"] === null ? "—" : fmtv(c.parsed[p.horizontal ? "x" : "y"] as number, p.fmt)}` } as never,
-          },
-        },
-      },
-      plugins: [paper, lines(() => p.marker, p.markerText ?? `${p.markerLabel ?? "Status"}${p.marker !== null && p.marker !== undefined && p.labels[p.marker] ? ` · ${p.labels[p.marker]}` : ""}`), ...(p.ends === false ? [] : [ends(() => p.fmt)])],
-    });
-    made.options.color = muted;
-    if (to) return made;
-    ch = made;
-    live.add(ch);
-    return ch;
-  };
-  /** The chart drawn for a document: a page-wide layout (960 × 470 px at three times the sharpness),
-   *  larger text, light colours whatever the theme, and its title on top. */
+  const empty = () => !p.labels.length && !p.time || p.datasets.every(d => d.data.every(v => !yv(v)));
+  const ro = new ResizeObserver(() => { const r = box.getBoundingClientRect(); if (r.width > 0 && r.height > 0) setSize([Math.floor(r.width), Math.floor(r.height)]); });
+  onMount(() => { ro.observe(box); const r = box.getBoundingClientRect(); if (r.width > 0) setSize([Math.floor(r.width), Math.floor(Math.max(r.height, 200))]); });
+  onCleanup(() => ro.disconnect());
+  /** The chart drawn for a document: page-wide (960 × 470 px plus its title) at three times the sharpness, light colours. */
   const picture = async (): Promise<HTMLCanvasElement | null> => {
-    if (!ch) return null;
-    const W = 960, H = p.type === "doughnut" || p.type === "pie" ? 420 : 470, T = p.subtitle ? 62 : 40, K = 3;
-    const host = document.createElement("div");
-    host.style.cssText = `position:fixed;left:-20000px;top:0;width:${W}px;height:${H}px`;
-    const c2 = document.createElement("canvas");
-    c2.style.width = `${W}px`; c2.style.height = `${H}px`; c2.width = W; c2.height = H;
-    host.appendChild(c2); document.body.appendChild(host);
-    doc = 1.3;
-    let made: Chart | undefined;
-    try { made = build(false, c2); made?.update("none"); } finally { doc = 0; }
-    const out = document.createElement("canvas");
-    out.width = W * K; out.height = (H + T) * K;
-    const x = out.getContext("2d")!;
-    x.fillStyle = "#fff"; x.fillRect(0, 0, out.width, out.height);
-    x.fillStyle = "#0C1A2B"; x.font = `${p.center ? 700 : 600} ${(p.center ? 20 : 17) * K}px 'IBM Plex Sans', 'Segoe UI', sans-serif`; x.textBaseline = "middle";
-    x.textAlign = p.center ? "center" : "left";
-    const tx = (p.center ? W / 2 : 12) * K;
-    x.fillText(p.title, tx, (p.subtitle ? 20 : T / 2 + 2) * K);
-    if (p.subtitle) { x.fillStyle = "#4B5563"; x.font = `500 ${12.5 * K}px 'IBM Plex Sans', 'Segoe UI', sans-serif`; x.fillText(p.subtitle, tx, 45 * K); }
-    x.textAlign = "left";
-    x.drawImage(c2, 0, T * K, W * K, H * K);
-    made?.destroy(); host.remove();
-    return out;
+    const W = 960, H = (p.type === "doughnut" || p.type === "pie" ? 420 : 470) + (p.subtitle ? 62 : 40);
+    const { c, d } = toChart(p, W, H, true);
+    return chartCanvas({ ...c, w: W, h: H }, d, 3).catch(() => null);
   };
-  // The box can change width without the window changing (sidebar, panes): follow it.
-  const ro = new ResizeObserver(() => ch?.resize());
-  onMount(() => { build(true); ro.observe(cv.parentElement!); });
-  onCleanup(() => { ro.disconnect(); if (ch) { live.delete(ch); ch.destroy(); } });
-  createEffect(on(() => [p.labels, p.datasets, themeTick(), p.marker], () => build(), { defer: true }));
   const save = async () => {
     const pic = await picture();
     if (!pic) return;
@@ -267,21 +122,33 @@ export const ChartBox = (p: ChartProps) => {
     // On a time axis every series is put on the chart's days: a point at a day, a period's bar at the day it ends.
     const ds0 = p.days ?? [];
     const onDays = (d: unknown[]) => ds0.map((day, j) => { const pt = (d as { x: number; y: number | null }[]).find(q => q.x <= day && (j === 0 ? q.x >= day : q.x > ds0[j - 1])); return pt ? pt.y : null; });
-    const series = p.datasets.map(d => ({ name: String(d.label ?? ""), values: (p.time ? onDays(d.data as unknown[]) : (d.data as unknown[]).map(yv)).map(v => (v === null || v === undefined ? null : +v)), color: String(typeof d.borderColor === "string" && d.borderColor !== cssv("--bg2") ? d.borderColor : typeof d.backgroundColor === "string" ? d.backgroundColor : ""), line: (d as { type?: string }).type === "line" || p.type === "line" }));
+    const series = p.datasets.map(d => ({ name: String(d.label ?? ""), values: (p.time ? onDays(d.data) : d.data.map(yv)).map(v => (v === null || v === undefined ? null : +v)), color: String(d.borderColor && (d.type === "line" || p.type === "line") ? d.borderColor : d.backgroundColor ?? d.borderColor ?? ""), line: d.type === "line" || p.type === "line" }));
     const msg = await call<string>("open_in_plot", { chart: { title: p.title, y: p.y ?? "", units, labels: p.time ? ds0.map(d => fmtDay(d)) : p.labels, days: ds0, series } });
     if (msg) toast(msg, true);
   };
   return (
     <div class="chartbox" data-marker={p.marker ?? ""} classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>
-      <Show when={!p.bare}><header classList={{ center: p.center }}><h3>{p.title}<Show when={p.subtitle}><small>{p.subtitle}</small></Show></h3>{p.extra}<button onClick={async () => { const pic = await picture(); if (pic) (await import("./picture")).copyCanvas(pic, p.title, 16); }} title="Copy the chart as a picture, page-wide and sharp, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
-      <div class="cv" classList={{ blank: empty() }}><canvas ref={cv} /></div>
+      <Show when={!p.bare}><header classList={{ center: p.center }}><h3>{p.title}<Show when={p.subtitle}><small>{p.subtitle}</small></Show></h3>{p.extra}
+        <button onClick={() => setFormatting(p)} title="Format this chart: type, colours, lines, markers, labels, axes and legend (kept with the plan)">Format chart</button>
+        <button onClick={async () => { const pic = await picture(); if (pic) (await import("./picture")).copyCanvas(pic, p.title, 16); }} title="Copy the chart as a picture, page-wide and sharp, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
+      <div class="cv" ref={box} classList={{ blank: empty() }}>{(() => { const [w, h] = size(); const { c, d } = toChart(p, w, h); return <XChart c={c} d={d} w={w} h={h} />; }) as unknown as JSX.Element}</div>
       <Show when={empty()}><p class="nodata">{p.fmt === "money" ? "No costs in this plan yet." : p.fmt === "hours" ? "No hours assigned yet." : "No data yet."}</p></Show>
     </div>
   );
 };
 
-/** Line dataset helpers: `fill` fades the area under the line. */
-export const line = (label: string, data: (number | null)[], color: string, dash?: number[], fill = false): ChartDataset<"line", (number | null)[]> =>
-  ({ type: "line", label, data, borderColor: color, backgroundColor: fill ? fade(color) : color, borderDash: dash, borderWidth: dash ? 2 : 2.5, fill: fill ? "origin" : false, spanGaps: false, pointBackgroundColor: color, pointBorderColor: color });
-export const bar = (label: string, data: (number | null)[], color: string, stack?: string): ChartDataset<"bar", (number | null)[]> =>
-  ({ type: "bar", label, data, backgroundColor: color, hoverBackgroundColor: color + "CC", stack });
+/** The Format pane of a view's chart: its look is saved with the plan, by the chart's title. */
+export const ChartFormat = () => <Show when={formatting()}>{q => <Portal><FormatHost p={q()} /></Portal>}</Show>;
+const FormatHost = (x: { p: ChartProps }) => {
+  const cur = () => toChart(x.p, 600, 300);
+  const looks = () => ((P()?.ui as { chartLooks?: Record<string, Partial<ChartDef>> } | undefined)?.chartLooks ?? {});
+  const save = (nc: ChartDef) => act({ Ui: { key: "chartLooks", value: { ...looks(), [x.p.title]: lookOf(nc) } } });
+  const reset = () => { const l = { ...looks() }; delete l[x.p.title]; act({ Ui: { key: "chartLooks", value: l } }); };
+  return <div class="chartpane-fixed"><ChartPane chart={cur().c} data={cur().d} set={save} close={() => setFormatting(null)} view reset={reset} /></div>;
+};
+
+/** Line dataset helpers: `fill` adds a soft fill under the line. */
+export const line = (label: string, data: (number | null)[], color: string, dash?: number[], fill = false): DS =>
+  ({ type: "line", label, data, borderColor: color, backgroundColor: color, borderDash: dash, borderWidth: dash ? 2 : 2.5, fill });
+export const bar = (label: string, data: (number | null)[], color: string, stack?: string): DS =>
+  ({ type: "bar", label, data, backgroundColor: color, borderColor: color, stack });

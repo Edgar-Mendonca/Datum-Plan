@@ -2,7 +2,7 @@
 // their edges and corners, and formatted in the Format Chart pane (type, data, series, axes, looks,
 // saved styles). Each change is one Undo step (Op::SheetCharts).
 import { For, Index, JSX, Show, createSignal } from "solid-js";
-import { ChartData, ChartDef, Series, Axis, KINDS, PALETTE, XChart, colorOf, kindOf } from "./xchart";
+import { ChartData, ChartDef, Series, Axis, KINDS, PALETTE, XChart, colorOf, kindOf, lookOf, withLook } from "./xchart";
 import { opts, setOpts, call, toast } from "./store";
 import { Options } from "./api";
 
@@ -59,19 +59,7 @@ const Num = (p: { value: number | null | undefined; set: (v: number | null) => v
 const Chk = (p: { value: boolean; set: (v: boolean) => void; l: string }) => <label class="cfchk"><input type="checkbox" checked={p.value} onChange={e => p.set(e.currentTarget.checked)} />{p.l}</label>;
 const Col = (p: { value: string; set: (v: string) => void }) => <input type="color" value={/^#[0-9a-f]{6}$/i.test(p.value) ? p.value : "#ffffff"} onChange={e => p.set(e.currentTarget.value.toUpperCase())} />;
 
-/** The look of a chart (what a saved style keeps): not its data, place or titles. */
-const lookOf = (c: ChartDef): Partial<ChartDef> => ({
-  legend: c.legend, labels: c.labels, font: c.font, bg: c.bg, plot: c.plot, gap: c.gap, stack: c.stack,
-  x: { fmt: c.x?.fmt, grid: c.x?.grid }, y: { fmt: c.y?.fmt, grid: c.y?.grid, min: c.y?.min, max: c.y?.max }, y2: { fmt: c.y2?.fmt, grid: c.y2?.grid, min: c.y2?.min, max: c.y2?.max },
-  series: c.series.map(s => ({ name: "", vals: "", kind: s.kind, y2: s.y2, color: s.color, width: s.width, dash: s.dash, marker: s.marker, smooth: s.smooth, labels: s.labels, trend: s.trend })),
-});
-const withLook = (c: ChartDef, l: Partial<ChartDef>): ChartDef => ({
-  ...c, ...Object.fromEntries(Object.entries(l).filter(([k]) => !["series", "x", "y", "y2"].includes(k))),
-  x: { ...c.x, ...l.x }, y: { ...c.y, ...l.y }, y2: { ...c.y2, ...l.y2 },
-  series: c.series.map((s, i) => { const t = l.series?.[i] ?? l.series?.[l.series.length - 1]; return t ? { ...s, ...Object.fromEntries(Object.entries(t).filter(([k]) => k !== "name" && k !== "vals")) } : s; }),
-});
-
-export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: ChartDef) => void; close: () => void }) => {
+export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: ChartDef) => void; close: () => void; view?: boolean; reset?: () => void }) => {
   const [tab, setTab] = createSignal("chart");
   const c = () => p.chart;
   const set = (x: Partial<ChartDef>) => p.set({ ...c(), ...x });
@@ -104,21 +92,22 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
         <Show when={tab() === "chart"}>
           <Row l="Chart type"><Sel value={c().kind} set={v => set({ kind: v })} options={KINDS} /></Row>
           <Show when={["column", "bar", "line", "area"].includes(c().kind)}><Row l="Stacking"><Sel value={c().stack ?? ""} set={v => set({ stack: v })} options={[["", "Side by side"], ["stacked", "Stacked"], ["percent", "100% stacked"]]} /></Row></Show>
-          <Row l="Title"><Txt value={c().title ?? ""} set={v => set({ title: v })} placeholder="No title" /></Row>
+          <Show when={!p.view}><Row l="Title"><Txt value={c().title ?? ""} set={v => set({ title: v })} placeholder="No title" /></Row></Show>
           <Row l="Legend"><Sel value={c().legend || "bottom"} set={v => set({ legend: v })} options={[["bottom", "Bottom"], ["top", "Top"], ["right", "Right"], ["left", "Left"], ["none", "None"]]} /></Row>
           <Row l="Text size (pt)"><Num value={c().font || null} set={v => set({ font: v ?? 0 })} placeholder="11" /></Row>
           <Chk l="Data labels on every series" value={!!c().labels} set={v => set({ labels: v })} />
           <Show when={["column", "bar"].includes(c().kind) || c().series.some((_, i) => ["column", "bar"].includes(kindOf(c(), i)))}><Row l="Gap between bars (%)" title="The space between groups of bars, as a share of a bar's width"><Num value={c().gap ?? 150} set={v => set({ gap: Math.max(0, Math.min(500, v ?? 150)) })} step="10" /></Row></Show>
           <Row l="Chart area"><Col value={c().bg || "#FFFFFF"} set={v => set({ bg: v })} /></Row>
           <Row l="Plot area"><Col value={c().plot || "#FFFFFF"} set={v => set({ plot: v === "#FFFFFF" ? "" : v })} /></Row>
-          <Row l="Size (px)"><span class="cfwh"><Num value={c().w} set={v => set({ w: Math.max(160, v ?? c().w) })} step="10" />×<Num value={c().h} set={v => set({ h: Math.max(110, v ?? c().h) })} step="10" /></span></Row>
-          <Row l="Categories (X)" title="The cells with the labels or dates under the bars, e.g. A2:A20 or Data!A2:A20"><Txt value={c().cats} set={v => set({ cats: v.trim() })} placeholder="A2:A20" /></Row>
+          <Show when={!p.view}><Row l="Size (px)"><span class="cfwh"><Num value={c().w} set={v => set({ w: Math.max(160, v ?? c().w) })} step="10" />×<Num value={c().h} set={v => set({ h: Math.max(110, v ?? c().h) })} step="10" /></span></Row>
+          <Row l="Categories (X)" title="The cells with the labels or dates under the bars, e.g. A2:A20 or Data!A2:A20"><Txt value={c().cats} set={v => set({ cats: v.trim() })} placeholder="A2:A20" /></Row></Show>
+          <Show when={p.reset}><p class="muted">This chart's look is kept with the plan. <button class="btn sm" onClick={() => p.reset?.()}>Back to the standard look</button></p></Show>
         </Show>
         <Show when={tab() === "series"}>
           <Index each={c().series}>{(s, i) => (
             <fieldset class="cfset"><legend><i class="cfsw" style={{ background: colorOf(c(), i) }} />{p.data?.names[i] || s().name || `Series ${i + 1}`}</legend>
-              <Row l="Name" title="Text, or =B1 to read it from a cell"><Txt value={s().name} set={v => setS(i, { name: v })} /></Row>
-              <Row l="Values"><Txt value={s().vals} set={v => setS(i, { vals: v.trim() })} placeholder="B2:B20" /></Row>
+              <Show when={!p.view}><Row l="Name" title="Text, or =B1 to read it from a cell"><Txt value={s().name} set={v => setS(i, { name: v })} /></Row>
+              <Row l="Values"><Txt value={s().vals} set={v => setS(i, { vals: v.trim() })} placeholder="B2:B20" /></Row></Show>
               <Show when={combo()}><Row l="Draw as" title="A combined chart: each series as columns, a line or an area"><Sel value={s().kind ?? ""} set={v => setS(i, { kind: v })} options={[["", "Same as the chart"], ["column", "Columns"], ["line", "Line"], ["area", "Area"]]} /></Row>
                 <Chk l="On the secondary axis (right)" value={!!s().y2} set={v => setS(i, { y2: v })} /></Show>
               <Row l="Colour"><Col value={colorOf(c(), i)} set={v => setS(i, { color: v })} /></Row>
@@ -130,13 +119,13 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
               </Show>
               <Chk l="Data labels" value={!!s().labels} set={v => setS(i, { labels: v })} />
               <Show when={!["pie", "doughnut"].includes(c().kind)}><Chk l="Linear trend line" value={s().trend === "linear"} set={v => setS(i, { trend: v ? "linear" : "" })} /></Show>
-              <div class="cfbtns">
+              <Show when={!p.view}><div class="cfbtns">
                 <button class="btn sm" disabled={i === 0} onClick={() => { const v = [...c().series]; [v[i - 1], v[i]] = [v[i], v[i - 1]]; set({ series: v }); }}>Up</button>
                 <button class="btn sm" disabled={i === c().series.length - 1} onClick={() => { const v = [...c().series]; [v[i + 1], v[i]] = [v[i], v[i + 1]]; set({ series: v }); }}>Down</button>
                 <button class="btn sm" onClick={() => set({ series: c().series.filter((_, j) => j !== i) })}>Remove</button>
-              </div>
+              </div></Show>
             </fieldset>)}</Index>
-          <button class="btn sm" onClick={() => set({ series: [...c().series, { name: `Series ${c().series.length + 1}`, vals: "", color: PALETTE[c().series.length % PALETTE.length] }] })}>+ Add series</button>
+          <Show when={!p.view}><button class="btn sm" onClick={() => set({ series: [...c().series, { name: `Series ${c().series.length + 1}`, vals: "", color: PALETTE[c().series.length % PALETTE.length] }] })}>+ Add series</button></Show>
         </Show>
         <Show when={tab() === "axes"}>
           <Show when={!["pie", "doughnut"].includes(c().kind)} fallback={<p class="muted">A pie has no axes; its number format is the values' own (Axes come back with another chart type).</p>}>
