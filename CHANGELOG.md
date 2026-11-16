@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.16 — 2026-11-16
+
+- **Print: wrap long text in every column.** File › Print › Text › **Wrap long text in every column** now wraps any long cell (predecessors, resources, notes, your own text columns) onto up to three lines, not only task names, and the row grows to fit. Column headings wider than their column (such as "% Complete" in a narrow column) take two lines instead of being cut off. With columns as wide as their text, wrapped text columns are kept to a sensible width so the chart keeps its room.
+
 ## 0.9.15 — 2026-11-16
 
 - **Fix: links in a printed or PDF Gantt chart are drawn whole.** When a successor starts close to (or before) its predecessor's finish, the link line turns back along the edge between two rows. The faint row lines were drawn on top of the links and hid that part, so arrows looked broken. Row lines now lie under the links and bars in the chart, and the table's row lines stop at the chart.

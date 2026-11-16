@@ -180,6 +180,17 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     });
     check("Printed Gantt: row lines are drawn under the links, and the table's row lines stop at the chart", g === "ok", g); }
   check("Print page shows a page preview", nprev >= 1 && (await p.textContent(".pprev .phead")).includes(fix.state.project.name), String(nprev));
+  // 0.9.16: with columns as on screen, "Wrap long text in every column" wraps long cells of any column, not only names.
+  { const multi = () => p.$$eval(".pprev .ppage text", ts => ts.filter(t => t.querySelectorAll("tspan").length > 1).length);
+    await p.click("button:text-is('Text')"); await p.waitForTimeout(200);
+    const fitBox = p.locator("label:has-text('Columns as wide as their text') input"), wrapBox = p.locator("label:has-text('Wrap long text in every column') input");
+    if (await fitBox.isChecked()) await fitBox.click();
+    if (await wrapBox.isChecked()) await wrapBox.click();
+    await p.waitForTimeout(300); const before = await multi();
+    await wrapBox.click(); await p.waitForTimeout(300);
+    const wrapped = await p.$$eval(".pprev .ppage svg svg", cols => cols.filter(c => !/Task Name/.test(c.querySelector("text")?.textContent ?? "")).flatMap(c => [...c.querySelectorAll("text")].slice(1)).filter(t => t.querySelectorAll("tspan").length > 1).length);
+    check("Print › Wrap long text in every column wraps long cells of other columns too", wrapped > 0 && (await multi()) > before, `${before} → ${await multi()}, other columns ${wrapped}`);
+    await wrapBox.click(); await fitBox.click(); await p.click("button:text-is('Page')"); await p.waitForTimeout(200); }
   await p.evaluate(() => { window.print = () => { window.__printed = [document.querySelectorAll("#printroot .ppage").length, [...document.querySelectorAll("style")].map(s => s.textContent).find(t => t.includes("@page")) || ""]; }; });
   await p.click(".pbtns button:has-text('Print…')"); await p.waitForTimeout(500);
   const pr = await p.evaluate(() => window.__printed);

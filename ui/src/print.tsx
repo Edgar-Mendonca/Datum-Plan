@@ -152,7 +152,8 @@ const layout = createMemo(() => {
     const name = c.c.key === "name", ind = (i: number) => (name ? g.rows[i].lvl * 10 : 0), hw = textW(c.c.name, fs - 0.5) + 10;
     const top = g.rows.map((r, i) => [(r.cells[c.j] ?? "").length * zs[i] + ind(i), i]).sort((a, b) => b[0] - a[0]).slice(0, 8);
     const w = Math.max(hw, ...top.map(([, i]) => textW(g.rows[i].cells[c.j] ?? "", zs[i]) + 10 + ind(i)));
-    return { ...c, w: Math.max(24, Math.ceil(name && ps.wrap ? Math.min(w, Math.max(hw, fs * 26)) : w)) };
+    const cap = !ps.wrap || RIGHT.includes(c.c.kind) ? w : name ? Math.max(hw, fs * 26) : Math.max(Math.min(hw, fs * 9), fs * 14);
+    return { ...c, w: Math.max(24, Math.ceil(Math.min(w, cap))) };
   });
   const tw0 = idw + colsP.reduce((a, c) => a + c.w, 0);
   if (ps.fitCols && tw0 > W * 0.55) { const f = (W * 0.55 - idw) / (tw0 - idw), g2 = Math.max(6.5, fs * Math.max(f, 0.7)) / fs; colsP = colsP.map(c => ({ ...c, w: c.w * f })); fs *= g2; zs = zs.map(z => z * g2); }
@@ -181,8 +182,12 @@ const layout = createMemo(() => {
   }
   const RH = ps.rowH, ni = nameAt >= 0 ? colsP[nameAt] : null, SH = Math.max(SCALE_H, Math.round(fs * 3.4));
   // Rows grow with their text; a long name wraps onto up to three lines.
-  const lines = g.rows.map((r, i) => (wrapOn && ni && textW(r.name, zs[i]) + r.lvl * 10 > ni.w - 8 ? wrapText(r.name, ni.w - 8 - r.lvl * 10, zs[i]) : null));
-  const rowsH = g.rows.map((_, i) => { const b = Math.max(RH, Math.ceil(zs[i] * 1.8)), n = lines[i]?.length ?? 1; return n > 1 ? Math.max(b, Math.ceil(n * zs[i] * 1.2 + 6)) : b; });
+  const lines = g.rows.map((r, i) => colsP.map(c => {
+    const name = c.c.key === "name", t = name ? r.name : r.cells[c.j] ?? "", ind = name ? r.lvl * 10 : 0;
+    if (!(name ? wrapOn && ni : ps.wrap && !RIGHT.includes(c.c.kind)) || !t || textW(t, zs[i]) + ind <= c.w - 8) return null;
+    const l = wrapText(t, c.w - 8 - ind, zs[i]); return l.length > 1 ? l : null;
+  }));
+  const rowsH = g.rows.map((_, i) => { const b = Math.max(RH, Math.ceil(zs[i] * 1.8)), n = Math.max(1, ...lines[i].map(l => l?.length ?? 1)); return n > 1 ? Math.max(b, Math.ceil(n * zs[i] * 1.2 + 6)) : b; });
   const room = H - hH - fH - (ps.legend === "every" ? legH : 0) - SH - 6, pages: Page[] = [];
   const fill = (r: number, max: number) => { let e = r, h = 0; while (e < g.rows.length && (h + rowsH[e] <= max || e === r)) h += rowsH[e++]; return Math.max(e, r + 1); }, chunks: [number, number][] = [];
   for (let r = 0; r < Math.max(1, g.rows.length);) { const e = fill(r, room); chunks.push([r, e]); r = e; }
@@ -248,14 +253,15 @@ const Strip = (p: { a: number; b: number; dx: number; r0: number; rows: Row[]; y
         {L.idw > 0 && <><text x={IDW / 2} y={SH - SH * 0.3} font-size={String(fs - 0.5)} font-weight="600" text-anchor="middle" fill="#0C1A2B">ID</text><For each={p.rows}>{(r, i) => <text x={IDW / 2} y={p.ys[i()] + p.hs[i()] / 2 + L.zs[p.r0 + i()] * 0.35} font-size={String(Math.min(fs, L.zs[p.r0 + i()]) - 0.5)} text-anchor="middle" fill="#55606E">{r.uid > 0 ? r.id : ""}</text>}</For></>}
         <For each={visCols()}>{c => (
           <svg x={c.x} y={0} width={c.w} height={p.bodyH} overflow="hidden">
-            <text x={4} y={SH - SH * 0.3} font-size={String(fs - 0.5)} font-weight="600" fill="#0C1A2B">{c.c.name}</text>
+            {(() => { const hl = textW(c.c.name, fs - 0.5) > c.w - 8 ? wrapText(c.c.name, c.w - 8, fs - 0.5).slice(0, 2) : [c.c.name];
+              return <text x={4} y={SH - SH * 0.3 - (hl.length - 1) * (fs - 0.5) * 1.15} font-size={String(fs - 0.5)} font-weight="600" fill="#0C1A2B"><For each={hl}>{(l, m) => <tspan x={4} dy={m() ? (fs - 0.5) * 1.15 : 0}>{l}</tspan>}</For></text>; })()}
             <For each={p.rows}>{(r, i) => {
               const rs = r.style ?? {}, f = F.parse([rs["*"], rs[c.c.key]].filter(Boolean).join(";")), ind = c.c.key === "name" ? r.lvl * 10 : 0, t = r.cells[c.j] ?? "", n = p.r0 + i(), z = L.over[n] ? L.zs[n] : f.z ? f.z * 0.85 * L.zk : L.zs[n];
-              const al = f.a || (RIGHT.includes(c.c.kind) ? "r" : ""), y = p.ys[i()], h = p.hs[i()], lines = c.c.key === "name" ? L.lines[n] : null, two = !!lines && lines.length > 1;
+              const al = f.a || (RIGHT.includes(c.c.kind) ? "r" : ""), y = p.ys[i()], h = p.hs[i()], lines = L.lines[n]?.[L.colsP.findIndex(x => x.c.key === c.c.key)] ?? null, two = !!lines && lines.length > 1;
               return <g>{f.f && <rect x={0} y={y} width={c.w} height={h} fill={f.f} />}
                 <text x={al === "r" ? c.w - 4 : al === "c" ? c.w / 2 : 4 + ind} y={y + (two ? 0 : h / 2 + z * 0.35)} font-size={String(z)} text-anchor={al === "r" ? "end" : al === "c" ? "middle" : "start"} fill={f.c || (r.kind === "subplan" ? "#4C2A99" : r.off || r.sub ? "#7A8594" : "#1B2733")}
                   style={{ ...(f.n ? { "font-family": `'${f.n}', sans-serif` } : {}), "font-weight": f.b || r.kind !== "task" ? 600 : 400, "font-style": f.i || (r.sub && r.kind !== "subplan") ? "italic" : "normal", "text-decoration": [f.u && "underline", f.s && "line-through"].filter(Boolean).join(" ") || "none" }}>
-                  {two ? <For each={lines!}>{(l, m) => <tspan x={4 + ind} dy={m() ? z * 1.2 : (h - lines!.length * z * 1.2) / 2 + z * 0.95}>{l}</tspan>}</For> : t}</text></g>;
+                  {two ? <For each={lines!}>{(l, m) => <tspan x={al === "r" ? c.w - 4 : al === "c" ? c.w / 2 : 4 + ind} dy={m() ? z * 1.2 : (h - lines!.length * z * 1.2) / 2 + z * 0.95}>{l}</tspan>}</For> : t}</text></g>;
             }}</For>
           </svg>
         )}</For>
@@ -338,9 +344,9 @@ const TextSizes = () => {
   return <>
     <label class="pl">Text size</label>
     <div class="prow"><label>All text (pt)<PtIn v={ps.font} set={v => setPs("font", v ?? 10)} /></label><label>Smallest row height (px)<input type="number" min="12" max="80" value={ps.rowH} onChange={e => setPs("rowH", Math.min(80, Math.max(12, +e.currentTarget.value)))} /></label></div>
-    <p class="muted ptsize">Prints at <b>{got()} pt</b>{got() < base() - 0.2 ? `, smaller than ${base()} pt: the page is shrunk so the table and the dates fit ${ps.fit || 1} ${ps.fit > 1 ? "pages" : "page"} wide. For bigger text, fit more pages wide, choose fewer columns (View) or wrap long task names.` : "."} Rows grow with their text; the timescale and bar labels follow it.</p>
+    <p class="muted ptsize">Prints at <b>{got()} pt</b>{got() < base() - 0.2 ? `, smaller than ${base()} pt: the page is shrunk so the table and the dates fit ${ps.fit || 1} ${ps.fit > 1 ? "pages" : "page"} wide. For bigger text, fit more pages wide, choose fewer columns (View) or wrap long text.` : "."} Rows grow with their text; the timescale and bar labels follow it.</p>
     <Check label="Columns as wide as their text (otherwise as on screen)" value={ps.fitText} set={v => setPs("fitText", v)} />
-    <Check label="Wrap long task names (up to three lines)" value={ps.wrap} set={v => setPs("wrap", v)} />
+    <Check label="Wrap long text in every column (up to three lines)" value={ps.wrap} set={v => setPs("wrap", v)} />
     <label class="pl">Size by row type (pt; empty = all text)</label>
     <div class="prow"><label>Top summaries<PtIn v={ps.kindPx?.top} ph={String(base())} set={v => setPs("kindPx", "top", v)} /></label><label>Other summaries<PtIn v={ps.kindPx?.sum} ph={String(base())} set={v => setPs("kindPx", "sum", v)} /></label></div>
     <div class="prow"><label>Tasks<PtIn v={ps.kindPx?.task} ph={String(base())} set={v => setPs("kindPx", "task", v)} /></label><label>Milestones<PtIn v={ps.kindPx?.ms} ph={String(base())} set={v => setPs("kindPx", "ms", v)} /></label></div>
