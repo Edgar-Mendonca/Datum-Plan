@@ -267,6 +267,8 @@ const Strip = (p: { a: number; b: number; dx: number; r0: number; rows: Row[]; y
           <Show when={L.pd >= 5}><For each={Array.from({ length: Math.ceil(t1 - t0) + 2 }, (_, i) => Math.floor(t0) + i).filter(d => off(d))}>{d => <rect x={C(d)} y={SH} width={L.pd} height={p.bodyH - SH} fill="#F2F4F6" />}</For></Show>
           <For each={unit(L.pd)}>{(u, ti) => { const ticks: number[] = []; for (let d = floorU(t0, u); d < t1; d = nextU(d, u)) ticks.push(d); return <For each={ticks}>{d => { const a = C(d), b = C(nextU(d, u)), y = ti() * SH / 2, t = label(d, u, ti() === 0, L.pd); return <g><line x1={a} x2={a} y1={y} y2={y + SH / 2} stroke="#C9CFD8" stroke-width=".6" />{b - a > t.length * tz * 0.59 && <text x={u === "day" ? (a + b) / 2 : Math.max(a, C(t0)) + 3} y={y + SH / 4 + tz * 0.36} font-size={String(tz)} fill="#33404F" text-anchor={u === "day" ? "middle" : "start"}>{t}</text>}</g>; }}</For>; }}</For>
           <line x1={0} x2={L.CW} y1={SH / 2} y2={SH / 2} stroke="#C9CFD8" stroke-width=".6" />
+          {/* row lines under the links and bars: a link that runs along a row's edge stays whole */}
+          {ps.grid && <For each={p.ys}>{(y, i) => <line x1={0} x2={L.CW} y1={y + p.hs[i()]} y2={y + p.hs[i()]} stroke="#E6E9EE" stroke-width=".5" />}</For>}
           {/* links between tasks on this page (predecessor end → successor start), as on screen */}
           <For each={p.rows}>{(r, i) => <For each={r.bar.links}>{([pu, k]) => {
             const j = p.rows.findIndex(x => x.uid === pu); if (j < 0) return null;
@@ -281,7 +283,7 @@ const Strip = (p: { a: number; b: number; dx: number; r0: number; rows: Row[]; y
           {out()!.summary.status_day && <line x1={C(out()!.summary.status_day!)} x2={C(out()!.summary.status_day!)} y1={SH} y2={p.bodyH} stroke="#2E9D57" stroke-dasharray="4 3" stroke-width=".8" />}
         </svg>
       </Show>
-      {ps.grid && <For each={p.ys}>{(y, i) => <line x1={p.a} x2={p.b} y1={y + p.hs[i()]} y2={y + p.hs[i()]} stroke="#E6E9EE" stroke-width=".5" />}</For>}
+      {ps.grid && <For each={p.ys}>{(y, i) => <line x1={p.a} x2={Math.min(p.b, L.TW)} y1={y + p.hs[i()]} y2={y + p.hs[i()]} stroke="#E6E9EE" stroke-width=".5" />}</For>}
       <line x1={p.a} x2={p.b} y1={SH} y2={SH} stroke="#8D99A8" stroke-width=".8" />
     </svg>
   );

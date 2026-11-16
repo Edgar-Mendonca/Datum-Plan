@@ -169,6 +169,16 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 5d. Print: Ctrl+P opens the print page with a preview; printing lays out the same pages with the paper size.
   await p.keyboard.press("Control+p"); await p.waitForTimeout(400);
   const nprev = (await p.$$(".pprev .ppage")).length;
+  // 0.9.15: in the chart, row lines lie under the links, so a link that turns back along a row's edge is not cut.
+  { const g = await p.evaluate(() => {
+      const isLink = e => e.tagName === "g" && e.firstElementChild?.getAttribute("fill") === "none" && /^M[\d.-]+ [\d.-]+H/.test(e.firstElementChild.getAttribute("d") ?? "");
+      const first = [...document.querySelectorAll(".pprev .ppage g")].find(isLink); if (!first) return "no links printed";
+      const chart = first.parentElement;
+      const els = [...chart.children], line = els.findIndex(e => e.tagName === "line" && e.getAttribute("stroke") === "#E6E9EE"), link = els.findIndex(isLink);
+      const tw = +chart.getAttribute("x"), long = [...chart.parentElement.children].filter(e => e.tagName === "line" && e.getAttribute("stroke") === "#E6E9EE" && +e.getAttribute("x2") > tw + 0.01).length;
+      return line >= 0 && link > line && long === 0 ? "ok" : `row line ${line}, link ${link} of ${els.length} (${[...new Set(els.map(e => e.tagName))]}), table lines into the chart ${long}`;
+    });
+    check("Printed Gantt: row lines are drawn under the links, and the table's row lines stop at the chart", g === "ok", g); }
   check("Print page shows a page preview", nprev >= 1 && (await p.textContent(".pprev .phead")).includes(fix.state.project.name), String(nprev));
   await p.evaluate(() => { window.print = () => { window.__printed = [document.querySelectorAll("#printroot .ppage").length, [...document.querySelectorAll("style")].map(s => s.textContent).find(t => t.includes("@page")) || ""]; }; });
   await p.click(".pbtns button:has-text('Print…')"); await p.waitForTimeout(500);

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.15 — 2026-11-16
+
+- **Fix: links in a printed or PDF Gantt chart are drawn whole.** When a successor starts close to (or before) its predecessor's finish, the link line turns back along the edge between two rows. The faint row lines were drawn on top of the links and hid that part, so arrows looked broken. Row lines now lie under the links and bars in the chart, and the table's row lines stop at the chart.
+
 ## 0.9.14 — 2026-11-14
 
 AI Link, batch 5 of 5: print and reports (190 tools). Every command in the window now has a tool.
