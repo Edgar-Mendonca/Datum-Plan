@@ -444,6 +444,18 @@ A new picture on a sheet sits inside its cell, or its merged cells, clear of the
 
 Keys: [[Ctrl+Arrow]] goes to the edge of the data, [[Ctrl+Home]] to A1, [[Ctrl+End]] to the last used cell, [[Page Up]] and [[Page Down]] by a screen, [[Ctrl+Enter]] puts what you typed in every selected cell, and [[Ctrl+D]] on one cell copies the cell above. Dates follow the plan's date format (Options), so 05/01/2026 is 5 January when the plan writes the day first; a formula on a date shows a date.
 
+### Charts
+
+Select the cells to chart, such as a column of dates or labels and one or more columns of numbers with their headings, then **Sheet Tools › Insert › Chart** (the arrow picks column, bar, line, area, scatter, pie or doughnut). The chart sits on the sheet beside the cells: drag it to move it, drag its edges or corner to size it, and **Delete** removes it. It reads its cells live, so it changes as the plan and the sheet do, and it follows inserted rows and renamed sheets.
+
+Double-click a chart (or **Format**) for **Format Chart**:
+- **Chart:** type, stacking (side by side, stacked, 100 %), title, legend, text size, data labels, the gap between bars, the chart and plot area colours, size, and the category cells.
+- **Series:** each series' name (typed, or =B1 read from a cell), its cells, how it is drawn in a combined chart (columns, line or area), the secondary axis on the right, colour, line width, dashes, markers, smooth lines, data labels and a linear trend line. Add, remove and reorder series.
+- **Axes:** titles, minimum, maximum, the step between gridlines, the number format (0 %, #,##0, dd-mmm-yy or your own code), gridlines, and hiding an axis.
+- **Style:** save a chart's look under a name and give it to any chart, in any plan, in one click (for example the S-curve style your client expects).
+
+Charts are drawn as vectors, so they are sharp on screen, in print and in PDFs; **Copy** puts one on the clipboard as a picture for a report. **Save as Workbook** writes them as real charts of the workbook, still reading their cells. **To Sheet** on an S-curve now brings its chart with it: weekly bars on the left axis, cumulative curves on the right, ready to restyle.
+
 ### Conditional formatting
 
 Select the cells, then Sheet Tools › Format › Look › **Conditional**:

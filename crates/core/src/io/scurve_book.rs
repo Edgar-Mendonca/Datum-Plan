@@ -2,7 +2,7 @@
 //! planned, actual and forecast %, with a native chart (period bars on the left axis, cumulative
 //! curves on the right) that the spreadsheet program draws and edits itself. Also the same table
 //! as a sheet of the plan, with the period figures as formulas over the cumulative ones.
-use crate::model::SheetData;
+use crate::model::{ChartAxis, ChartSeries, SheetChart, SheetData};
 use crate::report::SCurve;
 use chrono::{Datelike, NaiveDate};
 use serde::Deserialize;
@@ -136,7 +136,7 @@ pub fn sheet(name: &str, c: &SCurve, st: &ScStyle) -> SheetData {
     let mut s = SheetData { name: name.into(), ..Default::default() };
     let cols = ["A", "B", "C", "D", "E", "F"];
     let title = if st.title.is_empty() { format!("{} – S-Curve", c.name) } else { st.title.clone() };
-    s.cells.insert("A1".into(), title);
+    s.cells.insert("A1".into(), title.clone());
     s.style.insert("A1".into(), "b;z:18;c:#1F3864".into());
     s.cells.insert("A2".into(), subtitle(c));
     s.style.insert("A2".into(), "c:#595959".into());
@@ -158,6 +158,24 @@ pub fn sheet(name: &str, c: &SCurve, st: &ScStyle) -> SheetData {
         s.cells.insert(format!("B{x}"), if i == 0 { format!("=D{x}") } else { format!("=D{x}-D{}", x - 1) });
         s.cells.insert(format!("C{x}"), if i == 0 { format!("=IF(E{x}=\"\",\"\",E{x})") } else { format!("=IF(E{x}=\"\",\"\",E{x}-N(E{}))", x - 1) });
         for col in ["B", "C", "D", "E", "F"] { s.fmt.insert(format!("{col}{x}"), "0.0%".into()); }
+    }
+    // The S-curve as a chart on the sheet, next to its table: period bars on the left axis,
+    // cumulative curves on the right one, ready to restyle with Format Chart.
+    if !rs.is_empty() {
+        let last = rs.len() + 4;
+        let line = |col: &str, color: &str, dash: &str| ChartSeries { name: format!("={col}4"), vals: format!("{col}5:{col}{last}"), kind: "line".into(), y2: st.pbars || st.abars, color: color.into(), width: 2.25, dash: dash.into(), smooth: st.smooth, marker: "none".into(), ..Default::default() };
+        let bar = |col: &str, color: &str| ChartSeries { name: format!("={col}4"), vals: format!("{col}5:{col}{last}"), kind: "column".into(), color: color.into(), ..Default::default() };
+        let mut series = vec![];
+        if st.pbars { series.push(bar("B", &st.bp)) }
+        if st.abars { series.push(bar("C", &st.ba)) }
+        series.push(line("D", &st.cp, ""));
+        series.push(line("E", &st.ca, ""));
+        if rs.iter().any(|r| r.forecast.is_some()) { series.push(line("F", &st.cf, "dash")) }
+        let bars = st.pbars || st.abars;
+        let pct = |t: &str, max: Option<f64>| ChartAxis { title: t.into(), fmt: "0%".into(), min: Some(0.0), max, grid: t.starts_with("Cum") != bars, ..Default::default() };
+        s.charts.push(SheetChart { id: 1, cell: "H4".into(), w: 900, h: 460, kind: if bars { "column".into() } else { "line".into() }, cats: format!("A5:A{last}"), series, title: title.clone(),
+            legend: if st.legend == "top" { "top".into() } else { "bottom".into() }, x: ChartAxis { fmt: "dd-mmm-yy".into(), ..Default::default() },
+            y: if bars { pct("Per period", None) } else { pct("Cumulative %", Some(1.0)) }, y2: pct("Cumulative %", Some(1.0)), gap: 60, ..Default::default() });
     }
     s
 }
@@ -212,5 +230,12 @@ mod tests {
         assert_eq!(shown("C7"), "7.0%");
         assert_eq!(shown("C8"), "");
         assert_eq!(shown("A5"), "11-Apr-70");
+        // The sheet carries its S-curve as a chart: period bars, then cumulative lines on the right axis.
+        let k = p.sheets.len() - 1;
+        let ch = &p.sheets[k].charts[0];
+        assert_eq!((ch.cats.as_str(), ch.series.len(), ch.series[2].kind.as_str(), ch.series[2].y2, ch.series[4].dash.as_str()), ("A5:A8", 5, "line", true, "dash"));
+        let d = crate::sheet::chart_data(&c, k);
+        assert_eq!(d[0].names, ["Planned in period", "Actual in period", "Planned cumulative", "Actual cumulative", "Forecast cumulative"]);
+        assert_eq!(d[0].vals[2].len(), 4);
     }
 }

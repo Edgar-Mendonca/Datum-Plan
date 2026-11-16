@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.18 — 2026-11-17
+
+Charts in Sheets, with full control of how they look (193 AI Link tools).
+
+- **Insert › Chart** in Sheet Tools makes a chart of the selected cells: column, bar, line, area, scatter, pie or doughnut. It sits on the sheet beside its cells, moves and resizes like a picture, reads its cells live and follows inserted rows and renamed sheets.
+- **Format Chart** (double-click a chart): chart type and stacking; title, legend, text size, data labels, bar gap, chart and plot area colours; per series its name and cells, columns, line or area in a combined chart, the secondary axis, colour, line width, dashes, markers, smooth lines, labels and a linear trend line; axis titles, minimum, maximum, step, number format, gridlines.
+- **Chart styles:** save a chart's look under a name and give it to any chart in any plan in one click.
+- Drawn as vectors: sharp on screen, in print and in PDFs. **Copy** puts a chart on the clipboard as a picture. **Save as Workbook** writes native workbook charts that still read their cells.
+- **S-curve › To Sheet** now brings the S-curve's chart with it (period bars on the left axis, cumulative curves on the right).
+- AI Link: list_charts, set_chart, delete_chart.
+- The status bar keeps every item on one line.
+
 ## 0.9.17 — 2026-11-16
 
 - **The status date in the status bar.** The bar at the bottom always shows **Status date: 13-Nov-26** in bold, or "not set (today)" when progress is measured at today's date. It turns amber when it is more than a week old ("· 11 days old"); a click opens Project Information to change it.

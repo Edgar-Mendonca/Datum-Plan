@@ -231,9 +231,13 @@ pub fn tools() -> Value {
         { "name": "import_plan", "description": "Open a plan from another scheduling program's file (.xml, .xer, .mpp, .json) in a new tab, with the import notes. Only when the user asks, with the path they give.", "inputSchema": obj(json!({ "path": path("The file to import") }), &["path"]) },
     ]);
     // Print and reports (0.9.14).
+    let sheet_name = || json!({ "type": "string", "description": "The sheet's name (get_sheet lists them)" });
     let print = json!([
         { "name": "get_page_setup", "description": "The plan's page setup for printing and PDFs (paper, orientation, margins, pages wide, font, date range, header and footer), and the paper sizes.", "inputSchema": none() },
         { "name": "set_page_setup", "description": "Change the page setup (only the keys given): paper (A4, A3, A5, A2, A1, Letter, Legal, Tabloid), landscape, margins [top,right,bottom,left] mm, fit (pages wide), scale (%), font (pt), range (all or dates) with from and to (YYYY-MM-DD), unit (auto, day, week, month, quarter), wrap, notes, grid, idCol, repeat (headings on every page), legend (every, last, none), legendText, titleOn, title, titleSize, subtitle, footer: fPrinted, fTime, fPage, fStatus, fCompany, fRev, fText; subs (shown, collapsed, expanded, none). header_pictures {\"left\":[\"company\"],\"right\":[3]} places pictures (list_pictures ids) at the top.", "inputSchema": obj(json!({ "setup": { "type": "object" }, "header_pictures": { "type": "object" } }), &[]) },
+        { "name": "list_charts", "description": "The charts on a sheet: id, kind, place (cell, size), ranges (cats, each series' vals and name), titles, axes and looks, with the series names read and the number of points.", "inputSchema": obj(json!({ "name": sheet_name() }), &["name"]) },
+        { "name": "set_chart", "description": "Add a chart to a sheet, or change one (by id; only the fields given). chart: {kind: column|bar|line|area|scatter|pie|doughnut, stack: ''|stacked|percent, cell: 'H2', w, h (px), cats: 'A2:A20', series: [{name: 'Planned' or '=B1', vals: 'B2:B20' or 'Data!B2:B20', kind (column|line|area, for a combined chart), y2 (secondary axis), color '#RRGGBB', width (pt), dash (dash|dot), marker (none|circle|square|diamond|triangle), smooth, labels, trend (linear)}], title, legend (bottom|top|right|left|none), labels, font (pt), x/y/y2: {title, min, max, major, fmt (number format like 0%, #,##0, dd-mmm-yy), grid, hide}, bg, plot (colours), gap (% bar gap)}. series replaces the whole list.", "inputSchema": obj(json!({ "name": sheet_name(), "id": { "type": "integer" }, "chart": { "type": "object" } }), &["name", "chart"]) },
+        { "name": "delete_chart", "description": "Remove a chart (by id, from list_charts) from a sheet.", "inputSchema": obj(json!({ "name": sheet_name(), "id": { "type": "integer" } }), &["name", "id"]) },
         { "name": "list_reports", "description": "The plan's own reports (Report Builder): each report's name and sections, and the kinds of section.", "inputSchema": none() },
         { "name": "set_report", "description": "Add or replace a Report Builder report: name and sections [{\"kind\":\"kpis\"},{\"kind\":\"scurve\",\"unit\":\"month\"},{\"kind\":\"table\",\"title\":\"Critical tasks\",\"cols\":[\"code\",\"name\",\"finish\",\"tf\"],\"filter\":\"Critical\"},{\"kind\":\"text\",\"title\":\"Summary\",\"text\":\"…\"}]. Kinds: kpis, scurve, periodbars, phases, costev, manpower, table, completed, lookahead, milestones, behind, notes, text, break. rename_from renames.", "inputSchema": obj(json!({ "name": { "type": "string" }, "sections": { "type": "array", "items": { "type": "object" } }, "rename_from": { "type": "string" } }), &["name", "sections"]) },
         { "name": "delete_report", "description": "Delete a Report Builder report by name. Ask the user first.", "inputSchema": obj(json!({ "name": { "type": "string" } }), &["name"]) },
@@ -398,7 +402,7 @@ pub fn changes(name: &str) -> bool {
         | "set_resource_leave" | "define_credit_rule" | "find_replace"
         | "insert_rows_columns" | "delete_rows_columns" | "shift_cells" | "move_sheet" | "merge_cells" | "freeze_panes" | "set_sheet_conditional_formatting" | "set_cell_notes"
         | "hide_rows_columns" | "set_sheet_tab" | "set_row_heights" | "sort_range" | "remove_duplicates" | "place_picture"
-        | "set_page_setup" | "set_report" | "delete_report"
+        | "set_page_setup" | "set_report" | "delete_report" | "set_chart" | "delete_chart"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
         | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
         | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
@@ -1223,6 +1227,33 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             Ok(json!(p.pictures.iter().map(|x| json!({ "id": x.id, "name": x.name, "role": x.role, "kb": x.data.len() * 3 / 4 / 1024,
                 "placed": p.sheets.iter().flat_map(|s| s.images.iter().filter(|i| i.pic == x.id).map(move |i| format!("{}!{}", s.name, i.cell))).collect::<Vec<_>>() })).collect::<Vec<_>>()))
         }
+        "list_charts" => {
+            let k = sheet_k(&doc.p, a)?;
+            let c = Calc::new(&doc.p, fmt, today);
+            let data = crate::sheet::chart_data(&c, k);
+            Ok(json!(doc.p.sheets[k].charts.iter().zip(data).map(|(ch, d)| json!({ "chart": ch, "series_names": d.names, "points": d.cats.len().max(d.vals.iter().map(Vec::len).max().unwrap_or(0)) })).collect::<Vec<_>>()))
+        }
+        "set_chart" | "delete_chart" => {
+            let k = sheet_k(&doc.p, a)?;
+            let mut list = doc.p.sheets[k].charts.clone();
+            let id = a["id"].as_u64().map(|x| x as u32);
+            if name == "delete_chart" {
+                let i = list.iter().position(|x| Some(x.id) == id).ok_or("id is needed (list_charts).")?;
+                list.remove(i);
+            } else {
+                let f = a.get("chart").filter(|v| v.is_object()).ok_or("chart is needed: {\"kind\":\"column\",\"cell\":\"H2\",\"cats\":\"A2:A20\",\"series\":[{\"name\":\"=B1\",\"vals\":\"B2:B20\"}]}.")?;
+                match id.and_then(|id| list.iter().position(|x| x.id == id)) {
+                    Some(i) => list[i] = patch(&list[i], f, &["id"])?,
+                    None => {
+                        if id.is_some() { return Err("No chart with that id; see list_charts.".into()) }
+                        let blank = SheetChart { cell: "H2".into(), w: 560, h: 320, kind: "column".into(), legend: "bottom".into(), gap: 150, y: ChartAxis { grid: true, ..Default::default() }, ..Default::default() };
+                        list.push(patch(&blank, f, &["id"])?);
+                    }
+                }
+            }
+            apply(doc, Op::SheetCharts { k, charts: list })?;
+            Ok(json!({ "sheet": doc.p.sheets[k].name, "charts": doc.p.sheets[k].charts.iter().map(|x| json!({ "id": x.id, "kind": x.kind, "cell": x.cell, "title": x.title })).collect::<Vec<_>>() }))
+        }
         "place_picture" => {
             let k = sheet_k(&doc.p, a)?;
             let cell = s(a, "cell").ok_or("cell is needed, like B2.")?.to_uppercase();
@@ -1871,6 +1902,22 @@ mod tests {
         run(&mut doc, "set_period_notes", json!({ "period": "week", "end": "2027-01-08", "summary": "Good week." })).unwrap();
         assert_eq!(run(&mut doc, "get_period_notes", json!({ "period": "week" })).unwrap()[0]["summary"], "Good week.");
         assert!(run(&mut doc, "get_period_notes", json!({ "period": "month" })).unwrap().as_array().unwrap().is_empty());
+    }
+    #[test]
+    fn charts_on_sheets_are_added_changed_listed_and_deleted() {
+        let mut doc = plan();
+        run(&mut doc, "add_sheet", json!({ "name": "Curve", "cells": { "A1": "Week", "B1": "Planned", "C1": "Actual", "A2": "W1", "B2": "0.1", "C2": "0.08", "A3": "W2", "B3": "0.3", "C3": "0.25" } })).unwrap();
+        run(&mut doc, "set_chart", json!({ "name": "Curve", "chart": { "kind": "line", "cats": "A2:A3", "title": "Progress", "series": [{ "name": "=B1", "vals": "B2:B3" }, { "name": "=C1", "vals": "C2:C3", "dash": "dash" }], "y": { "fmt": "0%", "max": 1 } } })).unwrap();
+        let l = run(&mut doc, "list_charts", json!({ "name": "Curve" })).unwrap();
+        assert_eq!((l[0]["chart"]["id"].as_u64(), l[0]["series_names"].clone(), l[0]["points"].as_u64()), (Some(1), json!(["Planned", "Actual"]), Some(2)));
+        run(&mut doc, "set_chart", json!({ "name": "Curve", "id": 1, "chart": { "legend": "top", "w": 700 } })).unwrap();
+        let k = doc.p.sheets.iter().position(|s| s.name == "Curve").unwrap();
+        let ch = &doc.p.sheets[k].charts[0];
+        assert_eq!((ch.legend.as_str(), ch.w, ch.title.as_str(), ch.y.max), ("top", 700, "Progress", Some(1.0)), "only the fields given change");
+        assert!(run(&mut doc, "set_chart", json!({ "name": "Curve", "chart": { "nosuch": 1 } })).is_err());
+        assert!(run(&mut doc, "set_chart", json!({ "name": "Curve", "id": 9, "chart": { "w": 1 } })).is_err());
+        run(&mut doc, "delete_chart", json!({ "name": "Curve", "id": 1 })).unwrap();
+        assert!(doc.p.sheets[k].charts.is_empty());
     }
     #[test]
     fn the_window_tools_are_listed_and_marked() {

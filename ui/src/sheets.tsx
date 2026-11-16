@@ -14,6 +14,8 @@ import { CountryList, FlagText } from "./flags";
 import { Help } from "./help";
 import { SheetImage } from "./api";
 import { pictureMenu, picData } from "./pictures";
+import { ChartLayer, ChartPane, chartSel, setChartSel, fmtChart, setFmtChart } from "./sheetcharts";
+import { ChartData, ChartDef, chartFrom } from "./xchart";
 import { autoHeights, fitBox, sheetK, setSheetK, sheetMode, setSheetMode, sheetZoom, zoomSheet } from "./sheetlayout";
 import { sheetPages, SheetPagesView, pageRoom } from "./print";
 import { Icon } from "./ui";
@@ -246,6 +248,8 @@ export const Sheets = () => {
   const clear = () => { const out: [string, string][] = []; eachShown((r, c) => { if (input(k(), r, c)) out.push([a1(r, c), ""]); }); put(out); };
   const key = (e: KeyboardEvent) => {
     if (picSel() >= 0 && edit() === null && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); putImgs(imgs().filter((_, j) => j !== picSel())); setPicSel(-1); return; }
+    if (chartSel() >= 0 && edit() === null && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); putCharts(charts().filter((_, j) => j !== chartSel())); setChartSel(-1); setFmtChart(null); return; }
+    if (chartSel() >= 0 && e.key === "Escape") { setChartSel(-1); return; }
     // Keys typed before the cell editor has focus still go into it (fast typing loses nothing).
     if (edit() !== null) { if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); const t = edit()!, at = caret(); setText(t.slice(0, at) + e.key + t.slice(at), at + 1); } return; }
     const [r, c] = e.shiftKey ? end() : cur();
@@ -823,6 +827,19 @@ export const Sheets = () => {
     return [x + (bw - w) / 2, y + (bh - h) / 2, w, h];
   };
   const putImgs = (images: SheetImage[]) => act({ SheetImages: { k: k(), images } });
+  // Charts on the sheet: their data comes from the engine, read from their ranges after every edit.
+  const charts = () => (sheet()?.charts ?? []) as ChartDef[];
+  const [chartData] = createResource(() => [tick(), k(), charts().length], () => (charts().length ? call<ChartData[]>("sheet_charts", { k: k() }) : Promise.resolve([] as ChartData[])));
+  const putCharts = (list: ChartDef[]) => act({ SheetCharts: { k: k(), charts: list } });
+  /** Insert › Chart: from the selected cells (first column the categories, first row the names), placed beside them. */
+  const insertChart = (kind = "column") => {
+    const b = bounds(), shown = new Map((data()?.cells ?? []).map(x => [x[0], x[2]]));
+    const ch = chartFrom(sheet()!.name, b.r0, b.c0, b.r1, b.c1, a1, a => shown.get(a) ?? "", kind);
+    if (!ch || b.r1 === b.r0 && b.c1 === b.c0) return toast("Select the cells to chart first: a column of labels or dates and one or more columns of numbers, with their headings.");
+    if (kind === "line" || kind === "scatter") ch.series = ch.series.map(s => ({ ...s, width: 2.25 }));
+    ch.cell = a1(b.r0, b.c1 + 2);
+    putCharts([...charts(), ch]).then(() => { setChartSel(charts().length - 1); setFmtChart(charts()[charts().length - 1]?.id ?? null); });
+  };
   const placePic = (id: number) => {
     const im = new Image();
     im.onload = () => { const w = Math.min(240, im.naturalWidth || 160), h = Math.max(8, Math.round(w * (im.naturalHeight || 80) / (im.naturalWidth || 160))); putImgs([...imgs(), { pic: id, cell: a1(...cur()), w, h, fit: true }]).then(() => { setPicSel(imgs().length - 1); box.focus(); }); };
@@ -842,7 +859,7 @@ export const Sheets = () => {
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
   const down = (e: MouseEvent) => {
-    setPicSel(-1);
+    setPicSel(-1); setChartSel(-1);
     if (e.button !== 0) return;
     const [r, c] = at(e.clientX, e.clientY);
     if (r < 0) return;
@@ -1061,7 +1078,7 @@ export const Sheets = () => {
     frozen: () => !!(frozen()[0] || frozen()[1]), pen, merged,
     border, borderItems, merge, cellStyle, clearKind, fillDown, fillRight, sortRows, rowHeight, colWidth, autofitRows, autofitCols,
     autoSum, sumItems, insertFn, planData, fmtItems, setFmt, moreDecimals, insertCells, addSheet, rename: () => setRenaming(k()), del: () => delSheet(k()), moveCopy: () => moveCopy(k()), tabMenu: (e: MouseEvent) => tabMenu(e, k()),
-    picture: (e: MouseEvent) => pictureMenu(e, placePic), freeze: () => freeze(frozen()[0] || frozen()[1] ? [0, 0] : [cur()[0], cur()[1]]),
+    picture: (e: MouseEvent) => pictureMenu(e, placePic), chart: (kind?: string) => insertChart(typeof kind === "string" ? kind : "column"), freeze: () => freeze(frozen()[0] || frozen()[1] ? [0, 0] : [cur()[0], cur()[1]]),
     fmtLabel: () => FORMATS.find(f => f[1] === fmtOf(...cur()))?.[0].split(" (")[0] ?? (fmtOf(...cur()) || "General"),
     copy: () => { navigator.clipboard?.writeText(copy()).catch(() => {}); box?.focus(); }, cut: () => { navigator.clipboard?.writeText(copy(true)).catch(() => {}); box?.focus(); },
     paste: async () => { await pasteAll(await clipText()); box?.focus(); },
@@ -1145,6 +1162,9 @@ export const Sheets = () => {
   const hintPos = () => { void edit(); void caret(); const b = el()?.getBoundingClientRect(); return b ? { left: `${Math.min(b.left, innerWidth - 420)}px`, top: `${b.bottom + 2}px` } : {}; };
   return (
     <section class="ganttview">
+      <Show when={fmtChart() !== null && charts().find(c => c.id === fmtChart())}>{ch => (
+        <ChartPane chart={ch()} data={chartData()?.[charts().findIndex(c => c.id === fmtChart())]} close={() => setFmtChart(null)}
+          set={nc => putCharts(charts().map(c => (c.id === nc.id ? nc : c)))} />)}</Show>
       <CountryList />
       <datalist id="sheetnames"><For each={names()}>{n => <option value={n.name} />}</For></datalist>
       <div class="ptools sheettools">
@@ -1197,6 +1217,7 @@ export const Sheets = () => {
               </>}</Show>
               <Show when={sheetMode() === "breaks"}><For each={sheetPages()}>{pg => <div class="pbreak" style={{ left: `${lefts()[pg.c0]}px`, top: `${top_(pg.r0)}px`, width: `${lefts()[pg.c1] + width(pg.c1) - lefts()[pg.c0]}px`, height: `${top_(pg.r1 + 1) - top_(pg.r0)}px` }}><span>Page {pg.n}</span></div>}</For></Show>
               <For each={boxes()}>{b => <div class="refbox" style={{ left: `${lefts()[b.c0]}px`, top: `${top_(b.r0)}px`, width: `${lefts()[b.c1] + width(b.c1) - lefts()[b.c0]}px`, height: `${top_(Math.min(b.r1, nrows() - 1) + 1) - top_(b.r0)}px`, "border-color": b.color, background: `${b.color}14` }} />}</For>
+              <ChartLayer k={k()} charts={charts()} data={chartData()} put={putCharts} focus={() => box.focus()} g={{ x: c => lefts()[c] ?? 0, y: r => top_(r), cell: at, a1, parse: parseA1, zoom: sheetZoom }} />
               <For each={imgs()}>{(im, i) => { const rc = () => parseA1(im.cell), box2 = () => picBox(im); return (
                 <div class="simg" data-i={i()} classList={{ on: picSel() === i(), fit: !!im.fit }} style={{ left: `${box2()[0]}px`, top: `${box2()[1]}px`, width: `${box2()[2]}px`, height: `${box2()[3]}px` }}
                   title={im.fit ? "Placed in the cell: it follows the cell's size. Drag to move it to another cell." : "Drag to move; drag the corner to resize; Delete removes it"} onMouseDown={e => picDrag(e, i(), false)}>

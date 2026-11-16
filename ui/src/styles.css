@@ -1227,6 +1227,36 @@ svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-siz
 .ailink-more summary { cursor: pointer; color: var(--muted); }
 .aion { color: #D97757; font-weight: 600; cursor: pointer; }
 .status .sdate b { color: var(--text); font-weight: 700; }
+.status > * { white-space: nowrap; }
 .status .sdate.old { background: #FDF0DC; color: #8A5300; }
 .status .sdate.old b { color: #8A5300; }
 .status .sdate.unset b { font-weight: 600; color: var(--text2); }
+/* Charts on sheets (0.9.18) and the Format Chart pane */
+.schart { position: absolute; z-index: 3; cursor: move; background: #fff; outline: 1px solid #D5DAE1; box-shadow: 0 1px 3px #0001; }
+.schart.on { outline: 2px solid var(--blue); }
+.schart i { position: absolute; background: var(--blue); border: 1px solid #fff; }
+.schart .ch-e { right: -5px; top: calc(50% - 5px); width: 10px; height: 10px; cursor: ew-resize; }
+.schart .ch-s { bottom: -5px; left: calc(50% - 5px); width: 10px; height: 10px; cursor: ns-resize; }
+.schart .ch-se { right: -5px; bottom: -5px; width: 10px; height: 10px; cursor: nwse-resize; }
+.schart .ch-tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
+.schart .ch-tools button { height: 22px; padding: 0 8px; background: var(--bg2); border: 1px solid var(--line3); border-radius: 4px; font-size: 12px; box-shadow: 0 1px 4px #0002; }
+.chartpane { position: absolute; right: 0; top: 0; bottom: 0; width: 330px; z-index: 20; background: var(--bg2); border-left: 1px solid var(--line); box-shadow: -4px 0 14px #0002; display: flex; flex-direction: column; font-size: 12.5px; }
+.ganttview:has(> .chartpane) { position: relative; }
+.chartpane header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.chartpane header .x { font-size: 18px; width: 26px; height: 26px; }
+.cftabs { display: flex; border-bottom: 1px solid var(--line); }
+.cftabs button { flex: 1; padding: 7px 0; border-bottom: 2px solid transparent; color: var(--text2); }
+.cftabs button.on { border-bottom-color: var(--blue); color: var(--text); font-weight: 600; }
+.cfbody { flex: 1; overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.cfrow { display: grid; grid-template-columns: 118px 1fr; align-items: center; gap: 8px; }
+.cfrow input, .cfrow select { width: 100%; min-width: 0; }
+.cfrow input[type="color"] { width: 48px; height: 24px; padding: 0 2px; }
+.cfchk { display: flex; align-items: center; gap: 6px; }
+.cfset { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; margin: 0 0 6px; }
+.cfset legend { padding: 0 4px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.cfsw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.cfbtns { display: flex; gap: 6px; }
+.cfwh { display: flex; align-items: center; gap: 4px; }
+.cfwh input { width: 70px; }
+.cfstyle { display: flex; align-items: center; gap: 8px; }
+.cfstyle b { flex: 1; }

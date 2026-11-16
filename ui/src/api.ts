@@ -115,7 +115,7 @@ export interface Changes { items: Change[]; finish: [string, string]; finish_var
 export interface Trend { uid: number; name: string; points: [number, number][]; baseline: number | null }
 export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean; driving: boolean; lag: string }[]; cols: number; rows: number; bands?: { name: string; row: number; rows: number }[] }
 export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }
-export interface Options { dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; pool?: string; setupPanel: boolean; theme: string; colourSafe?: boolean;
+export interface Options { chartStyles?: Record<string, Partial<import("./xchart").ChartDef>>; dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; pool?: string; setupPanel: boolean; theme: string; colourSafe?: boolean;
   openLast: boolean; startView: string; manualDefault: boolean; weekEnd: number; monthEnd: number; paper: string; landscape: boolean; spellLang?: string; dictionary?: string[]; aiLink?: boolean }
 
 /** Days since 1970-01-01 (local) to a Date at local midnight + fraction. */
@@ -133,7 +133,7 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[]; hide_rows?: number[]; hide_cols?: number[]; notes?: Record<string, string>; filter?: SheetFilter | null; valid?: Validation[] }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[]; hide_rows?: number[]; hide_cols?: number[]; notes?: Record<string, string>; filter?: SheetFilter | null; valid?: Validation[]; charts?: import("./xchart").ChartDef[] }
 /** AutoFilter: the range (headings in its first row) and each filtered column (0-based on the sheet). */
 export interface SheetFilter { range: string; cols: ColFilter[] }
 export interface ColFilter { col: number; values?: string[] | null; op: string; a: string; b: string }

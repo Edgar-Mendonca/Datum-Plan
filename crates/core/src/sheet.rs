@@ -794,6 +794,37 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
     wb
 }
 
+/// What a chart shows, read from its ranges: the categories (text as shown, and the number behind
+/// each, for dates and scatter charts), their format, and per series its name, values and format.
+#[derive(Serialize, Debug, Default, Clone, PartialEq)]
+pub struct ChartData { pub cats: Vec<String>, pub xs: Vec<Option<f64>>, pub cat_fmt: String, pub names: Vec<String>, pub vals: Vec<Vec<Option<f64>>>, pub fmts: Vec<String> }
+
+/// The data of every chart on sheet `k` (in order). A range without a sheet name reads sheet `k`;
+/// a two-dimensional range is read row by row. At most 500 points per range.
+pub fn chart_data(c: &Calc, k: usize) -> Vec<ChartData> {
+    let Some(sd) = c.p.sheets.get(k) else { return vec![] };
+    let q = |r: &str| { let r = r.trim().trim_start_matches('='); if r.is_empty() { String::new() } else if r.contains('!') { format!("={r}") } else { format!("='{}'!{r}", sd.name.replace('\'', "''")) } };
+    let mut items = vec![];
+    for ch in &sd.charts {
+        items.push((q(&ch.cats), String::new()));
+        for se in &ch.series { items.push((q(&se.vals), String::new())); items.push((if se.name.starts_with('=') { q(&se.name) } else { String::new() }, String::new())); }
+    }
+    let got = if items.iter().any(|x| !x.0.is_empty()) { eval(c, &items.iter().map(|x| (if x.0.is_empty() { "=\"\"".to_string() } else { x.0.clone() }, x.1.clone())).collect::<Vec<_>>()) } else { vec![] };
+    let flat = |i: usize| -> Vec<Shown> { if items.get(i).is_none_or(|x| x.0.is_empty()) { return vec![] } got.get(i).map(|t| t.iter().flatten().take(500).cloned().collect()).unwrap_or_default() };
+    let mut at = 0;
+    sd.charts.iter().map(|ch| {
+        let cats = flat(at); at += 1;
+        let mut d = ChartData { cat_fmt: cats.iter().map(|x| x.2.clone()).find(|f| !f.is_empty()).unwrap_or_default(), cats: cats.iter().map(|x| x.0.clone()).collect(), xs: cats.iter().map(|x| x.1).collect(), ..Default::default() };
+        for (j, se) in ch.series.iter().enumerate() {
+            let v = flat(at); let nm = flat(at + 1); at += 2;
+            d.fmts.push(v.iter().map(|x| x.2.clone()).find(|f| !f.is_empty()).unwrap_or_default());
+            d.vals.push(v.iter().map(|x| x.1).collect());
+            d.names.push(if se.name.starts_with('=') { nm.first().map(|x| x.0.clone()).unwrap_or_default() } else if se.name.is_empty() { format!("Series {}", j + 1) } else { se.name.clone() });
+        }
+        d
+    }).collect()
+}
+
 /// One value as a dashboard shows it: the text, the number (if any) and the cell's format.
 pub type Shown = (String, Option<f64>, String);
 

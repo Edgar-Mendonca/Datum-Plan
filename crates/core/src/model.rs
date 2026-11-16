@@ -520,7 +520,9 @@ pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pu
     /// AutoFilter: a range whose first row holds the headings, and the condition on each column.
     #[serde(default, skip_serializing_if = "Option::is_none")] pub filter: Option<SheetFilter>,
     /// Drop-down lists: cells that take one of a list of values.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub valid: Vec<Validation> }
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub valid: Vec<Validation>,
+    /// Charts over the sheet's cells (or other sheets'), each anchored at a cell like a picture.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub charts: Vec<SheetChart> }
 
 /// An AutoFilter: the range ("A1:D40", headings in its first row) and the columns filtered.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -564,6 +566,64 @@ pub fn sheet_range(r: &str) -> Option<(u32, u32, u32, u32)> {
     let (a, b) = r.split_once(':').unwrap_or((r, r));
     let (a, b) = (gridcraft_core::CellRef::parse(a.trim())?, gridcraft_core::CellRef::parse(b.trim())?);
     Some((a.row.min(b.row), a.col.min(b.col), a.row.max(b.row), a.col.max(b.col)))
+}
+
+/// A chart on a sheet: where it sits (top-left cell and size in px), what it shows (the category
+/// range and one range per series, on this sheet or "Data!B2:B20"), and how it looks.
+/// `kind`: column, bar, line, area, scatter, pie, doughnut; a series may take its own kind (column,
+/// line, area) for a combined chart, and the secondary axis. `stack`: "", "stacked" or "percent".
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SheetChart {
+    pub id: u32, pub cell: String, pub w: u16, pub h: u16,
+    pub kind: String, pub stack: String, pub cats: String, pub series: Vec<ChartSeries>,
+    pub title: String, pub legend: String, pub labels: bool, pub font: f32,
+    pub x: ChartAxis, pub y: ChartAxis, pub y2: ChartAxis,
+    /// Colours of the background and the plot area ("" for white), and the gap between bars (% of a bar).
+    pub bg: String, pub plot: String, pub gap: u16,
+}
+/// One series: its name (text, or "=B1" read from a cell), its values range, and its look.
+/// `dash`: solid, dash, dot; `marker`: none, auto, circle, square, diamond, triangle; `trend`: "", linear.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChartSeries { pub name: String, pub vals: String, pub kind: String, pub y2: bool, pub color: String, pub width: f32, pub dash: String, pub marker: String, pub smooth: bool, pub labels: bool, pub trend: String }
+/// An axis: its title, bounds and step (None: automatic), number format ("" = the cells'), gridlines and whether it shows.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChartAxis { pub title: String, pub min: Option<f64>, pub max: Option<f64>, pub major: Option<f64>, pub fmt: String, pub grid: bool, pub hide: bool }
+pub const CHART_KINDS: [&str; 7] = ["column", "bar", "line", "area", "scatter", "pie", "doughnut"];
+
+impl SheetChart {
+    /// Every range the chart reads (categories, values and cell-read names), to rewrite as references are.
+    pub fn ranges_mut(&mut self) -> impl Iterator<Item = &mut String> {
+        std::iter::once(&mut self.cats).chain(self.series.iter_mut().flat_map(|s| std::iter::once(&mut s.vals).chain((s.name.starts_with('=')).then_some(&mut s.name))))
+    }
+    /// Kept within bounds: known kinds and styles, sizes, text lengths, at most 40 series.
+    pub fn tidy(&mut self) {
+        let pick = |v: &str, ok: &[&str]| if ok.contains(&v) { v.to_string() } else { String::new() };
+        if !CHART_KINDS.contains(&self.kind.as_str()) { self.kind = "column".into() }
+        self.stack = pick(&self.stack, &["stacked", "percent"]);
+        self.legend = pick(&self.legend, &["bottom", "top", "right", "left", "none"]);
+        (self.w, self.h) = (self.w.clamp(120, 4000), self.h.clamp(80, 4000));
+        self.font = if self.font.is_finite() && self.font > 0.0 { self.font.clamp(6.0, 36.0) } else { 0.0 };
+        self.gap = self.gap.min(500);
+        self.series.truncate(40);
+        let cut = |s: &mut String, n: usize| if s.chars().count() > n { *s = s.chars().take(n).collect() };
+        cut(&mut self.title, 300); cut(&mut self.cats, 300); cut(&mut self.bg, 20); cut(&mut self.plot, 20);
+        for a in [&mut self.x, &mut self.y, &mut self.y2] {
+            cut(&mut a.title, 200); cut(&mut a.fmt, 60);
+            for v in [&mut a.min, &mut a.max, &mut a.major] { if v.is_some_and(|x| !x.is_finite()) { *v = None } }
+            if a.major.is_some_and(|m| m <= 0.0) { a.major = None }
+        }
+        for s in &mut self.series {
+            cut(&mut s.name, 200); cut(&mut s.vals, 300); cut(&mut s.color, 20);
+            s.kind = pick(&s.kind, &["column", "line", "area"]);
+            s.dash = pick(&s.dash, &["dash", "dot"]);
+            s.marker = pick(&s.marker, &["none", "auto", "circle", "square", "diamond", "triangle"]);
+            s.trend = pick(&s.trend, &["linear"]);
+            s.width = if s.width.is_finite() && s.width > 0.0 { s.width.clamp(0.25, 12.0) } else { 0.0 };
+        }
+    }
 }
 
 /// A picture on a sheet, anchored at a cell ("B2") like a picture over a spreadsheet's cells.
@@ -1106,6 +1166,8 @@ impl Project {
             s.images.retain(|i| seen.contains(&i.pic));
             s.images.truncate(500);
             s.images.iter_mut().for_each(|i| (i.w, i.h) = (i.w.clamp(8, 4000), i.h.clamp(8, 4000)));
+            s.charts.truncate(100);
+            s.charts.iter_mut().for_each(SheetChart::tidy);
             // Merges: real ranges of more than one cell that do not overlap one another.
             let mut kept: Vec<(u32, u32, u32, u32)> = vec![];
             s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| {

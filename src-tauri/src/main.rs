@@ -49,11 +49,13 @@ struct Options {
     dictionary: Vec<String>,
     /// AI Link: Claude may work on the open plan (switched on in Home › AI Link; off at first).
     ai_link: bool,
+    /// Chart styles saved in Format Chart, by name (the looks of a chart, for any plan).
+    chart_styles: serde_json::Value,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true, spell_lang: "en-GB".into(), dictionary: vec![], ai_link: false }
+        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true, spell_lang: "en-GB".into(), dictionary: vec![], ai_link: false, chart_styles: serde_json::json!({}) }
     }
 }
 
@@ -1150,6 +1152,12 @@ fn pool_take_in(a: &mut App, add: bool) -> R<(Out, String)> {
     Ok((out(a), format!("{who} the pool's rates, units and calendars{}.", if added > 0 { format!("; {added} added from the pool") } else { String::new() })))
 }
 
+/// The data of every chart on sheet `k`, read from its ranges.
+#[tauri::command]
+fn sheet_charts(st: State<St>, k: usize) -> Vec<datum_core::sheet::ChartData> {
+    datum_core::sheet::chart_data(&calc(&st.lock()), k)
+}
+
 #[tauri::command]
 fn sheet_view(st: State<St>, k: usize) -> Option<datum_core::sheet::SheetOut> {
     datum_core::sheet::sheet_view(&calc(&st.lock()), k)
@@ -1950,7 +1958,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, export_scurve, scurve_sheet, spell_check, ai_info, ai_link, ai_setup_claude, ai_add_to_claude, task_path, ai_view_state, ai_pdf, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, scenarios, new_scenario, scenario_compare, scenario_merge, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, scenarios, new_scenario, scenario_compare, scenario_merge, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_charts, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

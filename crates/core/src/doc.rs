@@ -119,6 +119,8 @@ pub enum Op {
     Picture { id: u32, pic: Option<Picture> },
     /// Replaces the pictures placed on sheet k.
     SheetImages { k: usize, images: Vec<SheetImage> },
+    /// The charts on sheet `k` (the whole list).
+    SheetCharts { k: usize, charts: Vec<SheetChart> },
     /// Sets notes on cells of tab k (empty text deletes the note).
     SheetNotes { k: usize, cells: Vec<(String, String)> },
     /// Inserts (or with `del` deletes) the cells of `range` on tab k: the cells below (`down`) or to the
@@ -1180,6 +1182,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             // A picture whose row (column) goes moves to where the deleted rows (columns) were.
             let to_at = |a1: &str| gridcraft_core::CellRef::parse(a1).map(|r| if cols { format!("{}{}", crate::sheet::col_name(at), r.row + 1) } else { format!("{}{}", crate::sheet::col_name(r.col), at + 1) });
             for im in &mut s.images { if let Some(x) = shift(&im.cell).or_else(|| to_at(&im.cell)) { im.cell = x } }
+            for ch in &mut s.charts { if let Some(x) = shift(&ch.cell).or_else(|| to_at(&ch.cell)) { ch.cell = x } }
             // A merge moves with its cells and shrinks when some of its rows (columns) go; it goes when one cell is left.
             let edge = |x: u32, last: bool| if x < at { Some(x) } else if count > 0 { Some(x.saturating_add(n)) } else if x >= at.saturating_add(n) { Some(x - n) } else if last { at.checked_sub(1) } else { Some(at) };
             s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| {
@@ -1373,6 +1376,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             }
             s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| { let (a, b) = m.split_once(':')?; Some(format!("{}:{}", shift(a)?, shift(b)?)) }).collect();
             s.images.retain_mut(|im| shift(&im.cell).map(|x| im.cell = x).is_some());
+            for ch in &mut s.charts { if let Some(x) = shift(&ch.cell) { ch.cell = x } }
             // Ranges follow as references do: conditional formatting, validation and the filter move or
             // shrink when they lie within the shifted band, and go when all their cells go.
             let moved = |g: &str| {
@@ -1420,6 +1424,16 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             p.names = names;
             p.normalize();
         }
+        Op::SheetCharts { k, mut charts } => {
+            let s = p.sheets.get_mut(k).ok_or("There is no such sheet.")?;
+            if charts.len() > 100 { return Err("A sheet can hold at most 100 charts.".into()) }
+            if charts.iter().any(|c| gridcraft_core::CellRef::parse(&c.cell).is_none()) { return Err("A chart is placed at a cell, like B2.".into()) }
+            charts.iter_mut().for_each(SheetChart::tidy);
+            let mut next = charts.iter().map(|c| c.id).max().unwrap_or(0);
+            let mut seen = std::collections::HashSet::new();
+            for c in &mut charts { if c.id == 0 || !seen.insert(c.id) { next += 1; c.id = next; seen.insert(next); } }
+            s.charts = charts;
+        }
         Op::SheetImages { k, images } => {
             let ids: Vec<u32> = p.pictures.iter().map(|x| x.id).collect();
             let s = p.sheets.get_mut(k).ok_or("There is no such sheet.")?;
@@ -1455,6 +1469,10 @@ fn rewrite_sheets(p: &mut Project, f: impl Fn(&str, &str) -> String) {
         for v in s.cells.values_mut().filter(|v| v.starts_with('=')) { *v = f(v, &host); }
         // The references inside its rules too (validation bounds, list sources, conditional formatting values).
         crate::sheetx::rule_formulas(s, &mut |_, x| f(x, &host));
+        for r in s.charts.iter_mut().flat_map(SheetChart::ranges_mut).filter(|r| !r.is_empty()) {
+            let (eq, body) = match r.strip_prefix('=') { Some(b) => ("=", b.to_string()), None => ("", r.clone()) };
+            *r = format!("{eq}{}", f(&format!("={body}"), &host).trim_start_matches('='));
+        }
     }
     // Plan-wide names live on no sheet (their references name theirs); a sheet's own names read their sheet.
     for n in &mut p.names { n.formula = f(&n.formula, if n.sheet.is_empty() { "__names" } else { &n.sheet }); }

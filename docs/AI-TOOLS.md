@@ -2,7 +2,7 @@
 
 Every command in Datum Plan should have an AI Link tool, so the assistant never has to work on the screen. This list maps each ribbon group and view to its tools. ✅ has a tool · 🔜 planned (batch and version) · — no tool, on purpose.
 
-Tools: 190 (0.9.14). Every command has a tool; the — rows are left out on purpose. The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`; other plan files, `assist::MANY_PLANS`) are run by `src-tauri/src/ai.rs`.
+Tools: 193 (0.9.18). Every command has a tool; the — rows are left out on purpose. The engine's tools are in `crates/core/src/assist.rs`; the window's own (its tabs, files and what it shows, `assist::WINDOW_TOOLS`; other plan files, `assist::MANY_PLANS`) are run by `src-tauri/src/ai.rs`.
 
 ## Batches
 
@@ -98,6 +98,7 @@ Tools: 190 (0.9.14). Every command has a tool; the — rows are left out on purp
 | Command | Tool |
 |---|---|
 | Type in cells, formats, number formats, names | ✅ set_sheet_cells, format_sheet_cells, set_number_format, define_name |
+| Charts on sheets (Insert › Chart, Format Chart) | ✅ list_charts, set_chart, delete_chart |
 | Add, rename, delete sheets | ✅ add_sheet, rename_sheet, delete_sheet |
 | Insert and delete rows, columns and cells, move sheets, merge, freeze panes, conditional formatting, notes, hide, tab colour, row heights, sort, remove duplicates, pictures | ✅ insert_rows_columns, delete_rows_columns, shift_cells, move_sheet, merge_cells, freeze_panes, set_sheet_conditional_formatting, set_cell_notes, hide_rows_columns, set_sheet_tab, set_row_heights, sort_range, remove_duplicates, list_pictures, place_picture |
 

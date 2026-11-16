@@ -638,6 +638,11 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             let img = img.set_scale_width(w / iw).set_scale_height(h / ih).set_alt_text(&x.name);
             ws.insert_image(r, k, &img).map_err(e)?;
         }
+        // Charts, as native charts of the workbook (they keep reading the same cells there).
+        for ch in &s.charts {
+            let Some((r, k)) = a1_index(&ch.cell) else { continue };
+            if let Some(x) = xl_chart(ch, &c.p.sheets, &names, k_of(&c.p.sheets, &s.name)) { ws.insert_chart(r, k, &x).map_err(e)?; }
+        }
     }
     if !c.p.sheets.is_empty() {
         // The sheets' formulas read the plan as tables (Tasks[Finish]) and names (=ProjectFinish).
@@ -706,6 +711,95 @@ fn xl_names(sheets: &[crate::model::SheetData], full: bool) -> Vec<String> {
 
 /// How many items a top or bottom rule takes, as the window reads it (1 to 1000).
 fn top_n(a: &str) -> u16 { a.trim().parse::<f64>().ok().filter(|n| *n >= 1.0).map_or(10, |n| n.round().min(1000.0) as u16) }
+
+fn k_of(sheets: &[crate::model::SheetData], name: &str) -> usize { sheets.iter().position(|s| s.name == name).unwrap_or(0) }
+
+/// A range of a chart ("B2:B20" on its own sheet, or "Data!B2:B20") as the workbook's sheet and cells.
+fn xl_range(r: &str, sheets: &[crate::model::SheetData], names: &[String], host: usize) -> Option<(String, u32, u16, u32, u16)> {
+    let r = r.trim().trim_start_matches('=');
+    let (tab, cells) = match r.rsplit_once('!') { Some((t, c)) => (t.trim_matches('\'').replace("''", "'"), c), None => (sheets.get(host)?.name.clone(), r) };
+    let k = sheets.iter().position(|s| s.name.eq_ignore_ascii_case(&tab))?;
+    let (r0, c0, r1, c1) = crate::model::sheet_range(&cells.replace('$', "")).or_else(|| { let (r, c) = a1_index(&cells.replace('$', ""))?; Some((r, c as u32, r, c as u32)) })?;
+    Some((names.get(k)?.clone(), r0, c0 as u16, r1, c1 as u16))
+}
+
+/// A chart of a sheet as a native workbook chart: kinds and stacking, a combined chart where series
+/// take their own kind, the secondary axis, colours, lines, markers, labels, trend lines, axes and legend.
+fn xl_chart(ch: &crate::model::SheetChart, sheets: &[crate::model::SheetData], names: &[String], host: usize) -> Option<rust_xlsxwriter::Chart> {
+    use rust_xlsxwriter::{Chart, ChartDataLabel, ChartFormat, ChartLegendPosition, ChartLine, ChartLineDashType, ChartMarker, ChartMarkerType, ChartSolidFill, ChartTrendline, ChartTrendlineType, ChartType as T};
+    let rgb = |c: &str| u32::from_str_radix(c.trim_start_matches('#'), 16).ok();
+    let kind_of = |k: &str| -> T {
+        let (st, pc) = (ch.stack == "stacked", ch.stack == "percent");
+        match k {
+            "bar" => if pc { T::BarPercentStacked } else if st { T::BarStacked } else { T::Bar },
+            "line" => if pc { T::LinePercentStacked } else if st { T::LineStacked } else { T::Line },
+            "area" => if pc { T::AreaPercentStacked } else if st { T::AreaStacked } else { T::Area },
+            "scatter" => T::ScatterStraightWithMarkers,
+            "pie" => T::Pie,
+            "doughnut" => T::Doughnut,
+            _ => if pc { T::ColumnPercentStacked } else if st { T::ColumnStacked } else { T::Column },
+        }
+    };
+    let base = ch.kind.as_str();
+    let own = |s: &crate::model::ChartSeries| if s.kind.is_empty() || matches!(base, "bar" | "scatter" | "pie" | "doughnut") { base.to_string() } else { s.kind.clone() };
+    let cats = xl_range(&ch.cats, sheets, names, host);
+    let mut main = Chart::new(kind_of(base));
+    let mut extra: Vec<(String, Chart)> = vec![];
+    for s in &ch.series {
+        let Some(v) = xl_range(&s.vals, sheets, names, host) else { continue };
+        let k = own(s);
+        let chart = if k == base || (k == "column" && base == "column") { &mut main } else {
+            let i = match extra.iter().position(|(x, _)| *x == k) { Some(i) => i, None => { extra.push((k.clone(), Chart::new(kind_of(&k)))); extra.len() - 1 } };
+            &mut extra[i].1
+        };
+        let se = chart.add_series();
+        se.set_values((v.0.as_str(), v.1, v.2, v.3, v.4));
+        if let Some(c) = &cats { se.set_categories((c.0.as_str(), c.1, c.2, c.3, c.4)); }
+        if let Some(n) = s.name.strip_prefix('=') { if let Some(n) = xl_range(n, sheets, names, host) { se.set_name((n.0.as_str(), n.1, n.2)); } } else if !s.name.is_empty() { se.set_name(s.name.as_str()); }
+        let mut f = ChartFormat::new();
+        if let Some(c) = rgb(&s.color) {
+            if matches!(k.as_str(), "line" | "scatter") { let mut l = ChartLine::new(); l.set_color(c); if s.width > 0.0 { l.set_width(s.width as f64); } f.set_line(&l); } else { f.set_solid_fill(ChartSolidFill::new().set_color(c)); }
+        }
+        if !s.dash.is_empty() || (s.width > 0.0 && rgb(&s.color).is_none() && k == "line") {
+            let mut l = ChartLine::new();
+            if let Some(c) = rgb(&s.color) { l.set_color(c); }
+            if s.width > 0.0 { l.set_width(s.width as f64); }
+            if s.dash == "dash" { l.set_dash_type(ChartLineDashType::Dash); } else if s.dash == "dot" { l.set_dash_type(ChartLineDashType::RoundDot); }
+            f.set_line(&l);
+        }
+        se.set_format(&mut f);
+        if matches!(k.as_str(), "line" | "scatter") {
+            match s.marker.as_str() {
+                "none" => { se.set_marker(ChartMarker::new().set_none()); }
+                "circle" | "square" | "diamond" | "triangle" => { let t = match s.marker.as_str() { "circle" => ChartMarkerType::Circle, "square" => ChartMarkerType::Square, "diamond" => ChartMarkerType::Diamond, _ => ChartMarkerType::Triangle }; se.set_marker(ChartMarker::new().set_type(t)); }
+                _ => {}
+            }
+            if s.smooth { se.set_smooth(true); }
+        }
+        if s.labels || ch.labels { se.set_data_label(ChartDataLabel::new().show_value()); }
+        if s.trend == "linear" { se.set_trendline(ChartTrendline::new().set_type(ChartTrendlineType::Linear)); }
+        if s.y2 { se.set_secondary_axis(true); }
+    }
+    for (_, x) in &extra { main.combine(x); }
+    if !ch.title.is_empty() { main.title().set_name(&ch.title); }
+    match ch.legend.as_str() { "none" => { main.legend().set_hidden(); } "top" => { main.legend().set_position(ChartLegendPosition::Top); } "right" => { main.legend().set_position(ChartLegendPosition::Right); } "left" => { main.legend().set_position(ChartLegendPosition::Left); } _ => { main.legend().set_position(ChartLegendPosition::Bottom); } }
+    let axis = |a: &mut rust_xlsxwriter::ChartAxis, d: &crate::model::ChartAxis, grid: bool| {
+        if !d.title.is_empty() { a.set_name(&d.title); }
+        if let Some(v) = d.min { a.set_min(v); }
+        if let Some(v) = d.max { a.set_max(v); }
+        if let Some(v) = d.major { a.set_major_unit(v); }
+        if !d.fmt.is_empty() { a.set_num_format(&d.fmt); }
+        a.set_major_gridlines(grid);
+        if d.hide { a.set_hidden(true); }
+    };
+    if !matches!(base, "pie" | "doughnut") {
+        axis(main.x_axis(), &ch.x, ch.x.grid);
+        axis(main.y_axis(), &ch.y, ch.y.grid);
+        if ch.series.iter().any(|s| s.y2) { axis(main.y2_axis(), &ch.y2, ch.y2.grid); }
+    }
+    main.set_width(ch.w as u32).set_height(ch.h as u32);
+    Some(main)
+}
 
 /// "B12" → (row 11, column 1), 0-based.
 fn a1_index(a1: &str) -> Option<(u32, u16)> {

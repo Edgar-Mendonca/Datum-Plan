@@ -417,6 +417,7 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     // Cells with only a style or a format (a border, a fill) print too.
     for (const a of [...Object.keys(sh.style ?? {}), ...Object.keys(sh.fmt ?? {})]) { const x = ref(a); if (x && (sh.style?.[a] || sh.fmt?.[a] === "flag") && x[0] < 5000) { r1 = Math.max(r1, x[0]); c1 = Math.max(c1, x[1]); } }
     for (const im of sh.images ?? []) { const a = ref(im.cell); if (a) { r1 = Math.max(r1, a[0] + Math.ceil(im.h / 22)); c1 = Math.max(c1, a[1]); } }
+    for (const ch of sh.charts ?? []) { const a = ref(ch.cell); if (a) { r1 = Math.max(r1, a[0] + Math.ceil(ch.h / 22)); c1 = Math.max(c1, a[1] + Math.ceil(ch.w / 96) - 1); } }
     // Merges, pictures and formatting far away never stretch the print beyond 5,000 rows or 300 columns past the cells.
     r1 = Math.min(r1, Math.max(0, (sv?.rows ?? 1) - 1) + 5000); c1 = Math.min(c1, Math.max(0, (sv?.cols ?? 1) - 1) + 300);
     const ar = sp.area ? sp.area.split(":").map(ref) : null;
@@ -433,6 +434,11 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     t.h = rows.map(r => sheetRowH(sh, r, cells));
     t.merges = (sh.merges ?? []).flatMap(m => { const [a, b = a] = m.split(":"), p1 = ref(a), p2 = ref(b); if (!p1 || !p2) return []; return [{ r: p1[0] - r0, c: p1[1] - c0 + 1, rs: p2[0] - p1[0] + 1, cs: p2[1] - p1[1] + 1 }]; }).filter(m => m.r + m.rs > 0 && m.r < nr && m.c + m.cs > 1 && m.c <= nc);
     t.imgs = (sh.images ?? []).flatMap(im => { const a = ref(im.cell), src = picData(im.pic); if (!a || !src || a[0] < r0 || a[0] > r1 || a[1] < c0 || a[1] > c1) return []; const [w, h] = im.fit ? fitBox(sh, a[0], a[1], im) : [im.w, im.h]; return [{ src, r: a[0] - r0, c: a[1] - c0 + 1, w, h }]; });
+    // Charts print as vectors, like pictures at their cell.
+    if (sh.charts?.length) {
+      const [{ chartSvg, svgUrl }, data] = await Promise.all([import("./xchart"), call<import("./xchart").ChartData[]>("sheet_charts", { k })]);
+      t.imgs = [...(t.imgs ?? []), ...sh.charts.flatMap((ch, i) => { const a = ref(ch.cell); if (!a || a[0] < r0 || a[0] > r1 || a[1] < c0 || a[1] > c1) return []; return [{ src: svgUrl(chartSvg(ch, data?.[i])), r: a[0] - r0, c: a[1] - c0 + 1, w: ch.w, h: ch.h }]; })];
+    }
     t.flags = new Set(rows.flatMap((r, i) => cs.flatMap((c, j) => (sh.fmt?.[col(c) + (r + 1)] === "flag" ? [`${i},${j + 1}`] : []))));
     // Title rows: inside the print area they repeat from page 2; above it they print at the top of every page.
     if (sp.titles) {

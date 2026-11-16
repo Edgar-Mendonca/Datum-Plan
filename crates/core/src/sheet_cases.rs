@@ -806,3 +806,49 @@ fn formula_columns_use_the_plans_names() {
         assert!(e.contains(why), "{f}: {e}");
     }
 }
+
+/// Charts on sheets: their data read from ranges (here and on other sheets, names read from cells),
+/// ranges and anchors that follow inserted rows and renamed sheets, Undo, and native workbook charts.
+#[test]
+fn charts_read_their_ranges_follow_edits_and_export_natively() {
+    let mut doc = base();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("Data", &[("A1", "Week"), ("B1", "Planned"), ("C1", "Actual"), ("A2", "=DATE(2026,11,6)"), ("B2", "0.1"), ("C2", "0.05"),
+        ("A3", "=DATE(2026,11,13)"), ("B3", "0.3"), ("C3", "=C2*4"), ("A4", "=DATE(2026,11,20)"), ("B4", "0.6")])) });
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("Report", &[("A1", "Progress")])) });
+    let series = |n: &str, v: &str, kind: &str, y2: bool| ChartSeries { name: n.into(), vals: v.into(), kind: kind.into(), y2, color: "#1F5FAD".into(), ..Default::default() };
+    let on_data = SheetChart { cell: "E2".into(), w: 600, h: 300, kind: "column".into(), cats: "A2:A4".into(), series: vec![series("=B1", "B2:B4", "", false), series("Actual %", "C2:C4", "line", true)], ..Default::default() };
+    let on_report = SheetChart { cell: "B3".into(), w: 50, h: 9000, kind: "nosuch".into(), cats: "Data!A2:A4".into(), series: vec![series("", "'Data'!B2:B4", "", false)], ..Default::default() };
+    op(&mut doc, Op::SheetCharts { k: 0, charts: vec![on_data] });
+    op(&mut doc, Op::SheetCharts { k: 1, charts: vec![on_report] });
+    let ch = &doc.p.sheets[1].charts[0];
+    assert_eq!((ch.id, ch.kind.as_str(), ch.w, ch.h), (1, "column", 120, 4000), "ids given, unknown kinds and sizes kept in bounds");
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 20));
+    let got = crate::sheet::chart_data(&c, 0);
+    assert_eq!(got[0].names, ["Planned", "Actual %"], "a name read from a cell, a typed one");
+    assert_eq!(got[0].vals, vec![vec![Some(0.1), Some(0.3), Some(0.6)], vec![Some(0.05), Some(0.2), None]], "values and formula results, a blank as a gap");
+    assert_eq!(got[0].cats.len(), 3);
+    assert!(got[0].xs[0].is_some(), "dates keep their number for a date axis");
+    assert_eq!(crate::sheet::chart_data(&c, 1)[0].names, ["Series 1"]);
+    assert_eq!(crate::sheet::chart_data(&c, 1)[0].vals[0], vec![Some(0.1), Some(0.3), Some(0.6)], "a range on another sheet");
+    // Rows inserted above the data move the ranges and the anchor; a renamed sheet follows; Undo restores.
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 0, count: 2 });
+    let ch = &doc.p.sheets[0].charts[0];
+    assert_eq!((ch.cell.as_str(), ch.cats.as_str(), ch.series[0].vals.as_str(), ch.series[0].name.as_str()), ("E4", "A4:A6", "B4:B6", "=B3"));
+    assert_eq!(doc.p.sheets[1].charts[0].cats, "Data!A4:A6", "a chart on another sheet follows too");
+    let mut s0 = doc.p.sheets[0].clone();
+    s0.name = "Weekly".into();
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(s0) });
+    assert!(doc.p.sheets[1].charts[0].cats.starts_with("Weekly!"), "{}", doc.p.sheets[1].charts[0].cats);
+    doc.undo(); doc.undo();
+    assert_eq!(doc.p.sheets[0].charts[0].cats, "A2:A4");
+    // The workbook holds native charts (a combined column and line chart with a secondary axis).
+    let path = tmp("charts.xlsx");
+    crate::io::table::write_sheets_xlsx(&Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 20)), &path).unwrap();
+    let mut z = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let names: Vec<String> = (0..z.len()).map(|i| z.by_index(i).unwrap().name().unwrap().to_string()).collect();
+    assert_eq!(names.iter().filter(|n| n.starts_with("xl/charts/chart")).count(), 2, "{names:?}");
+    let mut x = String::new();
+    z.by_name("xl/charts/chart1.xml").unwrap().read_to_string(&mut x).unwrap();
+    assert!(x.contains("<c:barChart>") && x.contains("<c:lineChart>") && x.contains("Data!$B$2:$B$4") && x.contains("1F5FAD"), "{}", &x[..x.len().min(600)]);
+    let _ = std::fs::remove_file(path);
+}
