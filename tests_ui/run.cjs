@@ -1013,7 +1013,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.mouse.click(pl[0], pl[1], { button: "right" }); await p.waitForTimeout(200);
     const mt = (await p.textContent(".menu")) ?? "";
     check("right-click on a chart gives the chart's menu, not the cells'", mt.includes("Change Chart Type") && mt.includes("Save as Template") && mt.includes("Reset to Match Style") && mt.includes("Save as Picture") && !mt.includes("Insert Function"), mt.slice(0, 200));
-    await p.hover(".menu button:has-text('Change Chart Type')"); await p.waitForTimeout(150); await p.click(".menu >> nth=1 >> button:has-text('Line')"); await p.waitForTimeout(300);
+    await p.click(".menu button:has-text('Change Chart Type')"); await p.waitForTimeout(300); await p.click(".dlg .cttype nav button:has-text('Line')"); await p.waitForTimeout(100); await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(300);
     check("…and Change Chart Type changes it", (await charts())?.[0].kind === "line");
     const ti = await mid("title"); await p.mouse.click(ti[0], ti[1]); await p.waitForTimeout(150); await p.mouse.click(ti[0], ti[1]); await p.waitForTimeout(250);
     check("a second click on the title edits it in place", !!(await p.$(".schart input.ch-title")));
