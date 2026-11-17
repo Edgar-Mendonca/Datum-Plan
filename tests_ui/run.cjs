@@ -1047,7 +1047,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("…and Select all brings it back", ((await charts())?.[0].skip ?? []).length === 0);
     const n0 = (await charts())?.[0].series.length;
     await p.click(".ribbon button:has-text('Switch Row/Column')"); await p.waitForTimeout(300);
-    check("Switch Row/Column makes each row a series", (await charts())?.[0].series.length !== n0 && /^=/.test((await charts())?.[0].series[0].name), JSON.stringify((await charts())?.[0]).slice(0, 300));
+    check("Switch Row/Column makes each row a series", (await charts())?.[0].series.length !== n0 && /^[A-Z]+(\d+):[A-Z]+\1$/.test((await charts())?.[0].series[0].vals), JSON.stringify((await charts())?.[0]).slice(0, 300));
     await p.click(".ribbon button:has-text('Change Chart Type')"); await p.waitForTimeout(300);
     check("Change Chart Type shows every type, its variants drawn small and a large preview", !!(await p.$(".dlg .cttype")) && (await p.$$(".dlg .ctvars button svg")).length >= 3 && !!(await p.$(".dlg .ctprev svg")));
     await p.click(".dlg .cttype nav button:has-text('Bar')"); await p.click(".dlg .ctvars button[title='Stacked Bar']"); await p.waitForTimeout(150);
