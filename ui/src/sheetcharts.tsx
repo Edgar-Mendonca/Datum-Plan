@@ -8,6 +8,7 @@ import { ChartData, ChartDef, Series, Axis, KINDS, PALETTE, XChart, colorOf, kin
 import { opts, setOpts, call, toast, openMenu, Item } from "./store";
 import { Options } from "./api";
 import { askText } from "./ui";
+import { sheetK, setSheetK } from "./sheetlayout";
 import { ChartCtl, SideButtons, changeType, selectData, moveChart } from "./charttools";
 
 export const [chartSel, setChartSel] = createSignal(-1);
@@ -128,7 +129,8 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
   // The tools keep the sheet and charts they were opened on (picking a range may show another tab meanwhile).
-  const ctl = (i: number): ChartCtl | null => { const c = p.charts[i], list = p.charts, kk = p.k; return c ? { c, d: p.data?.[i], set: x => p.put(list.map((y, j) => (j === i ? x : y)), kk), format: fmt(c, i), a1: p.g.a1, parse: p.g.parse, k: p.k, move: () => moveChart(p.k, i, k => { setChartSel(0); setChartPart(""); p.moved?.(k); }) } : null; };
+  const ctl = (i: number): ChartCtl | null => { const c = p.charts[i], list = p.charts, kk = p.k; return c ? { c, d: p.data?.[i], set: x => p.put(list.map((y, j) => (j === i ? x : y)), kk), format: fmt(c, i), a1: p.g.a1, parse: p.g.parse, k: p.k, move: () => moveChart(p.k, i, k => { setChartSel(0); setChartPart(""); p.moved?.(k); }),
+    reselect: () => { if (sheetK() !== kk) setSheetK(kk); setChartPart(""); setChartSel(i); } } : null; };
   const fmt = (c: ChartDef, i: number) => (pt: string) => { if (pt === "data") { const t = ctl(i); if (t) selectData(t); return; } setChartPart(pt === "area" ? "" : pt); if (!pt || pt === "area") setPaneTab("chart"); setFmtChart(c.id); };
   createEffect(() => setChartCtl(ctl(chartSel())));
   onCleanup(() => setChartCtl(null));

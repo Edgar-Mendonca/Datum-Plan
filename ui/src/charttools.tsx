@@ -8,7 +8,7 @@ import { openDialog, closeDialog, openMenu, Item, toast, P, act } from "./store"
 import { Dialog } from "./ui";
 
 /** What the tools work on: a chart, its data, how to change it, and how to open its Format pane. */
-export type ChartCtl = { c: ChartDef; d?: ChartData; set: (c: ChartDef) => void; format: (part: string) => void; a1?: (r: number, c: number) => string; parse?: (a: string) => [number, number]; k?: number; move?: () => void };
+export type ChartCtl = { c: ChartDef; d?: ChartData; set: (c: ChartDef) => void; format: (part: string) => void; a1?: (r: number, c: number) => string; parse?: (a: string) => [number, number]; k?: number; move?: () => void; reselect?: () => void };
 
 const SAFE = ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7", "#56B4E9", "#C9B200", "#5E6A78"];
 /** Colour sets for Change Colours: the series take them in turn. */
@@ -226,6 +226,8 @@ export const PickBar = (p: { sel: () => { k: number; name: string; range: string
  *  Switch Row/Column; how empty cells show. Every range can be picked on the sheet. */
 export const selectData = (t: ChartCtl) => openDialog(() => {
   const [cur, setCur] = createSignal<ChartDef>(t.c), [at, setAt] = createSignal(0);
+  // Picking cells selects them on the sheet; the chart is selected again when the dialog closes.
+  onCleanup(() => t.reselect?.());
   const s = () => cur().series[at()];
   const setS = (x: Partial<Series>) => setCur({ ...cur(), series: cur().series.map((y, j) => (j === at() ? { ...y, ...x } : y)) });
   const k = t.k ?? -1;
