@@ -1100,6 +1100,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
       check("the style previews show the look only, no jumbled text", (await p.$$(".chpop .chgal svg")).length >= 6 && (await p.$$(".chpop .chgal svg text")).length === 0);
       await p.keyboard.press("Escape"); await p.waitForTimeout(100);
       await p.click(".schart", { position: { x: 3, y: 150 } }); await p.waitForTimeout(100);
+      await p.click(".tabs .ctxgrp.chartctx button"); await p.waitForTimeout(150);
       await p.click(".ribbon button:has-text('Format Chart')"); await p.waitForTimeout(250);
       check("the sheet scrolls so the Format pane does not cover the chart", await p.evaluate(() => { const c = document.querySelector(".sheetgrid .schart.on")?.getBoundingClientRect(), q = document.querySelector(".ganttview > .chartpane")?.getBoundingClientRect(); return !!c && !!q && c.right <= q.left + 2; }));
       await p.click(".tabs .file"); await p.waitForTimeout(300);
