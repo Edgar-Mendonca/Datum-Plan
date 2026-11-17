@@ -1242,8 +1242,6 @@ svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-siz
 .chartpane .flash { animation: cfflash .9s ease-out; border-radius: 4px; }
 @keyframes cfflash { from { background: color-mix(in srgb, var(--blue) 22%, transparent); } to { background: transparent; } }
 .chartbox .cv svg, .schart svg { -webkit-user-select: none; user-select: none; }
-.schart .ch-tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
-.schart .ch-tools button { height: 22px; padding: 0 8px; background: var(--bg2); border: 1px solid var(--line3); border-radius: 4px; font-size: 12px; box-shadow: 0 1px 4px #0002; }
 .chartpane { position: absolute; right: 0; top: 0; bottom: 0; width: 330px; z-index: 20; background: var(--bg2); border-left: 1px solid var(--line); box-shadow: -4px 0 14px #0002; display: flex; flex-direction: column; font-size: 12.5px; }
 .ganttview:has(> .chartpane) { position: relative; }
 .chartpane header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line); }

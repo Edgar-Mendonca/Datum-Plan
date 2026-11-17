@@ -2,9 +2,9 @@
 // (xchart.tsx): sharp on screen, in print and in PDFs, with the same Format pane. Each chart keeps
 // its look per plan (ui.chartLooks, by title), saved from "Format chart"; Copy and PNG give a
 // page-wide picture with the title, Datum Plot a one-way copy of the values.
-import { createSignal, onCleanup, onMount, JSX, Show } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount, JSX, Show } from "solid-js";
 import { Portal } from "solid-js/web";
-import { call, toast, P, act } from "./store";
+import { call, toast, P, act, backstage } from "./store";
 import { money, fmtDay } from "./api";
 import { ChartData, ChartDef, Series, XChart, chartCanvas, lookOf, withLook } from "./xchart";
 import { ChartPane, chartMenu } from "./sheetcharts";
@@ -150,7 +150,7 @@ export const ChartBox = (p: ChartProps) => {
 };
 
 /** The Format pane of a view's chart: its look is saved with the plan, by the chart's title. */
-export const ChartFormat = () => <Show when={formatting()}>{q => <Portal><FormatHost p={q()} /></Portal>}</Show>;
+export const ChartFormat = () => (void createEffect(() => { if (backstage()) setFormatting(null); }), <Show when={formatting()}>{q => <Portal><FormatHost p={q()} /></Portal>}</Show>);
 const FormatHost = (x: { p: ChartProps }) => {
   const cur = () => toChart(x.p, 600, 300);
   return <div class="chartpane-fixed"><ChartPane chart={cur().c} data={cur().d} set={nc => saveLook(x.p.title, nc)} close={() => setFormatting(null)} view reset={() => saveLook(x.p.title, null)} part={fmtPart()} /></div>;

@@ -49,7 +49,10 @@ const SAMPLE: ChartData = { cats: ["Q1", "Q2", "Q3", "Q4"], xs: [], cat_fmt: "",
 /** A small picture of a chart as it would look (its own data, or a sample). */
 export const Thumb = (p: { c: ChartDef; d?: ChartData; w?: number; h?: number }) => {
   const w = p.w ?? 132, h = p.h ?? 84, has = !!p.d?.vals.some(v => v.some(x => x !== null));
-  const c: ChartDef = { ...p.c, w, h, font: Math.min(7, (p.c.font || 11) * 0.62), title: p.c.title ? " " : "", subtitle: undefined, marker: null, ends: false, quiet: true, x: ax(p.c.x, { title: p.c.x?.title ? " " : "" }), y: ax(p.c.y, { title: p.c.y?.title ? " " : "" }) };
+  // A preview shows the look, not the words: shapes, colours, gridlines and the background only.
+  const bare = (a: Axis | undefined): Axis => ({ ...(a ?? {}), title: "", hide: true });
+  const c: ChartDef = { ...p.c, w, h, font: 6, title: "", subtitle: undefined, marker: null, ends: false, quiet: true, legend: "none", labels: false, table: false, gap: Math.min(p.c.gap ?? 150, 120),
+    x: bare(p.c.x), y: bare(p.c.y), y2: bare(p.c.y2), series: p.c.series.map(s => ({ ...s, labels: false })) };
   const d = has ? p.d! : { ...SAMPLE, vals: SAMPLE.vals.slice(0, Math.max(1, Math.min(3, p.c.series.length))) };
   if (!has) c.series = d.vals.map((_, i) => p.c.series[i] ?? { name: "", vals: "" });
   return <XChart c={c} d={d} w={w} h={h} hover={false} />;
@@ -102,7 +105,7 @@ const ElementsPop = (p: { t: () => ChartCtl | null }) => <div class="chlist"><b>
 const StylesPop = (p: { t: () => ChartCtl | null }) => {
   const [tab, setTab] = createSignal("style");
   return <div class="chstylepop"><div class="cftabs"><button classList={{ on: tab() === "style" }} onClick={() => setTab("style")}>Style</button><button classList={{ on: tab() === "colour" }} onClick={() => setTab("colour")}>Colour</button></div>
-    <Show when={tab() === "style"}><div class="chgal"><For each={STYLES}>{([l, f]) => <button title={l} onClick={() => p.t()!.set(f(p.t()!.c))}><Thumb c={f(p.t()!.c)} d={p.t()!.d} w={120} h={76} /><small>{l}</small></button>}</For></div></Show>
+    <Show when={tab() === "style"}><div class="chgal"><For each={STYLES}>{([l, f]) => <button title={l} onClick={() => p.t()!.set(f(p.t()!.c))}><Thumb c={f(p.t()!.c)} d={p.t()!.d} w={128} h={80} /><small>{l}</small></button>}</For></div></Show>
     <Show when={tab() === "colour"}><ColourList t={p.t} /></Show></div>;
 };
 const ColourList = (p: { t: () => ChartCtl | null }) => <div class="chcols"><For each={COLOURS}>{([l, set]) => <button onClick={() => p.t()!.set(recolour(p.t()!.c, set))}><span>{set.slice(0, 6).map(x => <i style={{ background: x }} />)}</span>{l}</button>}</For></div>;
@@ -117,11 +120,12 @@ const FiltersPop = (p: { t: () => ChartCtl | null }) => {
       <div class="chcats"><For each={cats()}>{(cat, j) => <label><input type="checkbox" checked={!skip().has(j())} onChange={e => setSkip(j(), e.currentTarget.checked)} />{cat || `(${j() + 1})`}</label>}</For></div></Show></div>;
 };
 /** The three buttons beside a selected chart on a sheet. */
-export const SideButtons = (p: { t: () => ChartCtl | null }) => (
+export const SideButtons = (p: { t: () => ChartCtl | null; more?: (e: MouseEvent) => void }) => (
   <div class="ch-side" onMouseDown={e => e.stopPropagation()}>
     <button title="Chart Elements: title, axes, labels, gridlines, legend, trendline" onClick={e => popover(beside(e), () => <ElementsPop t={p.t} />)}>+</button>
     <button title="Chart Styles: looks and colours" onClick={e => popover(beside(e), () => <StylesPop t={p.t} />)}><svg viewBox="0 0 16 16"><path d="M10.5 2.5l3 3-6 6-3-3zM4 10l2 2c0 1.6-1.4 2.5-3.5 2.2.6-.6.6-1.3.6-2C3.1 11 3.5 10.4 4 10z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" /></svg></button>
     <button title="Chart Filters: which series and categories the chart shows" onClick={e => popover(beside(e), () => <FiltersPop t={p.t} />)}><svg viewBox="0 0 16 16"><path d="M2 3h12l-4.6 5.4V13l-2.8 1V8.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" /></svg></button>
+    {p.more && <button class="chmore" title="More: Format, Copy as Picture, chart type, templates, order, Delete" onClick={e => p.more!(e)}>⋯</button>}
   </div>
 );
 

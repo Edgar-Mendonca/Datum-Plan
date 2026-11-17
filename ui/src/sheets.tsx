@@ -24,7 +24,7 @@ import { askText, askYes, Dialog, Row } from "./ui";
 import { condLooks, lookCss, condMenu, bounds as cfBounds } from "./condfmt";
 import type { CondRule } from "./api";
 import { colorPalette } from "./colors";
-import { openDialog, setTab } from "./store";
+import { openDialog, setTab, backstage } from "./store";
 import * as X from "./sheetcells";
 import type { ColFilter, DefName, Validation } from "./api";
 
@@ -843,6 +843,18 @@ export const Sheets = () => {
   // Charts on the sheet: their data comes from the engine, read from their ranges after every edit.
   const charts = () => (sheet()?.charts ?? []) as ChartDef[];
   const isCS = () => !!sheet()?.chartsheet;
+  // File (the backstage) closes the Format pane; it never stays on top of it.
+  createEffect(() => { if (backstage()) setFmtChart(null); });
+  // When the Format pane opens, the sheet scrolls so the selected chart is not under it.
+  createEffect(on(fmtChart, id => {
+    if (id === null || isCS()) return;
+    setTimeout(() => {
+      const ch = document.querySelector<HTMLElement>(".sheetgrid .schart.on"), pane = document.querySelector<HTMLElement>(".ganttview > .chartpane");
+      if (!ch || !pane || !box) return;
+      const over = ch.getBoundingClientRect().right + 40 - pane.getBoundingClientRect().left;
+      if (over > 0) box.scrollLeft += Math.min(over, Math.max(0, ch.getBoundingClientRect().left - box.getBoundingClientRect().left - 60));
+    }, 30);
+  }));
   const [csSize, setCsSize] = createSignal<[number, number]>([900, 560]);
   const csRo = new ResizeObserver(es => { const r = es[0]?.contentRect; if (r && r.width > 40 && r.height > 40) setCsSize([Math.floor(r.width) - 24, Math.floor(r.height) - 24]); });
   onCleanup(() => csRo.disconnect());

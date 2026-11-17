@@ -648,7 +648,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
         // Charts, as native charts of the workbook (they keep reading the same cells there).
         for ch in &s.charts {
             let Some((r, k)) = a1_index(&ch.cell) else { continue };
-            if let Some(x) = xl_chart(ch, &c.p.sheets, &names, k_of(&c.p.sheets, &s.name)) { ws.insert_chart(r, k, &x).map_err(e)?; }
+            if let Some(x) = xl_chart(ch, &c.p.sheets, &names, k_of(&c.p.sheets, &s.name)) { ws.insert_chart_with_offset(r, k, &x, ch.dx as u32, ch.dy as u32).map_err(e)?; }
         }
     }
     if !c.p.sheets.is_empty() {

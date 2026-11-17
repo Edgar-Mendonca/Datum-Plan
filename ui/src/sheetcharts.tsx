@@ -104,10 +104,20 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
     const o = p.charts[i], x0 = e.clientX, y0 = e.clientY, z = p.g.zoom();
     let next = o;
     const el = () => document.querySelector<HTMLElement>(`.schart[data-i="${i}"]`);
+    // Where the chart was grabbed, measured once: the chart then follows the pointer smoothly and
+    // keeps its place in the cell it is dropped on (a cell and an offset inside it).
+    const r0 = el()?.getBoundingClientRect(), gx = x0 - (r0?.left ?? x0), gy = y0 - (r0?.top ?? y0);
+    const [ar, ac] = p.g.parse(o.cell), left0 = p.g.x(ac) + (o.dx ?? 0), top0 = p.g.y(ar) + (o.dy ?? 0);
+    let moved = false;
     const mv = (m: MouseEvent) => {
       if (p.fill) return;
       const dx = (m.clientX - x0) / z, dy = (m.clientY - y0) / z;
-      if (how === "move") { const [r, c] = p.g.cell(m.clientX - (x0 - (el()?.getBoundingClientRect().left ?? x0)) + 2, m.clientY - (y0 - (el()?.getBoundingClientRect().top ?? y0)) + 2); if (r >= 0 && c >= 0) next = { ...o, cell: p.g.a1(r, c) }; }
+      if (!moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+      moved = true;
+      if (how === "move") {
+        const [r, c] = p.g.cell(m.clientX - gx + 1, m.clientY - gy + 1);
+        if (r >= 0 && c >= 0) { const L = Math.max(0, left0 + dx), T = Math.max(0, top0 + dy); next = { ...o, cell: p.g.a1(r, c), dx: Math.max(0, Math.round(L - p.g.x(c))), dy: Math.max(0, Math.round(T - p.g.y(r))) }; }
+      }
       else {
         let w = o.w, h = o.h;
         if (how.includes("e")) w = o.w + dx;
@@ -115,7 +125,7 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
         next = { ...o, w: Math.round(Math.max(160, w)), h: Math.round(Math.max(110, h)) };
       }
       const [r, c] = p.g.parse(next.cell), box = el();
-      if (box) Object.assign(box.style, { left: `${p.g.x(c)}px`, top: `${p.g.y(r)}px`, width: `${next.w}px`, height: `${next.h}px` });
+      if (box) Object.assign(box.style, { left: `${p.g.x(c) + (next.dx ?? 0)}px`, top: `${p.g.y(r) + (next.dy ?? 0)}px`, width: `${next.w}px`, height: `${next.h}px` });
     };
     const up = () => {
       removeEventListener("mousemove", mv); removeEventListener("mouseup", up);
@@ -141,12 +151,12 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
       remove: () => { p.put(p.charts.filter((_, j) => j !== i)); setChartSel(p.fill ? 0 : -1); setFmtChart(null); },
       title: () => { if (!c.title) put1(i, { ...c, title: "Chart Title" }); setEditTitle(c.id); },
       order: front => { const rest = p.charts.filter((_, j) => j !== i); p.put(front ? [...rest, c] : [c, ...rest]); setChartSel(front ? rest.length : 0); },
-      duplicate: () => { const [r, cc] = p.g.parse(c.cell); p.put([...p.charts, { ...c, id: 0, cell: p.g.a1(r + 2, cc + 1) }]); setChartSel(p.charts.length); },
+      duplicate: () => { const [r, cc] = p.g.parse(c.cell); p.put([...p.charts, { ...c, id: 0, cell: p.g.a1(r + 2, cc + 1), dx: c.dx, dy: c.dy }]); setChartSel(p.charts.length); },
       copy: () => copy(i) });
   };
   return (
     <For each={p.charts}>{(ch, i) => { const rc = () => p.g.parse(ch.cell); return (
-      <div class="schart" data-i={i()} classList={{ on: chartSel() === i(), fill: !!p.fill }} style={p.fill ? { left: "0", top: "0", width: `${p.fill[0]}px`, height: `${p.fill[1]}px` } : { left: `${p.g.x(rc()[1])}px`, top: `${p.g.y(rc()[0])}px`, width: `${ch.w}px`, height: `${ch.h}px` }}
+      <div class="schart" data-i={i()} classList={{ on: chartSel() === i(), fill: !!p.fill }} style={p.fill ? { left: "0", top: "0", width: `${p.fill[0]}px`, height: `${p.fill[1]}px` } : { left: `${p.g.x(rc()[1]) + (ch.dx ?? 0)}px`, top: `${p.g.y(rc()[0]) + (ch.dy ?? 0)}px`, width: `${ch.w}px`, height: `${ch.h}px` }}
         onMouseDown={e => { if (e.button === 0) drag(e, i(), "move"); else { e.stopPropagation(); if (chartSel() !== i()) setChartPart(""); setChartSel(i()); } }}
         onDblClick={e => { e.stopPropagation(); const p0 = partOf(e), cur = chartPart(), pt = cur.startsWith("p") && p0.startsWith("s") && seriesOf(cur) === +p0.slice(1) ? cur : p0; setChartPart(pt === "area" ? "" : pt); setEditTitle(null); setFmtChart(ch.id); }}
         onContextMenu={e => { e.preventDefault(); e.stopPropagation(); const p0 = partOf(e), cur = chartSel() === i() ? chartPart() : "", pt = cur.startsWith("p") && p0.startsWith("s") && seriesOf(cur) === +p0.slice(1) ? cur : p0; setChartSel(i()); setChartPart(pt === "area" ? "" : pt); menu(e, i(), pt); }}>
@@ -154,13 +164,7 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
         <Show when={editTitle() === ch.id}><TitleBox c={ch} done={t => { setEditTitle(null); if (t !== null && t !== (ch.title ?? "")) put1(i(), { ...ch, title: t }); p.focus(); }} /></Show>
         <Show when={chartSel() === i()}>
           <Show when={!p.fill}><i class="ch-e" onMouseDown={e => drag(e, i(), "e")} /><i class="ch-s" onMouseDown={e => drag(e, i(), "s")} /><i class="ch-se" onMouseDown={e => drag(e, i(), "se")} /></Show>
-          <div class="ch-tools" onMouseDown={e => e.stopPropagation()}>
-            <button title="Format Chart: type, data, series, axes and looks (or double-click a part of the chart)" onClick={() => setFmtChart(ch.id)}>Format</button>
-            <button title="Copy the chart as a picture, sharp, to paste into a document, slides or a workbook" onClick={async () => { const { chartCanvas } = await import("./xchart"); const cv = await chartCanvas(ch, p.data?.[i()], 2); (await import("./picture")).copyCanvas(cv, "Chart", 16); }}>Copy</button>
-            <button title="Remove the chart" onClick={() => { p.put(p.charts.filter((_, j) => j !== i())); setChartSel(-1); }}>×</button>
-            <button title="More: chart type, templates, pictures, order" onClick={e => menu(e, i(), chartPart() || "area")}>⋯</button>
-          </div>
-          <SideButtons t={chartCtl} />
+          <SideButtons t={chartCtl} more={e => menu(e, i(), chartPart() || "area")} />
         </Show>
       </div>); }}</For>
   );

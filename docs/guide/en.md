@@ -464,9 +464,10 @@ While a chart is selected, the ribbon shows **Chart Tools › Chart Design**:
 - **Change Chart Type:** every type on the left (column, bar, line, area, scatter, pie, combo), its variants drawn small with your data, and a large preview. **Combo** sets each series' type (columns, line, area) and whether it is on the secondary axis, with shortcuts for columns and a line.
 - Format Chart, Reset to Match Style and Save as Picture.
 
-Beside a selected chart are three buttons:
+Beside a selected chart are four buttons (nothing covers the chart itself):
 - **+ (Chart Elements):** tick an element on or off; the arrow beside it gives its options.
 - **Brush (Chart Styles):** the styles drawn with the chart's data, and a **Colour** tab.
+- **⋯:** the chart's menu, as on a right-click (Format, Copy as Picture, Delete and the rest).
 - **Funnel (Chart Filters):** untick a series or a category to leave it out of the chart; the cells stay as they are, and **Select all** brings everything back. A workbook export leaves hidden series out too.
 
 **Select Data** (Chart Design, or right-click) lists the series: add, remove and reorder them, untick one to leave it out, and give each its name and cells. **Pick…** beside a box hides the dialog: select the cells on the sheet (another tab works too) and press [[Enter]]. The category labels are picked the same way. **Switch Row/Column** and how **empty cells** show (gaps, zero, or the line joined over them) are there too.

@@ -1057,6 +1057,30 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(300);
     const cc = (await charts())?.[0];
     check("…and OK changes the chart (columns with a line on the secondary axis)", cc?.kind === "column" && cc.series.some(x => x.kind === "line" && x.y2), JSON.stringify(cc?.series).slice(0, 300));
+    // 0.9.23: a chart follows the pointer smoothly and stays where it is dropped; File closes the Format pane; the style previews
+    // show shapes only; the chart's menu button sits beside it, nothing over the chart.
+    { await p.click(".schart", { position: { x: 3, y: 150 } }); await p.waitForTimeout(150);
+      const r0 = await p.$eval(".sheetgrid .schart", e => { const r = e.getBoundingClientRect(); return [r.left, r.top]; });
+      await p.mouse.move(r0[0] + 3, r0[1] + 150); await p.mouse.down();
+      for (let k = 1; k <= 10; k++) await p.mouse.move(r0[0] + 3 + k * 4.1, r0[1] + 150 + k * 2.3);
+      const mid1 = await p.$eval(".sheetgrid .schart", e => { const r = e.getBoundingClientRect(); return [r.left, r.top]; });
+      await p.mouse.up(); await p.waitForTimeout(300);
+      const r1 = await p.$eval(".sheetgrid .schart", e => { const r = e.getBoundingClientRect(); return [r.left, r.top]; });
+      check("dragging a chart moves it with the pointer, without jumps", Math.abs(mid1[0] - r0[0] - 41) < 2 && Math.abs(mid1[1] - r0[1] - 23) < 2, `${r0} ${mid1}`);
+      check("…and it stays exactly where it is dropped (a cell and an offset in it)", Math.abs(r1[0] - mid1[0]) < 2 && Math.abs(r1[1] - mid1[1]) < 2 && ((await charts())?.[0].dx ?? 0) + ((await charts())?.[0].dy ?? 0) > 0, `${mid1} ${r1} ${JSON.stringify((await charts())?.[0]).slice(0, 120)}`);
+      check("no buttons sit over the chart: its menu button is beside it", !(await p.$(".schart .ch-tools")) && !!(await p.$(".schart .ch-side .chmore")));
+      await p.click(".schart .ch-side .chmore"); await p.waitForTimeout(150);
+      check("…and it gives the chart's menu", ((await p.textContent(".menu")) ?? "").includes("Change Chart Type"));
+      await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+      await p.click(".ch-side button[title^='Chart Styles']"); await p.waitForTimeout(200);
+      check("the style previews show the look only, no jumbled text", (await p.$$(".chpop .chgal svg")).length >= 6 && (await p.$$(".chpop .chgal svg text")).length === 0);
+      await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+      await p.click(".schart", { position: { x: 3, y: 150 } }); await p.waitForTimeout(100);
+      await p.click(".ribbon button:has-text('Format Chart')"); await p.waitForTimeout(250);
+      check("the sheet scrolls so the Format pane does not cover the chart", await p.evaluate(() => { const c = document.querySelector(".sheetgrid .schart.on")?.getBoundingClientRect(), q = document.querySelector(".ganttview > .chartpane")?.getBoundingClientRect(); return !!c && !!q && c.right <= q.left + 2; }));
+      await p.click(".tabs .file"); await p.waitForTimeout(300);
+      check("File closes the Format pane: it never shows over the backstage", !(await p.$(".chartpane")));
+      await p.click(".bs aside .back"); await p.waitForTimeout(300); }
     // 0.9.22: a data table; one bar's own colour; Select Data with ranges picked on the sheet; Move Chart to a chart sheet and back.
     await p.click(".schart", { position: { x: 3, y: 150 } }); await p.waitForTimeout(150);
     await p.click(".ribbon button:has-text('Format Chart')"); await p.waitForTimeout(250);

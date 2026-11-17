@@ -11,7 +11,7 @@ export type Axis = { title?: string; min?: number | null; max?: number | null; m
 export type Series = { name: string; vals: string; kind?: string; y2?: boolean; color?: string; width?: number; dash?: string; marker?: string; smooth?: boolean; labels?: boolean; trend?: string; hide?: boolean; pts?: { i: number; color: string }[]; lpos?: string; lwhat?: string;
   /** In the window only: a soft fill under a line, and a pie's own slice colours. */
   fill?: boolean; colors?: string[] };
-export type ChartDef = { id: number; cell: string; w: number; h: number; kind: string; stack?: string; cats: string; series: Series[]; title?: string; legend?: string; labels?: boolean; font?: number; x?: Axis; y?: Axis; y2?: Axis; bg?: string; plot?: string; gap?: number; skip?: number[]; table?: boolean; empty?: string;
+export type ChartDef = { id: number; cell: string; w: number; h: number; kind: string; stack?: string; cats: string; series: Series[]; title?: string; legend?: string; labels?: boolean; font?: number; x?: Axis; y?: Axis; y2?: Axis; bg?: string; plot?: string; gap?: number; skip?: number[]; table?: boolean; empty?: string; dx?: number; dy?: number;
   /** In the window's views only: a subtitle, the status date's line, the last value at each line's end,
    *  rounded bars, a time axis (x by date, ticks named), and no "no data" text. */
   subtitle?: string; marker?: { at: number; label: string } | null; ends?: boolean; radius?: number; quiet?: boolean;

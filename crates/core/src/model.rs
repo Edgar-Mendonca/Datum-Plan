@@ -589,6 +589,8 @@ pub struct SheetChart {
     pub table: bool,
     /// Empty cells shown as gaps (""), as zero ("zero"), or lines joined over them ("span").
     pub empty: String,
+    /// Where the chart sits inside its anchor cell (px from the cell's top-left corner).
+    pub dx: u16, pub dy: u16,
 }
 /// One bar or point with its own colour (its position in the series).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -626,6 +628,7 @@ impl SheetChart {
         self.legend = pick(&self.legend, &["bottom", "top", "right", "left", "none"]);
         self.empty = pick(&self.empty, &["zero", "span"]);
         (self.w, self.h) = (self.w.clamp(120, 4000), self.h.clamp(80, 4000));
+        (self.dx, self.dy) = (self.dx.min(2000), self.dy.min(2000));
         self.font = if self.font.is_finite() && self.font > 0.0 { self.font.clamp(6.0, 36.0) } else { 0.0 };
         self.gap = self.gap.min(500);
         self.series.truncate(40);

@@ -382,7 +382,7 @@ const Sheet = (p: { pg: Page; pages: number }) => {
 export type PKind = "gantt" | "net" | "cal" | "table" | "flow";
 export const pkind = (): PKind => { const v = view(); return ["gantt", "tracking", "timeline"].includes(v) ? "gantt" : v === "network" ? "net" : v === "calendar" ? "cal" : ["ressheet", "taskusage", "resusage", "team", "sheets"].includes(v) ? "table" : "flow"; };
 const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet", simrisk: "Schedule Risk", lookahead: "Look-ahead", manpower: "Manpower", dashboard: "Dashboard", scurve: "S-Curves", progress: "Progress Report" };
-type PT = { rowAt?: number[]; colAt?: number[]; nrows?: number; titlesOut?: boolean; cbreaks?: number[]; bars?: Map<string, [number, string]>; flags?: Set<string>; r0?: number; c0?: number; head: string[]; w: number[]; right: boolean[]; h?: number[]; bare?: boolean; grid?: boolean; center?: boolean; titles?: [number, number]; breaks?: number[]; font?: number; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
+type PT = { rowAt?: number[]; colAt?: number[]; nrows?: number; titlesOut?: boolean; cbreaks?: number[]; bars?: Map<string, [number, string]>; flags?: Set<string>; r0?: number; c0?: number; head: string[]; w: number[]; right: boolean[]; h?: number[]; bare?: boolean; grid?: boolean; center?: boolean; titles?: [number, number]; breaks?: number[]; font?: number; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number; dx?: number; dy?: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
 const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
 const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox(), netSums(), netWbs()] as const), async ([v]) => {
@@ -439,7 +439,7 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     // Charts print as vectors, like pictures at their cell.
     if (sh.charts?.length) {
       const [{ chartSvg, svgUrl }, data] = await Promise.all([import("./xchart"), call<import("./xchart").ChartData[]>("sheet_charts", { k })]);
-      t.imgs = [...(t.imgs ?? []), ...sh.charts.flatMap((ch, i) => { const a = ref(ch.cell); if (!a || a[0] < r0 || a[0] > r1 || a[1] < c0 || a[1] > c1) return []; return [{ src: svgUrl(chartSvg(ch, data?.[i])), r: a[0] - r0, c: a[1] - c0 + 1, w: ch.w, h: ch.h }]; })];
+      t.imgs = [...(t.imgs ?? []), ...sh.charts.flatMap((ch, i) => { const a = ref(ch.cell); if (!a || a[0] < r0 || a[0] > r1 || a[1] < c0 || a[1] > c1) return []; return [{ src: svgUrl(chartSvg(ch, data?.[i])), dx: ch.dx, dy: ch.dy, r: a[0] - r0, c: a[1] - c0 + 1, w: ch.w, h: ch.h }]; })];
     }
     t.flags = new Set(rows.flatMap((r, i) => cs.flatMap((c, j) => (sh.fmt?.[col(c) + (r + 1)] === "flag" ? [`${i},${j + 1}`] : []))));
     // Title rows: inside the print area they repeat from page 2; above it they print at the top of every page.
@@ -567,7 +567,7 @@ const TablePage = (p: { t: PT; pg: VPage }) => {
       </table>
       <For each={t.imgs?.filter(im => im.r >= r0 && im.r < r1 && p.pg.cols!.includes(im.c))}>{im => {
         const x = p.pg.cols!.slice(0, p.pg.cols!.indexOf(im.c)).reduce((a, c) => a + t.w[c], 0);
-        return <img class="psimg" src={im.src} alt="" style={{ left: `${x}px`, top: `${yOf(im.r)}px`, width: `${im.w}px`, height: `${im.h}px` }} />; }}</For>
+        return <img class="psimg" src={im.src} alt="" style={{ left: `${x + (im.dx ?? 0)}px`, top: `${yOf(im.r) + (im.dy ?? 0)}px`, width: `${im.w}px`, height: `${im.h}px` }} />; }}</For>
     </div>
   );
 };
