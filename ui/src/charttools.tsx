@@ -4,11 +4,11 @@
 // Every change goes through the chart's own `set`, so each is one Undo step.
 import { For, JSX, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { ChartData, ChartDef, Series, Axis, PALETTE, XChart, colorOf, kindOf } from "./xchart";
-import { openDialog, closeDialog, openMenu, Item, toast } from "./store";
+import { openDialog, closeDialog, openMenu, Item, toast, P, act } from "./store";
 import { Dialog } from "./ui";
 
 /** What the tools work on: a chart, its data, how to change it, and how to open its Format pane. */
-export type ChartCtl = { c: ChartDef; d?: ChartData; set: (c: ChartDef) => void; format: (part: string) => void; a1?: (r: number, c: number) => string; parse?: (a: string) => [number, number] };
+export type ChartCtl = { c: ChartDef; d?: ChartData; set: (c: ChartDef) => void; format: (part: string) => void; a1?: (r: number, c: number) => string; parse?: (a: string) => [number, number]; k?: number; move?: () => void };
 
 const SAFE = ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7", "#56B4E9", "#C9B200", "#5E6A78"];
 /** Colour sets for Change Colours: the series take them in turn. */
@@ -198,6 +198,95 @@ export const changeType = (t: ChartCtl) => openDialog(() => {
         </Show>
         <div class="ctprev">{(() => <Thumb c={{ ...cur(), font: 11 }} d={t.d} w={540} h={290} />) as unknown as JSX.Element}</div>
       </div>
+    </div>
+  </Dialog>;
+});
+
+// ---------- ranges: picking them on the sheet, naming their sheet ----------
+const quote = (n: string) => (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(n) ? n : `'${n.replace(/'/g, "''")}'`);
+/** A chart's ranges with their sheet named, so they read the same cells from another sheet. */
+export const qualify = (c: ChartDef, sheet: string): ChartDef => {
+  const q = (r: string) => (!r || r.includes("!") ? r : `${quote(sheet)}!${r}`);
+  return { ...c, cats: q(c.cats), series: c.series.map(s => ({ ...s, vals: q(s.vals), name: s.name.startsWith("=") ? `=${q(s.name.slice(1))}` : s.name })) };
+};
+/** While a range is being picked: what for, and where the answer goes. The dialogs hide meanwhile. */
+export const [picking, setPicking] = createSignal<{ label: string; k: number; done: (r: string | null) => void } | null>(null);
+const pick = (label: string, k: number, done: (r: string) => void) => { document.body.classList.add("picking"); setPicking({ label, k, done: r => { document.body.classList.remove("picking"); setPicking(null); if (r) done(r); } }); };
+/** The bar shown while picking: the selection as it is, Enter keeps it, Esc goes back. */
+export const PickBar = (p: { sel: () => { k: number; name: string; range: string } | null }) => {
+  const ref = () => { const s = p.sel(), q = picking(); return !s || !q ? "" : s.k === q.k ? s.range : `${quote(s.name)}!${s.range}`; };
+  const key = (e: KeyboardEvent) => { const q = picking(); if (!q) return; if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); q.done(ref()); } else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); q.done(null); } };
+  onMount(() => addEventListener("keydown", key, true)); onCleanup(() => removeEventListener("keydown", key, true));
+  return <Show when={picking()}>{q => <div class="pickbar" onMouseDown={e => e.stopPropagation()}><b>{q().label}</b><span>Select the cells on the sheet (another tab works too)</span><code>{ref() || "…"}</code>
+    <button class="btn sm pri" onClick={() => q().done(ref())}>OK</button><button class="btn sm" onClick={() => q().done(null)}>Cancel</button></div>}</Show>;
+};
+
+// ---------- Select Data ----------
+/** Select Data Source: each series' name and cells, added, removed and ordered; the categories;
+ *  Switch Row/Column; how empty cells show. Every range can be picked on the sheet. */
+export const selectData = (t: ChartCtl) => openDialog(() => {
+  const [cur, setCur] = createSignal<ChartDef>(t.c), [at, setAt] = createSignal(0);
+  const s = () => cur().series[at()];
+  const setS = (x: Partial<Series>) => setCur({ ...cur(), series: cur().series.map((y, j) => (j === at() ? { ...y, ...x } : y)) });
+  const k = t.k ?? -1;
+  const Field = (q: { l: string; v: string; set: (v: string) => void; ph?: string }) => <label class="sdf"><span>{q.l}</span><input value={q.v} placeholder={q.ph} onChange={e => q.set(e.currentTarget.value.trim())} />
+    <button class="btn sm" title="Pick the cells on the sheet" onClick={() => pick(q.l, k, q.set)}>Pick…</button></label>;
+  const move = (dir: number) => { const v = [...cur().series], i = at(), j = i + dir; if (j < 0 || j >= v.length) return; [v[i], v[j]] = [v[j], v[i]]; setCur({ ...cur(), series: v }); setAt(j); };
+  return <Dialog title="Select Data Source" wide ok={() => { t.set(cur()); }}>
+    <div class="sdata">
+      <div class="sdcols">
+        <section><h4>Legend Entries (Series)</h4>
+          <div class="inline"><button class="btn sm" disabled={cur().series.length >= 40} onClick={() => { setCur({ ...cur(), series: [...cur().series, { name: `Series ${cur().series.length + 1}`, vals: "", color: PALETTE[cur().series.length % PALETTE.length] }] }); setAt(cur().series.length - 1); }}>+ Add</button>
+            <button class="btn sm" disabled={cur().series.length < 2} onClick={() => { setCur({ ...cur(), series: cur().series.filter((_, j) => j !== at()) }); setAt(Math.max(0, at() - 1)); }}>Remove</button>
+            <button class="btn sm" disabled={at() === 0} onClick={() => move(-1)}>▲</button><button class="btn sm" disabled={at() >= cur().series.length - 1} onClick={() => move(1)}>▼</button></div>
+          <div class="sdlist"><For each={cur().series}>{(x, i) => <button classList={{ on: i() === at() }} onClick={() => setAt(i())}><input type="checkbox" checked={!x.hide} title="Shown in the chart" onClick={e => e.stopPropagation()} onChange={e => setCur({ ...cur(), series: cur().series.map((y, j) => (j === i() ? { ...y, hide: !e.currentTarget.checked } : y)) })} /><i class="cfsw" style={{ background: colorOf(cur(), i()) }} />{sname({ ...t, c: cur() }, i())}</button>}</For></div>
+          <Show when={s()}><Field l="Series name" v={s()!.name} set={v => setS({ name: v })} ph="Text, or =B1 from a cell" /><Field l="Series values" v={s()!.vals} set={v => setS({ vals: v })} ph="B2:B20" /></Show>
+        </section>
+        <section><h4>Horizontal (Category) Axis Labels</h4>
+          <Field l="Axis labels" v={cur().cats} set={v => setCur({ ...cur(), cats: v })} ph="A2:A20" />
+          <div class="sdcats"><For each={(t.d?.cats ?? []).slice(0, 12)}>{x => <span>{x}</span>}</For><Show when={(t.d?.cats.length ?? 0) > 12}><span class="muted">… {t.d!.cats.length - 12} more</span></Show></div>
+          <p class="muted">The labels shown are the chart's as it is now; OK reads the new cells.</p>
+        </section>
+      </div>
+      <div class="inline">
+        <Show when={t.a1 && t.parse}><button class="btn sm" onClick={() => { const n = switchRowCol(cur(), t.a1!, t.parse!); if (n) { setCur(n); setAt(0); } else toast("Switch Row/Column needs series that each read one column (or one row) of cells, side by side, over the same rows.", false); }}>Switch Row/Column</button></Show>
+        <span class="grow" />
+        <label>Empty cells as <select value={cur().empty ?? ""} onChange={e => setCur({ ...cur(), empty: e.currentTarget.value })}><option value="">Gaps</option><option value="zero">Zero</option><option value="span">Connect the line</option></select></label>
+      </div>
+    </div>
+  </Dialog>;
+});
+
+// ---------- Move Chart ----------
+/** Move Chart: to a chart sheet of its own (new), or onto another sheet; its ranges keep reading the
+ *  same cells. Moving the chart out of a chart sheet removes that sheet. One Undo step. */
+export const moveChart = (k: number, i: number, after: (k: number) => void) => openDialog(() => {
+  const sheets = P().sheets, src = sheets[k], ch = (src.charts ?? [])[i] as ChartDef | undefined;
+  const free = () => { let n = 1; while (sheets.some(s => s.name.toLowerCase() === `chart${n}`)) n++; return `Chart${n}`; };
+  const others = sheets.map((s, j) => [j, s] as const).filter(([j, s]) => j !== k && !s.chartsheet);
+  const [where, setWhere] = createSignal(src.chartsheet ? "object" : "new"), [name, setName] = createSignal(free()), [to, setTo] = createSignal(others[0]?.[0] ?? -1);
+  const ok = async () => {
+    if (!ch) return;
+    const c = qualify(ch, src.name), rest = (src.charts ?? []).filter((_, j) => j !== i);
+    const drop = src.chartsheet ? [{ Sheet: { k, sheet: null } }] : [{ SheetCharts: { k, charts: rest } }];
+    if (where() === "new") {
+      const n = name().trim();
+      if (!n) { toast("Give the chart sheet a name.", false); return false; }
+      if (!(await act({ Batch: [{ Sheet: { k: null, sheet: { name: n, cells: {}, fmt: {}, widths: {}, chartsheet: true, charts: [{ ...c, id: 0, cell: "A1", w: Math.max(c.w, 1000), h: Math.max(c.h, 640) }] } } }, ...drop] }))) return false;
+      after(P().sheets.findIndex(s => s.name === n));
+    } else {
+      const dst = sheets[to()]; if (!dst) { toast("There is no other sheet to put it on.", false); return false; }
+      const into = [...(dst.charts ?? []), { ...c, id: 0, cell: "B2", w: src.chartsheet ? 640 : c.w, h: src.chartsheet ? 380 : c.h }];
+      if (!(await act({ Batch: [{ SheetCharts: { k: to(), charts: into } }, ...drop] }))) return false;
+      after(P().sheets.findIndex(s => s.name === dst.name));
+    }
+  };
+  return <Dialog title="Move Chart" ok={ok}>
+    <div class="form mvchart"><p class="muted">Choose where the chart goes:</p>
+      <label class="chk"><input type="radio" name="mv" checked={where() === "new"} onChange={() => setWhere("new")} />New sheet:</label>
+      <input value={name()} disabled={where() !== "new"} onInput={e => setName(e.currentTarget.value)} />
+      <label class="chk"><input type="radio" name="mv" checked={where() === "object"} disabled={!others.length} onChange={() => setWhere("object")} />Object in:</label>
+      <select disabled={where() !== "object" || !others.length} value={to()} onChange={e => setTo(+e.currentTarget.value)}><For each={others}>{([j, s]) => <option value={j}>{s.name}</option>}</For></select>
     </div>
   </Dialog>;
 });

@@ -133,7 +133,7 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[]; hide_rows?: number[]; hide_cols?: number[]; notes?: Record<string, string>; filter?: SheetFilter | null; valid?: Validation[]; charts?: import("./xchart").ChartDef[] }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[]; hide_rows?: number[]; hide_cols?: number[]; notes?: Record<string, string>; filter?: SheetFilter | null; valid?: Validation[]; charts?: import("./xchart").ChartDef[]; chartsheet?: boolean }
 /** AutoFilter: the range (headings in its first row) and each filtered column (0-based on the sheet). */
 export interface SheetFilter { range: string; cols: ColFilter[] }
 export interface ColFilter { col: number; values?: string[] | null; op: string; a: string; b: string }

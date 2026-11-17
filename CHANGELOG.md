@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.22 — 2026-11-17
+
+Chart data, chart sheets and the finer details.
+
+- **Select Data:** each series' name and cells, added, removed, reordered or left out; the category labels; Switch Row/Column; how empty cells show. **Pick…** hides the dialog so you can select the cells on the sheet (or another tab) and press Enter.
+- **Chart sheets and Move Chart:** move a chart to a tab of its own, where it fills the window, or onto another sheet; its ranges keep reading the same cells. A chart sheet prints the chart alone and goes into a workbook as a chart sheet.
+- **Data table** under the chart: each series' values under its category, with its colour key (also in the workbook).
+- **One bar or point in its own colour:** click a selected series again to select one bar, then right-click › Point Colour.
+- **Date axes by month:** dates a month apart read as Jun-27 (a year apart as 2027) unless the axis has its own format; **Label angle** (level, slanted, upright) and **Label every** set how the labels sit.
+- **Data labels** show the value, the series name, the category or both, outside or inside the end, centred or at the base (above, below or centred on a line).
+- **Empty cells** show as gaps, as zero, or with the line joined over them.
+
 ## 0.9.21 — 2026-11-17
 
 Chart Tools: the ribbon tab and the buttons beside a chart.

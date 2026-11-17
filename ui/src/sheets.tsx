@@ -2,7 +2,7 @@
 // a spreadsheet: type = and click cells to build a formula, functions are suggested as you type, the fill
 // handle and paste carry formulas along, and the plan is read live by name: Tasks[Finish],
 // Resources[Country], ProjectFinish. The GridCraft engine (in crates/core) calculates everything.
-import { JSX, For, Show, batch, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js";
+import { JSX, For, Show, batch, createEffect, createMemo, createResource, createSignal, onCleanup, onMount, on } from "solid-js";
 import { SheetOut, SheetData, SheetPage } from "./api";
 import { act, call, grid, P, tick, openMenu, toast, Item, out, setOut } from "./store";
 import type { Out } from "./api";
@@ -15,6 +15,7 @@ import { Help } from "./help";
 import { SheetImage } from "./api";
 import { pictureMenu, picData } from "./pictures";
 import { ChartLayer, ChartPane, chartSel, setChartSel, fmtChart, setFmtChart, chartPart, setChartPart, withPoint } from "./sheetcharts";
+import { PickBar } from "./charttools";
 import { ChartData, ChartDef, chartFrom } from "./xchart";
 import { autoHeights, fitBox, sheetK, setSheetK, sheetMode, setSheetMode, sheetZoom, zoomSheet } from "./sheetlayout";
 import { sheetPages, SheetPagesView, pageRoom } from "./print";
@@ -841,8 +842,14 @@ export const Sheets = () => {
   const putImgs = (images: SheetImage[]) => act({ SheetImages: { k: k(), images } });
   // Charts on the sheet: their data comes from the engine, read from their ranges after every edit.
   const charts = () => (sheet()?.charts ?? []) as ChartDef[];
+  const isCS = () => !!sheet()?.chartsheet;
+  const [csSize, setCsSize] = createSignal<[number, number]>([900, 560]);
+  const csRo = new ResizeObserver(es => { const r = es[0]?.contentRect; if (r && r.width > 40 && r.height > 40) setCsSize([Math.floor(r.width) - 24, Math.floor(r.height) - 24]); });
+  onCleanup(() => csRo.disconnect());
+  // A chart sheet's chart is selected when its tab opens; another tab starts with no chart selected.
+  createEffect(on(k, () => { setChartPart(""); setChartSel(isCS() ? 0 : -1); }));
   const [chartData] = createResource(() => [tick(), k(), charts().length], () => (charts().length ? call<ChartData[]>("sheet_charts", { k: k() }) : Promise.resolve([] as ChartData[])));
-  const putCharts = (list: ChartDef[]) => act({ SheetCharts: { k: k(), charts: list } });
+  const putCharts = (list: ChartDef[], kk = k()) => act({ SheetCharts: { k: kk, charts: list } });
   /** Insert › Chart: from the selected cells (first column the categories, first row the names), placed beside them. */
   const insertChart = (kind = "column") => {
     const b = bounds(), shown = new Map((data()?.cells ?? []).map(x => [x[0], x[2]]));
@@ -1196,14 +1203,17 @@ export const Sheets = () => {
         <button class="btn sm" title="One value of one task (its finish, % complete…), live" onClick={taskValue}>Task value…</button>
       </div>
       <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan: dashboards, quantities, estimates, vendor lists. They read the plan live, so nothing is copied by hand.</p><div class="row2"><button class="btn pri" onClick={addSheet}>Add a sheet</button><button class="btn" onClick={() => import("./ribbon").then(m => m.importWorkbook())}>Bring in a workbook…</button></div></div>}>
-        <div class="fbar"><input class="fname" list="sheetnames" title="Name Box: type a cell, a range (B12, A1:D20, Sheet2!A1) or a defined name and press Enter to go there; a new name names the selection" value={home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : selA1()}
+        <Show when={isCS()}><div class="chsheet" tabindex="0" ref={el => csRo.observe(el)} onKeyDown={e => { if (["Delete", "Backspace", "Escape"].includes(e.key)) key(e); }} onMouseDown={e => { if (e.target === e.currentTarget) { setChartPart(""); setChartSel(0); } }}>
+          <ChartLayer k={k()} charts={charts().slice(0, 1)} data={chartData()} put={putCharts} focus={() => (document.querySelector(".chsheet") as HTMLElement | null)?.focus()} fill={csSize()} moved={setK}
+            g={{ x: () => 0, y: () => 0, cell: () => [0, 0], a1, parse: parseA1, zoom: () => 1 }} /></div></Show>
+        <div class="fbar" classList={{ csoff: isCS() }}><input class="fname" list="sheetnames" title="Name Box: type a cell, a range (B12, A1:D20, Sheet2!A1) or a defined name and press Enter to go there; a new name names the selection" value={home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : selA1()}
           onFocus={e => e.currentTarget.select()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); if (goTo(e.currentTarget.value)) box?.focus(); } if (e.key === "Escape") { e.currentTarget.value = selA1(); box?.focus(); } }} /><Show when={aggregate(S, (r, c) => { const x = cells().get(a1(r, c)); return x?.[3] ? x[2] : ""; })}>{t => <span class="agg">{t()}</span>}</Show>
           <button class="fx" title="Insert Function" onMouseDown={e => e.preventDefault()} onClick={insertFn}>fx</button>
           <textarea class="fbin" rows={1} spellcheck={false} ref={barEl} value={edit() ?? curCell()?.[1] ?? ""} placeholder={curCell() && curCell()![1] === "" ? "(the result of a formula above or to the left)" : ""}
             style={{ height: `${Math.min(6, (edit() ?? curCell()?.[1] ?? "").split("\n").length) * 17 + 10}px` }}
             onFocus={() => { lastEl = "bar"; if (edit() === null) startEdit(input(k(), ...cur())); }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} /></div>
         <Show when={sheetMode() === "layout"}><div class="slayoutwrap" title="The pages as they will print. Double-click to go back to the cells." onDblClick={() => setSheetMode("normal")}><SheetPagesView zoom={0.85 * sheetZoom()} /></div></Show>
-        <div class="gscroll sheetgrid" classList={{ breaks: sheetMode() === "breaks", hidden: sheetMode() === "layout" }} ref={el => { box = el; ro.observe(el); el.addEventListener("wheel", e => { if (!e.ctrlKey) return; e.preventDefault(); zoomSheet(e.deltaY < 0 ? 1 : -1); }, { passive: false }); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste} onScroll={() => { const z = sheetZoom(); setTop(box.scrollTop); if ((box.scrollTop + box.clientHeight) / z > top_(nrows()) - 300) setReach([nrows(), reach()[1]]); if ((box.scrollLeft + box.clientWidth) / z > (lefts()[ncols() - 1] ?? 0) - 200) setReach([reach()[0], ncols()]); }}
+        <div class="gscroll sheetgrid" classList={{ breaks: sheetMode() === "breaks", hidden: sheetMode() === "layout" || isCS() }} ref={el => { box = el; ro.observe(el); el.addEventListener("wheel", e => { if (!e.ctrlKey) return; e.preventDefault(); zoomSheet(e.deltaY < 0 ? 1 : -1); }, { passive: false }); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste} onScroll={() => { const z = sheetZoom(); setTop(box.scrollTop); if ((box.scrollTop + box.clientHeight) / z > top_(nrows()) - 300) setReach([nrows(), reach()[1]]); if ((box.scrollLeft + box.clientWidth) / z > (lefts()[ncols() - 1] ?? 0) - 200) setReach([reach()[0], ncols()]); }}
           onContextMenu={e => { e.preventDefault(); if (edit() === null) cellMenu(e); }} onMouseOver={noteHover} onMouseLeave={() => setHover(null)} onDblClick={() => { if (edit() === null) startEdit(input(k(), ...cur())); }}>
           <div class="gsheet" style={{ width: `${lefts()[ncols() - 1] + width(ncols() - 1) + 40}px`, height: `${top_(nrows()) + RH}px`, zoom: sheetZoom() }}>
             <div class="ghead" style={{ height: `${RH}px` }}>
@@ -1229,7 +1239,7 @@ export const Sheets = () => {
               </>}</Show>
               <Show when={sheetMode() === "breaks"}><For each={sheetPages()}>{pg => <div class="pbreak" style={{ left: `${lefts()[pg.c0]}px`, top: `${top_(pg.r0)}px`, width: `${lefts()[pg.c1] + width(pg.c1) - lefts()[pg.c0]}px`, height: `${top_(pg.r1 + 1) - top_(pg.r0)}px` }}><span>Page {pg.n}</span></div>}</For></Show>
               <For each={boxes()}>{b => <div class="refbox" style={{ left: `${lefts()[b.c0]}px`, top: `${top_(b.r0)}px`, width: `${lefts()[b.c1] + width(b.c1) - lefts()[b.c0]}px`, height: `${top_(Math.min(b.r1, nrows() - 1) + 1) - top_(b.r0)}px`, "border-color": b.color, background: `${b.color}14` }} />}</For>
-              <ChartLayer k={k()} charts={charts()} data={chartData()} put={putCharts} focus={() => box.focus()} g={{ x: c => lefts()[c] ?? 0, y: r => top_(r), cell: at, a1, parse: parseA1, zoom: sheetZoom }} />
+              <ChartLayer k={k()} charts={isCS() ? [] : charts()} data={chartData()} put={putCharts} focus={() => box.focus()} g={{ x: c => lefts()[c] ?? 0, y: r => top_(r), cell: at, a1, parse: parseA1, zoom: sheetZoom }} />
               <For each={imgs()}>{(im, i) => { const rc = () => parseA1(im.cell), box2 = () => picBox(im); return (
                 <div class="simg" data-i={i()} classList={{ on: picSel() === i(), fit: !!im.fit }} style={{ left: `${box2()[0]}px`, top: `${box2()[1]}px`, width: `${box2()[2]}px`, height: `${box2()[3]}px` }}
                   title={im.fit ? "Placed in the cell: it follows the cell's size. Drag to move it to another cell." : "Drag to move; drag the corner to resize; Delete removes it"} onMouseDown={e => picDrag(e, i(), false)}>
@@ -1250,6 +1260,7 @@ export const Sheets = () => {
           </div>
         </div>
       </Show>
+      <PickBar sel={() => { if (isCS()) return null; const b = bounds(), r = b.r0 === b.r1 && b.c0 === b.c1 ? a1(b.r0, b.c0) : `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}`; return { k: k(), name: sheet()?.name ?? "", range: r }; }} />
       <Show when={hover()}>{n => <div class="snote" style={{ left: `${Math.min(n().x, innerWidth - 260)}px`, top: `${n().y}px` }}>{n().t}</div>}</Show>
       <Show when={edit() !== null && (sugs().length || sig())}>
         <div class="fhint" style={hintPos()} onMouseDown={e => e.preventDefault()}>
@@ -1266,7 +1277,7 @@ export const Sheets = () => {
               onDragStart={e => { setDragTab(i()); e.dataTransfer?.setData("text/plain", String(i())); }} onDragEnd={() => setDragTab(-1)} onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); const f = dragTab(); setDragTab(-1); if (f >= 0 && f !== i()) act({ SheetMove: { from: f, to: i() } }).then(() => setK(i())); }}
               onMouseDown={e => { if (pointing()) e.preventDefault(); }} onClick={() => setK(i())} onContextMenu={e => { e.preventDefault(); setK(i()); tabMenu(e, i()); }} onDblClick={() => setRenaming(i())}
-              title="Double-click to rename; right-click for more; drag to move">{s2.name}</button>}>
+              title="Double-click to rename; right-click for more; drag to move">{s2.chartsheet && <Icon n="chart" />}{s2.name}</button>}>
             <input class="tabname" value={s2.name} ref={el2 => setTimeout(() => { el2.focus(); el2.select(); })} onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter") rename(i(), e.currentTarget.value); if (e.key === "Escape") setRenaming(-1); }} onBlur={e => rename(i(), e.currentTarget.value)} />
           </Show></Show>}</For>
         <button onClick={addSheet} title="New sheet">＋</button>

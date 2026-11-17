@@ -8,7 +8,7 @@ import { ChartData, ChartDef, Series, Axis, KINDS, PALETTE, XChart, colorOf, kin
 import { opts, setOpts, call, toast, openMenu, Item } from "./store";
 import { Options } from "./api";
 import { askText } from "./ui";
-import { ChartCtl, SideButtons, changeType } from "./charttools";
+import { ChartCtl, SideButtons, changeType, selectData, moveChart } from "./charttools";
 
 export const [chartSel, setChartSel] = createSignal(-1);
 export const [fmtChart, setFmtChart] = createSignal<number | null>(null);
@@ -46,7 +46,7 @@ const saveStyle = async (c: ChartDef) => {
 
 /** The right-click menu of a chart (on a sheet, or in a view with `view`), for the part clicked. */
 export const chartMenu = (e: MouseEvent, o: { c: ChartDef; d?: ChartData; part: string; set: (c: ChartDef) => void; format: (part: string) => void; remove?: () => void; title?: () => void;
-  order?: (front: boolean) => void; duplicate?: () => void; copy: () => void; reset?: () => void; extra?: Item[]; pic?: { c: ChartDef; d?: ChartData; name: string } }) => {
+  order?: (front: boolean) => void; duplicate?: () => void; copy: () => void; reset?: () => void; extra?: Item[]; pic?: { c: ChartDef; d?: ChartData; name: string }; move?: () => void }) => {
   const c = o.c, part = o.part, si = seriesOf(part), s = c.series[si];
   const setS = (x: Partial<Series>) => o.set({ ...c, series: c.series.map((y, j) => (j === si ? { ...y, ...x } : y)) });
   const setA = (k: "x" | "y" | "y2", x: Partial<Axis>) => o.set({ ...c, [k]: { ...(c[k] ?? {}), ...x } });
@@ -66,6 +66,7 @@ export const chartMenu = (e: MouseEvent, o: { c: ChartDef; d?: ChartData; part: 
   items.push("-",
     { label: "Change Chart Type…", run: () => changeType({ c, d: o.d, set: o.set, format: o.format }) },
     ...(o.remove ? [{ label: "Select Data…", run: () => o.format("data") }] : []),
+    ...(o.move ? [{ label: "Move Chart…", run: o.move }] : []),
     "-",
     { label: "Save as Template…", run: () => saveStyle(c) },
     { label: "Apply Template", sub: Object.keys(styles).length ? Object.keys(styles).map(n => ({ label: n, run: () => o.set(withLook(c, styles[n])) })) : [{ label: "No templates yet: Save as Template first", off: true }] },
@@ -89,7 +90,8 @@ export const chartMenu = (e: MouseEvent, o: { c: ChartDef; d?: ChartData; part: 
 type Geo = { x: (c: number) => number; y: (r: number) => number; cell: (cx: number, cy: number) => [number, number]; a1: (r: number, c: number) => string; parse: (a: string) => [number, number]; zoom: () => number };
 
 /** The charts of sheet `k` over its cells. */
-export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[]; g: Geo; put: (list: ChartDef[]) => Promise<unknown>; focus: () => void }) => {
+export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[]; g: Geo; put: (list: ChartDef[], k?: number) => Promise<unknown>; focus: () => void;
+  /** A chart sheet: the one chart fills this size and does not move. */ fill?: [number, number]; moved?: (k: number) => void }) => {
   const put1 = (i: number, c: ChartDef) => p.put(p.charts.map((x, j) => (j === i ? c : x)));
   const drag = (e: MouseEvent, i: number, how: string) => {
     e.preventDefault(); e.stopPropagation();
@@ -102,6 +104,7 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
     let next = o;
     const el = () => document.querySelector<HTMLElement>(`.schart[data-i="${i}"]`);
     const mv = (m: MouseEvent) => {
+      if (p.fill) return;
       const dx = (m.clientX - x0) / z, dy = (m.clientY - y0) / z;
       if (how === "move") { const [r, c] = p.g.cell(m.clientX - (x0 - (el()?.getBoundingClientRect().left ?? x0)) + 2, m.clientY - (y0 - (el()?.getBoundingClientRect().top ?? y0)) + 2); if (r >= 0 && c >= 0) next = { ...o, cell: p.g.a1(r, c) }; }
       else {
@@ -124,14 +127,16 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
     };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
-  const fmt = (c: ChartDef) => (pt: string) => { setChartPart(pt === "area" || pt === "data" ? "" : pt); setFmtChart(c.id); if (pt === "data") setPaneTab("series"); };
-  createEffect(() => { const i = chartSel(), c = p.charts[i]; setChartCtl(c ? { c, d: p.data?.[i], set: x => put1(i, x), format: fmt(c), a1: p.g.a1, parse: p.g.parse } : null); });
+  // The tools keep the sheet and charts they were opened on (picking a range may show another tab meanwhile).
+  const ctl = (i: number): ChartCtl | null => { const c = p.charts[i], list = p.charts, kk = p.k; return c ? { c, d: p.data?.[i], set: x => p.put(list.map((y, j) => (j === i ? x : y)), kk), format: fmt(c, i), a1: p.g.a1, parse: p.g.parse, k: p.k, move: () => moveChart(p.k, i, k => { setChartSel(0); setChartPart(""); p.moved?.(k); }) } : null; };
+  const fmt = (c: ChartDef, i: number) => (pt: string) => { if (pt === "data") { const t = ctl(i); if (t) selectData(t); return; } setChartPart(pt === "area" ? "" : pt); setFmtChart(c.id); };
+  createEffect(() => setChartCtl(ctl(chartSel())));
   onCleanup(() => setChartCtl(null));
   const copy = async (i: number) => { const cv = await chartCanvas(p.charts[i], p.data?.[i], 2); (await import("./picture")).copyCanvas(cv, "Chart", 16); };
   const menu = (e: MouseEvent, i: number, part: string) => {
     const c = p.charts[i];
-    chartMenu(e, { c, d: p.data?.[i], part, set: x => put1(i, x), format: fmt(c),
-      remove: () => { p.put(p.charts.filter((_, j) => j !== i)); setChartSel(-1); setFmtChart(null); },
+    chartMenu(e, { c, d: p.data?.[i], part, set: x => put1(i, x), format: fmt(c, i), move: ctl(i)?.move,
+      remove: () => { p.put(p.charts.filter((_, j) => j !== i)); setChartSel(p.fill ? 0 : -1); setFmtChart(null); },
       title: () => { if (!c.title) put1(i, { ...c, title: "Chart Title" }); setEditTitle(c.id); },
       order: front => { const rest = p.charts.filter((_, j) => j !== i); p.put(front ? [...rest, c] : [c, ...rest]); setChartSel(front ? rest.length : 0); },
       duplicate: () => { const [r, cc] = p.g.parse(c.cell); p.put([...p.charts, { ...c, id: 0, cell: p.g.a1(r + 2, cc + 1) }]); setChartSel(p.charts.length); },
@@ -139,14 +144,14 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
   };
   return (
     <For each={p.charts}>{(ch, i) => { const rc = () => p.g.parse(ch.cell); return (
-      <div class="schart" data-i={i()} classList={{ on: chartSel() === i() }} style={{ left: `${p.g.x(rc()[1])}px`, top: `${p.g.y(rc()[0])}px`, width: `${ch.w}px`, height: `${ch.h}px` }}
+      <div class="schart" data-i={i()} classList={{ on: chartSel() === i(), fill: !!p.fill }} style={p.fill ? { left: "0", top: "0", width: `${p.fill[0]}px`, height: `${p.fill[1]}px` } : { left: `${p.g.x(rc()[1])}px`, top: `${p.g.y(rc()[0])}px`, width: `${ch.w}px`, height: `${ch.h}px` }}
         onMouseDown={e => { if (e.button === 0) drag(e, i(), "move"); else { if (chartSel() !== i()) setChartPart(""); setChartSel(i()); } }}
         onDblClick={e => { e.stopPropagation(); const pt = partOf(e); setChartPart(pt === "area" ? "" : pt); setEditTitle(null); setFmtChart(ch.id); }}
         onContextMenu={e => { e.preventDefault(); e.stopPropagation(); const pt = partOf(e); setChartSel(i()); setChartPart(pt === "area" ? "" : pt); menu(e, i(), pt); }}>
-        {(() => { const d = p.data?.[i()]; return <XChart c={ch} d={d} w={ch.w} h={ch.h} sel={chartSel() === i() ? chartPart() || "area" : undefined} />; }) as unknown as JSX.Element}
+        {(() => { const d = p.data?.[i()], [w, h] = p.fill ?? [ch.w, ch.h]; return <XChart c={ch} d={d} w={w} h={h} sel={chartSel() === i() ? chartPart() || "area" : undefined} />; }) as unknown as JSX.Element}
         <Show when={editTitle() === ch.id}><TitleBox c={ch} done={t => { setEditTitle(null); if (t !== null && t !== (ch.title ?? "")) put1(i(), { ...ch, title: t }); p.focus(); }} /></Show>
         <Show when={chartSel() === i()}>
-          <i class="ch-e" onMouseDown={e => drag(e, i(), "e")} /><i class="ch-s" onMouseDown={e => drag(e, i(), "s")} /><i class="ch-se" onMouseDown={e => drag(e, i(), "se")} />
+          <Show when={!p.fill}><i class="ch-e" onMouseDown={e => drag(e, i(), "e")} /><i class="ch-s" onMouseDown={e => drag(e, i(), "s")} /><i class="ch-se" onMouseDown={e => drag(e, i(), "se")} /></Show>
           <div class="ch-tools" onMouseDown={e => e.stopPropagation()}>
             <button title="Format Chart: type, data, series, axes and looks (or double-click a part of the chart)" onClick={() => setFmtChart(ch.id)}>Format</button>
             <button title="Copy the chart as a picture, sharp, to paste into a document, slides or a workbook" onClick={async () => { const { chartCanvas } = await import("./xchart"); const cv = await chartCanvas(ch, p.data?.[i()], 2); (await import("./picture")).copyCanvas(cv, "Chart", 16); }}>Copy</button>

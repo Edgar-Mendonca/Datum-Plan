@@ -469,6 +469,12 @@ Beside a selected chart are three buttons:
 - **Brush (Chart Styles):** the styles drawn with the chart's data, and a **Colour** tab.
 - **Funnel (Chart Filters):** untick a series or a category to leave it out of the chart; the cells stay as they are, and **Select all** brings everything back. A workbook export leaves hidden series out too.
 
+**Select Data** (Chart Design, or right-click) lists the series: add, remove and reorder them, untick one to leave it out, and give each its name and cells. **Pick…** beside a box hides the dialog: select the cells on the sheet (another tab works too) and press [[Enter]]. The category labels are picked the same way. **Switch Row/Column** and how **empty cells** show (gaps, zero, or the line joined over them) are there too.
+
+**Move Chart** (Chart Design › Location, or right-click) puts the chart on a **chart sheet** of its own, a tab that holds only the chart filling the window, as in a spreadsheet; or onto another sheet. Its ranges keep reading the same cells. A chart sheet prints the chart alone, and a workbook export writes it as a chart sheet. Moving the chart back onto a sheet removes the chart sheet.
+
+Click a selected series again to select **one bar or point**: right-click › **Point Colour** gives it its own colour (Format shows it too, with **As the series**). Dates a month apart read as months (Jun-27) unless the axis has its own number format; **Axes › Label angle** (level, slanted, upright) and **Label every** set how the labels sit. **Data table** (Chart Elements or Format) writes each series' values under its category, with its colour key. For data labels, **Labels show** picks the value, the series name, the category or both, and **Label position** puts them outside or inside the end, in the centre or at the base (above, below or centred on a line).
+
 **Format Chart** (double-click, **Format**, or right-click › Format):
 - **Chart:** type, stacking (side by side, stacked, 100 %), title, legend, text size, data labels, the gap between bars, the chart and plot area colours, size, and the category cells.
 - **Series:** each series' name (typed, or =B1 read from a cell), its cells, how it is drawn in a combined chart (columns, line or area), the secondary axis on the right, colour, line width, dashes, markers, smooth lines, data labels and a linear trend line. Add, remove and reorder series.
