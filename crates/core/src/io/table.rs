@@ -470,6 +470,13 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
     // Formulas follow a tab whose name had to change in the workbook.
     let renamed: Vec<(&str, &str)> = c.p.sheets.iter().zip(&names).filter(|(s, n)| s.name != **n).map(|(s, n)| (s.name.as_str(), n.as_str())).collect();
     for (k, s) in c.p.sheets.iter().enumerate() {
+        // A chart sheet: the workbook's own chart sheet with its one chart.
+        if s.chartsheet {
+            let ws = wb.add_chartsheet();
+            ws.set_name(&names[k]).map_err(e)?;
+            if let Some(x) = s.charts.first().and_then(|ch| xl_chart(ch, &c.p.sheets, &names, k)) { ws.insert_chart(0, 0, &x).map_err(e)?; }
+            continue;
+        }
         let ws = wb.add_worksheet();
         ws.set_name(&names[k]).map_err(e)?;
         let sh = book.sheet(k + crate::sheet::BUILT_IN);
@@ -726,7 +733,7 @@ fn xl_range(r: &str, sheets: &[crate::model::SheetData], names: &[String], host:
 /// A chart of a sheet as a native workbook chart: kinds and stacking, a combined chart where series
 /// take their own kind, the secondary axis, colours, lines, markers, labels, trend lines, axes and legend.
 fn xl_chart(ch: &crate::model::SheetChart, sheets: &[crate::model::SheetData], names: &[String], host: usize) -> Option<rust_xlsxwriter::Chart> {
-    use rust_xlsxwriter::{Chart, ChartDataLabel, ChartFormat, ChartLegendPosition, ChartLine, ChartLineDashType, ChartMarker, ChartMarkerType, ChartSolidFill, ChartTrendline, ChartTrendlineType, ChartType as T};
+    use rust_xlsxwriter::{Chart, ChartDataLabel, ChartDataLabelPosition as LP, ChartDataTable, ChartPoint, ChartFormat, ChartLegendPosition, ChartLine, ChartLineDashType, ChartMarker, ChartMarkerType, ChartSolidFill, ChartTrendline, ChartTrendlineType, ChartType as T};
     let rgb = |c: &str| u32::from_str_radix(c.trim_start_matches('#'), 16).ok();
     let kind_of = |k: &str| -> T {
         let (st, pc) = (ch.stack == "stacked", ch.stack == "percent");
@@ -776,7 +783,18 @@ fn xl_chart(ch: &crate::model::SheetChart, sheets: &[crate::model::SheetData], n
             }
             if s.smooth { se.set_smooth(true); }
         }
-        if s.labels || ch.labels { se.set_data_label(ChartDataLabel::new().show_value()); }
+        if s.labels || ch.labels {
+            let mut l = ChartDataLabel::new();
+            match s.lwhat.as_str() { "name" => { l.show_series_name(); } "cat" => { l.show_category_name(); } "catval" => { l.show_category_name().show_value(); } _ => { l.show_value(); } }
+            let line = matches!(k.as_str(), "line" | "scatter");
+            match s.lpos.as_str() { "inside" if !line => { l.set_position(LP::InsideEnd); } "center" => { l.set_position(LP::Center); } "base" if !line => { l.set_position(LP::InsideBase); } "above" if line => { l.set_position(LP::Above); } "below" if line => { l.set_position(LP::Below); } "outside" if !line && k != "area" => { l.set_position(LP::OutsideEnd); } _ => {} }
+            se.set_data_label(&l);
+        }
+        // Bars or points with their own colour.
+        if let Some(n) = s.pts.iter().map(|p| p.i as usize + 1).max() {
+            let pts: Vec<ChartPoint> = (0..n).map(|i| match s.pts.iter().find(|p| p.i as usize == i).and_then(|p| rgb(&p.color)) { Some(c) => ChartPoint::new().set_format(ChartFormat::new().set_solid_fill(ChartSolidFill::new().set_color(c))), None => ChartPoint::new() }).collect();
+            se.set_points(&pts);
+        }
         if s.trend == "linear" { se.set_trendline(ChartTrendline::new().set_type(ChartTrendlineType::Linear)); }
         if s.y2 { se.set_secondary_axis(true); }
     }
@@ -791,12 +809,16 @@ fn xl_chart(ch: &crate::model::SheetChart, sheets: &[crate::model::SheetData], n
         if !d.fmt.is_empty() { a.set_num_format(&d.fmt); }
         a.set_major_gridlines(grid);
         if d.hide { a.set_hidden(true); }
+        if let Some(r) = d.angle { a.set_font(rust_xlsxwriter::ChartFont::new().set_rotation(r)); }
+        if d.every > 1 { a.set_label_interval(d.every.min(u16::MAX as u32) as u16); }
     };
     if !matches!(base, "pie" | "doughnut") {
         axis(main.x_axis(), &ch.x, ch.x.grid);
         axis(main.y_axis(), &ch.y, ch.y.grid);
         if ch.series.iter().any(|s| s.y2) { axis(main.y2_axis(), &ch.y2, ch.y2.grid); }
     }
+    match ch.empty.as_str() { "zero" => { main.show_empty_cells_as(rust_xlsxwriter::ChartEmptyCells::Zero); } "span" => { main.show_empty_cells_as(rust_xlsxwriter::ChartEmptyCells::Connected); } _ => {} }
+    if ch.table && matches!(base, "column" | "line" | "area") { main.set_data_table(&ChartDataTable::new().show_legend_keys(true)); }
     main.set_width(ch.w as u32).set_height(ch.h as u32);
     Some(main)
 }

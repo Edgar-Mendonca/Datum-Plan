@@ -80,6 +80,7 @@ const ELEMENTS: { l: string; on: (c: ChartDef) => boolean; flip: (c: ChartDef, o
   { l: "Chart Title", on: c => !!c.title, flip: (c, on) => ({ ...c, title: on ? c.title || "Chart Title" : "" }) },
   { l: "Data Labels", on: c => !!c.labels || c.series.some(s => s.labels), flip: (c, on) => ({ ...c, labels: on, series: c.series.map(s => ({ ...s, labels: false })) }),
     more: (c, set) => c.series.map((s, i) => ({ label: s.name.startsWith("=") ? `Series ${i + 1}` : s.name || `Series ${i + 1}`, on: !!s.labels || !!c.labels, run: () => set({ ...c, labels: false, series: c.series.map((x, j) => ({ ...x, labels: j === i ? !(x.labels || c.labels) : !!(x.labels || c.labels) })) }) })) },
+  { l: "Data Table", axes: true, on: c => !!c.table, flip: (c, on) => ({ ...c, table: on && ["column", "line", "area"].includes(c.kind) }) },
   { l: "Gridlines", axes: true, on: c => !!(c.y?.grid || c.x?.grid), flip: (c, on) => ({ ...c, y: ax(c.y, { grid: on }), x: on ? c.x : ax(c.x, { grid: false }) }),
     more: (c, set) => [{ label: "Primary Major Horizontal", on: !!c.y?.grid, run: () => set({ ...c, y: ax(c.y, { grid: !c.y?.grid }) }) }, { label: "Primary Major Vertical", on: !!c.x?.grid, run: () => set({ ...c, x: ax(c.x, { grid: !c.x?.grid }) }) }] },
   { l: "Legend", on: c => c.legend !== "none", flip: (c, on) => ({ ...c, legend: on ? "bottom" : "none" }),

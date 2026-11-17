@@ -14,7 +14,7 @@ import { CountryList, FlagText } from "./flags";
 import { Help } from "./help";
 import { SheetImage } from "./api";
 import { pictureMenu, picData } from "./pictures";
-import { ChartLayer, ChartPane, chartSel, setChartSel, fmtChart, setFmtChart, chartPart, setChartPart } from "./sheetcharts";
+import { ChartLayer, ChartPane, chartSel, setChartSel, fmtChart, setFmtChart, chartPart, setChartPart, withPoint } from "./sheetcharts";
 import { ChartData, ChartDef, chartFrom } from "./xchart";
 import { autoHeights, fitBox, sheetK, setSheetK, sheetMode, setSheetMode, sheetZoom, zoomSheet } from "./sheetlayout";
 import { sheetPages, SheetPagesView, pageRoom } from "./print";
@@ -253,7 +253,8 @@ export const Sheets = () => {
       e.preventDefault();
       const i = chartSel(), c = charts()[i], pt = chartPart(), si = pt.startsWith("s") ? +pt.slice(1) : -1;
       const set = (x: ChartDef) => putCharts(charts().map((y, j) => (j === i ? x : y)));
-      if (si >= 0 && c.series.length > 1) set({ ...c, series: c.series.filter((_, j) => j !== si) });
+      if (pt.startsWith("p")) set(withPoint(c, pt, ""));
+      else if (si >= 0 && c.series.length > 1) set({ ...c, series: c.series.filter((_, j) => j !== si) });
       else if (pt === "title") set({ ...c, title: "" });
       else if (pt === "legend") set({ ...c, legend: "none" });
       else if (pt === "x" || pt === "y" || pt === "y2") set({ ...c, [pt]: { ...(c[pt] ?? {}), hide: true } });

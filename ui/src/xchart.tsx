@@ -7,11 +7,11 @@ import { render } from "solid-js/web";
 import { P } from "./store";
 import { money, fmtDay } from "./api";
 
-export type Axis = { title?: string; min?: number | null; max?: number | null; major?: number | null; fmt?: string; grid?: boolean; hide?: boolean };
-export type Series = { name: string; vals: string; kind?: string; y2?: boolean; color?: string; width?: number; dash?: string; marker?: string; smooth?: boolean; labels?: boolean; trend?: string; hide?: boolean;
+export type Axis = { title?: string; min?: number | null; max?: number | null; major?: number | null; fmt?: string; grid?: boolean; hide?: boolean; angle?: number | null; every?: number };
+export type Series = { name: string; vals: string; kind?: string; y2?: boolean; color?: string; width?: number; dash?: string; marker?: string; smooth?: boolean; labels?: boolean; trend?: string; hide?: boolean; pts?: { i: number; color: string }[]; lpos?: string; lwhat?: string;
   /** In the window only: a soft fill under a line, and a pie's own slice colours. */
   fill?: boolean; colors?: string[] };
-export type ChartDef = { id: number; cell: string; w: number; h: number; kind: string; stack?: string; cats: string; series: Series[]; title?: string; legend?: string; labels?: boolean; font?: number; x?: Axis; y?: Axis; y2?: Axis; bg?: string; plot?: string; gap?: number; skip?: number[];
+export type ChartDef = { id: number; cell: string; w: number; h: number; kind: string; stack?: string; cats: string; series: Series[]; title?: string; legend?: string; labels?: boolean; font?: number; x?: Axis; y?: Axis; y2?: Axis; bg?: string; plot?: string; gap?: number; skip?: number[]; table?: boolean; empty?: string;
   /** In the window's views only: a subtitle, the status date's line, the last value at each line's end,
    *  rounded bars, a time axis (x by date, ticks named), and no "no data" text. */
   subtitle?: string; marker?: { at: number; label: string } | null; ends?: boolean; radius?: number; quiet?: boolean;
@@ -109,8 +109,9 @@ const INK = "var(--ch-ink, #3A4553)", TITLE = "var(--ch-title, #1B2733)", GRID =
 let gid = 0;
 
 /** The parts of a chart a click selects (`data-part`): its area, plot, title, legend, axes and series. */
-export const partName = (c: ChartDef, part: string, names?: string[]) => part === "title" ? "Chart Title" : part === "legend" ? "Legend" : part === "plot" ? "Plot Area" : part === "x" ? (c.kind === "bar" ? "Vertical (Category) Axis" : "Horizontal (Category) Axis")
-  : part === "y" ? (c.kind === "bar" ? "Horizontal (Value) Axis" : "Vertical (Value) Axis") : part === "y2" ? "Secondary Vertical (Value) Axis" : part.startsWith("s") ? `Series “${names?.[+part.slice(1)] || c.series[+part.slice(1)]?.name || `Series ${+part.slice(1) + 1}`}”` : "Chart Area";
+export const partName = (c: ChartDef, part: string, names?: string[]): string => part === "title" ? "Chart Title" : part === "legend" ? "Legend" : part === "plot" ? "Plot Area" : part === "x" ? (c.kind === "bar" ? "Vertical (Category) Axis" : "Horizontal (Category) Axis")
+  : part === "y" ? (c.kind === "bar" ? "Horizontal (Value) Axis" : "Vertical (Value) Axis") : part === "y2" ? "Secondary Vertical (Value) Axis" : part.startsWith("s") ? `Series “${names?.[+part.slice(1)] || c.series[+part.slice(1)]?.name || `Series ${+part.slice(1) + 1}`}”`
+  : part.startsWith("p") ? `Data Point ${+part.split(":")[1] + 1} of ${partName(c, `s${part.slice(1).split(":")[0]}`, names)}` : "Chart Area";
 type Tip = { head: string; rows: { col: string; name: string; val: string }[]; guide?: number; band?: [number, number, number, number]; dots?: [number, number, string][] };
 
 /** A chart as SVG at `w` × `h` px. In the window (`hover`, the default) moving over it shows the
@@ -120,7 +121,9 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
   const d0 = p.d ?? { cats: [], xs: [], cat_fmt: "", names: [], vals: [], fmts: [] }, keep = p.c.series.map((_, i) => i).filter(i => !p.c.series[i].hide);
   const skip = new Set(p.c.skip ?? []), cut = <T,>(a: T[] | undefined) => (skip.size && a ? a.filter((_, j) => !skip.has(j)) : a);
   const c: ChartDef = { ...p.c, series: keep.map(i => ({ ...p.c.series[i], color: colorOf(p.c, i) })) };
-  const d: ChartData = { ...d0, cats: cut(d0.cats)!, xs: cut(d0.xs)!, names: keep.map(i => d0.names[i]), fmts: keep.map(i => d0.fmts[i]), vals: keep.map(i => cut(d0.vals[i] ?? [])!),
+  const n0 = Math.max(d0.cats.length, ...d0.vals.map(v => v.length), 0), jmap = Array.from({ length: n0 }, (_, j) => j).filter(j => !skip.has(j)), jo = (j: number) => jmap[j] ?? j;
+  const z0 = p.c.empty === "zero" && !p.c.time;
+  const d: ChartData = { ...d0, cats: cut(d0.cats)!, xs: cut(d0.xs)!, names: keep.map(i => d0.names[i]), fmts: keep.map(i => d0.fmts[i]), vals: keep.map(i => cut((d0.vals[i] ?? []).map(v => (v === null && z0 ? 0 : v)))!),
     sx: d0.sx && keep.map(i => cut(d0.sx![i] ?? [])!), tips: d0.tips && keep.map(i => cut(d0.tips![i] ?? [])!) };
   const sp = (i: number) => `s${keep[i]}`;
   const fs = c.font || 11, W = p.w, H = p.h;
@@ -130,7 +133,7 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
   const pie = c.kind === "pie" || c.kind === "doughnut", horiz = c.kind === "bar", scatter = c.kind === "scatter";
   const els: JSX.Element[] = [];
   /** Each part's box (for the selection outline) and each series' points (for its handles). */
-  const box: Record<string, [number, number, number, number]> = { area: [0, 0, W, H] }, spts: [number, number][][] = c.series.map(() => []);
+  const box: Record<string, [number, number, number, number]> = { area: [0, 0, W, H] }, spts: [number, number][][] = c.series.map(() => []), pbox: Record<string, [number, number, number, number]> = {};
   const hit = (part: string, b: [number, number, number, number]) => { box[part] = b; return <rect data-part={part} x={b[0]} y={b[1]} width={Math.max(0, b[2])} height={Math.max(0, b[3])} fill="transparent" />; };
   const [hv, setHv] = createSignal<[number, number] | null>(null);
   let tipAt: (mx: number, my: number) => Tip | null = () => null;
@@ -179,6 +182,7 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
   // The selected part: a dashed frame with corner handles, or a handle on each point of a series.
   const selection = (part: string) => {
     const SEL = "var(--blue, #2F6FCF)";
+    if (part.startsWith("p")) { const b = pbox[part.slice(1)]; return b ? <g pointer-events="none"><rect x={b[0] - 2} y={b[1] - 2} width={b[2] + 4} height={b[3] + 4} fill="none" stroke={SEL} stroke-width="1.4" />{[[b[0] - 2, b[1] - 2], [b[0] + b[2] + 2, b[1] - 2], [b[0] - 2, b[1] + b[3] + 2], [b[0] + b[2] + 2, b[1] + b[3] + 2]].map(([a, b2]) => <rect x={a - 2.5} y={b2 - 2.5} width="5" height="5" fill="#fff" stroke={SEL} stroke-width="1.2" />)}</g> : null; }
     if (part.startsWith("s")) return <g pointer-events="none">{(spts[keep.indexOf(+part.slice(1))] ?? []).slice(0, 400).map(([x, y]) => <rect x={x - 3} y={y - 3} width="6" height="6" fill="#fff" stroke={SEL} stroke-width="1.2" />)}</g>;
     const b = box[part]; if (!b) return null;
     const [x, y, w, h] = part === "area" ? [1, 1, W - 2, H - 2] : b;
@@ -243,8 +247,16 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
   const guess1 = e1 ? scale(e1.lo, e1.hi, c.y, valLen, e1.zero) : null, guess2 = e2 ? scale(e2.lo, e2.hi, c.y2, valLen, e2.zero) : null;
   const xs = d.xs.map(v => v ?? NaN), xfin = xs.filter(isFinite);
   const xsc = scatter ? scale(Math.min(...xfin, Infinity), Math.max(...xfin, -Infinity), c.x, right - left, false) : null;
-  const catFmt = c.x?.fmt || d.cat_fmt;
-  const catLabel = (j: number) => (scatter ? "" : c.x?.fmt && d.xs[j] !== null && d.xs[j] !== undefined ? fmtNum(d.xs[j]!, c.x.fmt) : d.cats[j] ?? "");
+  // Dates a month or more apart read as months (Jun-27), a year or more apart as years, unless the axis has its own format.
+  const autoFmt = (() => {
+    if (c.x?.fmt || time || !isDateFmt(d.cat_fmt || "")) return "";
+    const v = d.xs.filter((x): x is number => x !== null && x !== undefined);
+    if (v.length < 3) return "";
+    const g = v.slice(1).map((x, k) => Math.abs(x - v[k])).sort((a, b) => a - b)[(v.length - 1) >> 1];
+    return g >= 360 ? "yyyy" : g >= 27 && /d/i.test(d.cat_fmt.replace(/"[^"]*"/g, "")) ? "mmm-yy" : "";
+  })();
+  const catFmt = c.x?.fmt || autoFmt || d.cat_fmt, xf = c.x?.fmt || autoFmt;
+  const catLabel = (j: number) => (scatter ? "" : xf && d.xs[j] !== null && d.xs[j] !== undefined ? fmtNum(d.xs[j]!, xf) : d.cats[j] ?? "");
   let yT = 0, y2T = 0, xT = 0;
   if (c.y?.title && !c.y.hide) { if (horiz) { yT = bottom - fs * 0.7; bottom -= fs * 1.6; } else { yT = left + fs * 0.7; left += fs * 1.6; } }
   if (guess2 && c.y2?.title && !c.y2.hide) { y2T = right - fs * 0.7; right -= fs * 1.6; }
@@ -258,13 +270,21 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
   if (c.ends && lineIdx.length && !horiz) right -= Math.max(...lineIdx.map(i => { const v = [...(d.vals[i] ?? [])].reverse().find(x => x !== null); return v === undefined || v === null ? 0 : tw(fmtNum(v, onY2(i) ? y2fmt : y1fmt), fs, true) + 8; }), 0);
   // Category (or time) labels under the plot: level, slanted, or every k-th when crowded.
   let rot = 0, every = 1, xlabH = 0;
-  if (!horiz) {
+  // A data table under the plot: a row per series under the categories (it takes the axis labels' place).
+  const tableOn = !!c.table && !horiz && !scatter && !time && n > 0, rh = fs * 1.5;
+  const nameW = tableOn ? Math.max(...names.map(t => tw(t, fs * 0.9))) + fs * 1.5 + 8 : 0;
+  if (tableOn && left < nameW + 6) left = nameW + 6;
+  if (tableOn) { xlabH = rh * (c.series.length + 1) + 2; bottom -= xlabH + 4; }
+  else if (!horiz) {
     const nt = time ? time.ticksAt.length : n;
     const band = (right - left) / Math.max(1, nt), lw = scatter && xsc ? Math.max(...xsc.ticks.map(t => tw(fmtNum(t, catFmt), fs))) : time ? Math.max(0, ...time.ticksAt.map((_, k) => tw(time.tickLabel(k), fs))) : Math.max(0, ...Array.from({ length: n }, (_, j) => tw(catLabel(j), fs)));
-    if (!scatter && (lw + 6 > band || time?.rotate)) { rot = -45; every = Math.max(1, Math.ceil(fs * 1.5 / band)); }
-    xlabH = c.x?.hide ? 0 : rot ? lw * 0.72 + fs * 0.8 + 6 : fs * 1.6;
+    const ang = c.x?.angle;
+    if (!scatter && ang !== null && ang !== undefined) { rot = ang; every = rot ? Math.max(1, Math.ceil(fs * 1.5 / band)) : Math.max(1, Math.ceil((lw + 6) / band)); }
+    else if (!scatter && (lw + 6 > band || time?.rotate)) { rot = -45; every = Math.max(1, Math.ceil(fs * 1.5 / band)); }
+    if (c.x?.every && !scatter) every = c.x.every;
+    xlabH = c.x?.hide ? 0 : !rot ? fs * 1.6 : Math.abs(rot) >= 80 ? lw + 10 : lw * 0.72 + fs * 0.8 + 6;
     bottom -= c.x?.hide ? 4 : xlabH;
-  }
+  } else if (c.x?.every) every = c.x.every;
   const pl = left, pr = Math.max(left + 20, right), pt = top + (c.marker ? fs * 1.7 : 0), pb = Math.max(pt + 20, bottom);
   const vlen = horiz ? pr - pl : pb - pt;
   const s1 = e1 ? scale(e1.lo, e1.hi, c.y, vlen, e1.zero) : null, s2 = e2 ? scale(e2.lo, e2.hi, c.y2, vlen, e2.zero) : null;
@@ -288,8 +308,20 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
   else for (let j = 0; j < n; j++) {
     const at = catAt(j);
     if (c.x?.grid) grid.push(horiz ? <line x1={pl} x2={pr} y1={pt + band * j} y2={pt + band * j} style={{ stroke: GRID }} stroke-width=".8" /> : <line x1={pl + band * j} x2={pl + band * j} y1={pt} y2={pb} style={{ stroke: GRID }} stroke-width=".8" />);
-    if (c.x?.hide || j % every) continue;
+    if (c.x?.hide || j % every || tableOn) continue;
     axes.push(horiz ? text(pl - 6, at, catLabel(j), { anchor: "end" }) : rot ? text(at + fs * 0.3, pb + 6, catLabel(j), { anchor: "end", rot, base: "hanging" }) : text(at, pb + fs * 0.9, catLabel(j), { anchor: "middle" }));
+  }
+  if (tableOn) {
+    const y0 = pb + 4, x0 = pl - nameW, rows = c.series.length, yb = y0 + rh * (rows + 1);
+    const fv = (i: number, v: number) => fmtNum(v, d.fmts[i] || (onY2(i) ? y2fmt : y1fmt)), cells = (j: number) => [catLabel(j), ...c.series.map((_, i) => (val(i, j) === null ? "" : fv(i, val(i, j)!)))];
+    const widest = Math.max(1, ...Array.from({ length: n }, (_, j) => Math.max(...cells(j).map(t => tw(t, fs * 0.9)))));
+    const tf = Math.max(6, Math.min(fs * 0.9, (fs * 0.9 * (band - 6)) / widest));
+    const L = (a: number, b: number, c2: number, d2: number) => <line x1={a} x2={b} y1={c2} y2={d2} style={{ stroke: AXIS }} stroke-width=".7" />;
+    axes.push(L(pl, pr, y0, y0)); for (let r = 1; r <= rows + 1; r++) axes.push(L(x0, pr, y0 + rh * r, y0 + rh * r));
+    for (let j = 0; j <= n; j++) axes.push(L(pl + band * j, pl + band * j, y0, yb));
+    axes.push(L(x0, x0, y0 + rh, yb));
+    for (let j = 0; j < n; j++) { const cl = cells(j); cl.forEach((t, r) => t && axes.push(text(catAt(j), y0 + rh * r + rh / 2, t, { size: tf, anchor: "middle", bold: r === 0 }))); }
+    c.series.forEach((_, i) => { const y = y0 + rh * (i + 1) + rh / 2; axes.push(<rect x={x0 + 4} y={y - fs * 0.32} width={fs * 0.9} height={fs * 0.64} fill={colorOf(c, i)} rx="1" />); axes.push(text(x0 + 6 + fs, y, names[i], { size: fs * 0.9 })); });
   }
   // Each axis's labels (and title) are a part a click selects.
   { const l1 = s1 ? tl(s1, y1fmt) : 0, l2 = s2 ? tl(s2, y2fmt) : 0, tt = fs * 1.6;
@@ -299,7 +331,7 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
     } else {
       if (s1 && !c.y?.hide) { const x0 = Math.min(yT ? yT - fs * 0.8 : Infinity, pl - l1 - 8); axes.push(hit("y", [x0, pt - fs * 0.7, pl - x0 - 1, pb - pt + fs * 1.4])); }
       if (s2 && !c.y2?.hide) axes.push(hit("y2", [pr + 1, pt - fs * 0.7, l2 + 8 + (y2T ? tt : 0), pb - pt + fs * 1.4]));
-      if (!c.x?.hide) axes.push(hit("x", [pl - 4, pb + 2, pr - pl + 8, xlabH + (xT ? tt : 0)]));
+      if (!c.x?.hide || tableOn) axes.push(hit("x", [tableOn ? pl - nameW : pl - 4, pb + 2, pr - pl + 8 + (tableOn ? nameW : 0), xlabH + (xT ? tt : 0) + 4]));
     } }
   const zero1 = s1 ? pos(Math.min(Math.max(0, s1.mn), s1.mx), s1) : horiz ? pl : pb;
   axes.push(horiz ? <line x1={zero1} x2={zero1} y1={pt} y2={pb} style={{ stroke: AXIS }} stroke-width="1" /> : <line x1={pl} x2={pr} y1={zero1} y2={zero1} style={{ stroke: AXIS }} stroke-width="1" />);
@@ -321,6 +353,8 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
   };
   const scaled = (j: number, i: number, v: number) => { if (!pctStack || time) return v; let tot = 0; for (let k = 0; k < c.series.length; k++) { const x = val(k, j); if (x !== null && onY2(k) === onY2(i) && kindOf(c, k) === kindOf(c, i)) tot += Math.abs(x); } return tot ? v / tot : 0; };
   const rad = c.radius ?? 0;
+  const pcol = (i: number, j: number) => c.series[i].pts?.find(q => q.i === jo(j))?.color || colorOf(c, i);
+  const ltext = (i: number, j: number, v: number) => { const w2 = c.series[i].lwhat; return w2 === "name" ? names[i] : w2 === "cat" ? catLabel(j) : w2 === "catval" ? `${catLabel(j)}, ${fmtV(i, v)}` : fmtV(i, v); };
   bars.forEach((i, bi) => {
     const s = sc(i); if (!s) return;
     const bnd = time ? tband(i) : band, bw = bnd / (slots + gapPct / 100);
@@ -329,9 +363,15 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
       const v = scaled(j, i, v0), b = base(j, i, v), a = pos(b, s), z = pos(b + v, s), cx = time ? xAt(i, j) : catAt(j), mid = cx - (slots * bw) / 2 + (stacked ? 0 : bi * bw);
       if (time && !isFinite(cx)) continue;
       const [x, y, w, h] = horiz ? [Math.min(a, z), mid, Math.abs(z - a), bw] : [mid, Math.min(a, z), bw, Math.abs(z - a)];
-      marks.push(<rect data-part={sp(i)} x={x} y={y} width={Math.max(0.5, w)} height={Math.max(0.5, h)} rx={Math.min(rad, w / 2, h / 2)} fill={colorOf(c, i)} />);
+      marks.push(<rect data-part={sp(i)} data-j={jo(j)} x={x} y={y} width={Math.max(0.5, w)} height={Math.max(0.5, h)} rx={Math.min(rad, w / 2, h / 2)} fill={pcol(i, j)} />);
       spts[i].push(horiz ? [x + w, y + h / 2] : [x + w / 2, y]);
-      if (c.series[i].labels || c.labels) labels.push(horiz ? text(Math.max(a, z) + 3, mid + bw / 2, fmtV(i, v0), { size: fs * 0.9 }) : text(mid + bw / 2, Math.min(a, z) - fs * 0.6, fmtV(i, v0), { size: fs * 0.9, anchor: "middle" }));
+      pbox[`${keep[i]}:${jo(j)}`] = [x, y, Math.max(0.5, w), Math.max(0.5, h)];
+      if (c.series[i].labels || c.labels) {
+        // Outside the end (the default), inside the end, centred, or inside at the base.
+        const lp = c.series[i].lpos || "outside", dir = z === a ? -1 : Math.sign(z - a), inner = lp !== "outside", o = { size: fs * 0.9, color: inner ? "#FFFFFF" : undefined, bold: inner };
+        const at = lp === "center" ? (a + z) / 2 : lp === "base" ? a + dir * (horiz ? 3 : fs * 0.75) : lp === "inside" ? z - dir * (horiz ? 3 : fs * 0.75) : z + dir * (horiz ? 3 : fs * 0.65);
+        labels.push(horiz ? text(at, mid + bw / 2, ltext(i, j, v0), { ...o, anchor: lp === "center" ? "middle" : (lp === "inside") === (dir > 0) ? "end" : "start" }) : text(mid + bw / 2, at, ltext(i, j, v0), { ...o, anchor: "middle" }));
+      }
     }
   });
   const endsAt: number[] = [];
@@ -354,11 +394,14 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
     }
     const smooth = !!ser.smooth;
     pts.forEach(q => q && spts[i].push(q));
-    over.push(<path data-part={sp(i)} d={pathOf(pts, smooth)} fill="none" stroke="transparent" stroke-width="12" />);
-    over.push(<path data-part={sp(i)} d={pathOf(pts, smooth)} fill="none" stroke={col} stroke-width={w} stroke-dasharray={dashOf(ser.dash, w)} stroke-linejoin="round" stroke-linecap="round" style={scatter && ser.marker !== "none" && !ser.width ? { display: "none" } : {}} />);
+    const path = pathOf(c.empty === "span" ? pts.filter(Boolean) : pts, smooth);
+    over.push(<path data-part={sp(i)} d={path} fill="none" stroke="transparent" stroke-width="12" />);
+    over.push(<path data-part={sp(i)} d={path} fill="none" stroke={col} stroke-width={w} stroke-dasharray={dashOf(ser.dash, w)} stroke-linejoin="round" stroke-linecap="round" style={scatter && ser.marker !== "none" && !ser.width ? { display: "none" } : {}} />);
     const mk = ser.marker === "none" ? "" : ser.marker && ser.marker !== "auto" ? ser.marker : scatter || (!time && n <= 30 && !c.ends) ? "circle" : "";
-    if (mk) pts.forEach(p2 => { if (p2) over.push(<g data-part={sp(i)}><Marker x={p2[0]} y={p2[1]} kind={mk} c={col} r={Math.max(2.5, w * 1.3)} /></g>); });
-    if (ser.labels || c.labels) pts.forEach((p2, j) => { if (p2) labels.push(text(p2[0], p2[1] - fs * 0.9, fmtV(i, val(i, j)!), { size: fs * 0.9, anchor: "middle" })); });
+    const mr = Math.max(2.5, w * 1.3);
+    if (mk) pts.forEach((p2, j) => { if (p2) { over.push(<g data-part={sp(i)} data-j={jo(j)}><Marker x={p2[0]} y={p2[1]} kind={mk} c={pcol(i, j)} r={mr} /></g>); pbox[`${keep[i]}:${jo(j)}`] = [p2[0] - mr - 1, p2[1] - mr - 1, mr * 2 + 2, mr * 2 + 2]; } });
+    const lp = ser.lpos === "below" ? fs * 0.9 : ser.lpos === "center" ? 0 : -fs * 0.9;
+    if (ser.labels || c.labels) pts.forEach((p2, j) => { if (p2) labels.push(text(p2[0], p2[1] + lp, ltext(i, j, val(i, j)!), { size: fs * 0.9, anchor: "middle" })); });
     // The last value at the line's end, in its colour (labels kept apart).
     if (c.ends) { let j = pts.length - 1; while (j >= 0 && !pts[j]) j--; if (j >= 0) { let y = pts[j]![1]; while (endsAt.some(u => Math.abs(u - y) < fs * 1.2)) y -= fs * 1.2; endsAt.push(y); labels.push(text(pts[j]![0] + 6, y, fmtV(i, val(i, j)!), { bold: true, color: col })); } }
   });
@@ -437,9 +480,9 @@ const pieOf = (c: ChartDef, d: ChartData, cx: number, cy: number, r: number, fs:
 
 /** The look of a chart (what a saved style keeps): not its data, place or titles. */
 export const lookOf = (c: ChartDef): Partial<ChartDef> => ({
-  legend: c.legend, labels: c.labels, font: c.font, bg: c.bg, plot: c.plot, gap: c.gap, stack: c.stack, kind: c.kind,
-  x: { fmt: c.x?.fmt, grid: c.x?.grid, title: c.x?.title }, y: { fmt: c.y?.fmt, grid: c.y?.grid, min: c.y?.min, max: c.y?.max, major: c.y?.major, title: c.y?.title }, y2: { fmt: c.y2?.fmt, grid: c.y2?.grid, min: c.y2?.min, max: c.y2?.max, major: c.y2?.major, title: c.y2?.title },
-  series: c.series.map(s => ({ name: "", vals: "", kind: s.kind, y2: s.y2, color: s.color, width: s.width, dash: s.dash, marker: s.marker, smooth: s.smooth, labels: s.labels, trend: s.trend })),
+  legend: c.legend, labels: c.labels, font: c.font, bg: c.bg, plot: c.plot, gap: c.gap, stack: c.stack, kind: c.kind, table: c.table, empty: c.empty,
+  x: { fmt: c.x?.fmt, grid: c.x?.grid, title: c.x?.title, angle: c.x?.angle, every: c.x?.every }, y: { fmt: c.y?.fmt, grid: c.y?.grid, min: c.y?.min, max: c.y?.max, major: c.y?.major, title: c.y?.title }, y2: { fmt: c.y2?.fmt, grid: c.y2?.grid, min: c.y2?.min, max: c.y2?.max, major: c.y2?.major, title: c.y2?.title },
+  series: c.series.map(s => ({ name: "", vals: "", kind: s.kind, y2: s.y2, color: s.color, width: s.width, dash: s.dash, marker: s.marker, smooth: s.smooth, labels: s.labels, trend: s.trend, lpos: s.lpos, lwhat: s.lwhat })),
 });
 /** A chart with a look given: `strict` takes each series' look by position only (a view's own series);
  *  otherwise the last look serves the series beyond it (a style saved from a smaller chart). */

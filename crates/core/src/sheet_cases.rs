@@ -860,5 +860,21 @@ fn charts_read_their_ranges_follow_edits_and_export_natively() {
     let mut x = String::new();
     z.by_name("xl/charts/chart1.xml").unwrap().read_to_string(&mut x).unwrap();
     assert!(x.contains("<c:barChart>") && !x.contains("<c:lineChart>"), "the hidden line series is left out");
+    // 0.9.22: a chart sheet holds one chart; a data table, a bar with its own colour and labels' place and content go into the workbook.
+    let mut ch = doc.p.sheets[0].charts[0].clone();
+    ch.table = true; ch.series[0].pts = vec![ChartPt { i: 1, color: "#C0392B".into() }, ChartPt { i: 1, color: "#000000".into() }]; ch.series[0].labels = true; ch.series[0].lpos = "inside".into(); ch.series[0].lwhat = "catval".into(); ch.series[0].hide = false;
+    ch.x.angle = Some(-200); ch.cats = "Data!A2:A4".into(); ch.series[0].vals = "Data!B2:B4".into(); ch.series[0].name = "=Data!B1".into();
+    let cs = SheetData { name: "Chart1".into(), chartsheet: true, charts: vec![ch.clone(), ch], ..Default::default() };
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(cs) });
+    let k = doc.p.sheets.len() - 1;
+    assert_eq!(doc.p.sheets[k].charts.len(), 1, "a chart sheet keeps one chart");
+    assert_eq!((doc.p.sheets[k].charts[0].series[0].pts.len(), doc.p.sheets[k].charts[0].x.angle), (1, Some(-90)), "points deduplicated, the angle kept in bounds");
+    assert_eq!(crate::sheet::chart_data(&Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 20)), k)[0].names[0], "Planned", "a chart sheet reads other sheets");
+    crate::io::table::write_sheets_xlsx(&Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 20)), &path).unwrap();
+    let mut z = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let names: Vec<String> = (0..z.len()).map(|i| z.by_index(i).unwrap().name().unwrap().to_string()).collect();
+    assert!(names.iter().any(|n| n.starts_with("xl/chartsheets/")), "{names:?}");
+    let all: String = names.iter().filter(|n| n.starts_with("xl/charts/chart")).map(|n| { let mut x = String::new(); z.by_name(n).unwrap().read_to_string(&mut x).unwrap(); x }).collect();
+    assert!(all.contains("<c:dTable>") && all.contains("C0392B") && all.contains("<c:dLblPos val=\"inEnd\"/>") && all.contains("<c:showCatName val=\"1\"/>"), "{}", &all[..all.len().min(400)]);
     let _ = std::fs::remove_file(path);
 }

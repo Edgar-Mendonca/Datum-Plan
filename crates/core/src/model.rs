@@ -522,7 +522,9 @@ pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pu
     /// Drop-down lists: cells that take one of a list of values.
     #[serde(default, skip_serializing_if = "Vec::is_empty")] pub valid: Vec<Validation>,
     /// Charts over the sheet's cells (or other sheets'), each anchored at a cell like a picture.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub charts: Vec<SheetChart> }
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub charts: Vec<SheetChart>,
+    /// A chart sheet: a tab that holds one chart, filling it, and no cells (its ranges name other sheets).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")] pub chartsheet: bool }
 
 /// An AutoFilter: the range ("A1:D40", headings in its first row) and the columns filtered.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -583,18 +585,32 @@ pub struct SheetChart {
     pub bg: String, pub plot: String, pub gap: u16,
     /// Categories left out of the chart by its filter (positions in the category range), the cells unchanged.
     pub skip: Vec<u32>,
+    /// A data table under the plot: each series' values under its category.
+    pub table: bool,
+    /// Empty cells shown as gaps (""), as zero ("zero"), or lines joined over them ("span").
+    pub empty: String,
 }
+/// One bar or point with its own colour (its position in the series).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChartPt { pub i: u32, pub color: String }
 /// One series: its name (text, or "=B1" read from a cell), its values range, and its look.
 /// `dash`: solid, dash, dot; `marker`: none, auto, circle, square, diamond, triangle; `trend`: "", linear.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ChartSeries { pub name: String, pub vals: String, pub kind: String, pub y2: bool, pub color: String, pub width: f32, pub dash: String, pub marker: String, pub smooth: bool, pub labels: bool, pub trend: String,
     /// Left out of the chart by its filter (the series and its cells stay).
-    pub hide: bool }
+    pub hide: bool,
+    /// Bars or points with their own colour.
+    pub pts: Vec<ChartPt>,
+    /// Data labels: where ("" automatic, outside, inside, center, base, above, below) and what ("" the value, name, cat, catval).
+    pub lpos: String, pub lwhat: String }
 /// An axis: its title, bounds and step (None: automatic), number format ("" = the cells'), gridlines and whether it shows.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ChartAxis { pub title: String, pub min: Option<f64>, pub max: Option<f64>, pub major: Option<f64>, pub fmt: String, pub grid: bool, pub hide: bool }
+pub struct ChartAxis { pub title: String, pub min: Option<f64>, pub max: Option<f64>, pub major: Option<f64>, pub fmt: String, pub grid: bool, pub hide: bool,
+    /// The labels' angle (None: automatic; 0 level, -45, -90) and every how many categories a label shows (0: automatic).
+    pub angle: Option<i16>, pub every: u32 }
 pub const CHART_KINDS: [&str; 7] = ["column", "bar", "line", "area", "scatter", "pie", "doughnut"];
 
 impl SheetChart {
@@ -608,16 +624,23 @@ impl SheetChart {
         if !CHART_KINDS.contains(&self.kind.as_str()) { self.kind = "column".into() }
         self.stack = pick(&self.stack, &["stacked", "percent"]);
         self.legend = pick(&self.legend, &["bottom", "top", "right", "left", "none"]);
+        self.empty = pick(&self.empty, &["zero", "span"]);
         (self.w, self.h) = (self.w.clamp(120, 4000), self.h.clamp(80, 4000));
         self.font = if self.font.is_finite() && self.font > 0.0 { self.font.clamp(6.0, 36.0) } else { 0.0 };
         self.gap = self.gap.min(500);
         self.series.truncate(40);
+        for s in &mut self.series {
+            s.lpos = pick(&s.lpos, &["outside", "inside", "center", "base", "above", "below"]);
+            s.lwhat = pick(&s.lwhat, &["name", "cat", "catval"]);
+            s.pts.retain(|p| p.i < 100_000 && p.color.len() <= 20); s.pts.sort_by_key(|p| p.i); s.pts.dedup_by_key(|p| p.i); s.pts.truncate(1000);
+        }
         self.skip.sort_unstable(); self.skip.dedup(); self.skip.truncate(5000);
         let cut = |s: &mut String, n: usize| if s.chars().count() > n { *s = s.chars().take(n).collect() };
         cut(&mut self.title, 300); cut(&mut self.cats, 300); cut(&mut self.bg, 20); cut(&mut self.plot, 20);
         for a in [&mut self.x, &mut self.y, &mut self.y2] {
             cut(&mut a.title, 200); cut(&mut a.fmt, 60);
             for v in [&mut a.min, &mut a.max, &mut a.major] { if v.is_some_and(|x| !x.is_finite()) { *v = None } }
+            a.angle = a.angle.map(|x| x.clamp(-90, 90)); a.every = a.every.min(10_000);
             if a.major.is_some_and(|m| m <= 0.0) { a.major = None }
         }
         for s in &mut self.series {
@@ -1171,7 +1194,7 @@ impl Project {
             s.images.retain(|i| seen.contains(&i.pic));
             s.images.truncate(500);
             s.images.iter_mut().for_each(|i| (i.w, i.h) = (i.w.clamp(8, 4000), i.h.clamp(8, 4000)));
-            s.charts.truncate(100);
+            s.charts.truncate(if s.chartsheet { 1 } else { 100 });
             s.charts.iter_mut().for_each(SheetChart::tidy);
             // Merges: real ranges of more than one cell that do not overlap one another.
             let mut kept: Vec<(u32, u32, u32, u32)> = vec![];

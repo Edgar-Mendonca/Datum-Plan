@@ -18,10 +18,18 @@ const [editTitle, setEditTitle] = createSignal<number | null>(null);
 /** The selected chart on the sheet, for the Chart Design tab and the buttons beside it. */
 export const [chartCtl, setChartCtl] = createSignal<ChartCtl | null>(null);
 const partOf = (e: Event) => ((e.target as Element).closest?.("[data-part]")?.getAttribute("data-part") ?? "area");
+const jOf = (e: Event) => (e.target as Element).closest?.("[data-j]")?.getAttribute("data-j") ?? null;
+/** The series a part belongs to (a series "s2" or one of its points "p2:5"), or -1. */
+export const seriesOf = (part: string) => (part.startsWith("s") ? +part.slice(1) : part.startsWith("p") ? +part.slice(1).split(":")[0] : -1);
 
 /** A chart's look back to the standard one: palette colours, plain lines, no labels, white areas. */
 export const plainLook = (c: ChartDef): ChartDef => ({ ...c, labels: false, font: 0, bg: "", plot: "", gap: 150,
-  series: c.series.map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length], width: 0, dash: "", marker: "", smooth: false, labels: false, trend: "" })) });
+  series: c.series.map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length], width: 0, dash: "", marker: "", smooth: false, labels: false, trend: "", pts: [], lpos: "", lwhat: "" })) });
+/** A series' bars or points with their own colour: one set ("" back to the series' colour). */
+export const withPoint = (c: ChartDef, part: string, color: string): ChartDef => {
+  const [i, j] = part.slice(1).split(":").map(Number);
+  return { ...c, series: c.series.map((s, k) => (k === i ? { ...s, pts: [...(s.pts ?? []).filter(q => q.i !== j), ...(color ? [{ i: j, color }] : [])].sort((a, b) => a.i - b.i) } : s)) };
+};
 
 /** Saves a chart as a picture: PNG (sharp, for documents) or SVG (vector, for drawings and the web). */
 export const savePicture = async (c: ChartDef, d: ChartData | undefined, name: string, svg: boolean) => {
@@ -39,11 +47,12 @@ const saveStyle = async (c: ChartDef) => {
 /** The right-click menu of a chart (on a sheet, or in a view with `view`), for the part clicked. */
 export const chartMenu = (e: MouseEvent, o: { c: ChartDef; d?: ChartData; part: string; set: (c: ChartDef) => void; format: (part: string) => void; remove?: () => void; title?: () => void;
   order?: (front: boolean) => void; duplicate?: () => void; copy: () => void; reset?: () => void; extra?: Item[]; pic?: { c: ChartDef; d?: ChartData; name: string } }) => {
-  const c = o.c, part = o.part, si = part.startsWith("s") ? +part.slice(1) : -1, s = c.series[si];
+  const c = o.c, part = o.part, si = seriesOf(part), s = c.series[si];
   const setS = (x: Partial<Series>) => o.set({ ...c, series: c.series.map((y, j) => (j === si ? { ...y, ...x } : y)) });
   const setA = (k: "x" | "y" | "y2", x: Partial<Axis>) => o.set({ ...c, [k]: { ...(c[k] ?? {}), ...x } });
   const styles = opts()?.chartStyles ?? {};
   const items: Item[] = [{ label: `Format ${partName(c, part, o.d?.names)}…`, keys: "Dbl-click", run: () => o.format(part) }];
+  if (part.startsWith("p")) items.push({ label: "Point Colour", sub: [{ label: "As the series", run: () => o.set(withPoint(c, part, "")) }, "-", ...PALETTE.map((x): Item => ({ label: x, swatch: x, run: () => o.set(withPoint(c, part, x)) }))] });
   if (s) items.push(
     { label: "Change Series Chart Type", sub: ["column", "line", "area"].includes(c.kind) ? [["column", "Columns"], ["line", "Line"], ["area", "Area"]].map(([k, l]) => ({ label: l, on: kindOf(c, si) === k, run: () => setS({ kind: k }) })) : [{ label: "Only in column, line and area charts", off: true }] },
     { label: "Plot on Secondary Axis", on: !!s.y2, off: !["column", "line", "area"].includes(c.kind), run: () => setS({ y2: !s.y2 }) },
@@ -85,7 +94,7 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
   const drag = (e: MouseEvent, i: number, how: string) => {
     e.preventDefault(); e.stopPropagation();
     // A click selects the part under the pointer (a second click on the title edits it); a drag moves the chart.
-    const part = how === "move" ? partOf(e) : "", was = chartSel() === i ? chartPart() : null;
+    const part = how === "move" ? partOf(e) : "", jv = jOf(e), was = chartSel() === i ? chartPart() : null;
     if (chartSel() !== i) setChartPart("");
     if (fmtChart() !== null) setFmtChart(p.charts[i].id);
     setChartSel(i); p.focus();
@@ -109,6 +118,8 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
       if (next !== o) { p.put(p.charts.map((x, j) => (j === i ? next : x))); return; }
       if (how !== "move") return;
       if (part === "title" && was === "title") setEditTitle(o.id);
+      // A second click on a selected series selects the one bar or point under the pointer.
+      else if (part.startsWith("s") && jv !== null && was && seriesOf(was) === +part.slice(1)) setChartPart(`p${part.slice(1)}:${jv}`);
       else setChartPart(part === "area" ? "" : part);
     };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
@@ -174,8 +185,8 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
   // The pane follows the part selected in the chart: its tab, and the part's own settings in view.
   createEffect(on(() => p.part, part => {
     if (!part) return;
-    setTab(part.startsWith("s") ? "series" : part === "x" || part === "y" || part === "y2" ? "axes" : "chart");
-    setTimeout(() => { const el = document.querySelector<HTMLElement>(`.chartpane [data-k="${part}"]`); if (el) { el.scrollIntoView({ block: "nearest" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900); if (part === "title") el.querySelector("input")?.focus(); } });
+    setTab(part.startsWith("s") || part.startsWith("p") ? "series" : part === "x" || part === "y" || part === "y2" ? "axes" : "chart");
+    setTimeout(() => { const el = document.querySelector<HTMLElement>(`.chartpane [data-k="${part.startsWith("p") ? `s${seriesOf(part)}` : part}"]`); if (el) { el.scrollIntoView({ block: "nearest" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900); if (part === "title") el.querySelector("input")?.focus(); } });
   }));
   const c = () => p.chart;
   const set = (x: Partial<ChartDef>) => p.set({ ...c(), ...x });
@@ -192,6 +203,9 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
         <Row l="Major unit" title="The step between gridlines and labels"><Num value={a().major} set={v => setA(q.k, { major: v && v > 0 ? v : null })} /></Row></Show>
       <Row l="Number format"><Sel value={FMTS.some(f => f[0] === (a().fmt ?? "")) ? a().fmt ?? "" : "custom"} set={v => setA(q.k, { fmt: v === "custom" ? a().fmt || "0.00" : v })} options={[...FMTS, ["custom", "Custom…"]]} /></Row>
       <Show when={!FMTS.some(f => f[0] === (a().fmt ?? ""))}><Row l="Format code"><Txt value={a().fmt ?? ""} set={v => setA(q.k, { fmt: v })} placeholder="#,##0.0  or  dd-mmm" /></Row></Show>
+      <Show when={q.k === "x" && !["scatter", "pie", "doughnut"].includes(c().kind)}>
+        <Row l="Label angle"><Sel value={a().angle === null || a().angle === undefined ? "" : String(a().angle)} set={v => setA("x", { angle: v === "" ? null : +v })} options={[["", "Automatic"], ["0", "Level"], ["-45", "Slanted"], ["-90", "Upright"]]} /></Row>
+        <Row l="Label every" title="Show a label on every n-th category (0: as many as fit)"><Num value={a().every || null} set={v => setA("x", { every: Math.max(0, Math.round(v ?? 0)) })} placeholder="Auto" step="1" /></Row></Show>
       <Chk l="Gridlines" value={!!a().grid} set={v => setA(q.k, { grid: v })} /><Chk l="Hide this axis" value={!!a().hide} set={v => setA(q.k, { hide: v })} />
     </fieldset>;
   };
@@ -208,6 +222,8 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
           <Row l="Text size (pt)"><Num value={c().font || null} set={v => set({ font: v ?? 0 })} placeholder="11" /></Row>
           <Chk l="Data labels on every series" value={!!c().labels} set={v => set({ labels: v })} />
           <Show when={["column", "bar"].includes(c().kind) || c().series.some((_, i) => ["column", "bar"].includes(kindOf(c(), i)))}><Row l="Gap between bars (%)" title="The space between groups of bars, as a share of a bar's width"><Num value={c().gap ?? 150} set={v => set({ gap: Math.max(0, Math.min(500, v ?? 150)) })} step="10" /></Row></Show>
+          <Show when={["column", "line", "area"].includes(c().kind)}><Chk l="Data table under the chart" value={!!c().table} set={v => set({ table: v })} /></Show>
+          <Row l="Empty cells" title="How a chart shows cells with no value"><Sel value={c().empty ?? ""} set={v => set({ empty: v })} options={[["", "Gaps"], ["zero", "Zero"], ["span", "Connect the line"]]} /></Row>
           <div data-k="area"><Row l="Chart area"><Col value={c().bg || "#FFFFFF"} set={v => set({ bg: v })} /></Row></div>
           <div data-k="plot"><Row l="Plot area"><Col value={c().plot || "#FFFFFF"} set={v => set({ plot: v === "#FFFFFF" ? "" : v })} /></Row></div>
           <Show when={!p.view}><Row l="Size (px)"><span class="cfwh"><Num value={c().w} set={v => set({ w: Math.max(160, v ?? c().w) })} step="10" />×<Num value={c().h} set={v => set({ h: Math.max(110, v ?? c().h) })} step="10" /></span></Row>
@@ -229,6 +245,11 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
                 <Chk l="Smooth line" value={!!s().smooth} set={v => setS(i, { smooth: v })} />
               </Show>
               <Chk l="Data labels" value={!!s().labels} set={v => setS(i, { labels: v })} />
+              <Show when={s().labels || c().labels}>
+                <Row l="Labels show"><Sel value={s().lwhat ?? ""} set={v => setS(i, { lwhat: v })} options={[["", "Value"], ["name", "Series name"], ["cat", "Category"], ["catval", "Category and value"]]} /></Row>
+                <Row l="Label position"><Sel value={s().lpos ?? ""} set={v => setS(i, { lpos: v })} options={["line", "scatter", "area"].includes(kindOf(c(), i)) ? [["", "Above"], ["below", "Below"], ["center", "Centre"]] : [["", "Outside end"], ["inside", "Inside end"], ["center", "Centre"], ["base", "Inside base"]]} /></Row></Show>
+              <Show when={p.part?.startsWith(`p${i}:`)}><Row l={`Point ${+p.part!.split(":")[1] + 1} colour`}><span class="cfwh"><Col value={(s().pts ?? []).find(q => q.i === +p.part!.split(":")[1])?.color || colorOf(c(), i)} set={v => p.set(withPoint(c(), p.part!, v))} /><button class="btn sm" onClick={() => p.set(withPoint(c(), p.part!, ""))}>As the series</button></span></Row></Show>
+              <Show when={(s().pts ?? []).length}><p class="muted">{(s().pts ?? []).length} bar(s) or point(s) with their own colour. <button class="btn sm" onClick={() => setS(i, { pts: [] })}>All as the series</button></p></Show>
               <Show when={!["pie", "doughnut"].includes(c().kind)}><Chk l="Linear trend line" value={s().trend === "linear"} set={v => setS(i, { trend: v ? "linear" : "" })} /></Show>
               <Show when={!p.view}><div class="cfbtns">
                 <button class="btn sm" disabled={i === 0} onClick={() => { const v = [...c().series]; [v[i - 1], v[i]] = [v[i], v[i - 1]]; set({ series: v }); }}>Up</button>
