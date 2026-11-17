@@ -1063,7 +1063,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.click(".chartpane .cfchk:has-text('Data table') input"); await p.waitForTimeout(300);
     check("Format Chart › Data table draws the values under the chart", (await charts())?.[0].table === true && (await p.$$(".schart svg line")).length > nl + 4);
     await p.click(".chartpane header .x"); await p.waitForTimeout(100);
-    const b0 = await mid("s0"); await p.mouse.click(b0[0], b0[1]); await p.waitForTimeout(150); await p.mouse.click(b0[0], b0[1]); await p.waitForTimeout(150);
+    const b0 = await mid("s0"); await p.mouse.click(b0[0], b0[1]); await p.waitForTimeout(700); await p.mouse.click(b0[0], b0[1]); await p.waitForTimeout(150);
+    check("a slow second click on a selected series selects one bar (its frame and handles)", (await p.$$(".schart svg rect[width='5']")).length === 4);
     await p.mouse.click(b0[0], b0[1], { button: "right" }); await p.waitForTimeout(200);
     check("a second click on a series selects one bar, and its menu offers its own colour", ((await p.textContent(".menu")) ?? "").includes("Point Colour") && ((await p.textContent(".menu")) ?? "").includes("Format Data Point"), `${(await p.textContent(".menu"))?.slice(0, 120)} | ${b0} | ${await p.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return `${e?.tagName} ${e?.getAttribute("data-part")} ${e?.getAttribute("data-j")}`; }, b0)}`);
     await p.hover(".menu button:has-text('Point Colour')"); await p.waitForTimeout(150); await p.click(".menu >> nth=1 >> button >> nth=3"); await p.waitForTimeout(300);

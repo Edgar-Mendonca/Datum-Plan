@@ -146,7 +146,7 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
     <For each={p.charts}>{(ch, i) => { const rc = () => p.g.parse(ch.cell); return (
       <div class="schart" data-i={i()} classList={{ on: chartSel() === i(), fill: !!p.fill }} style={p.fill ? { left: "0", top: "0", width: `${p.fill[0]}px`, height: `${p.fill[1]}px` } : { left: `${p.g.x(rc()[1])}px`, top: `${p.g.y(rc()[0])}px`, width: `${ch.w}px`, height: `${ch.h}px` }}
         onMouseDown={e => { if (e.button === 0) drag(e, i(), "move"); else { if (chartSel() !== i()) setChartPart(""); setChartSel(i()); } }}
-        onDblClick={e => { e.stopPropagation(); const pt = partOf(e); setChartPart(pt === "area" ? "" : pt); setEditTitle(null); setFmtChart(ch.id); }}
+        onDblClick={e => { e.stopPropagation(); const p0 = partOf(e), cur = chartPart(), pt = cur.startsWith("p") && p0.startsWith("s") && seriesOf(cur) === +p0.slice(1) ? cur : p0; setChartPart(pt === "area" ? "" : pt); setEditTitle(null); setFmtChart(ch.id); }}
         onContextMenu={e => { e.preventDefault(); e.stopPropagation(); const p0 = partOf(e), cur = chartSel() === i() ? chartPart() : "", pt = cur.startsWith("p") && p0.startsWith("s") && cur === `p${p0.slice(1)}:${jOf(e)}` ? cur : p0; setChartSel(i()); setChartPart(pt === "area" ? "" : pt); menu(e, i(), pt); }}>
         {(() => { const d = p.data?.[i()], [w, h] = p.fill ?? [ch.w, ch.h]; return <XChart c={ch} d={d} w={w} h={h} sel={chartSel() === i() ? chartPart() || "area" : undefined} />; }) as unknown as JSX.Element}
         <Show when={editTitle() === ch.id}><TitleBox c={ch} done={t => { setEditTitle(null); if (t !== null && t !== (ch.title ?? "")) put1(i(), { ...ch, title: t }); p.focus(); }} /></Show>
