@@ -8,10 +8,10 @@ import { P } from "./store";
 import { money, fmtDay } from "./api";
 
 export type Axis = { title?: string; min?: number | null; max?: number | null; major?: number | null; fmt?: string; grid?: boolean; hide?: boolean };
-export type Series = { name: string; vals: string; kind?: string; y2?: boolean; color?: string; width?: number; dash?: string; marker?: string; smooth?: boolean; labels?: boolean; trend?: string;
+export type Series = { name: string; vals: string; kind?: string; y2?: boolean; color?: string; width?: number; dash?: string; marker?: string; smooth?: boolean; labels?: boolean; trend?: string; hide?: boolean;
   /** In the window only: a soft fill under a line, and a pie's own slice colours. */
   fill?: boolean; colors?: string[] };
-export type ChartDef = { id: number; cell: string; w: number; h: number; kind: string; stack?: string; cats: string; series: Series[]; title?: string; legend?: string; labels?: boolean; font?: number; x?: Axis; y?: Axis; y2?: Axis; bg?: string; plot?: string; gap?: number;
+export type ChartDef = { id: number; cell: string; w: number; h: number; kind: string; stack?: string; cats: string; series: Series[]; title?: string; legend?: string; labels?: boolean; font?: number; x?: Axis; y?: Axis; y2?: Axis; bg?: string; plot?: string; gap?: number; skip?: number[];
   /** In the window's views only: a subtitle, the status date's line, the last value at each line's end,
    *  rounded bars, a time axis (x by date, ticks named), and no "no data" text. */
   subtitle?: string; marker?: { at: number; label: string } | null; ends?: boolean; radius?: number; quiet?: boolean;
@@ -116,7 +116,14 @@ type Tip = { head: string; rows: { col: string; name: string; val: string }[]; g
 /** A chart as SVG at `w` × `h` px. In the window (`hover`, the default) moving over it shows the
  *  values at that place, and `sel` outlines the selected part. */
 export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; hover?: boolean; sel?: string }): JSX.Element => {
-  const c = p.c, fs = c.font || 11, W = p.w, H = p.h, d = p.d ?? { cats: [], xs: [], cat_fmt: "", names: [], vals: [], fmts: [] };
+  // The chart's filter: hidden series and skipped categories are left out (colours stay with their series).
+  const d0 = p.d ?? { cats: [], xs: [], cat_fmt: "", names: [], vals: [], fmts: [] }, keep = p.c.series.map((_, i) => i).filter(i => !p.c.series[i].hide);
+  const skip = new Set(p.c.skip ?? []), cut = <T,>(a: T[] | undefined) => (skip.size && a ? a.filter((_, j) => !skip.has(j)) : a);
+  const c: ChartDef = { ...p.c, series: keep.map(i => ({ ...p.c.series[i], color: colorOf(p.c, i) })) };
+  const d: ChartData = { ...d0, cats: cut(d0.cats)!, xs: cut(d0.xs)!, names: keep.map(i => d0.names[i]), fmts: keep.map(i => d0.fmts[i]), vals: keep.map(i => cut(d0.vals[i] ?? [])!),
+    sx: d0.sx && keep.map(i => cut(d0.sx![i] ?? [])!), tips: d0.tips && keep.map(i => cut(d0.tips![i] ?? [])!) };
+  const sp = (i: number) => `s${keep[i]}`;
+  const fs = c.font || 11, W = p.w, H = p.h;
   const time = c.time, sxOf = (i: number, j: number) => (time ? d.sx?.[i]?.[j] ?? d.xs[j] ?? null : null);
   const n = Math.max(d.cats.length, ...d.vals.map(v => v.length), 0);
   const names = c.series.map((s, i) => d.names[i] || s.name || `Series ${i + 1}`);
@@ -172,7 +179,7 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
   // The selected part: a dashed frame with corner handles, or a handle on each point of a series.
   const selection = (part: string) => {
     const SEL = "var(--blue, #2F6FCF)";
-    if (part.startsWith("s")) return <g pointer-events="none">{(spts[+part.slice(1)] ?? []).slice(0, 400).map(([x, y]) => <rect x={x - 3} y={y - 3} width="6" height="6" fill="#fff" stroke={SEL} stroke-width="1.2" />)}</g>;
+    if (part.startsWith("s")) return <g pointer-events="none">{(spts[keep.indexOf(+part.slice(1))] ?? []).slice(0, 400).map(([x, y]) => <rect x={x - 3} y={y - 3} width="6" height="6" fill="#fff" stroke={SEL} stroke-width="1.2" />)}</g>;
     const b = box[part]; if (!b) return null;
     const [x, y, w, h] = part === "area" ? [1, 1, W - 2, H - 2] : b;
     return <g pointer-events="none"><rect x={x} y={y} width={w} height={h} fill="none" stroke={SEL} stroke-width="1.2" stroke-dasharray={part === "area" ? undefined : "4 3"} />
@@ -322,7 +329,7 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
       const v = scaled(j, i, v0), b = base(j, i, v), a = pos(b, s), z = pos(b + v, s), cx = time ? xAt(i, j) : catAt(j), mid = cx - (slots * bw) / 2 + (stacked ? 0 : bi * bw);
       if (time && !isFinite(cx)) continue;
       const [x, y, w, h] = horiz ? [Math.min(a, z), mid, Math.abs(z - a), bw] : [mid, Math.min(a, z), bw, Math.abs(z - a)];
-      marks.push(<rect data-part={`s${i}`} x={x} y={y} width={Math.max(0.5, w)} height={Math.max(0.5, h)} rx={Math.min(rad, w / 2, h / 2)} fill={colorOf(c, i)} />);
+      marks.push(<rect data-part={sp(i)} x={x} y={y} width={Math.max(0.5, w)} height={Math.max(0.5, h)} rx={Math.min(rad, w / 2, h / 2)} fill={colorOf(c, i)} />);
       spts[i].push(horiz ? [x + w, y + h / 2] : [x + w / 2, y]);
       if (c.series[i].labels || c.labels) labels.push(horiz ? text(Math.max(a, z) + 3, mid + bw / 2, fmtV(i, v0), { size: fs * 0.9 }) : text(mid + bw / 2, Math.min(a, z) - fs * 0.6, fmtV(i, v0), { size: fs * 0.9, anchor: "middle" }));
     }
@@ -341,16 +348,16 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; ho
       const lowY = (j: number) => (k === "area" ? floor(j) : pos(Math.max(s.mn, Math.min(0, s.mx)), s));
       const flush = () => { if (run.length) { d2 += `M${run.map(j => `${pts[j]![0]} ${pts[j]![1]}`).join("L")}L${[...run].reverse().map(j => `${pts[j]![0]} ${lowY(j)}`).join("L")}Z`; } run = []; };
       pts.forEach((p2, j) => { if (p2) run.push(j); else flush(); }); flush();
-      marks.push(<g><defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color={col} stop-opacity={k === "area" ? ".75" : ".32"} /><stop offset="1" stop-color={col} stop-opacity={k === "area" ? ".55" : ".03"} /></linearGradient></defs><path data-part={`s${i}`} d={d2} fill={`url(#${id})`} stroke={k === "area" ? col : "none"} stroke-width="1" pointer-events={k === "area" ? undefined : "none"} /></g>);
+      marks.push(<g><defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color={col} stop-opacity={k === "area" ? ".75" : ".32"} /><stop offset="1" stop-color={col} stop-opacity={k === "area" ? ".55" : ".03"} /></linearGradient></defs><path data-part={sp(i)} d={d2} fill={`url(#${id})`} stroke={k === "area" ? col : "none"} stroke-width="1" pointer-events={k === "area" ? undefined : "none"} /></g>);
       if (k === "area") pts.forEach(q => q && spts[i].push(q));
       if (k === "area") return;
     }
     const smooth = !!ser.smooth;
     pts.forEach(q => q && spts[i].push(q));
-    over.push(<path data-part={`s${i}`} d={pathOf(pts, smooth)} fill="none" stroke="transparent" stroke-width="12" />);
-    over.push(<path data-part={`s${i}`} d={pathOf(pts, smooth)} fill="none" stroke={col} stroke-width={w} stroke-dasharray={dashOf(ser.dash, w)} stroke-linejoin="round" stroke-linecap="round" style={scatter && ser.marker !== "none" && !ser.width ? { display: "none" } : {}} />);
+    over.push(<path data-part={sp(i)} d={pathOf(pts, smooth)} fill="none" stroke="transparent" stroke-width="12" />);
+    over.push(<path data-part={sp(i)} d={pathOf(pts, smooth)} fill="none" stroke={col} stroke-width={w} stroke-dasharray={dashOf(ser.dash, w)} stroke-linejoin="round" stroke-linecap="round" style={scatter && ser.marker !== "none" && !ser.width ? { display: "none" } : {}} />);
     const mk = ser.marker === "none" ? "" : ser.marker && ser.marker !== "auto" ? ser.marker : scatter || (!time && n <= 30 && !c.ends) ? "circle" : "";
-    if (mk) pts.forEach(p2 => { if (p2) over.push(<g data-part={`s${i}`}><Marker x={p2[0]} y={p2[1]} kind={mk} c={col} r={Math.max(2.5, w * 1.3)} /></g>); });
+    if (mk) pts.forEach(p2 => { if (p2) over.push(<g data-part={sp(i)}><Marker x={p2[0]} y={p2[1]} kind={mk} c={col} r={Math.max(2.5, w * 1.3)} /></g>); });
     if (ser.labels || c.labels) pts.forEach((p2, j) => { if (p2) labels.push(text(p2[0], p2[1] - fs * 0.9, fmtV(i, val(i, j)!), { size: fs * 0.9, anchor: "middle" })); });
     // The last value at the line's end, in its colour (labels kept apart).
     if (c.ends) { let j = pts.length - 1; while (j >= 0 && !pts[j]) j--; if (j >= 0) { let y = pts[j]![1]; while (endsAt.some(u => Math.abs(u - y) < fs * 1.2)) y -= fs * 1.2; endsAt.push(y); labels.push(text(pts[j]![0] + 6, y, fmtV(i, val(i, j)!), { bold: true, color: col })); } }

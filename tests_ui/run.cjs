@@ -1021,8 +1021,44 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("…and Enter keeps the new title", (await charts())?.[0].title === "Progress by week");
     const lg = await mid("legend"); await p.mouse.click(lg[0], lg[1]); await p.waitForTimeout(150); await p.keyboard.press("Delete"); await p.waitForTimeout(300);
     check("Delete with the legend selected removes the legend, not the chart", (await charts())?.[0].legend === "none" && (await p.$$(".schart")).length === 1);
+    // 0.9.21: Chart Tools › Chart Design while a chart is selected; the + / brush / funnel buttons beside it; Change Chart Type with previews.
+    await p.keyboard.press("Escape"); await p.click(".schart", { position: { x: 3, y: 150 } }); await p.waitForTimeout(150);
+    check("a selected chart shows Chart Tools › Chart Design on the ribbon", !!(await p.$(".tabs .ctxgrp.chartctx")));
+    await p.click(".tabs .ctxgrp.chartctx button"); await p.waitForTimeout(200);
+    const rt = (await p.textContent(".ribbon")) ?? "";
+    check("…with Add Chart Element, Quick Layout, Change Colours, styles, Switch Row/Column, Select Data, Change Chart Type", ["Add Chart Element", "Quick Layout", "Change Colours", "Switch Row/Column", "Select Data", "Change Chart Type"].every(x => rt.includes(x)) && (await p.$$(".chribgal svg")).length === 5, rt.slice(0, 300));
+    await p.click(".ribbon button:has-text('Quick Layout')"); await p.waitForTimeout(200); await p.click(".chpop .chgal button >> nth=0"); await p.waitForTimeout(300);
+    check("Quick Layout gives the chart a title and a legend on the right", (await charts())?.[0].legend === "right" && !!(await charts())?.[0].title);
+    await p.click(".ch-side button[title^='Chart Elements']"); await p.waitForTimeout(200);
+    await p.click(".chpop .chrow:has-text('Legend') input"); await p.waitForTimeout(300);
+    check("the + button beside the chart turns an element off", (await charts())?.[0].legend === "none" && !(await p.$eval(".chpop .chrow:has-text('Legend') input", e => e.checked)));
+    await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+    await p.click(".ch-side button[title^='Chart Styles']"); await p.waitForTimeout(200);
+    check("the brush shows each style drawn with the chart's own data", (await p.$$(".chpop .chgal button svg")).length >= 6);
+    await p.click(".chpop .chgal button[title='Bold']"); await p.waitForTimeout(300);
+    check("…and a click gives the chart that style", (await charts())?.[0].series.every(x => x.width === 3.5));
+    await p.click(".chpop .cftabs button:has-text('Colour')"); await p.click(".chpop .chcols button:has-text('Greens')"); await p.waitForTimeout(300);
+    check("…and its Colour tab recolours the series", (await charts())?.[0].series[0].color === "#155B32");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+    await p.click(".ch-side button[title^='Chart Filters']"); await p.waitForTimeout(200);
+    await p.click(".chpop .chcats label >> nth=0 >> input"); await p.waitForTimeout(300);
+    check("the funnel leaves a category out of the chart, the cells unchanged", JSON.stringify((await charts())?.[0].skip) === "[0]");
+    await p.click(".chpop .link"); await p.waitForTimeout(300); await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+    check("…and Select all brings it back", ((await charts())?.[0].skip ?? []).length === 0);
+    const n0 = (await charts())?.[0].series.length;
+    await p.click(".ribbon button:has-text('Switch Row/Column')"); await p.waitForTimeout(300);
+    check("Switch Row/Column makes each row a series", (await charts())?.[0].series.length !== n0 && /^=/.test((await charts())?.[0].series[0].name), JSON.stringify((await charts())?.[0]).slice(0, 300));
+    await p.click(".ribbon button:has-text('Change Chart Type')"); await p.waitForTimeout(300);
+    check("Change Chart Type shows every type, its variants drawn small and a large preview", !!(await p.$(".dlg .cttype")) && (await p.$$(".dlg .ctvars button svg")).length >= 3 && !!(await p.$(".dlg .ctprev svg")));
+    await p.click(".dlg .cttype nav button:has-text('Bar')"); await p.click(".dlg .ctvars button[title='Stacked Bar']"); await p.waitForTimeout(150);
+    await p.click(".dlg .cttype nav button:has-text('Combo')"); await p.waitForTimeout(150);
+    check("…its Combo tab sets each series' type and axis", (await p.$$(".dlg .cttab tbody tr")).length >= 2);
+    await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(300);
+    const cc = (await charts())?.[0];
+    check("…and OK changes the chart (columns with a line on the secondary axis)", cc?.kind === "column" && cc.series.some(x => x.kind === "line" && x.y2), JSON.stringify(cc?.series).slice(0, 300));
     await p.click(".schart", { position: { x: 3, y: 150 } }); await p.waitForTimeout(100); await p.keyboard.press("Delete"); await p.waitForTimeout(300);
-    check("Delete removes the selected chart", (await charts())?.length === 0 && (await p.$$(".schart")).length === 0); }
+    check("Delete removes the selected chart", (await charts())?.length === 0 && (await p.$$(".schart")).length === 0);
+    check("…and Chart Tools goes with it", !(await p.$(".tabs .ctxgrp.chartctx"))); }
   // 0.5.17: Sheet Tools > Home opens by itself in Sheets: borders, merge, wrap, cell styles; tabs rename in place.
   check("the ribbon shows Gantt Chart Tools first, then Sheet Tools", await p.evaluate(() => { const g = [...document.querySelectorAll(".tabs .ctxgrp")].map(x => x.querySelector("small")?.textContent); return g.indexOf("Gantt Chart Tools") >= 0 && g.indexOf("Gantt Chart Tools") < g.indexOf("Sheet Tools"); }));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200); await p.click('.side button[title="Sheets"]'); await p.waitForTimeout(300);

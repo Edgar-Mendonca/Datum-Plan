@@ -1270,3 +1270,48 @@ svg.scatter .axis { stroke: var(--line3, #9AA3AF); } svg.scatter .lab { font-siz
 .chartpane-fixed .chartpane { position: fixed; top: 64px; bottom: 24px; right: 0; z-index: 60; }
 .chartbox header { flex-wrap: wrap; row-gap: 4px; }
 .chartbox header button { white-space: nowrap; }
+/* Chart Tools (0.9.21): the Chart Design tab, the buttons beside a chart, their boxes, the type dialog. */
+.ctxgrp.chartctx { border-top-color: #8E44AD; }
+.ctxgrp.chartctx small { color: #8E44AD; }
+.chribgal { display: flex; align-items: center; gap: 3px; height: 54px; padding: 0 2px; }
+.chribgal button { border: 1px solid var(--line); background: #fff; padding: 1px; line-height: 0; }
+.chribgal button:hover { border-color: var(--blue); }
+.chribgal .more { height: 46px; width: 16px; line-height: normal; font-size: 10px; }
+.schart .ch-side { position: absolute; left: calc(100% + 6px); top: 0; display: flex; flex-direction: column; gap: 4px; }
+.schart .ch-side button { width: 26px; height: 26px; display: grid; place-items: center; background: var(--bg2); border: 1px solid var(--line3); border-radius: 3px; box-shadow: 0 1px 4px #0002; font-size: 17px; color: var(--text2); cursor: pointer; }
+.schart .ch-side button:hover { border-color: var(--blue); color: var(--blue); }
+.schart .ch-side svg { width: 15px; height: 15px; }
+.chpop { position: fixed; background: var(--bg2); border: 1px solid var(--line3); box-shadow: 0 8px 24px #0003; border-radius: 4px; padding: 8px 10px; max-height: 76vh; overflow: auto; font-size: 12.5px; }
+.chlist { display: flex; flex-direction: column; gap: 3px; min-width: 200px; }
+.chlist b { font-size: 12.5px; margin-bottom: 3px; }
+.chlist small { font-weight: 600; color: var(--muted); margin-top: 6px; display: flex; justify-content: space-between; gap: 10px; }
+.chlist label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.chrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.chrow .more { width: 20px; height: 20px; font-size: 15px; color: var(--muted); }
+.chrow .more:hover { color: var(--blue); }
+.chcats { max-height: 240px; overflow: auto; display: flex; flex-direction: column; gap: 2px; padding-right: 6px; }
+.chfilter .link { font-weight: 400; color: var(--blue); font-size: 11.5px; }
+.chgal { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; }
+.chgal.wide { grid-template-columns: repeat(4, auto); }
+.chgal button { display: flex; flex-direction: column; align-items: center; gap: 2px; border: 1px solid var(--line); background: #fff; padding: 2px; color: #3A4553; }
+.chgal button:hover, .chgal button.on { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+.chgal small { font-size: 10.5px; }
+.chstylepop { width: 400px; display: flex; flex-direction: column; gap: 8px; }
+.chcols { display: flex; flex-direction: column; gap: 2px; min-width: 240px; }
+.chcols button { display: flex; align-items: center; gap: 10px; padding: 4px 6px; text-align: left; }
+.chcols button:hover { background: var(--pale); }
+.chcols span { display: flex; }
+.chcols i { width: 14px; height: 14px; }
+.cttype { display: flex; gap: 14px; min-height: 420px; }
+.cttype nav { display: flex; flex-direction: column; min-width: 130px; border-right: 1px solid var(--line); padding-right: 8px; }
+.cttype nav button { text-align: left; padding: 6px 8px; border-left: 3px solid transparent; }
+.cttype nav button.on { border-left-color: var(--blue); background: var(--pale); font-weight: 600; }
+.ctmain { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 560px; }
+.ctvars { display: flex; gap: 6px; flex-wrap: wrap; }
+.ctvars button { display: flex; flex-direction: column; align-items: center; gap: 2px; border: 1px solid var(--line); background: #fff; padding: 2px; color: #3A4553; }
+.ctvars button.on, .ctvars button:hover { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+.ctvars small { font-size: 10.5px; }
+.ctprev { border: 1px solid var(--line); align-self: flex-start; line-height: 0; }
+.cttab { border-collapse: collapse; }
+.cttab th, .cttab td { padding: 4px 10px 4px 0; text-align: left; font-size: 12.5px; }
+.cttab td:last-child, .cttab th:last-child { text-align: center; }

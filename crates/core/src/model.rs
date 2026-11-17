@@ -581,12 +581,16 @@ pub struct SheetChart {
     pub x: ChartAxis, pub y: ChartAxis, pub y2: ChartAxis,
     /// Colours of the background and the plot area ("" for white), and the gap between bars (% of a bar).
     pub bg: String, pub plot: String, pub gap: u16,
+    /// Categories left out of the chart by its filter (positions in the category range), the cells unchanged.
+    pub skip: Vec<u32>,
 }
 /// One series: its name (text, or "=B1" read from a cell), its values range, and its look.
 /// `dash`: solid, dash, dot; `marker`: none, auto, circle, square, diamond, triangle; `trend`: "", linear.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ChartSeries { pub name: String, pub vals: String, pub kind: String, pub y2: bool, pub color: String, pub width: f32, pub dash: String, pub marker: String, pub smooth: bool, pub labels: bool, pub trend: String }
+pub struct ChartSeries { pub name: String, pub vals: String, pub kind: String, pub y2: bool, pub color: String, pub width: f32, pub dash: String, pub marker: String, pub smooth: bool, pub labels: bool, pub trend: String,
+    /// Left out of the chart by its filter (the series and its cells stay).
+    pub hide: bool }
 /// An axis: its title, bounds and step (None: automatic), number format ("" = the cells'), gridlines and whether it shows.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -608,6 +612,7 @@ impl SheetChart {
         self.font = if self.font.is_finite() && self.font > 0.0 { self.font.clamp(6.0, 36.0) } else { 0.0 };
         self.gap = self.gap.min(500);
         self.series.truncate(40);
+        self.skip.sort_unstable(); self.skip.dedup(); self.skip.truncate(5000);
         let cut = |s: &mut String, n: usize| if s.chars().count() > n { *s = s.chars().take(n).collect() };
         cut(&mut self.title, 300); cut(&mut self.cats, 300); cut(&mut self.bg, 20); cut(&mut self.plot, 20);
         for a in [&mut self.x, &mut self.y, &mut self.y2] {

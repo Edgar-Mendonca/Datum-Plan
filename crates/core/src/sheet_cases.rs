@@ -850,5 +850,15 @@ fn charts_read_their_ranges_follow_edits_and_export_natively() {
     let mut x = String::new();
     z.by_name("xl/charts/chart1.xml").unwrap().read_to_string(&mut x).unwrap();
     assert!(x.contains("<c:barChart>") && x.contains("<c:lineChart>") && x.contains("Data!$B$2:$B$4") && x.contains("1F5FAD"), "{}", &x[..x.len().min(600)]);
+    // A series left out by the chart's filter stays in the plan but not in the workbook's chart; skipped categories are tidied.
+    let mut ch = doc.p.sheets[0].charts[0].clone();
+    ch.series[1].hide = true; ch.skip = vec![2, 0, 2];
+    op(&mut doc, Op::SheetCharts { k: 0, charts: vec![ch] });
+    assert_eq!(doc.p.sheets[0].charts[0].skip, [0, 2]);
+    crate::io::table::write_sheets_xlsx(&Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 20)), &path).unwrap();
+    let mut z = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let mut x = String::new();
+    z.by_name("xl/charts/chart1.xml").unwrap().read_to_string(&mut x).unwrap();
+    assert!(x.contains("<c:barChart>") && !x.contains("<c:lineChart>"), "the hidden line series is left out");
     let _ = std::fs::remove_file(path);
 }

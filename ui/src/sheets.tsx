@@ -23,7 +23,7 @@ import { askText, askYes, Dialog, Row } from "./ui";
 import { condLooks, lookCss, condMenu, bounds as cfBounds } from "./condfmt";
 import type { CondRule } from "./api";
 import { colorPalette } from "./colors";
-import { openDialog } from "./store";
+import { openDialog, setTab } from "./store";
 import * as X from "./sheetcells";
 import type { ColFilter, DefName, Validation } from "./api";
 
@@ -849,7 +849,7 @@ export const Sheets = () => {
     if (!ch || b.r1 === b.r0 && b.c1 === b.c0) return toast("Select the cells to chart first: a column of labels or dates and one or more columns of numbers, with their headings.");
     if (kind === "line" || kind === "scatter") ch.series = ch.series.map(s => ({ ...s, width: 2.25 }));
     ch.cell = a1(b.r0, b.c1 + 2);
-    putCharts([...charts(), ch]).then(() => { setChartSel(charts().length - 1); setFmtChart(charts()[charts().length - 1]?.id ?? null); });
+    putCharts([...charts(), ch]).then(() => { setChartSel(charts().length - 1); setTab("chart"); setFmtChart(charts()[charts().length - 1]?.id ?? null); });
   };
   const placePic = (id: number) => {
     const im = new Image();

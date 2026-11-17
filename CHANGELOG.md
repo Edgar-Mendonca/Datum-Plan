@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.21 — 2026-11-17
+
+Chart Tools: the ribbon tab and the buttons beside a chart.
+
+- **Chart Tools › Chart Design** appears on the ribbon while a chart on a sheet is selected (and opens when you insert one): Add Chart Element, Quick Layout, Change Colours, the chart styles drawn with your data, Switch Row/Column, Select Data, Change Chart Type, Format Chart, Reset to Match Style and Save as Picture.
+- **Three buttons beside a selected chart:** **+** ticks chart elements on and off (axes, axis titles, title, data labels, gridlines, legend, trendline, each with its options); the **brush** gives styles and colour sets; the **funnel** leaves series or categories out of the chart without touching the cells.
+- **Change Chart Type** is a dialog: every type, its variants drawn small with the chart's own data, a large preview, and a **Combo** tab to set each series' type and axis (columns with a line on the secondary axis in one click).
+- **Switch Row/Column** turns rows into series and series into categories.
+- Saving a chart template asks for its name in the app's own box.
+- A workbook export leaves out the series hidden by a chart's filter.
+
 ## 0.9.20 — 2026-11-17
 
 Charts you work on directly, as in a spreadsheet.

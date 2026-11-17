@@ -745,7 +745,7 @@ fn xl_chart(ch: &crate::model::SheetChart, sheets: &[crate::model::SheetData], n
     let cats = xl_range(&ch.cats, sheets, names, host);
     let mut main = Chart::new(kind_of(base));
     let mut extra: Vec<(String, Chart)> = vec![];
-    for s in &ch.series {
+    for s in ch.series.iter().filter(|s| !s.hide) {
         let Some(v) = xl_range(&s.vals, sheets, names, host) else { continue };
         let k = own(s);
         let chart = if k == base || (k == "column" && base == "column") { &mut main } else {

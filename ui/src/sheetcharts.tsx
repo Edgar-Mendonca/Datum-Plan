@@ -3,16 +3,20 @@
 // saved styles). A click selects a part (title, legend, an axis, a series, the plot); double-click
 // formats it; right-click gives the chart's menu; the title is edited in place. Each change is one
 // Undo step (Op::SheetCharts).
-import { For, Index, JSX, Show, createEffect, createSignal, on } from "solid-js";
+import { For, Index, JSX, Show, createEffect, createSignal, on, onCleanup } from "solid-js";
 import { ChartData, ChartDef, Series, Axis, KINDS, PALETTE, XChart, colorOf, kindOf, lookOf, withLook, partName, chartSvg, chartCanvas } from "./xchart";
 import { opts, setOpts, call, toast, openMenu, Item } from "./store";
 import { Options } from "./api";
+import { askText } from "./ui";
+import { ChartCtl, SideButtons, changeType } from "./charttools";
 
 export const [chartSel, setChartSel] = createSignal(-1);
 export const [fmtChart, setFmtChart] = createSignal<number | null>(null);
 /** The selected part of the selected chart ("" = the whole chart). */
 export const [chartPart, setChartPart] = createSignal("");
 const [editTitle, setEditTitle] = createSignal<number | null>(null);
+/** The selected chart on the sheet, for the Chart Design tab and the buttons beside it. */
+export const [chartCtl, setChartCtl] = createSignal<ChartCtl | null>(null);
 const partOf = (e: Event) => ((e.target as Element).closest?.("[data-part]")?.getAttribute("data-part") ?? "area");
 
 /** A chart's look back to the standard one: palette colours, plain lines, no labels, white areas. */
@@ -27,7 +31,7 @@ export const savePicture = async (c: ChartDef, d: ChartData | undefined, name: s
   if (path) toast(`Saved ${path}`, true);
 };
 const saveStyle = async (c: ChartDef) => {
-  const name = prompt("Save this chart's look as a template named:", "")?.trim(); if (!name) return;
+  const name = (await askText("Save as Template", "Template name", ""))?.trim(); if (!name) return;
   const o = { ...opts()!, chartStyles: { ...(opts()?.chartStyles ?? {}), [name]: lookOf(c) } } as Options;
   await call("set_options", { opts: o }); setOpts(o); toast(`Template “${name}” saved: right-click any chart › Apply Template, in any plan.`, true);
 };
@@ -39,7 +43,6 @@ export const chartMenu = (e: MouseEvent, o: { c: ChartDef; d?: ChartData; part: 
   const setS = (x: Partial<Series>) => o.set({ ...c, series: c.series.map((y, j) => (j === si ? { ...y, ...x } : y)) });
   const setA = (k: "x" | "y" | "y2", x: Partial<Axis>) => o.set({ ...c, [k]: { ...(c[k] ?? {}), ...x } });
   const styles = opts()?.chartStyles ?? {};
-  const kinds = (cur: string, set: (k: string) => void): Item[] => KINDS.map(([k, l]) => ({ label: l, on: cur === k, run: () => set(k) }));
   const items: Item[] = [{ label: `Format ${partName(c, part, o.d?.names)}…`, keys: "Dbl-click", run: () => o.format(part) }];
   if (s) items.push(
     { label: "Change Series Chart Type", sub: ["column", "line", "area"].includes(c.kind) ? [["column", "Columns"], ["line", "Line"], ["area", "Area"]].map(([k, l]) => ({ label: l, on: kindOf(c, si) === k, run: () => setS({ kind: k }) })) : [{ label: "Only in column, line and area charts", off: true }] },
@@ -52,7 +55,7 @@ export const chartMenu = (e: MouseEvent, o: { c: ChartDef; d?: ChartData; part: 
     { label: "Number Format", sub: [["", "As the cells"], ["0", "0"], ["#,##0", "#,##0"], ["0%", "0%"], ["0.0%", "0.0%"], ["mmm-yy", "mmm-yy"], ["dd-mmm-yy", "dd-mmm-yy"]].map(([k, l]) => ({ label: l, on: (c[part]?.fmt ?? "") === k, run: () => setA(part, { fmt: k }) })) });
   if (o.title && (part === "title" || part === "area")) items.push({ label: c.title ? "Edit Chart Title" : "Add Chart Title", run: o.title });
   items.push("-",
-    { label: "Change Chart Type", sub: kinds(c.kind, k => o.set({ ...c, kind: k })) },
+    { label: "Change Chart Type…", run: () => changeType({ c, d: o.d, set: o.set, format: o.format }) },
     ...(o.remove ? [{ label: "Select Data…", run: () => o.format("data") }] : []),
     "-",
     { label: "Save as Template…", run: () => saveStyle(c) },
@@ -110,10 +113,13 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
     };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
+  const fmt = (c: ChartDef) => (pt: string) => { setChartPart(pt === "area" || pt === "data" ? "" : pt); setFmtChart(c.id); if (pt === "data") setPaneTab("series"); };
+  createEffect(() => { const i = chartSel(), c = p.charts[i]; setChartCtl(c ? { c, d: p.data?.[i], set: x => put1(i, x), format: fmt(c), a1: p.g.a1, parse: p.g.parse } : null); });
+  onCleanup(() => setChartCtl(null));
   const copy = async (i: number) => { const cv = await chartCanvas(p.charts[i], p.data?.[i], 2); (await import("./picture")).copyCanvas(cv, "Chart", 16); };
   const menu = (e: MouseEvent, i: number, part: string) => {
     const c = p.charts[i];
-    chartMenu(e, { c, d: p.data?.[i], part, set: x => put1(i, x), format: pt => { setChartPart(pt === "area" || pt === "data" ? "" : pt); setFmtChart(c.id); if (pt === "data") setPaneTab("series"); },
+    chartMenu(e, { c, d: p.data?.[i], part, set: x => put1(i, x), format: fmt(c),
       remove: () => { p.put(p.charts.filter((_, j) => j !== i)); setChartSel(-1); setFmtChart(null); },
       title: () => { if (!c.title) put1(i, { ...c, title: "Chart Title" }); setEditTitle(c.id); },
       order: front => { const rest = p.charts.filter((_, j) => j !== i); p.put(front ? [...rest, c] : [c, ...rest]); setChartSel(front ? rest.length : 0); },
@@ -136,6 +142,7 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
             <button title="Remove the chart" onClick={() => { p.put(p.charts.filter((_, j) => j !== i())); setChartSel(-1); }}>×</button>
             <button title="More: chart type, templates, pictures, order" onClick={e => menu(e, i(), chartPart() || "area")}>⋯</button>
           </div>
+          <SideButtons t={chartCtl} />
         </Show>
       </div>); }}</For>
   );

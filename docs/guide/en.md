@@ -455,6 +455,20 @@ Work on a chart as in a spreadsheet:
 - **Right-click** for the chart's menu: Format the part, Change Chart Type, Select Data, Save as Template, Apply Template, Reset to Match Style, Copy as Picture, Save as Picture (PNG or SVG), Duplicate, Bring to Front, Send to Back and Delete. On a series it also offers Change Series Chart Type, Plot on Secondary Axis, Data Labels and a Trendline; on the legend its position; on an axis its gridlines and number format.
 - **Delete** removes the selected part (a series, the title, the legend or an axis), or the chart when the whole chart is selected. [[Esc]] first clears the part, then the chart.
 
+While a chart is selected, the ribbon shows **Chart Tools › Chart Design**:
+- **Add Chart Element:** axes, axis titles, chart title, data labels (on every series or one), gridlines, legend and its place, trendlines.
+- **Quick Layout:** six layouts drawn as they would look (title and legend places, labels, axis titles, gridlines).
+- **Change Colours:** colour sets for the series (colourful, colour-blind safe, blues, oranges, greens, greys, blue and orange); beside it, the chart's styles drawn with its own data (▾ shows them all).
+- **Switch Row/Column:** each row becomes a series and each series a category (when the series read whole columns, or whole rows, side by side).
+- **Select Data:** the cells each series reads, its name and the categories (the Format pane's Series tab).
+- **Change Chart Type:** every type on the left (column, bar, line, area, scatter, pie, combo), its variants drawn small with your data, and a large preview. **Combo** sets each series' type (columns, line, area) and whether it is on the secondary axis, with shortcuts for columns and a line.
+- Format Chart, Reset to Match Style and Save as Picture.
+
+Beside a selected chart are three buttons:
+- **+ (Chart Elements):** tick an element on or off; the arrow beside it gives its options.
+- **Brush (Chart Styles):** the styles drawn with the chart's data, and a **Colour** tab.
+- **Funnel (Chart Filters):** untick a series or a category to leave it out of the chart; the cells stay as they are, and **Select all** brings everything back. A workbook export leaves hidden series out too.
+
 **Format Chart** (double-click, **Format**, or right-click › Format):
 - **Chart:** type, stacking (side by side, stacked, 100 %), title, legend, text size, data labels, the gap between bars, the chart and plot area colours, size, and the category cells.
 - **Series:** each series' name (typed, or =B1 read from a cell), its cells, how it is drawn in a combined chart (columns, line or area), the secondary axis on the right, colour, line width, dashes, markers, smooth lines, data labels and a linear trend line. Add, remove and reorder series.

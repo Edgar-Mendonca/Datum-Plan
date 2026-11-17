@@ -21,6 +21,9 @@ import { PAPERS, sheetPage } from "./print";
 import type { SheetPage } from "./api";
 import { askText } from "./ui";
 import { colorPalette } from "./colors";
+import { chartCtl } from "./sheetcharts";
+import { elementMenu, quickLayout, changeColours, moreStyles, changeType, switchRowCol, STYLES as CSTYLES, Thumb } from "./charttools";
+import { savePicture, plainLook } from "./sheetcharts";
 
 const GH = "https://github.com/Edgar-Mendonca/Datum-Plan";
 export const FONTS = ["Aptos", "Calibri", "Arial", "Segoe UI", "Tahoma", "Verdana", "Times New Roman", "Cambria", "Georgia", "Garamond", "Consolas", "IBM Plex Sans"];
@@ -133,7 +136,7 @@ export const palette = () => openDialog(() => {
 
 // Home serves the task sheet and the Sheets alike; leaving Sheets from its own tabs goes back to Home.
 let lastView = "";
-const followView = () => { const v = view(); if (v === lastView) return; const was = lastView; lastView = v; if (v === "sheets" && tab() === "format") setTab("sheet"); else if (was === "sheets" && tab() === "sheet") setTab("task"); };
+const followView = () => { if (tab() === "chart" && !chartCtl()) setTab(view() === "sheets" ? "sheet" : "task"); const v = view(); if (v === lastView) return; const was = lastView; lastView = v; if (v === "sheets" && tab() === "format") setTab("sheet"); else if (was === "sheets" && tab() === "sheet") setTab("task"); };
 /** The contextual tabs are always there; opening one takes you to the view it works on. */
 const openCtx = (k: "format" | "sheet") => { if (k === "sheet" && view() !== "sheets") { C.view("sheets"); toast("Sheet Tools work on the Sheets: opened Sheets.", true); } else if (k === "format" && view() === "sheets") { C.view("gantt"); toast("Gantt Chart Tools work on the Gantt chart: opened the Gantt.", true); } setTab(k); };
 export const TitleBar = (p: { update: string | null }) => (void createEffect(followView),
@@ -153,8 +156,9 @@ export const TitleBar = (p: { update: string | null }) => (void createEffect(fol
     </div>
     <nav class="tabs">
       <button class="file" onClick={() => setBackstage("home")}>File</button>
-      <For each={[["task", "Home"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["sheet", "Format"], ["help", "Help"]]}>{([k, l]) =>
-        k === "sheet" ? <div class="ctxgrp sheetctx"><small>Sheet Tools</small><button classList={{ on: tab() === "sheet" }} title="Formatting, page setup and printing of the sheets (opens Sheets)" onClick={() => openCtx("sheet")}>{l}</button></div>
+      <For each={[["task", "Home"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["sheet", "Format"], ["chart", "Chart Design"], ["help", "Help"]]}>{([k, l]) =>
+        k === "chart" ? <Show when={chartCtl() && view() === "sheets"}><div class="ctxgrp chartctx"><small>Chart Tools</small><button classList={{ on: tab() === "chart" }} title="Elements, layouts, colours, styles, data and type of the selected chart" onClick={() => setTab("chart")}>{l}</button></div></Show>
+        : k === "sheet" ? <div class="ctxgrp sheetctx"><small>Sheet Tools</small><button classList={{ on: tab() === "sheet" }} title="Formatting, page setup and printing of the sheets (opens Sheets)" onClick={() => openCtx("sheet")}>{l}</button></div>
           : k === "format" ? <div class="ctxgrp"><small>Gantt Chart Tools</small><button classList={{ on: tab() === k }} title="Bar styles, columns and the look of the Gantt chart (opens the Gantt)" onClick={() => openCtx("format")}>{l}</button></div>
           : <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For>
     </nav>
@@ -256,6 +260,20 @@ const SheetCells = () => {
     <G l="Insert" h="sheets"><S><B i="chart" l="Chart" title="A chart of the selected cells (a column of labels or dates and columns of numbers with their headings): column, bar, line, area, scatter, pie; then Format Chart for every detail" run={() => A()?.chart("column")} dd={e => openMenu(e, ([["column", "Column"], ["bar", "Bar"], ["line", "Line"], ["area", "Area"], ["scatter", "Scatter (X Y)"], ["pie", "Pie"], ["doughnut", "Doughnut"]] as [string, string][]).map(([k, l]) => ({ label: l, run: () => A()?.chart(k) } as Item)))} /><B i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><B i="link" l="Link…" title="A web or mail link in the cell (Ctrl+K); Ctrl+click opens it" run={run("editLink")} /></S><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /><B i="import" l="Workbook…" title="Bring the sheets of a workbook (.xlsx, .xls, .ods) in as sheet tabs: values, formulas, formats, styles, merged cells, sizes, pictures" run={importWorkbook} /></S></G>
   </>;
 };
+/** Chart Tools › Chart Design: for the chart selected on a sheet. */
+const ChartDesign = () => {
+  const t = () => chartCtl()!, ok = () => !!chartCtl();
+  const sw = () => { const c = t(); if (!c.a1 || !c.parse) return; const n = switchRowCol(c.c, c.a1, c.parse); if (n) c.set(n); else toast("Switch Row/Column needs series that each read one column (or one row) of cells, side by side, over the same rows. Select Data shows each series' cells.", false); };
+  return <Show when={ok()}>
+    <G l="Chart Layouts" h="sheets"><B big i="chart" l="Add Chart Element" dd={e => elementMenu(e, t())} title="Axes, axis titles, chart title, data labels, gridlines, legend and trendlines" /><B big i="vlayout" l="Quick Layout" dd={e => quickLayout(e, t())} title="Where the title, legend, labels and axis titles go, in one click" /></G>
+    <G l="Chart Styles" h="sheets"><B big i="palette" l="Change Colours" dd={e => changeColours(e, chartCtl)} title="Colour sets for the series" />
+      <div class="chribgal"><For each={CSTYLES.slice(0, 5)}>{([l, f]) => <button title={l} onClick={() => t().set(f(t().c))}>{(() => <Thumb c={f(t().c)} d={t().d} w={66} h={44} />) as unknown as JSX.Element}</button>}</For>
+        <button class="more" title="More styles" onClick={e => moreStyles(e, chartCtl)}>▾</button></div></G>
+    <G l="Data" h="sheets"><B big i="repeat" l="Switch Row/Column" run={sw} title="Series become categories and categories series" /><B big i="table" l="Select Data" run={() => t().format("data")} title="The cells each series reads, its name, and the categories" /></G>
+    <G l="Type" h="sheets"><B big i="chart" l="Change Chart Type" run={() => changeType(t())} title="Every chart type with a preview, and Combo for a type and axis per series" /></G>
+    <G l="Chart" h="sheets"><S><B i="opts" l="Format Chart" run={() => t().format("")} /><B i="clear" l="Reset to Match Style" run={() => t().set(plainLook(t().c))} /><B i="image" l="Save as Picture" dd={e => openMenu(e, [{ label: "PNG…", run: () => savePicture(t().c, t().d, t().c.title || "Chart", false) }, { label: "SVG…", run: () => savePicture(t().c, t().d, t().c.title || "Chart", true) }])} /></S></G>
+  </Show>;
+};
 /** Sheet Tools › Format, second part: the page views, page setup and printing. Each sheet keeps its own page setup. */
 const SheetPageTab = () => {
   const A = () => sheetApi(), pg = () => A()?.page() ?? {}, set = (x: Partial<SheetPage>) => A()?.setPage(x);
@@ -331,6 +349,7 @@ export const Ribbon = () => (
       <G l="Split View" h="split"><S><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
     </Show>
     <Show when={tab() === "sheet"}><SheetCells /><SheetPageTab /></Show>
+    <Show when={tab() === "chart"}><ChartDesign /></Show>
     <Show when={tab() === "format"}>
       <G l="Format" h="format"><B big i="style" l="Bar Styles" run={() => D.barStyles()} /><B big i="grid" l="Conditional Formatting" run={() => D.condFormat()} /><S><label class="chk"><input type="checkbox" checked={gstyle().grid} onChange={e => act({ Ui: { key: "gantt", value: { ...gstyle(), grid: e.currentTarget.checked } } })} />Gridlines</label><B i="detail" l="Details Pane" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
       <G l="Columns" h="columns"><B big i="fx" l="Formula Column" run={() => D.formulaColumn()} /><B big i="cols" l="Insert Column" dd={e => openMenu(e, fieldMenu(k => saveCols([...cols(), [k, 90]])))} /><S><B i="table" l="Columns…" run={() => D.columnsDialog()} /><B i="fields" l="Custom Fields" run={() => D.customFields()} /></S></G>
