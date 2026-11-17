@@ -1026,6 +1026,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("a selected chart shows Chart Tools › Chart Design on the ribbon", !!(await p.$(".tabs .ctxgrp.chartctx")));
     await p.click(".tabs .ctxgrp.chartctx button"); await p.waitForTimeout(200);
     const rt = (await p.textContent(".ribbon")) ?? "";
+    check("Chart Design fits the ribbon, nothing folded", await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth <= 1 && !r.querySelector(".grp[data-fit='4']")));
     check("…with Add Chart Element, Quick Layout, Change Colours, styles, Switch Row/Column, Select Data, Change Chart Type", ["Add Chart Element", "Quick Layout", "Change Colours", "Switch Row/Column", "Select Data", "Change Chart Type"].every(x => rt.includes(x)) && (await p.$$(".chribgal svg")).length === 5, rt.slice(0, 300));
     await p.click(".ribbon button:has-text('Quick Layout')"); await p.waitForTimeout(200); await p.click(".chpop .chgal button >> nth=0"); await p.waitForTimeout(300);
     check("Quick Layout gives the chart a title and a legend on the right", (await charts())?.[0].legend === "right" && !!(await charts())?.[0].title);

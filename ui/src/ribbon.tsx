@@ -270,8 +270,7 @@ const ChartDesign = () => {
       <div class="chribgal"><For each={CSTYLES.slice(0, 5)}>{([l, f]) => <button title={l} onClick={() => t().set(f(t().c))}>{(() => <Thumb c={f(t().c)} d={t().d} w={66} h={44} />) as unknown as JSX.Element}</button>}</For>
         <button class="more" title="More styles" onClick={e => moreStyles(e, chartCtl)}>▾</button></div></G>
     <G l="Data" h="sheets"><B big i="repeat" l="Switch Row/Column" run={sw} title="Series become categories and categories series" /><B big i="table" l="Select Data" run={() => t().format("data")} title="The cells each series reads, its name, and the categories" /></G>
-    <G l="Type" h="sheets"><B big i="chart" l="Change Chart Type" run={() => changeType(t())} title="Every chart type with a preview, and Combo for a type and axis per series" /></G>
-    <G l="Location" h="sheets"><B big i="sheet" l="Move Chart" run={() => t().move?.()} title="Move the chart to a chart sheet of its own, or onto another sheet" /></G>
+    <G l="Type" h="sheets"><B big i="chart" l="Change Chart Type" run={() => changeType(t())} title="Every chart type with a preview, and Combo for a type and axis per series" /><B big i="sheet" l="Move Chart" run={() => t().move?.()} title="Move the chart to a chart sheet of its own, or onto another sheet" /></G>
     <G l="Chart" h="sheets"><S><B i="opts" l="Format Chart" run={() => t().format("")} /><B i="clear" l="Reset to Match Style" run={() => t().set(plainLook(t().c))} /><B i="image" l="Save as Picture" dd={e => openMenu(e, [{ label: "PNG…", run: () => savePicture(t().c, t().d, t().c.title || "Chart", false) }, { label: "SVG…", run: () => savePicture(t().c, t().d, t().c.title || "Chart", true) }])} /></S></G>
   </Show>;
 };
