@@ -1085,10 +1085,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(300);
     check("…and OK adds the series", (await charts())?.[0].series.length === nS + 1 && (await charts())?.[0].series[nS].vals === picked);
     const sheetsNow = () => p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Batch?.some(o => o.SheetCharts || o.Sheet)).pop()?.[1].op.Batch);
+    check("…and the chart is selected again when Select Data closes", !!(await p.$(".tabs .ctxgrp.chartctx")));
+    await p.click(".tabs .ctxgrp.chartctx button"); await p.waitForTimeout(200);
     await p.click(".ribbon button:has-text('Move Chart')"); await p.waitForTimeout(300); await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(500);
     const mv = await sheetsNow(), cs = mv?.find(o => o.Sheet)?.Sheet.sheet;
     check("Move Chart › New sheet makes a chart sheet, its ranges naming their sheet, in one step", cs?.chartsheet === true && cs.charts[0].series[0].vals.includes("!") && mv.some(o => o.SheetCharts && o.SheetCharts.charts.length === 0), JSON.stringify(mv).slice(0, 300));
     check("…and opens it: the chart fills the tab, still selected", !!(await p.$(".chsheet .schart.fill svg")) && !!(await p.$(".sheettabs button.on:has-text('Chart1')")) && !!(await p.$(".tabs .ctxgrp.chartctx")));
+    await p.click(".tabs .ctxgrp.chartctx button"); await p.waitForTimeout(200);
     await p.click(".ribbon button:has-text('Move Chart')"); await p.waitForTimeout(300); await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(500);
     const back = await sheetsNow();
     check("…and Move Chart › Object in puts it back on a sheet and removes the chart sheet", back?.some(o => o.SheetCharts?.charts.length === 1) && back.some(o => o.Sheet && o.Sheet.sheet === null) && !!(await p.$(".sheetgrid .schart")) && !(await p.$(".sheettabs button:has-text('Chart1')")), JSON.stringify(back).slice(0, 300));
