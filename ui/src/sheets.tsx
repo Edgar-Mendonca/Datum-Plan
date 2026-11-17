@@ -1239,7 +1239,7 @@ export const Sheets = () => {
               </>}</Show>
               <Show when={sheetMode() === "breaks"}><For each={sheetPages()}>{pg => <div class="pbreak" style={{ left: `${lefts()[pg.c0]}px`, top: `${top_(pg.r0)}px`, width: `${lefts()[pg.c1] + width(pg.c1) - lefts()[pg.c0]}px`, height: `${top_(pg.r1 + 1) - top_(pg.r0)}px` }}><span>Page {pg.n}</span></div>}</For></Show>
               <For each={boxes()}>{b => <div class="refbox" style={{ left: `${lefts()[b.c0]}px`, top: `${top_(b.r0)}px`, width: `${lefts()[b.c1] + width(b.c1) - lefts()[b.c0]}px`, height: `${top_(Math.min(b.r1, nrows() - 1) + 1) - top_(b.r0)}px`, "border-color": b.color, background: `${b.color}14` }} />}</For>
-              <ChartLayer k={k()} charts={isCS() ? [] : charts()} data={chartData()} put={putCharts} focus={() => box.focus()} g={{ x: c => lefts()[c] ?? 0, y: r => top_(r), cell: at, a1, parse: parseA1, zoom: sheetZoom }} />
+              <ChartLayer k={k()} charts={isCS() ? [] : charts()} data={chartData()} put={putCharts} moved={setK} focus={() => box.focus()} g={{ x: c => lefts()[c] ?? 0, y: r => top_(r), cell: at, a1, parse: parseA1, zoom: sheetZoom }} />
               <For each={imgs()}>{(im, i) => { const rc = () => parseA1(im.cell), box2 = () => picBox(im); return (
                 <div class="simg" data-i={i()} classList={{ on: picSel() === i(), fit: !!im.fit }} style={{ left: `${box2()[0]}px`, top: `${box2()[1]}px`, width: `${box2()[2]}px`, height: `${box2()[3]}px` }}
                   title={im.fit ? "Placed in the cell: it follows the cell's size. Drag to move it to another cell." : "Drag to move; drag the corner to resize; Delete removes it"} onMouseDown={e => picDrag(e, i(), false)}>
