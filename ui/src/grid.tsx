@@ -40,6 +40,8 @@ const choices = (k: string): string[] | undefined => {
   if (k.startsWith("c:flag")) return ["Yes", "No"];
   return undefined;
 };
+/** A column whose values come from a list (a ▾ shows on its cells). */
+const listCol = (k: string) => !!choices(k);
 const right = (c: Col) => ["Num", "Int", "Cost", "Pct", "Work", "Dur"].includes(c.kind);
 export const formulaOf = (key: string) => key.startsWith("c:") ? P().fields.find(f => f.key === key.slice(2))?.formula ?? "" : "";
 
@@ -268,9 +270,24 @@ export const Grid = (p: { width?: number }) => {
     if (out.length) act({ Cells: { cells: out } });
   };
 
+  /** A cell with a list of values (Task Mode, Type, Calendar, a code…): its list under the cell, one
+   *  click to choose. The choice goes into every selected row of the column when the cell is among them. */
+  const pickList = (row: number, col: number, anchor?: { x: number; y: number }) => {
+    const r = rows()[row], c = grid().cols[col], opts = c && choices(c.key);
+    if (!r || !c || !opts || r.uid <= 0) return false;
+    if (!c.edit) { toast(`${c.name} is calculated by Datum Plan.`); return true; }
+    const el = box.querySelector<HTMLElement>(`.gbody .row:nth-child(${visible().findIndex(([, k]) => k === row) + 1}) .c:nth-child(${col + 2})`)?.getBoundingClientRect();
+    const at = anchor ?? (el ? { x: el.left, y: el.bottom } : { x: 200, y: 200 });
+    const many = inRange(row, col) && ranges().some(g => Math.abs(g.r1 - g.r0) > 0);
+    const uids = many ? [...new Set(ranges().flatMap(g => { const n = norm(g); return n.c0 <= col && col <= n.c1 ? Array.from({ length: n.r1 - n.r0 + 1 }, (_, i) => rows()[n.r0 + i]).filter(x => x && x.uid > 0).map(x => x!.uid) : []; }))] : [r.uid];
+    openMenu(at, opts.map(o => ({ label: o || "(none)", on: o === (r.cells[col] ?? ""), run: () => act({ Cells: { cells: uids.map(u => [u, c.key, o]) } }) })));
+    return true;
+  };
   const key = (e: KeyboardEvent) => {
     if (edit() || rename() !== null) return;
     const { row, col } = cur();
+    // Alt+Down (or F4) opens the list of a list cell, as in a spreadsheet.
+    if ((e.altKey && e.key === "ArrowDown") || e.key === "F4") { const c = grid().cols[col]; if (c && choices(c.key)) { e.preventDefault(); pickList(row, col); return; } }
     const ctrl = e.ctrlKey || e.metaKey, last = ranges()[ranges().length - 1];
     const at = e.shiftKey && last ? { row: last.r1, col: last.c1 } : { row, col };
     const go = (r: number, c: number) => { e.preventDefault(); pick(r, c, e.shiftKey); };
@@ -392,7 +409,7 @@ export const Grid = (p: { width?: number }) => {
     <div class="grid" style={{ width: p.width ? `${p.width}px` : undefined }}>
       <div class="gscroll" ref={box} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onContextMenu={rowMenu}
         onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste}
-        onDblClick={e => { const [r, c] = cellAt(e), x = rows()[r]; if (x?.sub) return void import("./plans").then(m => m.goToLink(x.sub!, x.suid ?? 0)); if (c < 0) C.info(); else startEdit(r, c); }}
+        onDblClick={e => { const [r, c] = cellAt(e), x = rows()[r]; if (x?.sub) return void import("./plans").then(m => m.goToLink(x.sub!, x.suid ?? 0)); if (c < 0) C.info(); else if (!pickList(r, c, { x: e.clientX, y: e.clientY + 8 })) startEdit(r, c); }}
         onScroll={() => { setScrollTop(box.scrollTop); if (echo) { echo = false; return; } document.dispatchEvent(new CustomEvent("chart-scroll", { detail: box.scrollTop })); }}>
         <div class="gsheet" style={{ width: `${total() + 160}px`, height: `${(rows().length + 3) * RH + 40}px` }}>
           <div class="ghead" onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.stopPropagation()} onDblClick={e => e.stopPropagation()}>
@@ -423,6 +440,8 @@ export const Grid = (p: { width?: number }) => {
                   <div class="c" classList={{ r: right(c), nm: c.key === "name", ro: !c.edit, in: inRange(k, j()), at: cur().row === k && cur().col === j(), fz: j() === frozen(), fx: !!formulaOf(c.key) }}
                     style={{ width: `${widths()[j()]}px`, ...sticky(j()), ...(r.style ? { ...F.css(r.style["*"]), ...F.css(r.style[c.key]) } : {}), ...(D.cfRules().length ? D.cfStyle(c.key, r.cells[j()] ?? "") : {}) }}>
                     {cell(r, c, j())}
+                    {r.uid > 0 && c.edit && listCol(c.key) && <button class="lsb" title="Choose from the list (Alt+Down)" onMouseDown={e => { e.stopPropagation(); e.preventDefault(); }}
+                      onClick={e => { e.stopPropagation(); if (!inRange(k, j())) setRanges([{ r0: k, c0: j(), r1: k, c1: j() }]); const b = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect(); pickList(k, j(), { x: b.left, y: b.bottom }); }}>▾</button>}
                   </div>
                 )}</For>
               </div>

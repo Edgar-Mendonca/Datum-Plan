@@ -2,12 +2,13 @@
 
 ## 0.9.23 — 2026-11-17
 
-Fixes to the charts, found in use.
+Fixes found in use: the charts, and choosing Task Mode.
 
 - **Dragging a chart** no longer jumps ahead of the pointer: it follows the mouse smoothly and stays exactly where you drop it (in its cell, at the place inside it). The workbook export keeps that place.
 - **File** closes the Format pane: it no longer stays on top of Home, Open and the rest.
 - **Style previews** (the brush, and Chart Styles on the ribbon) show the look only: shapes, colours, gridlines and background, without the tiny legend and axis text that made them unreadable.
 - **The Format pane no longer covers the chart:** the sheet scrolls so the chart stays beside it.
+- **Task Mode and other list columns in two clicks:** a ▾ shows on the cell under the pointer; click it, then the value. Double-click or Alt+Down opens the list straight away (no more double-click, click, click). With several rows selected, the value goes into all of them.
 - **Nothing sits over the chart:** the Format, Copy and × buttons over its corner are gone; the ⋯ menu button joins the +, brush and funnel beside the chart (Format, Copy and Delete are in that menu and on a right-click).
 
 ## 0.9.22 — 2026-11-17

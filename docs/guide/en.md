@@ -96,6 +96,8 @@ On a small screen, ribbon groups that do not fit fold into one button with the g
 
 Datum Plan schedules automatically: when you change a duration or a link, every date that depends on it moves.
 
+Columns with a list of values (**Task Mode**, **Type**, **Calendar**, activity codes and lookup fields) show a ▾ on the cell under the pointer: click it and click the value, two clicks. Double-click on the cell, or [[Alt+Down]], opens the list too. With several rows selected, the value goes into all of them.
+
 ### The outline (WBS)
 
 Indent tasks to put them under a summary task: select them and click **Indent** on the Schedule tab or Home › Alignment (or press [[Alt+Shift+→]]). The task above becomes a summary; its dates, work and cost add up from its tasks. **Outdent** ([[Alt+Shift+←]]) moves them back. Click the small triangle beside a summary to collapse it.

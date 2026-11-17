@@ -113,6 +113,22 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const op = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()[1].op);
     check("a paste past the last task is one step", op.Batch?.length === 2 && op.Batch[0].Cells?.cells.length === 1 && op.Batch[1].InsertRows?.rows.length === 2, JSON.stringify(op));
     await p.evaluate(() => { document.querySelector(".gscroll").scrollTop = 0; }); await p.waitForTimeout(150); }
+  // 0.9.23: a list cell (Task Mode, Type, Calendar…) shows ▾ under the pointer; one click opens its list, one click chooses.
+  { const lc = await p.$(".gbody .row:not(.sum) .c:has(> .lsb)");
+    check("a list cell (such as Task Mode) has its ▾ on the cell", !!lc);
+    if (lc) {
+      await lc.hover(); await p.waitForTimeout(100);
+      check("…shown as soon as the pointer is on it", await lc.$eval(".lsb", b => getComputedStyle(b).display !== "none"));
+      await (await lc.$(".lsb")).click(); await p.waitForTimeout(200);
+      const items = await p.$$(".menu button");
+      check("…one click opens the list", items.length >= 2);
+      const n0 = await p.evaluate(() => window.__calls.length);
+      await items[1].click(); await p.waitForTimeout(250);
+      const op = await p.evaluate(n => window.__calls.slice(n).filter(c => c[0] === "apply").pop()?.[1].op, n0);
+      check("…and one click on a value sets it", !!op?.Cells && op.Cells.cells.length >= 1, JSON.stringify(op));
+      await lc.dblclick(); await p.waitForTimeout(200);
+      check("double-click on a list cell opens its list straight away", (await p.$$(".menu button")).length >= 2 && !(await p.$(".gbody select.edit")));
+      await p.keyboard.press("Escape"); await p.waitForTimeout(100); } }
   // The Calendar and Team Planner show the tasks under a collapsed summary too.
   { await p.dispatchEvent(".gbody .row b.tg >> nth=0", "mousedown"); await p.waitForTimeout(200);
     const collapsedQ = await p.evaluate(() => window.__calls.some(c => c[0] === "query" && c[1].q?.collapsed?.length));

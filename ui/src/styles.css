@@ -1334,3 +1334,8 @@ body.picking .ov { display: none !important; }
 .sdcats span { border: 1px solid var(--line); padding: 1px 6px; font-size: 11.5px; }
 .mvchart { display: grid; grid-template-columns: auto 220px; gap: 8px 12px; align-items: center; }
 .mvchart p { grid-column: 1 / -1; margin: 0; }
+/* 0.9.23: a list cell's ▾ shows on hover and on the selected cell; one click opens its list. */
+.gbody .c .lsb { display: none; position: absolute; right: 1px; top: 2px; bottom: 2px; width: 16px; padding: 0; font-size: 10px; line-height: 1; color: var(--text2); background: var(--bg2); border: 1px solid var(--line3); border-radius: 2px; cursor: pointer; }
+.gbody .c:hover .lsb, .gbody .c.at .lsb { display: block; }
+.gbody .c .lsb:hover { color: var(--blue); border-color: var(--blue); }
+.gbody .c:has(> .lsb) { position: relative; }
