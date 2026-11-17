@@ -863,7 +863,15 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const looks = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Ui?.key === "chartLooks").pop()?.[1].op.Ui.value);
     check("…and keeps the chart's new look with the plan, by its title", !!looks && looks[t]?.labels === true, JSON.stringify(looks).slice(0, 200));
     await p.click(".chartpane header .x"); await p.waitForTimeout(150);
-    check("…and closes", !(await p.$(".chartpane-fixed .chartpane"))); }
+    check("…and closes", !(await p.$(".chartpane-fixed .chartpane")));
+    await p.mouse.move(0, 0);
+    const cvb = await p.$eval(".chartbox:not(.bare) .cv >> nth=0", e => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+    await p.mouse.move(cvb[0], cvb[1]); await p.waitForTimeout(150);
+    check("a view's chart shows the values under the pointer", (await p.$$(".chartbox:not(.bare) .cv svg g[pointer-events=none] text")).length >= 2);
+    await p.mouse.click(cvb[0], cvb[1], { button: "right" }); await p.waitForTimeout(200);
+    const vm = (await p.textContent(".menu")) ?? "";
+    check("…and right-click gives its menu (type, templates, pictures, Datum Plot)", vm.includes("Change Chart Type") && vm.includes("Open in Datum Plot") && vm.includes("Copy as Picture") && !vm.includes("Delete Chart"), vm.slice(0, 200));
+    await p.keyboard.press("Escape"); await p.waitForTimeout(100); }
   const cc = await p.evaluate(() => { const c = window.__calls.filter(x => x[0] === "copy_picture").pop()?.[1]; const v = new DataView(Uint8Array.from(atob(c.dib.slice(0, 64)), ch => ch.charCodeAt(0)).buffer); const png = atob(c.png.split(",")[1].slice(0, 120)); return { w: v.getInt32(4, true), h: v.getInt32(8, true), ppm: v.getInt32(24, true), phys: png.includes("pHYs"), png: c.png }; });
   if (process.env.CHARTPNG) require("fs").writeFileSync(process.env.CHARTPNG, Buffer.from(cc.png.split(",")[1], "base64"));
   check("…drawn page-wide and sharp (2880 px), tagged to paste 16 cm wide", cc.w === 2880 && cc.h > 1300 && Math.abs(cc.ppm - 18000) < 2 && cc.phys, JSON.stringify({ ...cc, png: undefined }));
@@ -992,7 +1000,28 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.keyboard.press("Control+p"); await p.waitForTimeout(700);
     check("a chart on a sheet prints with the sheet (as a vector picture)", await p.evaluate(() => [...document.querySelectorAll(".pprev .ppage .psimg")].some(i => (i.getAttribute("src") ?? "").startsWith("data:image/svg+xml"))));
     await p.click(".bs aside .back"); await p.waitForTimeout(300);
-    await p.click(".schart", { position: { x: 30, y: 60 } }); await p.waitForTimeout(100); await p.keyboard.press("Delete"); await p.waitForTimeout(300);
+    // 0.9.20: the values under the pointer; a click selects a part, double-click formats it; the chart's own menu; the title edited in place; Delete removes a part.
+    const mid = (part) => p.evaluate(q => { const e = document.querySelector(`.schart svg [data-part="${q}"]`); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, part);
+    const pl = await mid("plot"); await p.mouse.move(pl[0] - 20, pl[1] + 20); await p.mouse.move(pl[0], pl[1] + 20); await p.waitForTimeout(150);
+    const tipText = await p.evaluate(() => [...document.querySelectorAll(".schart svg g[pointer-events=none] text")].map(t => t.textContent).join("|"));
+    check("moving over a chart shows the values there at once (place, series and value)", /%/.test(tipText) && tipText.split("|").length >= 3, tipText);
+    const s0 = await mid("s0"); await p.mouse.click(s0[0], s0[1]); await p.waitForTimeout(200);
+    check("a click on a series selects it (a handle on each point)", (await p.$$(".schart svg rect[width='6']")).length >= 2);
+    const ya = await mid("y"); await p.mouse.dblclick(ya[0], ya[1]); await p.waitForTimeout(300);
+    check("double-click on an axis opens Format for that axis", ((await p.textContent(".chartpane header b")) ?? "").includes("Value) Axis") && !!(await p.$(".chartpane .cftabs button.on:has-text('Axes')")));
+    await p.click(".chartpane header .x"); await p.waitForTimeout(100);
+    await p.mouse.click(pl[0], pl[1], { button: "right" }); await p.waitForTimeout(200);
+    const mt = (await p.textContent(".menu")) ?? "";
+    check("right-click on a chart gives the chart's menu, not the cells'", mt.includes("Change Chart Type") && mt.includes("Save as Template") && mt.includes("Reset to Match Style") && mt.includes("Save as Picture") && !mt.includes("Insert Function"), mt.slice(0, 200));
+    await p.hover(".menu button:has-text('Change Chart Type')"); await p.waitForTimeout(150); await p.click(".menu >> nth=1 >> button:has-text('Line')"); await p.waitForTimeout(300);
+    check("…and Change Chart Type changes it", (await charts())?.[0].kind === "line");
+    const ti = await mid("title"); await p.mouse.click(ti[0], ti[1]); await p.waitForTimeout(150); await p.mouse.click(ti[0], ti[1]); await p.waitForTimeout(250);
+    check("a second click on the title edits it in place", !!(await p.$(".schart input.ch-title")));
+    await p.fill(".schart input.ch-title", "Progress by week"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
+    check("…and Enter keeps the new title", (await charts())?.[0].title === "Progress by week");
+    const lg = await mid("legend"); await p.mouse.click(lg[0], lg[1]); await p.waitForTimeout(150); await p.keyboard.press("Delete"); await p.waitForTimeout(300);
+    check("Delete with the legend selected removes the legend, not the chart", (await charts())?.[0].legend === "none" && (await p.$$(".schart")).length === 1);
+    await p.click(".schart", { position: { x: 3, y: 150 } }); await p.waitForTimeout(100); await p.keyboard.press("Delete"); await p.waitForTimeout(300);
     check("Delete removes the selected chart", (await charts())?.length === 0 && (await p.$$(".schart")).length === 0); }
   // 0.5.17: Sheet Tools > Home opens by itself in Sheets: borders, merge, wrap, cell styles; tabs rename in place.
   check("the ribbon shows Gantt Chart Tools first, then Sheet Tools", await p.evaluate(() => { const g = [...document.querySelectorAll(".tabs .ctxgrp")].map(x => x.querySelector("small")?.textContent); return g.indexOf("Gantt Chart Tools") >= 0 && g.indexOf("Gantt Chart Tools") < g.indexOf("Sheet Tools"); }));

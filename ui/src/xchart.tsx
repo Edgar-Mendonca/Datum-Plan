@@ -2,7 +2,7 @@
 // combined series on a secondary axis, titles, axis bounds, steps and number formats, gridlines,
 // legend, data labels, colours, lines, markers, smooth lines and linear trend lines. Sharp on
 // screen, in print and in PDFs. The data comes from the engine (`sheet::chart_data`).
-import { JSX, Show } from "solid-js";
+import { JSX, Show, createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { P } from "./store";
 import { money, fmtDay } from "./api";
@@ -108,19 +108,30 @@ export const kindOf = (c: ChartDef, i: number) => (["bar", "scatter", "pie", "do
 const INK = "var(--ch-ink, #3A4553)", TITLE = "var(--ch-title, #1B2733)", GRID = "var(--ch-grid, #E3E7EC)", AXIS = "var(--ch-axis, #8D99A8)", BG = "var(--ch-bg, #FFFFFF)", SUB = "var(--ch-sub, #5B6573)";
 let gid = 0;
 
-/** A chart as SVG at `w` × `h` px. */
-export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }): JSX.Element => {
+/** The parts of a chart a click selects (`data-part`): its area, plot, title, legend, axes and series. */
+export const partName = (c: ChartDef, part: string, names?: string[]) => part === "title" ? "Chart Title" : part === "legend" ? "Legend" : part === "plot" ? "Plot Area" : part === "x" ? (c.kind === "bar" ? "Vertical (Category) Axis" : "Horizontal (Category) Axis")
+  : part === "y" ? (c.kind === "bar" ? "Horizontal (Value) Axis" : "Vertical (Value) Axis") : part === "y2" ? "Secondary Vertical (Value) Axis" : part.startsWith("s") ? `Series “${names?.[+part.slice(1)] || c.series[+part.slice(1)]?.name || `Series ${+part.slice(1) + 1}`}”` : "Chart Area";
+type Tip = { head: string; rows: { col: string; name: string; val: string }[]; guide?: number; band?: [number, number, number, number]; dots?: [number, number, string][] };
+
+/** A chart as SVG at `w` × `h` px. In the window (`hover`, the default) moving over it shows the
+ *  values at that place, and `sel` outlines the selected part. */
+export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number; hover?: boolean; sel?: string }): JSX.Element => {
   const c = p.c, fs = c.font || 11, W = p.w, H = p.h, d = p.d ?? { cats: [], xs: [], cat_fmt: "", names: [], vals: [], fmts: [] };
   const time = c.time, sxOf = (i: number, j: number) => (time ? d.sx?.[i]?.[j] ?? d.xs[j] ?? null : null);
   const n = Math.max(d.cats.length, ...d.vals.map(v => v.length), 0);
   const names = c.series.map((s, i) => d.names[i] || s.name || `Series ${i + 1}`);
   const pie = c.kind === "pie" || c.kind === "doughnut", horiz = c.kind === "bar", scatter = c.kind === "scatter";
   const els: JSX.Element[] = [];
+  /** Each part's box (for the selection outline) and each series' points (for its handles). */
+  const box: Record<string, [number, number, number, number]> = { area: [0, 0, W, H] }, spts: [number, number][][] = c.series.map(() => []);
+  const hit = (part: string, b: [number, number, number, number]) => { box[part] = b; return <rect data-part={part} x={b[0]} y={b[1]} width={Math.max(0, b[2])} height={Math.max(0, b[3])} fill="transparent" />; };
+  const [hv, setHv] = createSignal<[number, number] | null>(null);
+  let tipAt: (mx: number, my: number) => Tip | null = () => null;
   const text = (x: number, y: number, t: string, o: { size?: number; anchor?: string; bold?: boolean; color?: string; rot?: number; base?: string } = {}) =>
-    <text x={x} y={y} font-size={String(o.size ?? fs)} font-family={FONT} font-weight={o.bold ? "600" : "400"} style={{ fill: o.color ?? INK }} text-anchor={(o.anchor ?? "start") as "start" | "middle" | "end"} dominant-baseline={(o.base ?? "middle") as "middle" | "hanging"} transform={o.rot ? `rotate(${o.rot} ${x} ${y})` : undefined}>{t}</text>;
+    <text pointer-events="none" x={x} y={y} font-size={String(o.size ?? fs)} font-family={FONT} font-weight={o.bold ? "600" : "400"} style={{ fill: o.color ?? INK }} text-anchor={(o.anchor ?? "start") as "start" | "middle" | "end"} dominant-baseline={(o.base ?? "middle") as "middle" | "hanging"} transform={o.rot ? `rotate(${o.rot} ${x} ${y})` : undefined}>{t}</text>;
   // Title (and subtitle) and legend take their room first.
   let top = 8, bottom = H - 8, left = 8, right = W - 8;
-  if (c.title) { els.push(text(W / 2, top + fs * 0.8, c.title, { size: fs * 1.35, bold: true, anchor: "middle", color: TITLE })); top += fs * 1.35 + 8; }
+  if (c.title) { const tw0 = tw(c.title, fs * 1.35, true); els.push(text(W / 2, top + fs * 0.8, c.title, { size: fs * 1.35, bold: true, anchor: "middle", color: TITLE })); els.push(hit("title", [W / 2 - tw0 / 2 - 5, top + fs * 0.8 - fs * 0.95, tw0 + 10, fs * 1.9])); top += fs * 1.35 + 8; }
   if (c.subtitle) { els.push(text(W / 2, top + fs * 0.6, c.subtitle, { size: fs * 1.02, anchor: "middle", color: SUB })); top += fs * 1.3 + 4; }
   if (c.title || c.subtitle) top += 4;
   const legend = c.legend || (pie ? "right" : "bottom");
@@ -133,17 +144,70 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
     if (legend === "right" || legend === "left") {
       const lw = Math.min(W * 0.4, Math.max(...iw) + 8), x0 = legend === "right" ? right - lw : left, y0 = (top + bottom) / 2 - items.length * lh / 2;
       items.forEach(([t, col, k], i) => { const y = y0 + i * lh + lh / 2; els.push(sym(x0, y, col, k, i)); els.push(text(x0 + sw + 5, y, t)); });
+      els.push(hit("legend", [x0 - 3, y0 - 2, lw + 2, items.length * lh + 4]));
       if (legend === "right") right -= lw + 8; else left += lw + 8;
     } else {
       const rows: number[][] = [[]]; let x = 0; const avail = right - left;
       iw.forEach((w, i) => { if (x + w > avail && rows[rows.length - 1].length) { rows.push([]); x = 0; } rows[rows.length - 1].push(i); x += w + gap; });
       const lhTot = rows.length * lh, y0 = legend === "top" ? top : bottom - lhTot;
-      rows.forEach((r, ri) => { const rw = r.reduce((a, i) => a + iw[i] + gap, -gap); let xx = left + (avail - rw) / 2; for (const i of r) { const y = y0 + ri * lh + lh / 2; els.push(sym(xx, y, items[i][1], items[i][2], i)); els.push(text(xx + sw + 5, y, items[i][0])); xx += iw[i] + gap; } });
+      let lx0 = Infinity, lx1 = -Infinity;
+      rows.forEach((r, ri) => { const rw = r.reduce((a, i) => a + iw[i] + gap, -gap); let xx = left + (avail - rw) / 2; lx0 = Math.min(lx0, xx); lx1 = Math.max(lx1, xx + rw); for (const i of r) { const y = y0 + ri * lh + lh / 2; els.push(sym(xx, y, items[i][1], items[i][2], i)); els.push(text(xx + sw + 5, y, items[i][0])); xx += iw[i] + gap; } });
+      els.push(hit("legend", [lx0 - 4, y0 - 1, lx1 - lx0 + 8, lhTot + 2]));
       if (legend === "top") top += lhTot + 6; else bottom -= lhTot + 6;
     }
   }
-  const bg = <rect x="0" y="0" width={W} height={H} style={{ fill: c.bg || BG }} />;
-  if (pie) return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>{bg}{els}{pieOf(c, d, (left + right) / 2, (top + bottom) / 2, Math.max(10, Math.min(right - left, bottom - top) / 2 - fs * 2), fs, text)}</svg>;
+  const bg = <rect data-part="area" x="0" y="0" width={W} height={H} style={{ fill: c.bg || BG }} />;
+  const shell = (body: JSX.Element) => {
+    let svg!: SVGSVGElement;
+    const at = (e: MouseEvent): [number, number] => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) * W / (r.width || W), (e.clientY - r.top) * H / (r.height || H)]; };
+    return (
+      <svg ref={svg} width={W} height={H} viewBox={`0 0 ${W} ${H}`} xmlns="http://www.w3.org/2000/svg" style={{ display: "block", "user-select": "none", "-webkit-user-select": "none" }}
+        onMouseMove={p.hover === false ? undefined : e => setHv(at(e))} onMouseLeave={() => setHv(null)}>
+        {body}
+        {(() => (p.sel ? selection(p.sel) : null)) as unknown as JSX.Element}
+        {p.hover === false ? null : (() => { const m = hv(); const t = m && tipAt(m[0], m[1]); return t ? tipBox(t, m![0], m![1]) : null; }) as unknown as JSX.Element}
+      </svg>
+    );
+  };
+  // The selected part: a dashed frame with corner handles, or a handle on each point of a series.
+  const selection = (part: string) => {
+    const SEL = "var(--blue, #2F6FCF)";
+    if (part.startsWith("s")) return <g pointer-events="none">{(spts[+part.slice(1)] ?? []).slice(0, 400).map(([x, y]) => <rect x={x - 3} y={y - 3} width="6" height="6" fill="#fff" stroke={SEL} stroke-width="1.2" />)}</g>;
+    const b = box[part]; if (!b) return null;
+    const [x, y, w, h] = part === "area" ? [1, 1, W - 2, H - 2] : b;
+    return <g pointer-events="none"><rect x={x} y={y} width={w} height={h} fill="none" stroke={SEL} stroke-width="1.2" stroke-dasharray={part === "area" ? undefined : "4 3"} />
+      {[[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map(([a, b2]) => <rect x={a - 3} y={b2 - 3} width="6" height="6" fill="#fff" stroke={SEL} stroke-width="1.2" />)}</g>;
+  };
+  // The values at the pointer: a box with the place's name and each series' value, in its colour.
+  const tipBox = (t: Tip, mx: number, my: number) => {
+    const f = Math.max(10.5, fs * 0.95), pad = 8, lh = f * 1.5, rows = t.rows.slice(0, 14);
+    const w = Math.max(t.head ? tw(t.head, f, true) : 0, ...rows.map(r => 16 + tw(r.name, f) + 14 + tw(r.val, f, true))) + pad * 2;
+    const ht = pad * 2 + lh * (rows.length + (t.head ? 1 : 0)) - f * 0.3;
+    let x = mx + 16; if (x + w > W - 2) x = mx - 16 - w; x = Math.max(2, x);
+    const y = Math.max(2, Math.min(H - ht - 2, my - ht / 2));
+    return <g pointer-events="none">
+      {t.band ? <rect x={t.band[0]} y={t.band[1]} width={t.band[2]} height={t.band[3]} style={{ fill: INK }} opacity=".07" /> : null}
+      {t.guide !== undefined ? <line x1={t.guide} x2={t.guide} y1={box.plot?.[1] ?? 0} y2={(box.plot?.[1] ?? 0) + (box.plot?.[3] ?? H)} style={{ stroke: AXIS }} stroke-width="1" stroke-dasharray="3 3" /> : null}
+      {(t.dots ?? []).map(([a, b, col]) => <circle cx={a} cy={b} r="4.2" fill={col} stroke="#fff" stroke-width="1.6" />)}
+      <rect x={x} y={y} width={w} height={ht} rx="5" style={{ fill: "var(--ch-tip, #FFFFFF)", stroke: AXIS, filter: "drop-shadow(0 2px 5px rgba(0,0,0,.18))" }} stroke-width=".8" />
+      {t.head ? text(x + pad, y + pad + f * 0.55, t.head, { size: f, bold: true, color: TITLE }) : null}
+      {rows.map((r, k) => { const yy = y + pad + f * 0.55 + lh * (k + (t.head ? 1 : 0)); return <g>
+        <rect x={x + pad} y={yy - f * 0.38} width={f * 0.76} height={f * 0.76} rx="1.5" fill={r.col} />
+        {text(x + pad + 16, yy, r.name, { size: f })}{text(x + w - pad, yy, r.val, { size: f, bold: true, anchor: "end", color: TITLE })}</g>; })}
+    </g>;
+  };
+  if (pie) {
+    const cx = (left + right) / 2, cy = (top + bottom) / 2, r = Math.max(10, Math.min(right - left, bottom - top) / 2 - fs * 2);
+    const v = (d.vals[0] ?? []).map(x => Math.max(0, x ?? 0)), tot = v.reduce((a, b) => a + b, 0), hole = c.kind === "doughnut" ? r * 0.58 : 0;
+    box.plot = [cx - r, cy - r, r * 2, r * 2];
+    tipAt = (mx, my) => {
+      const dx = mx - cx, dy = my - cy, rr = Math.hypot(dx, dy); if (!tot || rr > r || rr < hole) return null;
+      let a = Math.atan2(dy, dx) + Math.PI / 2; if (a < 0) a += Math.PI * 2;
+      let acc = 0; for (let i = 0; i < v.length; i++) { acc += (v[i] / tot) * Math.PI * 2; if (a <= acc && v[i]) return { head: d.cats[i] ?? "", rows: [{ col: c.series[0]?.colors?.[i] ?? PALETTE[i % PALETTE.length], name: names[0], val: `${fmtNum(d.vals[0][i] ?? 0, c.y?.fmt || d.fmts[0] || "")} (${Math.round((v[i] / tot) * 1000) / 10}%)` }] }; }
+      return null;
+    };
+    return shell(<>{bg}{els}{pieOf(c, d, cx, cy, r, fs, text)}</>);
+  }
   // Value axes: the primary, and the secondary when a series is on it.
   const onY2 = (i: number) => !!c.series[i]?.y2 && !horiz && !scatter;
   const stacked = c.stack === "stacked" || c.stack === "percent", pctStack = c.stack === "percent";
@@ -186,12 +250,13 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
   const lineIdx = c.series.map((_, i) => i).filter(i => ["line", "area"].includes(kindOf(c, i)));
   if (c.ends && lineIdx.length && !horiz) right -= Math.max(...lineIdx.map(i => { const v = [...(d.vals[i] ?? [])].reverse().find(x => x !== null); return v === undefined || v === null ? 0 : tw(fmtNum(v, onY2(i) ? y2fmt : y1fmt), fs, true) + 8; }), 0);
   // Category (or time) labels under the plot: level, slanted, or every k-th when crowded.
-  let rot = 0, every = 1;
+  let rot = 0, every = 1, xlabH = 0;
   if (!horiz) {
     const nt = time ? time.ticksAt.length : n;
     const band = (right - left) / Math.max(1, nt), lw = scatter && xsc ? Math.max(...xsc.ticks.map(t => tw(fmtNum(t, catFmt), fs))) : time ? Math.max(0, ...time.ticksAt.map((_, k) => tw(time.tickLabel(k), fs))) : Math.max(0, ...Array.from({ length: n }, (_, j) => tw(catLabel(j), fs)));
     if (!scatter && (lw + 6 > band || time?.rotate)) { rot = -45; every = Math.max(1, Math.ceil(fs * 1.5 / band)); }
-    bottom -= c.x?.hide ? 4 : rot ? lw * 0.72 + fs * 0.8 + 6 : fs * 1.6;
+    xlabH = c.x?.hide ? 0 : rot ? lw * 0.72 + fs * 0.8 + 6 : fs * 1.6;
+    bottom -= c.x?.hide ? 4 : xlabH;
   }
   const pl = left, pr = Math.max(left + 20, right), pt = top + (c.marker ? fs * 1.7 : 0), pb = Math.max(pt + 20, bottom);
   const vlen = horiz ? pr - pl : pb - pt;
@@ -202,7 +267,8 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
   const catAt = (j: number) => (horiz ? pt + band * (j + 0.5) : pl + band * (j + 0.5));
   const tX = (v: number) => (time ? pl + ((v - time.min) / Math.max(1e-9, time.max - time.min)) * (pr - pl) : pl);
   const xAt = (i: number, j: number) => (time ? tX(sxOf(i, j) ?? NaN) : scatter && xsc ? pl + ((xs[j] - xsc.mn) / (xsc.mx - xsc.mn)) * (pr - pl) : catAt(j));
-  const plotBg = <rect x={pl} y={pt} width={pr - pl} height={pb - pt} fill={c.plot || "none"} />;
+  const plotBg = <rect data-part="plot" x={pl} y={pt} width={pr - pl} height={pb - pt} fill={c.plot || "transparent"} />;
+  box.plot = [pl, pt, pr - pl, pb - pt];
   const grid: JSX.Element[] = [], axes: JSX.Element[] = [];
   if (s1) for (const t of s1.ticks) {
     const v = pos(t, s1);
@@ -218,6 +284,16 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
     if (c.x?.hide || j % every) continue;
     axes.push(horiz ? text(pl - 6, at, catLabel(j), { anchor: "end" }) : rot ? text(at + fs * 0.3, pb + 6, catLabel(j), { anchor: "end", rot, base: "hanging" }) : text(at, pb + fs * 0.9, catLabel(j), { anchor: "middle" }));
   }
+  // Each axis's labels (and title) are a part a click selects.
+  { const l1 = s1 ? tl(s1, y1fmt) : 0, l2 = s2 ? tl(s2, y2fmt) : 0, tt = fs * 1.6;
+    if (horiz) {
+      if (s1 && !c.y?.hide) axes.push(hit("y", [pl, pb + 2, pr - pl, fs * 1.6 + (yT ? tt : 0)]));
+      if (!c.x?.hide) axes.push(hit("x", [pl - catW - 8 - (xT ? tt : 0), pt, catW + 6 + (xT ? tt : 0), pb - pt]));
+    } else {
+      if (s1 && !c.y?.hide) { const x0 = Math.min(yT ? yT - fs * 0.8 : Infinity, pl - l1 - 8); axes.push(hit("y", [x0, pt - fs * 0.7, pl - x0 - 1, pb - pt + fs * 1.4])); }
+      if (s2 && !c.y2?.hide) axes.push(hit("y2", [pr + 1, pt - fs * 0.7, l2 + 8 + (y2T ? tt : 0), pb - pt + fs * 1.4]));
+      if (!c.x?.hide) axes.push(hit("x", [pl - 4, pb + 2, pr - pl + 8, xlabH + (xT ? tt : 0)]));
+    } }
   const zero1 = s1 ? pos(Math.min(Math.max(0, s1.mn), s1.mx), s1) : horiz ? pl : pb;
   axes.push(horiz ? <line x1={zero1} x2={zero1} y1={pt} y2={pb} style={{ stroke: AXIS }} stroke-width="1" /> : <line x1={pl} x2={pr} y1={zero1} y2={zero1} style={{ stroke: AXIS }} stroke-width="1" />);
   if (yT) axes.push(horiz ? text((pl + pr) / 2, yT, c.y!.title!, { anchor: "middle", bold: true }) : text(yT, (pt + pb) / 2, c.y!.title!, { anchor: "middle", bold: true, rot: -90 }));
@@ -226,7 +302,6 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
   // The series: columns (or bars) side by side or stacked, then areas, lines and markers on top.
   const marks: JSX.Element[] = [], over: JSX.Element[] = [], labels: JSX.Element[] = [];
   const fmtV = (i: number, v: number) => fmtNum(v, d.fmts[i] || (onY2(i) ? y2fmt : y1fmt));
-  const tip = (i: number, j: number, v: number) => `${names[i]} · ${time ? (d.tips?.[i]?.[j] ?? fmtNum(sxOf(i, j) ?? 0, catFmt || "@day")) : scatter ? fmtNum(xs[j], catFmt) : catLabel(j)}: ${fmtV(i, v)}`;
   const bars = c.series.map((_, i) => i).filter(i => ["column", "bar"].includes(kindOf(c, i)));
   const gapPct = c.gap ?? 150, slots = stacked ? 1 : Math.max(1, bars.length);
   // On a time axis, a bar is as wide as the gap between its neighbours allows.
@@ -247,7 +322,8 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
       const v = scaled(j, i, v0), b = base(j, i, v), a = pos(b, s), z = pos(b + v, s), cx = time ? xAt(i, j) : catAt(j), mid = cx - (slots * bw) / 2 + (stacked ? 0 : bi * bw);
       if (time && !isFinite(cx)) continue;
       const [x, y, w, h] = horiz ? [Math.min(a, z), mid, Math.abs(z - a), bw] : [mid, Math.min(a, z), bw, Math.abs(z - a)];
-      marks.push(<rect x={x} y={y} width={Math.max(0.5, w)} height={Math.max(0.5, h)} rx={Math.min(rad, w / 2, h / 2)} fill={colorOf(c, i)}><title>{tip(i, j, v0)}</title></rect>);
+      marks.push(<rect data-part={`s${i}`} x={x} y={y} width={Math.max(0.5, w)} height={Math.max(0.5, h)} rx={Math.min(rad, w / 2, h / 2)} fill={colorOf(c, i)} />);
+      spts[i].push(horiz ? [x + w, y + h / 2] : [x + w / 2, y]);
       if (c.series[i].labels || c.labels) labels.push(horiz ? text(Math.max(a, z) + 3, mid + bw / 2, fmtV(i, v0), { size: fs * 0.9 }) : text(mid + bw / 2, Math.min(a, z) - fs * 0.6, fmtV(i, v0), { size: fs * 0.9, anchor: "middle" }));
     }
   });
@@ -265,14 +341,16 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
       const lowY = (j: number) => (k === "area" ? floor(j) : pos(Math.max(s.mn, Math.min(0, s.mx)), s));
       const flush = () => { if (run.length) { d2 += `M${run.map(j => `${pts[j]![0]} ${pts[j]![1]}`).join("L")}L${[...run].reverse().map(j => `${pts[j]![0]} ${lowY(j)}`).join("L")}Z`; } run = []; };
       pts.forEach((p2, j) => { if (p2) run.push(j); else flush(); }); flush();
-      marks.push(<g><defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color={col} stop-opacity={k === "area" ? ".75" : ".32"} /><stop offset="1" stop-color={col} stop-opacity={k === "area" ? ".55" : ".03"} /></linearGradient></defs><path d={d2} fill={`url(#${id})`} stroke={k === "area" ? col : "none"} stroke-width="1" /></g>);
+      marks.push(<g><defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color={col} stop-opacity={k === "area" ? ".75" : ".32"} /><stop offset="1" stop-color={col} stop-opacity={k === "area" ? ".55" : ".03"} /></linearGradient></defs><path data-part={`s${i}`} d={d2} fill={`url(#${id})`} stroke={k === "area" ? col : "none"} stroke-width="1" pointer-events={k === "area" ? undefined : "none"} /></g>);
+      if (k === "area") pts.forEach(q => q && spts[i].push(q));
       if (k === "area") return;
     }
     const smooth = !!ser.smooth;
-    over.push(<path d={pathOf(pts, smooth)} fill="none" stroke={col} stroke-width={w} stroke-dasharray={dashOf(ser.dash, w)} stroke-linejoin="round" stroke-linecap="round" style={scatter && ser.marker !== "none" && !ser.width ? { display: "none" } : {}} />);
+    pts.forEach(q => q && spts[i].push(q));
+    over.push(<path data-part={`s${i}`} d={pathOf(pts, smooth)} fill="none" stroke="transparent" stroke-width="12" />);
+    over.push(<path data-part={`s${i}`} d={pathOf(pts, smooth)} fill="none" stroke={col} stroke-width={w} stroke-dasharray={dashOf(ser.dash, w)} stroke-linejoin="round" stroke-linecap="round" style={scatter && ser.marker !== "none" && !ser.width ? { display: "none" } : {}} />);
     const mk = ser.marker === "none" ? "" : ser.marker && ser.marker !== "auto" ? ser.marker : scatter || (!time && n <= 30 && !c.ends) ? "circle" : "";
-    if (mk) pts.forEach((p2, j) => { if (p2) over.push(<g><Marker x={p2[0]} y={p2[1]} kind={mk} c={col} r={Math.max(2.5, w * 1.3)} /><title>{tip(i, j, val(i, j)!)}</title></g>); });
-    else pts.forEach((p2, j) => { if (p2) over.push(<circle cx={p2[0]} cy={p2[1]} r={Math.max(4, w * 2)} fill="transparent"><title>{tip(i, j, val(i, j)!)}</title></circle>); });
+    if (mk) pts.forEach(p2 => { if (p2) over.push(<g data-part={`s${i}`}><Marker x={p2[0]} y={p2[1]} kind={mk} c={col} r={Math.max(2.5, w * 1.3)} /></g>); });
     if (ser.labels || c.labels) pts.forEach((p2, j) => { if (p2) labels.push(text(p2[0], p2[1] - fs * 0.9, fmtV(i, val(i, j)!), { size: fs * 0.9, anchor: "middle" })); });
     // The last value at the line's end, in its colour (labels kept apart).
     if (c.ends) { let j = pts.length - 1; while (j >= 0 && !pts[j]) j--; if (j >= 0) { let y = pts[j]![1]; while (endsAt.some(u => Math.abs(u - y) < fs * 1.2)) y -= fs * 1.2; endsAt.push(y); labels.push(text(pts[j]![0] + 6, y, fmtV(i, val(i, j)!), { bold: true, color: col })); } }
@@ -288,7 +366,7 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
     const b = P.reduce((a, q) => a + (q[0] - mx) * (q[1] - my), 0) / sxx, a0 = my - b * mx, x0 = P[0][0], x1 = P[P.length - 1][0];
     const X = (x: number) => (time ? tX(x) : scatter && xsc ? pl + ((x - xsc.mn) / (xsc.mx - xsc.mn)) * (pr - pl) : catAt(x));
     const Y = (x: number) => pos(a0 + b * x, s);
-    over.push(horiz ? <line x1={Y(x0)} x2={Y(x1)} y1={X(x0)} y2={X(x1)} stroke={colorOf(c, i)} stroke-width="1.5" stroke-dasharray="6 4" opacity=".85" /> : <line x1={X(x0)} x2={X(x1)} y1={Y(x0)} y2={Y(x1)} stroke={colorOf(c, i)} stroke-width="1.5" stroke-dasharray="6 4" opacity=".85" />);
+    over.push(horiz ? <line x1={Y(x0)} x2={Y(x1)} y1={X(x0)} y2={X(x1)} stroke={colorOf(c, i)} stroke-width="1.5" stroke-dasharray="6 4" opacity=".85" /> : <line x1={X(x0)} x2={X(x1)} y1={Y(x0)} y2={Y(x1)} stroke={colorOf(c, i)} stroke-width="1.5" stroke-dasharray="6 4" opacity=".85" pointer-events="none" />);
   });
   // The status date: a dashed line with its label above the plot.
   const mk = c.marker;
@@ -300,12 +378,36 @@ export const XChart = (p: { c: ChartDef; d?: ChartData; w: number; h: number }):
     }
   }
   const empty = !n || d.vals.every(v => v.every(x => x === null || x === 0));
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
-      {bg}{plotBg}{grid}{marks}{axes}{over}{labels}{els}
-      <Show when={empty && !c.quiet}><text x={W / 2} y={(pt + pb) / 2} font-size={String(fs)} font-family={FONT} style={{ fill: AXIS }} text-anchor="middle">No data in the chart's ranges yet</text></Show>
-    </svg>
-  );
+  // What the pointer is over: a category (every series' value there), a time (each series' nearest
+  // point), or a point of a scatter chart.
+  const yOf = (i: number, j: number) => { const v0 = val(i, j), s = sc(i); if (v0 === null || !s) return null; const v = scaled(j, i, v0); return pos(base(j, i, v) + v, s); };
+  const isLine = (i: number) => !["column", "bar"].includes(kindOf(c, i));
+  const row = (i: number, j: number) => ({ col: colorOf(c, i), name: names[i], val: fmtV(i, val(i, j)!) });
+  tipAt = (mx, my) => {
+    if (empty || mx < pl - 2 || mx > pr + 2 || my < pt - 2 || my > pb + 2) return null;
+    const idx = c.series.map((_, i) => i);
+    if (scatter) {
+      let best: [number, number, number] | null = null;
+      for (const i of idx) for (let j = 0; j < n; j++) { const y = yOf(i, j), x = xAt(i, j); if (y === null || !isFinite(x)) continue; const dd = Math.hypot(x - mx, y - my); if (dd < 24 && (!best || dd < best[2])) best = [i, j, dd]; }
+      if (!best) return null; const [i, j] = best;
+      return { head: names[i], rows: [{ col: colorOf(c, i), name: fmtNum(xs[j], catFmt), val: fmtV(i, val(i, j)!) }], dots: [[xAt(i, j), yOf(i, j)!, colorOf(c, i)]] };
+    }
+    if (time) {
+      let g: [number, number, number] | null = null; const near: [number, number][] = [];
+      for (const i of idx) { let b = -1, bd = Infinity; for (let j = 0; j < len(i); j++) { if (val(i, j) === null) continue; const dd = Math.abs(xAt(i, j) - mx); if (dd < bd) { bd = dd; b = j; } } if (b >= 0 && bd <= Math.max(10, tband(i) / 2 + 2)) { near.push([i, b]); if (!g || bd < g[2]) g = [i, b, bd]; } }
+      if (!g) return null;
+      return { head: d.tips?.[g[0]]?.[g[1]] ?? fmtNum(sxOf(g[0], g[1]) ?? 0, "@day"), rows: near.map(([i, j]) => row(i, j)), guide: xAt(g[0], g[1]), dots: near.filter(([i]) => isLine(i)).map(([i, j]) => [xAt(i, j), yOf(i, j)!, colorOf(c, i)] as [number, number, string]) };
+    }
+    const j = Math.max(0, Math.min(n - 1, Math.floor(((horiz ? my - pt : mx - pl)) / band)));
+    const here = idx.filter(i => val(i, j) !== null);
+    if (!here.length) return null;
+    return { head: catLabel(j), rows: here.map(i => row(i, j)), band: bars.length ? (horiz ? [pl, pt + band * j, pr - pl, band] : [pl + band * j, pt, band, pb - pt]) : undefined,
+      guide: !bars.length && !horiz ? catAt(j) : undefined, dots: horiz ? [] : here.filter(isLine).map(i => [catAt(j), yOf(i, j)!, colorOf(c, i)] as [number, number, string]) };
+  };
+  return shell(<>
+    {bg}{plotBg}{grid}{marks}{axes}{over}{labels}{els}
+    <Show when={empty && !c.quiet}><text pointer-events="none" x={W / 2} y={(pt + pb) / 2} font-size={String(fs)} font-family={FONT} style={{ fill: AXIS }} text-anchor="middle">No data in the chart's ranges yet</text></Show>
+  </>);
 };
 
 /** A pie or doughnut of the first series, slices labelled with their share. */
@@ -319,7 +421,7 @@ const pieOf = (c: ChartDef, d: ChartData, cx: number, cy: number, r: number, fs:
     const b = a + (x / tot) * Math.PI * 2, big = b - a > Math.PI ? 1 : 0, P = (ang: number, rr: number) => `${cx + rr * Math.cos(ang)} ${cy + rr * Math.sin(ang)}`;
     const dd = x === tot ? (hole ? `M${P(0, r)}A${r} ${r} 0 1 1 ${P(Math.PI, r)}A${r} ${r} 0 1 1 ${P(0, r)}M${P(0, hole)}A${hole} ${hole} 0 1 0 ${P(Math.PI, hole)}A${hole} ${hole} 0 1 0 ${P(0, hole)}Z` : `M${P(0, r)}A${r} ${r} 0 1 1 ${P(Math.PI, r)}A${r} ${r} 0 1 1 ${P(0, r)}Z`)
       : hole ? `M${P(a, r)}A${r} ${r} 0 ${big} 1 ${P(b, r)}L${P(b, hole)}A${hole} ${hole} 0 ${big} 0 ${P(a, hole)}Z` : `M${cx} ${cy}L${P(a, r)}A${r} ${r} 0 ${big} 1 ${P(b, r)}Z`;
-    out.push(<path d={dd} fill={c.series[0]?.colors?.[i] ?? PALETTE[i % PALETTE.length]} style={{ stroke: BG }} stroke-width="1.5" fill-rule="evenodd"><title>{`${d.cats[i] ?? ""}: ${fmtNum(d.vals[0][i] ?? 0, c.y?.fmt || d.fmts[0] || "")} (${Math.round((x / tot) * 100)}%)`}</title></path>);
+    out.push(<path d={dd} fill={c.series[0]?.colors?.[i] ?? PALETTE[i % PALETTE.length]} style={{ stroke: BG }} stroke-width="1.5" fill-rule="evenodd" data-part="s0" />);
     if (x / tot >= 0.04) { const m = (a + b) / 2, rr = hole ? (r + hole) / 2 : r * 0.68; out.push(text(cx + rr * Math.cos(m), cy + rr * Math.sin(m), (c.labels || c.series[0]?.labels) ? fmtNum(d.vals[0][i] ?? 0, c.y?.fmt || d.fmts[0] || "") : `${Math.round((x / tot) * 100)}%`, { anchor: "middle", color: "#FFFFFF", bold: true, size: fs * 0.95 })); }
     a = b;
   });
@@ -347,7 +449,7 @@ export const withLook = (c: ChartDef, l: Partial<ChartDef> | undefined, strict =
 /** A chart as a standalone SVG document (for print, PDF and pictures). */
 export const chartSvg = (c: ChartDef, d: ChartData | undefined) => {
   const host = document.createElement("div");
-  const dispose = render(() => <XChart c={c} d={d} w={c.w} h={c.h} />, host);
+  const dispose = render(() => <XChart c={c} d={d} w={c.w} h={c.h} hover={false} />, host);
   const svg = host.innerHTML; dispose();
   return svg;
 };

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.20 — 2026-11-17
+
+Charts you work on directly, as in a spreadsheet.
+
+- **Values under the pointer**, at once: point at any chart (on a sheet, in a view or on a dashboard) to see the month or label and every series' value there, each in its colour, with a guide line and the points marked.
+- **Click a part to select it**: the title, the legend, an axis, a series (a handle on each point), the plot area or the whole chart. **Double-click a part** to format just that part; the Format pane opens at its settings and follows the part you click.
+- **Right-click a chart** for its own menu (not the cells' menu): Format the part, Change Chart Type, Select Data, Save as Template, Apply Template, Reset to Match Style, Copy as Picture, Save as Picture (PNG or SVG), Duplicate, Bring to Front, Send to Back, Delete. On a series: its chart type, the secondary axis, data labels and a trendline; on the legend: its position; on an axis: gridlines and number format. View and dashboard charts have the same menu, with Datum Plot.
+- **The title is edited where it stands**: click it, click again, type, Enter.
+- **Delete removes the selected part** (a series, the title, the legend, an axis), or the chart when the chart itself is selected.
+- Fixed: chart text could be selected by a drag, showing a blue box over the axis labels.
+- Chart styles are now called templates.
+
 ## 0.9.19 — 2026-11-17
 
 One chart engine for the whole app.

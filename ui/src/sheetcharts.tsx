@@ -1,20 +1,91 @@
 // Charts on a sheet: drawn over the cells at their anchor cell, moved by dragging, resized from
 // their edges and corners, and formatted in the Format Chart pane (type, data, series, axes, looks,
-// saved styles). Each change is one Undo step (Op::SheetCharts).
-import { For, Index, JSX, Show, createSignal } from "solid-js";
-import { ChartData, ChartDef, Series, Axis, KINDS, PALETTE, XChart, colorOf, kindOf, lookOf, withLook } from "./xchart";
-import { opts, setOpts, call, toast } from "./store";
+// saved styles). A click selects a part (title, legend, an axis, a series, the plot); double-click
+// formats it; right-click gives the chart's menu; the title is edited in place. Each change is one
+// Undo step (Op::SheetCharts).
+import { For, Index, JSX, Show, createEffect, createSignal, on } from "solid-js";
+import { ChartData, ChartDef, Series, Axis, KINDS, PALETTE, XChart, colorOf, kindOf, lookOf, withLook, partName, chartSvg, chartCanvas } from "./xchart";
+import { opts, setOpts, call, toast, openMenu, Item } from "./store";
 import { Options } from "./api";
 
 export const [chartSel, setChartSel] = createSignal(-1);
 export const [fmtChart, setFmtChart] = createSignal<number | null>(null);
+/** The selected part of the selected chart ("" = the whole chart). */
+export const [chartPart, setChartPart] = createSignal("");
+const [editTitle, setEditTitle] = createSignal<number | null>(null);
+const partOf = (e: Event) => ((e.target as Element).closest?.("[data-part]")?.getAttribute("data-part") ?? "area");
+
+/** A chart's look back to the standard one: palette colours, plain lines, no labels, white areas. */
+export const plainLook = (c: ChartDef): ChartDef => ({ ...c, labels: false, font: 0, bg: "", plot: "", gap: 150,
+  series: c.series.map((s, i) => ({ ...s, color: PALETTE[i % PALETTE.length], width: 0, dash: "", marker: "", smooth: false, labels: false, trend: "" })) });
+
+/** Saves a chart as a picture: PNG (sharp, for documents) or SVG (vector, for drawings and the web). */
+export const savePicture = async (c: ChartDef, d: ChartData | undefined, name: string, svg: boolean) => {
+  const file = `${(name || "Chart").replace(/[\\/:*?"<>|]/g, "_")}.${svg ? "svg" : "png"}`;
+  const data = svg ? chartSvg(c, d) : (await import("./picture")).pngAt(await chartCanvas(c, d, 3), 16);
+  const path = await call<string | null>("save_file", { name: file, data });
+  if (path) toast(`Saved ${path}`, true);
+};
+const saveStyle = async (c: ChartDef) => {
+  const name = prompt("Save this chart's look as a template named:", "")?.trim(); if (!name) return;
+  const o = { ...opts()!, chartStyles: { ...(opts()?.chartStyles ?? {}), [name]: lookOf(c) } } as Options;
+  await call("set_options", { opts: o }); setOpts(o); toast(`Template “${name}” saved: right-click any chart › Apply Template, in any plan.`, true);
+};
+
+/** The right-click menu of a chart (on a sheet, or in a view with `view`), for the part clicked. */
+export const chartMenu = (e: MouseEvent, o: { c: ChartDef; d?: ChartData; part: string; set: (c: ChartDef) => void; format: (part: string) => void; remove?: () => void; title?: () => void;
+  order?: (front: boolean) => void; duplicate?: () => void; copy: () => void; reset?: () => void; extra?: Item[]; pic?: { c: ChartDef; d?: ChartData; name: string } }) => {
+  const c = o.c, part = o.part, si = part.startsWith("s") ? +part.slice(1) : -1, s = c.series[si];
+  const setS = (x: Partial<Series>) => o.set({ ...c, series: c.series.map((y, j) => (j === si ? { ...y, ...x } : y)) });
+  const setA = (k: "x" | "y" | "y2", x: Partial<Axis>) => o.set({ ...c, [k]: { ...(c[k] ?? {}), ...x } });
+  const styles = opts()?.chartStyles ?? {};
+  const kinds = (cur: string, set: (k: string) => void): Item[] => KINDS.map(([k, l]) => ({ label: l, on: cur === k, run: () => set(k) }));
+  const items: Item[] = [{ label: `Format ${partName(c, part, o.d?.names)}…`, keys: "Dbl-click", run: () => o.format(part) }];
+  if (s) items.push(
+    { label: "Change Series Chart Type", sub: ["column", "line", "area"].includes(c.kind) ? [["column", "Columns"], ["line", "Line"], ["area", "Area"]].map(([k, l]) => ({ label: l, on: kindOf(c, si) === k, run: () => setS({ kind: k }) })) : [{ label: "Only in column, line and area charts", off: true }] },
+    { label: "Plot on Secondary Axis", on: !!s.y2, off: !["column", "line", "area"].includes(c.kind), run: () => setS({ y2: !s.y2 }) },
+    { label: s.labels ? "Remove Data Labels" : "Add Data Labels", run: () => setS({ labels: !s.labels }) },
+    { label: s.trend === "linear" ? "Remove Trendline" : "Add Trendline", off: ["pie", "doughnut"].includes(c.kind), run: () => setS({ trend: s.trend === "linear" ? "" : "linear" }) });
+  if (part === "legend") items.push({ label: "Legend Position", sub: [["bottom", "Bottom"], ["top", "Top"], ["right", "Right"], ["left", "Left"]].map(([k, l]) => ({ label: l, on: (c.legend || "bottom") === k, run: () => o.set({ ...c, legend: k }) })) });
+  if (part === "x" || part === "y" || part === "y2") items.push(
+    { label: "Major Gridlines", on: !!c[part]?.grid, run: () => setA(part, { grid: !c[part]?.grid }) },
+    { label: "Number Format", sub: [["", "As the cells"], ["0", "0"], ["#,##0", "#,##0"], ["0%", "0%"], ["0.0%", "0.0%"], ["mmm-yy", "mmm-yy"], ["dd-mmm-yy", "dd-mmm-yy"]].map(([k, l]) => ({ label: l, on: (c[part]?.fmt ?? "") === k, run: () => setA(part, { fmt: k }) })) });
+  if (o.title && (part === "title" || part === "area")) items.push({ label: c.title ? "Edit Chart Title" : "Add Chart Title", run: o.title });
+  items.push("-",
+    { label: "Change Chart Type", sub: kinds(c.kind, k => o.set({ ...c, kind: k })) },
+    ...(o.remove ? [{ label: "Select Data…", run: () => o.format("data") }] : []),
+    "-",
+    { label: "Save as Template…", run: () => saveStyle(c) },
+    { label: "Apply Template", sub: Object.keys(styles).length ? Object.keys(styles).map(n => ({ label: n, run: () => o.set(withLook(c, styles[n])) })) : [{ label: "No templates yet: Save as Template first", off: true }] },
+    { label: "Reset to Match Style", run: () => (o.reset ? o.reset() : o.set(plainLook(c))) },
+    "-",
+    { label: "Copy as Picture", run: o.copy },
+    { label: "Save as Picture", sub: [false, true].map(svg => ({ label: svg ? "SVG (vector, for drawings)…" : "PNG (for documents and slides)…", run: () => savePicture(o.pic?.c ?? c, o.pic ? o.pic.d : o.d, o.pic?.name ?? (c.title || "Chart"), svg) })) },
+    ...(o.extra ?? []));
+  if (o.duplicate) items.push({ label: "Duplicate", run: o.duplicate });
+  if (o.order) items.push({ label: "Bring to Front", run: () => o.order!(true) }, { label: "Send to Back", run: () => o.order!(false) });
+  if (o.remove) {
+    items.push("-");
+    if (s) items.push({ label: "Delete Series", off: c.series.length < 2, run: () => o.set({ ...c, series: c.series.filter((_, j) => j !== si) }) });
+    else if (part === "title" && c.title) items.push({ label: "Delete Chart Title", run: () => o.set({ ...c, title: "" }) });
+    else if (part === "legend") items.push({ label: "Delete Legend", run: () => o.set({ ...c, legend: "none" }) });
+    items.push({ label: "Delete Chart", keys: "Del", run: o.remove });
+  }
+  openMenu(e, items);
+};
 
 type Geo = { x: (c: number) => number; y: (r: number) => number; cell: (cx: number, cy: number) => [number, number]; a1: (r: number, c: number) => string; parse: (a: string) => [number, number]; zoom: () => number };
 
 /** The charts of sheet `k` over its cells. */
 export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[]; g: Geo; put: (list: ChartDef[]) => Promise<unknown>; focus: () => void }) => {
+  const put1 = (i: number, c: ChartDef) => p.put(p.charts.map((x, j) => (j === i ? c : x)));
   const drag = (e: MouseEvent, i: number, how: string) => {
-    e.preventDefault(); e.stopPropagation(); setChartSel(i); p.focus();
+    e.preventDefault(); e.stopPropagation();
+    // A click selects the part under the pointer (a second click on the title edits it); a drag moves the chart.
+    const part = how === "move" ? partOf(e) : "", was = chartSel() === i ? chartPart() : null;
+    if (chartSel() !== i) setChartPart("");
+    if (fmtChart() !== null) setFmtChart(p.charts[i].id);
+    setChartSel(i); p.focus();
     const o = p.charts[i], x0 = e.clientX, y0 = e.clientY, z = p.g.zoom();
     let next = o;
     const el = () => document.querySelector<HTMLElement>(`.schart[data-i="${i}"]`);
@@ -30,24 +101,54 @@ export const ChartLayer = (p: { k: number; charts: ChartDef[]; data?: ChartData[
       const [r, c] = p.g.parse(next.cell), box = el();
       if (box) Object.assign(box.style, { left: `${p.g.x(c)}px`, top: `${p.g.y(r)}px`, width: `${next.w}px`, height: `${next.h}px` });
     };
-    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); if (next !== o) p.put(p.charts.map((x, j) => (j === i ? next : x))); };
+    const up = () => {
+      removeEventListener("mousemove", mv); removeEventListener("mouseup", up);
+      if (next !== o) { p.put(p.charts.map((x, j) => (j === i ? next : x))); return; }
+      if (how !== "move") return;
+      if (part === "title" && was === "title") setEditTitle(o.id);
+      else setChartPart(part === "area" ? "" : part);
+    };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
+  };
+  const copy = async (i: number) => { const cv = await chartCanvas(p.charts[i], p.data?.[i], 2); (await import("./picture")).copyCanvas(cv, "Chart", 16); };
+  const menu = (e: MouseEvent, i: number, part: string) => {
+    const c = p.charts[i];
+    chartMenu(e, { c, d: p.data?.[i], part, set: x => put1(i, x), format: pt => { setChartPart(pt === "area" || pt === "data" ? "" : pt); setFmtChart(c.id); if (pt === "data") setPaneTab("series"); },
+      remove: () => { p.put(p.charts.filter((_, j) => j !== i)); setChartSel(-1); setFmtChart(null); },
+      title: () => { if (!c.title) put1(i, { ...c, title: "Chart Title" }); setEditTitle(c.id); },
+      order: front => { const rest = p.charts.filter((_, j) => j !== i); p.put(front ? [...rest, c] : [c, ...rest]); setChartSel(front ? rest.length : 0); },
+      duplicate: () => { const [r, cc] = p.g.parse(c.cell); p.put([...p.charts, { ...c, id: 0, cell: p.g.a1(r + 2, cc + 1) }]); setChartSel(p.charts.length); },
+      copy: () => copy(i) });
   };
   return (
     <For each={p.charts}>{(ch, i) => { const rc = () => p.g.parse(ch.cell); return (
       <div class="schart" data-i={i()} classList={{ on: chartSel() === i() }} style={{ left: `${p.g.x(rc()[1])}px`, top: `${p.g.y(rc()[0])}px`, width: `${ch.w}px`, height: `${ch.h}px` }}
-        title="Drag to move · drag an edge or corner to resize · double-click to format · Delete removes it" onMouseDown={e => { if (e.button === 0) drag(e, i(), "move"); else { setChartSel(i()); } }} onDblClick={e => { e.stopPropagation(); setFmtChart(ch.id); }}>
-        {(() => { const d = p.data?.[i()]; return <XChart c={ch} d={d} w={ch.w} h={ch.h} />; }) as unknown as JSX.Element}
+        onMouseDown={e => { if (e.button === 0) drag(e, i(), "move"); else { if (chartSel() !== i()) setChartPart(""); setChartSel(i()); } }}
+        onDblClick={e => { e.stopPropagation(); const pt = partOf(e); setChartPart(pt === "area" ? "" : pt); setEditTitle(null); setFmtChart(ch.id); }}
+        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); const pt = partOf(e); setChartSel(i()); setChartPart(pt === "area" ? "" : pt); menu(e, i(), pt); }}>
+        {(() => { const d = p.data?.[i()]; return <XChart c={ch} d={d} w={ch.w} h={ch.h} sel={chartSel() === i() ? chartPart() || "area" : undefined} />; }) as unknown as JSX.Element}
+        <Show when={editTitle() === ch.id}><TitleBox c={ch} done={t => { setEditTitle(null); if (t !== null && t !== (ch.title ?? "")) put1(i(), { ...ch, title: t }); p.focus(); }} /></Show>
         <Show when={chartSel() === i()}>
           <i class="ch-e" onMouseDown={e => drag(e, i(), "e")} /><i class="ch-s" onMouseDown={e => drag(e, i(), "s")} /><i class="ch-se" onMouseDown={e => drag(e, i(), "se")} />
           <div class="ch-tools" onMouseDown={e => e.stopPropagation()}>
-            <button title="Format Chart: type, data, series, axes and looks" onClick={() => setFmtChart(ch.id)}>Format</button>
+            <button title="Format Chart: type, data, series, axes and looks (or double-click a part of the chart)" onClick={() => setFmtChart(ch.id)}>Format</button>
             <button title="Copy the chart as a picture, sharp, to paste into a document, slides or a workbook" onClick={async () => { const { chartCanvas } = await import("./xchart"); const cv = await chartCanvas(ch, p.data?.[i()], 2); (await import("./picture")).copyCanvas(cv, "Chart", 16); }}>Copy</button>
             <button title="Remove the chart" onClick={() => { p.put(p.charts.filter((_, j) => j !== i())); setChartSel(-1); }}>×</button>
+            <button title="More: chart type, templates, pictures, order" onClick={e => menu(e, i(), chartPart() || "area")}>⋯</button>
           </div>
         </Show>
       </div>); }}</For>
   );
+};
+
+/** The title edited where it stands: Enter keeps it, Escape leaves it as it was. */
+const TitleBox = (p: { c: ChartDef; done: (t: string | null) => void }) => {
+  const fs = (p.c.font || 11) * 1.35;
+  let el!: HTMLInputElement, over = false;
+  const end = (t: string | null) => { if (!over) { over = true; p.done(t); } };
+  setTimeout(() => { el?.focus(); el?.select(); });
+  return <input ref={el} class="ch-title" value={p.c.title ?? ""} style={{ "font-size": `${fs}px` }} onMouseDown={e => e.stopPropagation()} onDblClick={e => e.stopPropagation()}
+    onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter") end(e.currentTarget.value.trim()); if (e.key === "Escape") end(null); }} onBlur={e => end(e.currentTarget.value.trim())} />;
 };
 
 // ---------- the Format Chart pane ----------
@@ -59,23 +160,26 @@ const Num = (p: { value: number | null | undefined; set: (v: number | null) => v
 const Chk = (p: { value: boolean; set: (v: boolean) => void; l: string }) => <label class="cfchk"><input type="checkbox" checked={p.value} onChange={e => p.set(e.currentTarget.checked)} />{p.l}</label>;
 const Col = (p: { value: string; set: (v: string) => void }) => <input type="color" value={/^#[0-9a-f]{6}$/i.test(p.value) ? p.value : "#ffffff"} onChange={e => p.set(e.currentTarget.value.toUpperCase())} />;
 
-export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: ChartDef) => void; close: () => void; view?: boolean; reset?: () => void }) => {
-  const [tab, setTab] = createSignal("chart");
+const [paneTab, setPaneTab] = createSignal("chart");
+export { setPaneTab };
+export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: ChartDef) => void; close: () => void; view?: boolean; reset?: () => void; part?: string }) => {
+  const [tab, setTab] = [paneTab, setPaneTab];
+  // The pane follows the part selected in the chart: its tab, and the part's own settings in view.
+  createEffect(on(() => p.part, part => {
+    if (!part) return;
+    setTab(part.startsWith("s") ? "series" : part === "x" || part === "y" || part === "y2" ? "axes" : "chart");
+    setTimeout(() => { const el = document.querySelector<HTMLElement>(`.chartpane [data-k="${part}"]`); if (el) { el.scrollIntoView({ block: "nearest" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900); if (part === "title") el.querySelector("input")?.focus(); } });
+  }));
   const c = () => p.chart;
   const set = (x: Partial<ChartDef>) => p.set({ ...c(), ...x });
   const setS = (i: number, x: Partial<Series>) => set({ series: c().series.map((s, j) => (j === i ? { ...s, ...x } : s)) });
   const setA = (k: "x" | "y" | "y2", x: Partial<Axis>) => set({ [k]: { ...(c()[k] ?? {}), ...x } } as Partial<ChartDef>);
   const combo = () => ["column", "line", "area"].includes(c().kind);
   const styles = () => opts()?.chartStyles ?? {};
-  const saveStyle = async () => {
-    const name = prompt("Save this chart's look as a style named:", "")?.trim(); if (!name) return;
-    const o = { ...opts()!, chartStyles: { ...styles(), [name]: lookOf(c()) } } as Options;
-    await call("set_options", { opts: o }); setOpts(o); toast(`Style “${name}” saved: Format Chart › Style applies it to any chart, in any plan.`, true);
-  };
   const delStyle = async (name: string) => { const s = { ...styles() }; delete s[name]; const o = { ...opts()!, chartStyles: s } as Options; await call("set_options", { opts: o }); setOpts(o); };
   const AxisBox = (q: { k: "x" | "y" | "y2"; l: string }) => {
     const a = () => c()[q.k] ?? {};
-    return <fieldset class="cfset"><legend>{q.l}</legend>
+    return <fieldset class="cfset" data-k={q.k}><legend>{q.l}</legend>
       <Row l="Title"><Txt value={a().title ?? ""} set={v => setA(q.k, { title: v })} /></Row>
       <Show when={q.k !== "x" || c().kind === "scatter"}><Row l="Minimum"><Num value={a().min} set={v => setA(q.k, { min: v })} /></Row><Row l="Maximum"><Num value={a().max} set={v => setA(q.k, { max: v })} /></Row>
         <Row l="Major unit" title="The step between gridlines and labels"><Num value={a().major} set={v => setA(q.k, { major: v && v > 0 ? v : null })} /></Row></Show>
@@ -86,26 +190,26 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
   };
   return (
     <aside class="chartpane" onMouseDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-      <header><b>Format Chart</b><button class="x" title="Close" onClick={p.close}>×</button></header>
+      <header><b>{p.part ? `Format ${partName(c(), p.part, p.data?.names)}` : "Format Chart"}</b><button class="x" title="Close" onClick={p.close}>×</button></header>
       <div class="cftabs"><For each={[["chart", "Chart"], ["series", "Series"], ["axes", "Axes"], ["style", "Style"]]}>{([k, l]) => <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For></div>
       <div class="cfbody">
         <Show when={tab() === "chart"}>
           <Row l="Chart type"><Sel value={c().kind} set={v => set({ kind: v })} options={KINDS} /></Row>
           <Show when={["column", "bar", "line", "area"].includes(c().kind)}><Row l="Stacking"><Sel value={c().stack ?? ""} set={v => set({ stack: v })} options={[["", "Side by side"], ["stacked", "Stacked"], ["percent", "100% stacked"]]} /></Row></Show>
-          <Show when={!p.view}><Row l="Title"><Txt value={c().title ?? ""} set={v => set({ title: v })} placeholder="No title" /></Row></Show>
-          <Row l="Legend"><Sel value={c().legend || "bottom"} set={v => set({ legend: v })} options={[["bottom", "Bottom"], ["top", "Top"], ["right", "Right"], ["left", "Left"], ["none", "None"]]} /></Row>
+          <Show when={!p.view}><div data-k="title"><Row l="Title"><Txt value={c().title ?? ""} set={v => set({ title: v })} placeholder="No title" /></Row></div></Show>
+          <div data-k="legend"><Row l="Legend"><Sel value={c().legend || "bottom"} set={v => set({ legend: v })} options={[["bottom", "Bottom"], ["top", "Top"], ["right", "Right"], ["left", "Left"], ["none", "None"]]} /></Row></div>
           <Row l="Text size (pt)"><Num value={c().font || null} set={v => set({ font: v ?? 0 })} placeholder="11" /></Row>
           <Chk l="Data labels on every series" value={!!c().labels} set={v => set({ labels: v })} />
           <Show when={["column", "bar"].includes(c().kind) || c().series.some((_, i) => ["column", "bar"].includes(kindOf(c(), i)))}><Row l="Gap between bars (%)" title="The space between groups of bars, as a share of a bar's width"><Num value={c().gap ?? 150} set={v => set({ gap: Math.max(0, Math.min(500, v ?? 150)) })} step="10" /></Row></Show>
-          <Row l="Chart area"><Col value={c().bg || "#FFFFFF"} set={v => set({ bg: v })} /></Row>
-          <Row l="Plot area"><Col value={c().plot || "#FFFFFF"} set={v => set({ plot: v === "#FFFFFF" ? "" : v })} /></Row>
+          <div data-k="area"><Row l="Chart area"><Col value={c().bg || "#FFFFFF"} set={v => set({ bg: v })} /></Row></div>
+          <div data-k="plot"><Row l="Plot area"><Col value={c().plot || "#FFFFFF"} set={v => set({ plot: v === "#FFFFFF" ? "" : v })} /></Row></div>
           <Show when={!p.view}><Row l="Size (px)"><span class="cfwh"><Num value={c().w} set={v => set({ w: Math.max(160, v ?? c().w) })} step="10" />×<Num value={c().h} set={v => set({ h: Math.max(110, v ?? c().h) })} step="10" /></span></Row>
           <Row l="Categories (X)" title="The cells with the labels or dates under the bars, e.g. A2:A20 or Data!A2:A20"><Txt value={c().cats} set={v => set({ cats: v.trim() })} placeholder="A2:A20" /></Row></Show>
           <Show when={p.reset}><p class="muted">This chart's look is kept with the plan. <button class="btn sm" onClick={() => p.reset?.()}>Back to the standard look</button></p></Show>
         </Show>
         <Show when={tab() === "series"}>
           <Index each={c().series}>{(s, i) => (
-            <fieldset class="cfset"><legend><i class="cfsw" style={{ background: colorOf(c(), i) }} />{p.data?.names[i] || s().name || `Series ${i + 1}`}</legend>
+            <fieldset class="cfset" data-k={`s${i}`}><legend><i class="cfsw" style={{ background: colorOf(c(), i) }} />{p.data?.names[i] || s().name || `Series ${i + 1}`}</legend>
               <Show when={!p.view}><Row l="Name" title="Text, or =B1 to read it from a cell"><Txt value={s().name} set={v => setS(i, { name: v })} /></Row>
               <Row l="Values"><Txt value={s().vals} set={v => setS(i, { vals: v.trim() })} placeholder="B2:B20" /></Row></Show>
               <Show when={combo()}><Row l="Draw as" title="A combined chart: each series as columns, a line or an area"><Sel value={s().kind ?? ""} set={v => setS(i, { kind: v })} options={[["", "Same as the chart"], ["column", "Columns"], ["line", "Line"], ["area", "Area"]]} /></Row>
@@ -135,10 +239,10 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
           </Show>
         </Show>
         <Show when={tab() === "style"}>
-          <p class="muted">A style keeps a chart's look (colours, lines, markers, labels, legend, axis formats and bounds, background) to give any chart, in any plan, the same look in one click.</p>
-          <button class="btn sm pri" onClick={saveStyle}>Save this look as a style…</button>
-          <For each={Object.keys(styles())} fallback={<p class="muted">No styles saved yet.</p>}>{name => (
-            <div class="cfstyle"><button class="btn sm" title="Give this chart that look" onClick={() => p.set(withLook(c(), styles()[name]))}>Apply</button><b>{name}</b><button class="x" title="Delete the style" onClick={() => delStyle(name)}>×</button></div>)}</For>
+          <p class="muted">A template keeps a chart's look (colours, lines, markers, labels, legend, axis formats and bounds, background) to give any chart, in any plan, the same look in one click.</p>
+          <button class="btn sm pri" onClick={() => saveStyle(c())}>Save this look as a template…</button>
+          <For each={Object.keys(styles())} fallback={<p class="muted">No templates saved yet.</p>}>{name => (
+            <div class="cfstyle"><button class="btn sm" title="Give this chart that look" onClick={() => p.set(withLook(c(), styles()[name]))}>Apply</button><b>{name}</b><button class="x" title="Delete the template" onClick={() => delStyle(name)}>×</button></div>)}</For>
         </Show>
       </div>
     </aside>

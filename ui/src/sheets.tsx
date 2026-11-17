@@ -14,7 +14,7 @@ import { CountryList, FlagText } from "./flags";
 import { Help } from "./help";
 import { SheetImage } from "./api";
 import { pictureMenu, picData } from "./pictures";
-import { ChartLayer, ChartPane, chartSel, setChartSel, fmtChart, setFmtChart } from "./sheetcharts";
+import { ChartLayer, ChartPane, chartSel, setChartSel, fmtChart, setFmtChart, chartPart, setChartPart } from "./sheetcharts";
 import { ChartData, ChartDef, chartFrom } from "./xchart";
 import { autoHeights, fitBox, sheetK, setSheetK, sheetMode, setSheetMode, sheetZoom, zoomSheet } from "./sheetlayout";
 import { sheetPages, SheetPagesView, pageRoom } from "./print";
@@ -248,8 +248,19 @@ export const Sheets = () => {
   const clear = () => { const out: [string, string][] = []; eachShown((r, c) => { if (input(k(), r, c)) out.push([a1(r, c), ""]); }); put(out); };
   const key = (e: KeyboardEvent) => {
     if (picSel() >= 0 && edit() === null && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); putImgs(imgs().filter((_, j) => j !== picSel())); setPicSel(-1); return; }
-    if (chartSel() >= 0 && edit() === null && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); putCharts(charts().filter((_, j) => j !== chartSel())); setChartSel(-1); setFmtChart(null); return; }
-    if (chartSel() >= 0 && e.key === "Escape") { setChartSel(-1); return; }
+    if (chartSel() >= 0 && edit() === null && (e.key === "Delete" || e.key === "Backspace")) {
+      // Delete removes the selected part (a series, the title, the legend, an axis) or, with none selected, the chart.
+      e.preventDefault();
+      const i = chartSel(), c = charts()[i], pt = chartPart(), si = pt.startsWith("s") ? +pt.slice(1) : -1;
+      const set = (x: ChartDef) => putCharts(charts().map((y, j) => (j === i ? x : y)));
+      if (si >= 0 && c.series.length > 1) set({ ...c, series: c.series.filter((_, j) => j !== si) });
+      else if (pt === "title") set({ ...c, title: "" });
+      else if (pt === "legend") set({ ...c, legend: "none" });
+      else if (pt === "x" || pt === "y" || pt === "y2") set({ ...c, [pt]: { ...(c[pt] ?? {}), hide: true } });
+      else if (!pt || pt === "area") { putCharts(charts().filter((_, j) => j !== i)); setChartSel(-1); setFmtChart(null); }
+      setChartPart(""); return;
+    }
+    if (chartSel() >= 0 && e.key === "Escape") { if (chartPart()) setChartPart(""); else setChartSel(-1); return; }
     // Keys typed before the cell editor has focus still go into it (fast typing loses nothing).
     if (edit() !== null) { if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); const t = edit()!, at = caret(); setText(t.slice(0, at) + e.key + t.slice(at), at + 1); } return; }
     const [r, c] = e.shiftKey ? end() : cur();
@@ -1163,7 +1174,7 @@ export const Sheets = () => {
   return (
     <section class="ganttview">
       <Show when={fmtChart() !== null && charts().find(c => c.id === fmtChart())}>{ch => (
-        <ChartPane chart={ch()} data={chartData()?.[charts().findIndex(c => c.id === fmtChart())]} close={() => setFmtChart(null)}
+        <ChartPane chart={ch()} data={chartData()?.[charts().findIndex(c => c.id === fmtChart())]} close={() => setFmtChart(null)} part={charts()[chartSel()]?.id === fmtChart() ? chartPart() : ""}
           set={nc => putCharts(charts().map(c => (c.id === nc.id ? nc : c)))} />)}</Show>
       <CountryList />
       <datalist id="sheetnames"><For each={names()}>{n => <option value={n.name} />}</For></datalist>

@@ -77,6 +77,7 @@
       "title": "Smaller tools",
       "when": "Next",
       "items": [
+        "Charts you work on as in a spreadsheet: values under the pointer, click a part to format it, a chart menu, a Chart Tools tab, data tables and chart sheets (0.9.18 to 0.9.22).",
         "Help › Check, list organising, a Gantt picture that reopens in Datum Plan, line of balance for repetitive work.",
         "Builds for Mac and Linux."
       ]

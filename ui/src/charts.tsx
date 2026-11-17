@@ -7,7 +7,7 @@ import { Portal } from "solid-js/web";
 import { call, toast, P, act } from "./store";
 import { money, fmtDay } from "./api";
 import { ChartData, ChartDef, Series, XChart, chartCanvas, lookOf, withLook } from "./xchart";
-import { ChartPane } from "./sheetcharts";
+import { ChartPane, chartMenu } from "./sheetcharts";
 
 /** The chart colours: clear and easy to tell apart. With Options › Colour-blind safe colours they
  * become the Okabe-Ito set, told apart with every common kind of colour-blindness. */
@@ -92,8 +92,12 @@ const toChart = (p: ChartProps, w: number, h: number, doc = false): { c: ChartDe
   return { c, d };
 };
 
-/** The chart whose Format pane is open (its title), and its props. */
+/** The chart whose Format pane is open (its title), and its props; and the part it formats. */
 const [formatting, setFormatting] = createSignal<ChartProps | null>(null);
+const [fmtPart, setFmtPart] = createSignal("");
+const looks = () => ((P()?.ui as { chartLooks?: Record<string, Partial<ChartDef>> } | undefined)?.chartLooks ?? {});
+const saveLook = (title: string, nc: ChartDef | null) => { const l = { ...looks() }; if (nc) l[title] = lookOf(nc); else delete l[title]; return act({ Ui: { key: "chartLooks", value: l } }); };
+const partOf = (e: Event) => ((e.target as Element).closest?.("[data-part]")?.getAttribute("data-part") ?? "area");
 
 export const ChartBox = (p: ChartProps) => {
   let box!: HTMLDivElement;
@@ -126,12 +130,20 @@ export const ChartBox = (p: ChartProps) => {
     const msg = await call<string>("open_in_plot", { chart: { title: p.title, y: p.y ?? "", units, labels: p.time ? ds0.map(d => fmtDay(d)) : p.labels, days: ds0, series } });
     if (msg) toast(msg, true);
   };
+  const docChart = () => { const W = 960, H = (p.type === "doughnut" || p.type === "pie" ? 420 : 470) + (p.subtitle ? 62 : 40); const r = toChart(p, W, H, true); return { c: { ...r.c, w: W, h: H }, d: r.d }; };
+  const menu = (e: MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const [w, h] = size(), { c, d } = toChart(p, w, h), part = partOf(e), pic = docChart();
+    chartMenu(e, { c, d, part, set: nc => saveLook(p.title, nc), format: pt => { setFmtPart(pt === "area" ? "" : pt); setFormatting(p); }, reset: () => saveLook(p.title, null),
+      copy: async () => { const cv = await picture(); if (cv) (await import("./picture")).copyCanvas(cv, p.title, 16); }, pic: { ...pic, name: p.title },
+      extra: [{ label: "Open in Datum Plot", run: toPlot }] });
+  };
   return (
     <div class="chartbox" data-marker={p.marker ?? ""} classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>
       <Show when={!p.bare}><header classList={{ center: p.center }}><h3>{p.title}<Show when={p.subtitle}><small>{p.subtitle}</small></Show></h3>{p.extra}
-        <button onClick={() => setFormatting(p)} title="Format this chart: type, colours, lines, markers, labels, axes and legend (kept with the plan)">Format chart</button>
+        <button onClick={() => { setFmtPart(""); setFormatting(p); }} title="Format this chart: type, colours, lines, markers, labels, axes and legend (kept with the plan)">Format chart</button>
         <button onClick={async () => { const pic = await picture(); if (pic) (await import("./picture")).copyCanvas(pic, p.title, 16); }} title="Copy the chart as a picture, page-wide and sharp, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
-      <div class="cv" ref={box} classList={{ blank: empty() }}>{(() => { const [w, h] = size(); const { c, d } = toChart(p, w, h); return <XChart c={c} d={d} w={w} h={h} />; }) as unknown as JSX.Element}</div>
+      <div class="cv" ref={box} classList={{ blank: empty() }} onContextMenu={menu} onDblClick={e => { const pt = partOf(e); setFmtPart(pt === "area" ? "" : pt); setFormatting(p); }}>{(() => { const [w, h] = size(); const { c, d } = toChart(p, w, h); return <XChart c={c} d={d} w={w} h={h} />; }) as unknown as JSX.Element}</div>
       <Show when={empty()}><p class="nodata">{p.fmt === "money" ? "No costs in this plan yet." : p.fmt === "hours" ? "No hours assigned yet." : "No data yet."}</p></Show>
     </div>
   );
@@ -141,10 +153,7 @@ export const ChartBox = (p: ChartProps) => {
 export const ChartFormat = () => <Show when={formatting()}>{q => <Portal><FormatHost p={q()} /></Portal>}</Show>;
 const FormatHost = (x: { p: ChartProps }) => {
   const cur = () => toChart(x.p, 600, 300);
-  const looks = () => ((P()?.ui as { chartLooks?: Record<string, Partial<ChartDef>> } | undefined)?.chartLooks ?? {});
-  const save = (nc: ChartDef) => act({ Ui: { key: "chartLooks", value: { ...looks(), [x.p.title]: lookOf(nc) } } });
-  const reset = () => { const l = { ...looks() }; delete l[x.p.title]; act({ Ui: { key: "chartLooks", value: l } }); };
-  return <div class="chartpane-fixed"><ChartPane chart={cur().c} data={cur().d} set={save} close={() => setFormatting(null)} view reset={reset} /></div>;
+  return <div class="chartpane-fixed"><ChartPane chart={cur().c} data={cur().d} set={nc => saveLook(x.p.title, nc)} close={() => setFormatting(null)} view reset={() => saveLook(x.p.title, null)} part={fmtPart()} /></div>;
 };
 
 /** Line dataset helpers: `fill` adds a soft fill under the line. */
