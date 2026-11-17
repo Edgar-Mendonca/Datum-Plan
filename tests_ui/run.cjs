@@ -1065,7 +1065,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.click(".chartpane header .x"); await p.waitForTimeout(100);
     const b0 = await mid("s0"); await p.mouse.click(b0[0], b0[1]); await p.waitForTimeout(150); await p.mouse.click(b0[0], b0[1]); await p.waitForTimeout(150);
     await p.mouse.click(b0[0], b0[1], { button: "right" }); await p.waitForTimeout(200);
-    check("a second click on a series selects one bar, and its menu offers its own colour", ((await p.textContent(".menu")) ?? "").includes("Point Colour") && ((await p.textContent(".menu")) ?? "").includes("Format Data Point"));
+    check("a second click on a series selects one bar, and its menu offers its own colour", ((await p.textContent(".menu")) ?? "").includes("Point Colour") && ((await p.textContent(".menu")) ?? "").includes("Format Data Point"), `${(await p.textContent(".menu"))?.slice(0, 120)} | ${b0} | ${await p.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return `${e?.tagName} ${e?.getAttribute("data-part")} ${e?.getAttribute("data-j")}`; }, b0)}`);
     await p.hover(".menu button:has-text('Point Colour')"); await p.waitForTimeout(150); await p.click(".menu >> nth=1 >> button >> nth=3"); await p.waitForTimeout(300);
     check("…and a colour for that one bar", ((await charts())?.[0].series[0].pts ?? []).length === 1, JSON.stringify((await charts())?.[0].series[0]));
     await p.click(".schart", { position: { x: 3, y: 150 } }); await p.waitForTimeout(150);
