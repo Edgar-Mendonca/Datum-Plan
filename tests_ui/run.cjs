@@ -1088,6 +1088,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
       await p.click(".schart .ch-side .chmore"); await p.waitForTimeout(150);
       check("…and it gives the chart's menu", ((await p.textContent(".menu")) ?? "").includes("Change Chart Type"));
       await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+      // 0.9.24: every command of the chart's menu, and of a cell's menu, has its small picture.
+      await p.click(".schart .ch-side .chmore"); await p.waitForTimeout(150);
+      check("each command in the chart's menu has its icon", await p.$$eval(".menu button", bs => bs.length > 8 && bs.every(b => b.querySelector(".tick svg"))));
+      await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+      await p.click(".sheetgrid .gbody .row >> nth=2", { button: "right" }); await p.waitForTimeout(200);
+      check("each command in a cell's menu has its icon", await p.$$eval(".menu button", bs => bs.length > 10 && bs.every(b => b.querySelector(".tick svg"))), await p.$$eval(".menu button", bs => bs.filter(b => !b.querySelector(".tick svg")).map(b => b.textContent).join(" | ")));
+      await p.keyboard.press("Escape"); await p.waitForTimeout(100);
       await p.click(".ch-side button[title^='Chart Styles']"); await p.waitForTimeout(200);
       check("the style previews show the look only, no jumbled text", (await p.$$(".chpop .chgal svg")).length >= 6 && (await p.$$(".chpop .chgal svg text")).length === 0);
       await p.keyboard.press("Escape"); await p.waitForTimeout(100);

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.24 — 2026-11-17
+
+Small pictures for every command, as in a spreadsheet.
+
+- **The chart's menu** (right-click, or ⋯ beside the chart): each command has its own icon: Format (the part's own picture), Change Chart Type, Select Data, Move Chart, Save as Template, Reset to Match Style, Copy and Save as Picture, Duplicate, Bring to Front, Send to Back, Delete; on a series its chart type, secondary axis, data labels and trendline; on a bar its colour; on an axis its gridlines and number format; on the legend its position.
+- **Chart Tools › Chart Design** on the ribbon: each command has its own picture (Add Chart Element, Quick Layout, Switch Row/Column, Select Data, Change Chart Type, Move Chart, Format Chart, Reset to Match Style, Save as Picture).
+- **Add Chart Element** and the **+** beside the chart: an icon for each element (axes, axis titles, chart title, data labels, data table, gridlines, legend, trendline).
+- **The Format pane:** its tabs and its title show the part being formatted.
+- **A cell's menu in Sheets:** every command has its icon now (Insert, Delete, Clear Contents, sort, filter, notes, links, Format Cells, Number Format, rows and columns, Freeze Panes, AutoSum, Insert Function, Plan Data, Define Name, Data Validation, page breaks and print area).
+- On a series or an axis, the menu now says what a click will do (Plot on Primary Axis / Plot on Secondary Axis, Add or Remove Major Gridlines).
+
 ## 0.9.23 — 2026-11-17
 
 Fixes found in use: the charts, and choosing Task Mode.

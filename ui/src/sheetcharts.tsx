@@ -7,7 +7,7 @@ import { For, Index, JSX, Show, createEffect, createSignal, on, onCleanup } from
 import { ChartData, ChartDef, Series, Axis, KINDS, PALETTE, XChart, colorOf, kindOf, lookOf, withLook, partName, chartSvg, chartCanvas } from "./xchart";
 import { opts, setOpts, call, toast, openMenu, Item } from "./store";
 import { Options } from "./api";
-import { askText } from "./ui";
+import { askText, Icon } from "./ui";
 import { sheetK, setSheetK } from "./sheetlayout";
 import { ChartCtl, SideButtons, changeType, selectData, moveChart } from "./charttools";
 
@@ -46,44 +46,46 @@ const saveStyle = async (c: ChartDef) => {
 };
 
 /** The right-click menu of a chart (on a sheet, or in a view with `view`), for the part clicked. */
+/** The icon of a chart's part (in menus and the Format pane). */
+export const partIcon = (part: string) => part === "title" ? "ctitle" : part === "legend" ? "legend" : part === "plot" ? "plot" : ["x", "y"].includes(part) ? "axes" : part === "y2" ? "y2axis" : part.startsWith("s") ? "series" : part.startsWith("p") ? "ptcolor" : "fmtpane";
 export const chartMenu = (e: MouseEvent, o: { c: ChartDef; d?: ChartData; part: string; set: (c: ChartDef) => void; format: (part: string) => void; remove?: () => void; title?: () => void;
   order?: (front: boolean) => void; duplicate?: () => void; copy: () => void; reset?: () => void; extra?: Item[]; pic?: { c: ChartDef; d?: ChartData; name: string }; move?: () => void }) => {
   const c = o.c, part = o.part, si = seriesOf(part), s = c.series[si];
   const setS = (x: Partial<Series>) => o.set({ ...c, series: c.series.map((y, j) => (j === si ? { ...y, ...x } : y)) });
   const setA = (k: "x" | "y" | "y2", x: Partial<Axis>) => o.set({ ...c, [k]: { ...(c[k] ?? {}), ...x } });
   const styles = opts()?.chartStyles ?? {};
-  const items: Item[] = [{ label: `Format ${partName(c, part, o.d?.names)}…`, keys: "Dbl-click", run: () => o.format(part) }];
-  if (part.startsWith("p")) items.push({ label: "Point Colour", sub: [{ label: "As the series", run: () => o.set(withPoint(c, part, "")) }, "-", ...PALETTE.map((x): Item => ({ label: x, swatch: x, run: () => o.set(withPoint(c, part, x)) }))] });
+  const items: Item[] = [{ label: `Format ${partName(c, part, o.d?.names)}…`, icon: partIcon(part), keys: "Dbl-click", run: () => o.format(part) }];
+  if (part.startsWith("p")) items.push({ label: "Point Colour", icon: "ptcolor", sub: [{ label: "As the series", run: () => o.set(withPoint(c, part, "")) }, "-", ...PALETTE.map((x): Item => ({ label: x, swatch: x, run: () => o.set(withPoint(c, part, x)) }))] });
   if (s) items.push(
-    { label: "Change Series Chart Type", sub: ["column", "line", "area"].includes(c.kind) ? [["column", "Columns"], ["line", "Line"], ["area", "Area"]].map(([k, l]) => ({ label: l, on: kindOf(c, si) === k, run: () => setS({ kind: k }) })) : [{ label: "Only in column, line and area charts", off: true }] },
-    { label: "Plot on Secondary Axis", on: !!s.y2, off: !["column", "line", "area"].includes(c.kind), run: () => setS({ y2: !s.y2 }) },
-    { label: s.labels ? "Remove Data Labels" : "Add Data Labels", run: () => setS({ labels: !s.labels }) },
-    { label: s.trend === "linear" ? "Remove Trendline" : "Add Trendline", off: ["pie", "doughnut"].includes(c.kind), run: () => setS({ trend: s.trend === "linear" ? "" : "linear" }) });
-  if (part === "legend") items.push({ label: "Legend Position", sub: [["bottom", "Bottom"], ["top", "Top"], ["right", "Right"], ["left", "Left"]].map(([k, l]) => ({ label: l, on: (c.legend || "bottom") === k, run: () => o.set({ ...c, legend: k }) })) });
+    { label: "Change Series Chart Type", icon: "ctype", sub: ["column", "line", "area"].includes(c.kind) ? [["column", "Columns"], ["line", "Line"], ["area", "Area"]].map(([k, l]) => ({ label: l, on: kindOf(c, si) === k, run: () => setS({ kind: k }) })) : [{ label: "Only in column, line and area charts", off: true }] },
+    { label: s.y2 ? "Plot on Primary Axis" : "Plot on Secondary Axis", icon: "y2axis", off: !["column", "line", "area"].includes(c.kind), run: () => setS({ y2: !s.y2 }) },
+    { label: s.labels ? "Remove Data Labels" : "Add Data Labels", icon: "labels", run: () => setS({ labels: !s.labels }) },
+    { label: s.trend === "linear" ? "Remove Trendline" : "Add Trendline", icon: "trend", off: ["pie", "doughnut"].includes(c.kind), run: () => setS({ trend: s.trend === "linear" ? "" : "linear" }) });
+  if (part === "legend") items.push({ label: "Legend Position", icon: "legend", sub: [["bottom", "Bottom"], ["top", "Top"], ["right", "Right"], ["left", "Left"]].map(([k, l]) => ({ label: l, on: (c.legend || "bottom") === k, run: () => o.set({ ...c, legend: k }) })) });
   if (part === "x" || part === "y" || part === "y2") items.push(
-    { label: "Major Gridlines", on: !!c[part]?.grid, run: () => setA(part, { grid: !c[part]?.grid }) },
-    { label: "Number Format", sub: [["", "As the cells"], ["0", "0"], ["#,##0", "#,##0"], ["0%", "0%"], ["0.0%", "0.0%"], ["mmm-yy", "mmm-yy"], ["dd-mmm-yy", "dd-mmm-yy"]].map(([k, l]) => ({ label: l, on: (c[part]?.fmt ?? "") === k, run: () => setA(part, { fmt: k }) })) });
-  if (o.title && (part === "title" || part === "area")) items.push({ label: c.title ? "Edit Chart Title" : "Add Chart Title", run: o.title });
+    { label: c[part]?.grid ? "Remove Major Gridlines" : "Add Major Gridlines", icon: "gridlines", run: () => setA(part, { grid: !c[part]?.grid }) },
+    { label: "Number Format", icon: "axes", sub: [["", "As the cells"], ["0", "0"], ["#,##0", "#,##0"], ["0%", "0%"], ["0.0%", "0.0%"], ["mmm-yy", "mmm-yy"], ["dd-mmm-yy", "dd-mmm-yy"]].map(([k, l]) => ({ label: l, on: (c[part]?.fmt ?? "") === k, run: () => setA(part, { fmt: k }) })) });
+  if (o.title && (part === "title" || part === "area")) items.push({ label: c.title ? "Edit Chart Title" : "Add Chart Title", icon: "ctitle", run: o.title });
   items.push("-",
-    { label: "Change Chart Type…", run: () => changeType({ c, d: o.d, set: o.set, format: o.format }) },
-    ...(o.remove ? [{ label: "Select Data…", run: () => o.format("data") }] : []),
-    ...(o.move ? [{ label: "Move Chart…", run: o.move }] : []),
+    { label: "Change Chart Type…", icon: "ctype", run: () => changeType({ c, d: o.d, set: o.set, format: o.format }) },
+    ...(o.remove ? [{ label: "Select Data…", icon: "seldata", run: () => o.format("data") }] : []),
+    ...(o.move ? [{ label: "Move Chart…", icon: "movechart", run: o.move }] : []),
     "-",
-    { label: "Save as Template…", run: () => saveStyle(c) },
-    { label: "Apply Template", sub: Object.keys(styles).length ? Object.keys(styles).map(n => ({ label: n, run: () => o.set(withLook(c, styles[n])) })) : [{ label: "No templates yet: Save as Template first", off: true }] },
-    { label: "Reset to Match Style", run: () => (o.reset ? o.reset() : o.set(plainLook(c))) },
+    { label: "Save as Template…", icon: "template", run: () => saveStyle(c) },
+    { label: "Apply Template", icon: "style", sub: Object.keys(styles).length ? Object.keys(styles).map(n => ({ label: n, run: () => o.set(withLook(c, styles[n])) })) : [{ label: "No templates yet: Save as Template first", off: true }] },
+    { label: "Reset to Match Style", icon: "resetstyle", run: () => (o.reset ? o.reset() : o.set(plainLook(c))) },
     "-",
-    { label: "Copy as Picture", run: o.copy },
-    { label: "Save as Picture", sub: [false, true].map(svg => ({ label: svg ? "SVG (vector, for drawings)…" : "PNG (for documents and slides)…", run: () => savePicture(o.pic?.c ?? c, o.pic ? o.pic.d : o.d, o.pic?.name ?? (c.title || "Chart"), svg) })) },
+    { label: "Copy as Picture", icon: "copy", run: o.copy },
+    { label: "Save as Picture", icon: "savepic", sub: [false, true].map(svg => ({ label: svg ? "SVG (vector, for drawings)…" : "PNG (for documents and slides)…", run: () => savePicture(o.pic?.c ?? c, o.pic ? o.pic.d : o.d, o.pic?.name ?? (c.title || "Chart"), svg) })) },
     ...(o.extra ?? []));
-  if (o.duplicate) items.push({ label: "Duplicate", run: o.duplicate });
-  if (o.order) items.push({ label: "Bring to Front", run: () => o.order!(true) }, { label: "Send to Back", run: () => o.order!(false) });
+  if (o.duplicate) items.push({ label: "Duplicate", icon: "dup", run: o.duplicate });
+  if (o.order) items.push({ label: "Bring to Front", icon: "front", run: () => o.order!(true) }, { label: "Send to Back", icon: "back", run: () => o.order!(false) });
   if (o.remove) {
     items.push("-");
-    if (s) items.push({ label: "Delete Series", off: c.series.length < 2, run: () => o.set({ ...c, series: c.series.filter((_, j) => j !== si) }) });
-    else if (part === "title" && c.title) items.push({ label: "Delete Chart Title", run: () => o.set({ ...c, title: "" }) });
-    else if (part === "legend") items.push({ label: "Delete Legend", run: () => o.set({ ...c, legend: "none" }) });
-    items.push({ label: "Delete Chart", keys: "Del", run: o.remove });
+    if (s) items.push({ label: "Delete Series", icon: "del", off: c.series.length < 2, run: () => o.set({ ...c, series: c.series.filter((_, j) => j !== si) }) });
+    else if (part === "title" && c.title) items.push({ label: "Delete Chart Title", icon: "del", run: () => o.set({ ...c, title: "" }) });
+    else if (part === "legend") items.push({ label: "Delete Legend", icon: "del", run: () => o.set({ ...c, legend: "none" }) });
+    items.push({ label: "Delete Chart", icon: "del", keys: "Del", run: o.remove });
   }
   openMenu(e, items);
 };
@@ -222,8 +224,8 @@ export const ChartPane = (p: { chart: ChartDef; data?: ChartData; set: (c: Chart
   };
   return (
     <aside class="chartpane" onMouseDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-      <header><b>{p.part ? `Format ${partName(c(), p.part, p.data?.names)}` : "Format Chart"}</b><button class="x" title="Close" onClick={p.close}>×</button></header>
-      <div class="cftabs"><For each={[["chart", "Chart"], ["series", "Series"], ["axes", "Axes"], ["style", "Style"]]}>{([k, l]) => <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For></div>
+      <header><b><Icon n={partIcon(p.part || "area")} />{p.part ? `Format ${partName(c(), p.part, p.data?.names)}` : "Format Chart"}</b><button class="x" title="Close" onClick={p.close}>×</button></header>
+      <div class="cftabs"><For each={[["chart", "Chart", "fmtpane"], ["series", "Series", "series"], ["axes", "Axes", "axes"], ["style", "Style", "style"]]}>{([k, l, ic]) => <button classList={{ on: tab() === k }} onClick={() => setTab(k)}><Icon n={ic} />{l}</button>}</For></div>
       <div class="cfbody">
         <Show when={tab() === "chart"}>
           <Row l="Chart type"><Sel value={c().kind} set={v => set({ kind: v })} options={KINDS} /></Row>

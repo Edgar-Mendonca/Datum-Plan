@@ -136,7 +136,7 @@ export const ChartBox = (p: ChartProps) => {
     const [w, h] = size(), { c, d } = toChart(p, w, h), part = partOf(e), pic = docChart();
     chartMenu(e, { c, d, part, set: nc => saveLook(p.title, nc), format: pt => { setFmtPart(pt === "area" ? "" : pt); setFormatting(p); }, reset: () => saveLook(p.title, null),
       copy: async () => { const cv = await picture(); if (cv) (await import("./picture")).copyCanvas(cv, p.title, 16); }, pic: { ...pic, name: p.title },
-      extra: [{ label: "Open in Datum Plot", run: toPlot }] });
+      extra: [{ label: "Open in Datum Plot", icon: "chart", run: toPlot }] });
   };
   return (
     <div class="chartbox" data-marker={p.marker ?? ""} classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>

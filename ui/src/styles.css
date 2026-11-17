@@ -1339,3 +1339,7 @@ body.picking .ov { display: none !important; }
 .gbody .c:hover .lsb, .gbody .c.at .lsb { display: block; }
 .gbody .c .lsb:hover { color: var(--blue); border-color: var(--blue); }
 .gbody .c:has(> .lsb) { position: relative; }
+/* 0.9.24: icons in the chart's menus, Format pane and + box. */
+.cftabs button svg { width: 14px; height: 14px; margin-right: 5px; vertical-align: -2px; }
+.chartpane header b svg { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
+.chlist label svg { width: 16px; height: 16px; flex: none; }

@@ -5,7 +5,7 @@
 import { For, JSX, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { ChartData, ChartDef, Series, Axis, PALETTE, XChart, colorOf, kindOf } from "./xchart";
 import { openDialog, closeDialog, openMenu, Item, toast, P, act } from "./store";
-import { Dialog } from "./ui";
+import { Dialog, Icon } from "./ui";
 
 /** What the tools work on: a chart, its data, how to change it, and how to open its Format pane. */
 export type ChartCtl = { c: ChartDef; d?: ChartData; set: (c: ChartDef) => void; format: (part: string) => void; a1?: (r: number, c: number) => string; parse?: (a: string) => [number, number]; k?: number; move?: () => void; reselect?: () => void };
@@ -73,33 +73,33 @@ const beside = (e: MouseEvent) => { const r = (e.currentTarget as HTMLElement).g
 const hasY2 = (c: ChartDef) => c.series.some(s => s.y2);
 const round = (c: ChartDef) => c.kind === "pie" || c.kind === "doughnut";
 /** Each element: is it shown, turn it on or off, and its options (a submenu). */
-const ELEMENTS: { l: string; on: (c: ChartDef) => boolean; flip: (c: ChartDef, on: boolean) => ChartDef; more?: (c: ChartDef, set: (c: ChartDef) => void) => Item[]; axes?: boolean }[] = [
-  { l: "Axes", axes: true, on: c => !c.x?.hide || !c.y?.hide, flip: (c, on) => ({ ...c, x: ax(c.x, { hide: !on }), y: ax(c.y, { hide: !on }), y2: ax(c.y2, { hide: !on }) }),
+const ELEMENTS: { l: string; i?: string; on: (c: ChartDef) => boolean; flip: (c: ChartDef, on: boolean) => ChartDef; more?: (c: ChartDef, set: (c: ChartDef) => void) => Item[]; axes?: boolean }[] = [
+  { l: "Axes", i: "axes", axes: true, on: c => !c.x?.hide || !c.y?.hide, flip: (c, on) => ({ ...c, x: ax(c.x, { hide: !on }), y: ax(c.y, { hide: !on }), y2: ax(c.y2, { hide: !on }) }),
     more: (c, set) => [{ label: "Primary Horizontal", on: !c.x?.hide, run: () => set({ ...c, x: ax(c.x, { hide: !c.x?.hide }) }) }, { label: "Primary Vertical", on: !c.y?.hide, run: () => set({ ...c, y: ax(c.y, { hide: !c.y?.hide }) }) },
       ...(hasY2(c) ? [{ label: "Secondary Vertical", on: !c.y2?.hide, run: () => set({ ...c, y2: ax(c.y2, { hide: !c.y2?.hide }) }) }] : [])] },
-  { l: "Axis Titles", axes: true, on: c => !!(c.x?.title || c.y?.title), flip: (c, on) => ({ ...c, x: ax(c.x, { title: on ? c.x?.title || "Axis Title" : "" }), y: ax(c.y, { title: on ? c.y?.title || "Axis Title" : "" }), y2: hasY2(c) ? ax(c.y2, { title: on ? c.y2?.title || "Axis Title" : "" }) : c.y2 }),
+  { l: "Axis Titles", i: "axtitle", axes: true, on: c => !!(c.x?.title || c.y?.title), flip: (c, on) => ({ ...c, x: ax(c.x, { title: on ? c.x?.title || "Axis Title" : "" }), y: ax(c.y, { title: on ? c.y?.title || "Axis Title" : "" }), y2: hasY2(c) ? ax(c.y2, { title: on ? c.y2?.title || "Axis Title" : "" }) : c.y2 }),
     more: (c, set) => [{ label: "Primary Horizontal", on: !!c.x?.title, run: () => set({ ...c, x: ax(c.x, { title: c.x?.title ? "" : "Axis Title" }) }) }, { label: "Primary Vertical", on: !!c.y?.title, run: () => set({ ...c, y: ax(c.y, { title: c.y?.title ? "" : "Axis Title" }) }) },
       ...(hasY2(c) ? [{ label: "Secondary Vertical", on: !!c.y2?.title, run: () => set({ ...c, y2: ax(c.y2, { title: c.y2?.title ? "" : "Axis Title" }) }) }] : [])] },
-  { l: "Chart Title", on: c => !!c.title, flip: (c, on) => ({ ...c, title: on ? c.title || "Chart Title" : "" }) },
-  { l: "Data Labels", on: c => !!c.labels || c.series.some(s => s.labels), flip: (c, on) => ({ ...c, labels: on, series: c.series.map(s => ({ ...s, labels: false })) }),
+  { l: "Chart Title", i: "ctitle", on: c => !!c.title, flip: (c, on) => ({ ...c, title: on ? c.title || "Chart Title" : "" }) },
+  { l: "Data Labels", i: "labels", on: c => !!c.labels || c.series.some(s => s.labels), flip: (c, on) => ({ ...c, labels: on, series: c.series.map(s => ({ ...s, labels: false })) }),
     more: (c, set) => c.series.map((s, i) => ({ label: s.name.startsWith("=") ? `Series ${i + 1}` : s.name || `Series ${i + 1}`, on: !!s.labels || !!c.labels, run: () => set({ ...c, labels: false, series: c.series.map((x, j) => ({ ...x, labels: j === i ? !(x.labels || c.labels) : !!(x.labels || c.labels) })) }) })) },
-  { l: "Data Table", axes: true, on: c => !!c.table, flip: (c, on) => ({ ...c, table: on && ["column", "line", "area"].includes(c.kind) }) },
-  { l: "Gridlines", axes: true, on: c => !!(c.y?.grid || c.x?.grid), flip: (c, on) => ({ ...c, y: ax(c.y, { grid: on }), x: on ? c.x : ax(c.x, { grid: false }) }),
+  { l: "Data Table", i: "dtable", axes: true, on: c => !!c.table, flip: (c, on) => ({ ...c, table: on && ["column", "line", "area"].includes(c.kind) }) },
+  { l: "Gridlines", i: "gridlines", axes: true, on: c => !!(c.y?.grid || c.x?.grid), flip: (c, on) => ({ ...c, y: ax(c.y, { grid: on }), x: on ? c.x : ax(c.x, { grid: false }) }),
     more: (c, set) => [{ label: "Primary Major Horizontal", on: !!c.y?.grid, run: () => set({ ...c, y: ax(c.y, { grid: !c.y?.grid }) }) }, { label: "Primary Major Vertical", on: !!c.x?.grid, run: () => set({ ...c, x: ax(c.x, { grid: !c.x?.grid }) }) }] },
-  { l: "Legend", on: c => c.legend !== "none", flip: (c, on) => ({ ...c, legend: on ? "bottom" : "none" }),
+  { l: "Legend", i: "legend", on: c => c.legend !== "none", flip: (c, on) => ({ ...c, legend: on ? "bottom" : "none" }),
     more: (c, set) => [["right", "Right"], ["top", "Top"], ["left", "Left"], ["bottom", "Bottom"]].map(([k, l]) => ({ label: l, on: (c.legend || "bottom") === k, run: () => set({ ...c, legend: k }) })) },
-  { l: "Trendline", axes: true, on: c => c.series.some(s => s.trend === "linear"), flip: (c, on) => ({ ...c, series: c.series.map(s => ({ ...s, trend: on ? "linear" : "" })) }),
+  { l: "Trendline", i: "trend", axes: true, on: c => c.series.some(s => s.trend === "linear"), flip: (c, on) => ({ ...c, series: c.series.map(s => ({ ...s, trend: on ? "linear" : "" })) }),
     more: (c, set) => c.series.map((s, i) => ({ label: s.name.startsWith("=") ? `Series ${i + 1}` : s.name || `Series ${i + 1}`, on: s.trend === "linear", run: () => set({ ...c, series: c.series.map((x, j) => (j === i ? { ...x, trend: x.trend === "linear" ? "" : "linear" } : x)) }) })) },
 ];
 /** Add Chart Element (the ribbon's menu): every element with its options. */
-export const elementMenu = (e: MouseEvent, t: ChartCtl) => openMenu(e, ELEMENTS.filter(x => !(x.axes && round(t.c))).map(x => ({ label: x.l, sub: [{ label: "None", on: !x.on(t.c), run: () => t.set(x.flip(t.c, false)) }, { label: x.l === "Chart Title" ? "Above Chart" : "Show", on: x.on(t.c), run: () => t.set(x.flip(t.c, true)) }, ...(x.more ? ["-" as const, ...x.more(t.c, t.set)] : [])] })));
+export const elementMenu = (e: MouseEvent, t: ChartCtl) => openMenu(e, ELEMENTS.filter(x => !(x.axes && round(t.c))).map(x => ({ label: x.l, icon: x.i, sub: [{ label: "None", on: !x.on(t.c), run: () => t.set(x.flip(t.c, false)) }, { label: x.l === "Chart Title" ? "Above Chart" : "Show", on: x.on(t.c), run: () => t.set(x.flip(t.c, true)) }, ...(x.more ? ["-" as const, ...x.more(t.c, t.set)] : [])] })));
 /** The series' name as the chart shows it. */
 const sname = (t: ChartCtl, i: number) => t.d?.names[i] || (t.c.series[i].name.startsWith("=") ? "" : t.c.series[i].name) || `Series ${i + 1}`;
 
 // ---------- the three buttons beside a chart ----------
 /** + : the chart's elements, each ticked on or off, its options under the arrow. */
 const ElementsPop = (p: { t: () => ChartCtl | null }) => <div class="chlist"><b>Chart Elements</b>
-  <For each={ELEMENTS.filter(x => !(x.axes && round(p.t()!.c)))}>{x => <div class="chrow"><label><input type="checkbox" checked={x.on(p.t()!.c)} onChange={e => p.t()!.set(x.flip(p.t()!.c, e.currentTarget.checked))} />{x.l}</label>
+  <For each={ELEMENTS.filter(x => !(x.axes && round(p.t()!.c)))}>{x => <div class="chrow"><label><input type="checkbox" checked={x.on(p.t()!.c)} onChange={e => p.t()!.set(x.flip(p.t()!.c, e.currentTarget.checked))} />{x.i && <Icon n={x.i} />}{x.l}</label>
     <Show when={x.more}><button class="more" title="Options" onClick={e => { const t = p.t()!; openMenu(beside(e), x.more!(t.c, t.set)); }}>›</button></Show></div>}</For></div>;
 /** Brush: styles drawn as they would look, and colour sets. */
 const StylesPop = (p: { t: () => ChartCtl | null }) => {
