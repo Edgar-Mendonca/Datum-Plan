@@ -128,7 +128,21 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
       check("…and one click on a value sets it", !!op?.Cells && op.Cells.cells.length >= 1, JSON.stringify(op));
       await lc.dblclick(); await p.waitForTimeout(200);
       check("double-click on a list cell opens its list straight away", (await p.$$(".menu button")).length >= 2 && !(await p.$(".gbody select.edit")));
-      await p.keyboard.press("Escape"); await p.waitForTimeout(100); } }
+      await p.keyboard.press("Escape"); await p.waitForTimeout(100); }
+    // 0.9.25: Resource Names has its ▾ too: one click ticks a person on or off, units kept; typing stays one click away.
+    const ri = await p.$$eval(".ghead .hc", hs => hs.findIndex(h => (h.textContent ?? "").trim().startsWith("Resource Names")));
+    check("the task sheet shows Resource Names", ri > 0);
+    if (ri > 0) {
+      const rc = (await p.$$(".gbody .row:not(.sum)"))[0] && await (await p.$$(".gbody .row:not(.sum)"))[0].$(`.c >> nth=${ri}`);
+      await rc.hover(); await p.waitForTimeout(100);
+      check("Resource Names has its ▾ on the cell", !!(await rc.$(".lsb")) && await rc.$eval(".lsb", b => getComputedStyle(b).display !== "none"));
+      await (await rc.$(".lsb")).click(); await p.waitForTimeout(200);
+      const mt = (await p.textContent(".menu")) ?? "";
+      check("…one click lists the resources, with typing names and units one click away", mt.includes("Type names and units") && (await p.$$(".menu button")).length >= 3, mt.slice(0, 160));
+      const n0 = await p.evaluate(() => window.__calls.length);
+      await p.click(".menu button >> nth=0"); await p.waitForTimeout(250);
+      const op = await p.evaluate(n => window.__calls.slice(n).filter(c => c[0] === "apply").pop()?.[1].op, n0);
+      check("…and one click on a name assigns it (or takes it off)", op?.Cells?.cells?.[0]?.[1] === "res", JSON.stringify(op)); } }
   // The Calendar and Team Planner show the tasks under a collapsed summary too.
   { await p.dispatchEvent(".gbody .row b.tg >> nth=0", "mousedown"); await p.waitForTimeout(200);
     const collapsedQ = await p.evaluate(() => window.__calls.some(c => c[0] === "query" && c[1].q?.collapsed?.length));

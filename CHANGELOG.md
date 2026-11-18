@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.25 — 2026-11-18
+
+Every list in the task sheet in two clicks.
+
+- **Resource Names** shows its ▾ on the cell under the pointer: one click lists the people, one click on a name assigns it (or takes it off again). Units typed before, such as [50%], are kept. **Type names and units…** (or F2) still opens the cell for typing, and **No resources** clears it.
+- **Custom fields with a lookup table** (even those that also take typed values) show the ▾ too: one click to the list, one click on the value, with **Type a value…** for anything else.
+- Double-click, Alt+Down or F4 open these lists straight away, as for Task Mode. With several rows selected, the choice goes into all of them.
+
 ## 0.9.24 — 2026-11-17
 
 Small pictures for every command, as in a spreadsheet.

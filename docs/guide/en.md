@@ -96,7 +96,7 @@ On a small screen, ribbon groups that do not fit fold into one button with the g
 
 Datum Plan schedules automatically: when you change a duration or a link, every date that depends on it moves.
 
-Columns with a list of values (**Task Mode**, **Type**, **Calendar**, activity codes and lookup fields) show a ▾ on the cell under the pointer: click it and click the value, two clicks. Double-click on the cell, or [[Alt+Down]], opens the list too. With several rows selected, the value goes into all of them.
+Columns with a list of values (**Task Mode**, **Type**, **Calendar**, **Resource Names**, activity codes and lookup fields) show a ▾ on the cell under the pointer: click it and click the value, two clicks. In **Resource Names** each click ticks a person on or off (units such as [50%] are kept); **Type names and units…** (or [[F2]]) opens the cell for typing. Double-click on the cell, or [[Alt+Down]], opens the list too. With several rows selected, the value goes into all of them.
 
 ### The outline (WBS)
 

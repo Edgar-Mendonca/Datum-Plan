@@ -40,8 +40,12 @@ const choices = (k: string): string[] | undefined => {
   if (k.startsWith("c:flag")) return ["Yes", "No"];
   return undefined;
 };
-/** A column whose values come from a list (a ▾ shows on its cells). */
-const listCol = (k: string) => !!choices(k);
+/** A column whose values come from a list (a ▾ shows on its cells): the fixed lists, Resource Names,
+ *  and custom fields with a lookup table (even when other values may be typed too). */
+const lookupOf = (k: string) => (k.startsWith("c:") ? P().fields.find(f => f.key === k.slice(2))?.lookup.map(l => l.value) ?? [] : []);
+const listCol = (k: string) => !!choices(k) || k === "res" || lookupOf(k).length > 0;
+/** The names in a Resource Names cell ("Ann[50%], Bob" → ["Ann", "Bob"]). */
+const resNames = (v: string) => v.split(",").map(x => x.trim()).filter(Boolean);
 const right = (c: Col) => ["Num", "Int", "Cost", "Pct", "Work", "Dur"].includes(c.kind);
 export const formulaOf = (key: string) => key.startsWith("c:") ? P().fields.find(f => f.key === key.slice(2))?.formula ?? "" : "";
 
@@ -273,21 +277,31 @@ export const Grid = (p: { width?: number }) => {
   /** A cell with a list of values (Task Mode, Type, Calendar, a code…): its list under the cell, one
    *  click to choose. The choice goes into every selected row of the column when the cell is among them. */
   const pickList = (row: number, col: number, anchor?: { x: number; y: number }) => {
-    const r = rows()[row], c = grid().cols[col], opts = c && choices(c.key);
-    if (!r || !c || !opts || r.uid <= 0) return false;
+    const r = rows()[row], c = grid().cols[col];
+    if (!r || !c || r.uid <= 0 || !listCol(c.key)) return false;
+    const opts = choices(c.key) ?? (c.key === "res" ? [] : ["", ...lookupOf(c.key)]);
     if (!c.edit) { toast(`${c.name} is calculated by Datum Plan.`); return true; }
     const el = box.querySelector<HTMLElement>(`.gbody .row:nth-child(${visible().findIndex(([, k]) => k === row) + 1}) .c:nth-child(${col + 2})`)?.getBoundingClientRect();
     const at = anchor ?? (el ? { x: el.left, y: el.bottom } : { x: 200, y: 200 });
     const many = inRange(row, col) && ranges().some(g => Math.abs(g.r1 - g.r0) > 0);
     const uids = many ? [...new Set(ranges().flatMap(g => { const n = norm(g); return n.c0 <= col && col <= n.c1 ? Array.from({ length: n.r1 - n.r0 + 1 }, (_, i) => rows()[n.r0 + i]).filter(x => x && x.uid > 0).map(x => x!.uid) : []; }))] : [r.uid];
-    openMenu(at, opts.map(o => ({ label: o || "(none)", on: o === (r.cells[col] ?? ""), run: () => act({ Cells: { cells: uids.map(u => [u, c.key, o]) } }) })));
+    if (c.key === "res") {
+      // Resource Names: each person ticks on or off; units typed before ([50%]) are kept.
+      const have = resNames(r.cells[col] ?? ""), base = (x: string) => x.replace(/\[.*\]$/, "").trim();
+      const toggle = (name: string) => act({ Cells: { cells: uids.map(u => { const cur = resNames(rows().find(x => x.uid === u)?.cells[col] ?? ""), on = cur.some(x => base(x) === name); return [u, "res", (on ? cur.filter(x => base(x) !== name) : [...cur, name]).join(", ")]; }) } });
+      openMenu(at, [...P().resources.filter(x => x.name).map(x => ({ label: x.name, on: have.some(h => base(h) === x.name), run: () => toggle(x.name) })),
+        ...(P().resources.length ? ["-" as const] : []), { label: "Type names and units…", keys: "F2", run: () => startEdit(row, col) }, { label: "No resources", off: !have.length, run: () => act({ Cells: { cells: uids.map(u => [u, "res", ""]) } }) }]);
+      return true;
+    }
+    openMenu(at, [...opts.map(o => ({ label: o || "(none)", on: o === (r.cells[col] ?? ""), run: () => act({ Cells: { cells: uids.map(u => [u, c.key, o]) } }) })),
+      ...(choices(c.key) ? [] : ["-" as const, { label: "Type a value…", keys: "F2", run: () => startEdit(row, col) }])]);
     return true;
   };
   const key = (e: KeyboardEvent) => {
     if (edit() || rename() !== null) return;
     const { row, col } = cur();
     // Alt+Down (or F4) opens the list of a list cell, as in a spreadsheet.
-    if ((e.altKey && e.key === "ArrowDown") || e.key === "F4") { const c = grid().cols[col]; if (c && choices(c.key)) { e.preventDefault(); pickList(row, col); return; } }
+    if ((e.altKey && e.key === "ArrowDown") || e.key === "F4") { const c = grid().cols[col]; if (c && listCol(c.key)) { e.preventDefault(); pickList(row, col); return; } }
     const ctrl = e.ctrlKey || e.metaKey, last = ranges()[ranges().length - 1];
     const at = e.shiftKey && last ? { row: last.r1, col: last.c1 } : { row, col };
     const go = (r: number, c: number) => { e.preventDefault(); pick(r, c, e.shiftKey); };
