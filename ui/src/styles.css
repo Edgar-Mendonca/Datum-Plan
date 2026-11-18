@@ -1343,3 +1343,8 @@ body.picking .ov { display: none !important; }
 .cftabs button svg { width: 14px; height: 14px; margin-right: 5px; vertical-align: -2px; }
 .chartpane header b svg { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
 .chlist label svg { width: 16px; height: 16px; flex: none; }
+.dcls { border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px 8px; margin: 0 0 8px; }
+.dcls legend { display: flex; align-items: center; gap: 8px; padding: 0 4px; font-size: 12px; }
+.dcls .dcname { width: 90px; font-weight: 600; }
+.dsteps input, .dsteps select { width: 100%; min-width: 0; }
+.dsteps td:first-child input { min-width: 140px; }

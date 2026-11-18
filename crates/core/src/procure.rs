@@ -117,12 +117,12 @@ pub fn status(c: &Calc) -> ProcOut {
             task_name: task.map(|i| p.tasks[i].name.clone()).unwrap_or_default(), need_name: need.map(|i| p.tasks[i].name.clone()).unwrap_or_default(), ..Default::default()
         };
         if let Some(d) = &docs {
-            let ok = |id: u32| d.docs.iter().find(|x| x.id == id).is_some_and(|x| x.actual[3].or(x.actual[1]).is_some());
+            let ok = |id: u32| d.docs.iter().find(|x| x.id == id).is_some_and(|x| x.approved.is_some());
             let mine: Vec<&crate::docreg::DocRow> = d.docs.iter().filter(|x| it.docs.contains(&x.id)).collect();
             row.docs = mine.len();
             row.docs_ok = mine.iter().filter(|x| ok(x.id)).count();
             // Drawings still not accepted when manufacturing should start.
-            row.docs_late = a[2].is_none() && row.docs_ok < row.docs && pl[2].is_some_and(|s| mine.iter().any(|x| !ok(x.id) && x.forecast[3].or(x.forecast[1]).is_some_and(|f| f > s)) || s < today);
+            row.docs_late = a[2].is_none() && row.docs_ok < row.docs && pl[2].is_some_and(|s| mine.iter().any(|x| !ok(x.id) && x.approved_fc.is_some_and(|f| f > s)) || s < today);
         }
         wsum += weight;
         o.items.push(row);

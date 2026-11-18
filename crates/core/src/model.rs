@@ -905,6 +905,8 @@ pub struct DocRegister {
     /// Issue purposes: code and meaning.
     pub purposes: Vec<(String, String)>,
     pub flow: Flow,
+    /// The classes of document, each with its own steps (empty in older files: made from `flow` and `weights`).
+    pub classes: Vec<DocClass>,
     pub docs: Vec<VDoc>,
     pub log: Vec<Submission>,
 }
@@ -925,8 +927,39 @@ impl Default for DocRegister {
             ],
             purposes: vec![pur("ICR", "Issued for client review"), pur("IFA", "Issued for approval"), pur("IFI", "Issued for information"), pur("IFD", "Issued for design"),
                 pur("IFP", "Issued for purchase"), pur("IFH", "Issued for HAZOP"), pur("IFC1", "Issued for construction"), pur("IFC2", "Issued final"), pur("RED-LINE", "Red-line mark-up"), pur("AS-BUILT", "As built")],
-            flow: Flow::default(), docs: vec![], log: vec![],
+            flow: Flow::default(), classes: vec![], docs: vec![], log: vec![],
         }
+    }
+}
+
+/// A class of document (its name, such as "1", "A" or "Approval") and the steps of its cycle.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DocClass { pub name: String, pub steps: Vec<DocStep> }
+/// One step of a document's cycle: an issue with one of `purposes` (comma-separated) is sent, or
+/// (`returned`) comes back with a code that accepts it, or with one of `codes` when they are given.
+/// `weight` is the % of the document earned at the step; `days`, when given, the planned working
+/// days from the step before (else the review period before a return, the turnaround after one).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DocStep { pub name: String, pub purposes: String, pub returned: bool, pub codes: String, pub weight: f64, pub days: Option<i64> }
+impl DocRegister {
+    /// The classes and their steps: the register's own, or (older files) the three classes made
+    /// from the issue flow and the six weighted steps.
+    pub fn classes(&self) -> Vec<DocClass> {
+        if !self.classes.is_empty() { return self.classes.clone() }
+        let f = &self.flow;
+        let w = |i: usize, k: usize| self.weights.get(i).and_then(|s| s.get(k)).copied().unwrap_or(0.0);
+        let st = |name: &str, p: &str, returned: bool, weight: f64| DocStep { name: name.into(), purposes: p.into(), returned, weight, ..Default::default() };
+        let full = |k: usize| DocClass { name: (k + 1).to_string(), steps: vec![
+            st("First issue submitted", &f.first, false, w(0, k)), st("First issue accepted", &f.first, true, w(1, k)),
+            st("Approval issue submitted", &f.approval, false, w(2, k)), st("Approval issue accepted", &f.approval, true, w(3, k)),
+            st("Construction issue submitted", &f.construction, false, w(4, k)), st("Final issue submitted", &f.final_, false, w(5, k)),
+        ] };
+        vec![full(0), full(1), DocClass { name: "3".into(), steps: vec![
+            st("Construction issue submitted", &f.construction, false, w(0, 2) + w(2, 2) + w(4, 2)), st("Construction issue accepted", &f.construction, true, w(1, 2) + w(3, 2)),
+            st("Final issue submitted", &f.final_, false, w(5, 2)),
+        ] }]
     }
 }
 

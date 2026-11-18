@@ -51,11 +51,13 @@ struct Options {
     ai_link: bool,
     /// Chart styles saved in Format Chart, by name (the looks of a chart, for any plan).
     chart_styles: serde_json::Value,
+    /// Document register templates by name: a client's codes, purposes, classes, steps and review days.
+    doc_templates: serde_json::Value,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true, spell_lang: "en-GB".into(), dictionary: vec![], ai_link: false, chart_styles: serde_json::json!({}) }
+        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true, spell_lang: "en-GB".into(), dictionary: vec![], ai_link: false, chart_styles: serde_json::json!({}), doc_templates: serde_json::json!({}) }
     }
 }
 

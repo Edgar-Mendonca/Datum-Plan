@@ -40,12 +40,15 @@ export interface Submission { id: number; doc: number; rev: string; purpose: str
 export interface ReturnCode { code: string; meaning: string; accepted: boolean; resubmit: boolean }
 export interface DocRegister {
   p_date: string | null; p_unit: string; review_days: number; turnaround_days: number; review_cal: string; work_cal: string; weights: number[][];
-  codes: ReturnCode[]; purposes: [string, string][]; flow: { first: string; approval: string; construction: string; final: string }; docs: VDoc[]; log: Submission[];
+  codes: ReturnCode[]; purposes: [string, string][]; flow: { first: string; approval: string; construction: string; final: string }; classes?: DocClass[]; docs: VDoc[]; log: Submission[];
 }
+/** A class of document and its steps: an issue with one of the purposes sent, or returned with a code that counts. */
+export interface DocStep { name: string; purposes: string; returned: boolean; codes: string; weight: number; days: number | null }
+export interface DocClass { name: string; steps: DocStep[] }
 export type D6 = (string | null)[];
-export interface DocRow { id: number; planned: D6; actual: D6; forecast: D6; subs: number; cycles: number; rev: string; purpose: string; sent: string | null; due: string | null; returned: string | null; code: string; status: string; late1: number; client_late: number; earned: number; planned_pct: number; task_name: string; need: string | null; late_for_task: boolean }
+export interface DocRow { id: number; planned: D6; actual: D6; forecast: D6; steps: string[]; done: boolean; finish: string | null; approved: string | null; approved_fc: string | null; subs: number; cycles: number; rev: string; purpose: string; sent: string | null; due: string | null; returned: string | null; code: string; status: string; late1: number; client_late: number; earned: number; planned_pct: number; task_name: string; need: string | null; late_for_task: boolean }
 export interface RegPoint { end: string; planned: number; actual: number | null; first_planned: number; first_done: number }
-export interface RegOut { data_date: string | null; docs: DocRow[]; subs: { id: number; due: string | null; accepted: boolean; days: number; late: number; state: string }[]; earned: number; planned: number; client_late: number; weekly: RegPoint[]; monthly: RegPoint[]; weights_ok: boolean[] }
+export interface RegOut { data_date: string | null; docs: DocRow[]; subs: { id: number; due: string | null; accepted: boolean; days: number; late: number; state: string }[]; earned: number; planned: number; client_late: number; weekly: RegPoint[]; monthly: RegPoint[]; weights_ok: boolean[]; classes: string[] }
 export type D5 = (string | null)[];
 export interface PItem { id: number; tag: string; name: string; vendor: string; origin: string; po_no: string; value: number; manual_w: number; long_lead: boolean; task: number; need: number; required: string | null; planned: D5; actual: D5; mfg_pct: number; promised: string | null; log: { date: string | null; note: string; by: string }[]; docs: number[]; remarks: string }
 export interface ProcRegister { preset: string; weights: number[]; weighting: string; irn_days: number; warn_days: number; link_docs: boolean; items: PItem[] }
@@ -115,7 +118,7 @@ export interface Changes { items: Change[]; finish: [string, string]; finish_var
 export interface Trend { uid: number; name: string; points: [number, number][]; baseline: number | null }
 export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean; driving: boolean; lag: string }[]; cols: number; rows: number; bands?: { name: string; row: number; rows: number }[] }
 export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }
-export interface Options { chartStyles?: Record<string, Partial<import("./xchart").ChartDef>>; dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; pool?: string; setupPanel: boolean; theme: string; colourSafe?: boolean;
+export interface Options { chartStyles?: Record<string, Partial<import("./xchart").ChartDef>>; docTemplates?: Record<string, Partial<DocRegister>>; dateFmt: string; autosave: number; beta: boolean; currency: Currency; company: string; logo: string; workspace: string; pool?: string; setupPanel: boolean; theme: string; colourSafe?: boolean;
   openLast: boolean; startView: string; manualDefault: boolean; weekEnd: number; monthEnd: number; paper: string; landscape: boolean; spellLang?: string; dictionary?: string[]; aiLink?: boolean }
 
 /** Days since 1970-01-01 (local) to a Date at local midnight + fraction. */

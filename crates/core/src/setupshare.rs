@@ -64,7 +64,7 @@ pub fn adopt(p: &mut Project, from: &Project, parts: &[String]) -> Result<(), St
         p.contract.warn_days = from.contract.warn_days;
         let (r, f) = (&mut p.documents, &from.documents);
         (r.p_date, r.p_unit, r.review_days, r.turnaround_days, r.review_cal, r.work_cal) = (f.p_date, f.p_unit.clone(), f.review_days, f.turnaround_days, f.review_cal.clone(), f.work_cal.clone());
-        (r.weights, r.codes, r.purposes, r.flow) = (f.weights.clone(), f.codes.clone(), f.purposes.clone(), f.flow.clone());
+        (r.weights, r.codes, r.purposes, r.flow, r.classes) = (f.weights.clone(), f.codes.clone(), f.purposes.clone(), f.flow.clone(), f.classes.clone());
         let (q, g) = (&mut p.procurement, &from.procurement);
         (q.preset, q.weights, q.weighting, q.irn_days, q.warn_days, q.link_docs) = (g.preset.clone(), g.weights.clone(), g.weighting.clone(), g.irn_days, g.warn_days, g.link_docs);
         // A calendar the rules count on comes along.

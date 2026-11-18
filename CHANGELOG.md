@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.26 — 2026-11-18
+
+The Document Register follows each client's own rules.
+
+- **Return codes are yours:** type each code and its meaning and tick whether it accepts the document or asks for it again. One client's Code 1 can be a rejection and Code 3 an approval.
+- **Classes and their steps:** name the classes (any number) and give each its own steps. A step says which issue purposes it counts, whether it is the issue we send or the client's return, which codes count for it (empty: any code that accepts), its progress weight and, if needed, its own days instead of the review and turnaround. The register, the S-curve, the forecast and the workbook export follow the steps.
+- **Templates:** Save as Template… keeps a client's whole set-up (codes, purposes, classes, steps, days) for the next project; Use a template applies it.
+- **Import** skips deleted, void and cancelled rows, reads the "counts for progress" column, takes a planned first-issue date where the sheet has one, and matches classes by name.
+- Plans from earlier versions keep the three standard classes and give the same figures.
+
 ## 0.9.25 — 2026-11-18
 
 Every list in the task sheet in two clicks.
