@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.27 — 2026-11-18
+
+Fixes to the registers.
+
+- **Document Register › Settings:** the classes and their steps now take the dialog's full width, so every column shows (weight, days, and the ↑ ↓ × buttons). The return codes and issue purposes sit beside the planned dates.
+- **Progress tabs** of the Document, Procurement and Contract registers: the S-curve and the per-period chart showed as thin empty bars on a long page; they now draw at full height.
+- **Transmittal log:** the purpose and the return code of each submission show in full (a returned code could look empty).
+
 ## 0.9.26 — 2026-11-18
 
 The Document Register follows each client's own rules.

@@ -447,6 +447,7 @@ input, select, textarea { background: var(--bg2); color: var(--text); }
 
 /* ---------- 0.3.1: charts and reports ---------- */
 .chartbox { position: relative; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px 10px; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+.page > .chartbox { flex-shrink: 0; }
 .chartbox header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .chartbox header h3 { margin: 0; flex: 1; font: 500 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .chartbox header button { font: 500 9.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); padding: 1px 6px; }
@@ -1100,6 +1101,8 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 /* Document Register */
 .dtabs { margin: 14px 0 0; }
 .dset { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.dclasses h3 { margin: 16px 0 6px; font-size: 13px; }
+.dset > div { min-width: 0; }
 .dset h3 { margin: 12px 0 6px; font-size: 13px; }
 .dset textarea { width: 100%; }
 .dcal { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; padding: 8px 10px; background: var(--bg2); border-radius: 4px; }
@@ -1343,8 +1346,12 @@ body.picking .ov { display: none !important; }
 .cftabs button svg { width: 14px; height: 14px; margin-right: 5px; vertical-align: -2px; }
 .chartpane header b svg { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
 .chlist label svg { width: 16px; height: 16px; flex: none; }
-.dcls { border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px 8px; margin: 0 0 8px; }
+.dcls { border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px 8px; margin: 0 0 8px; min-width: 0; }
+.dscroll { overflow-x: auto; }
 .dcls legend { display: flex; align-items: center; gap: 8px; padding: 0 4px; font-size: 12px; }
 .dcls .dcname { width: 90px; font-weight: 600; }
 .dsteps input, .dsteps select { width: 100%; min-width: 0; }
-.dsteps td:first-child input { min-width: 140px; }
+.dsteps td:first-child input { min-width: 200px; }
+.dsteps td:nth-child(4) input { min-width: 170px; }
+.dsteps td { padding-top: 3px; padding-bottom: 3px; }
+.dsteps td:nth-child(3) select { min-width: 104px; }

@@ -108,30 +108,13 @@ export const docSettings = () => openDialog(() => {
             <label>Our turnaround (working days)<input type="number" min="0" value={r().turnaround_days} onChange={e => put({ turnaround_days: +e.currentTarget.value || 0 })} /></label></div>
           <CalChoice label="Client review days count on" value={r().review_cal} set={v => put({ review_cal: v })} />
           <CalChoice label="Our turnaround days count on" value={r().work_cal} set={v => put({ work_cal: v })} />
+        </div>
+        <div>
           <h3>Which issues mean what</h3>
           <p class="muted">Orders wait for a document's approval issue to be accepted; a task waits for its construction issue. The next submission of a document takes the next issue of its class.</p>
           <div class="prow">
             {(["first", "approval", "construction", "final"] as const).map(k => <label>{{ first: "First issue", approval: "Approval issue", construction: "Construction issue", final: "Final issue" }[k]}<select value={r().flow[k]} onChange={e => put({ flow: { ...r().flow, [k]: e.currentTarget.value } })}><For each={purposes()}>{x => <option>{x}</option>}</For></select></label>)}
           </div>
-        </div>
-        <div>
-          <h3>Classes and their steps</h3>
-          <p class="muted">Each class has its own steps. A step counts when an issue with one of its purposes is <b>sent</b>, or when it <b>comes back</b> with a code that accepts it (or one of the codes you name, such as Code 1, Code 4). Its weight is the % of the document earned there. Days: from the step before (empty: the review period before a return, the turnaround after one).</p>
-          <For each={cls()}>{(c, k) => <fieldset class="dcls"><legend><input class="dcname" value={c.name} title="The class's name, as the register writes it (1, 2, A, Approval…)" onChange={e => setC(k(), { name: e.currentTarget.value })} />
-            <span classList={{ bad: Math.abs(total(k()) - 100) > 0.01 }}>Total {total(k())} %</span><button class="x" title="Remove the class" disabled={cls().length < 2} onClick={() => put({ classes: cls().filter((_, j) => j !== k()) })}>×</button></legend>
-            <table class="tbl dsteps"><thead><tr><th>Step</th><th>Issue purposes</th><th>Counts when</th><th>Codes that count</th><th>Weight %</th><th>Days</th><th /></tr></thead>
-              <tbody><For each={c.steps}>{(s, i) => <tr>
-                <td><input value={s.name} onChange={e => setS(k(), i(), { name: e.currentTarget.value })} /></td>
-                <td><input list="dpurposes" style={{ width: "92px" }} value={s.purposes} placeholder="ICR, IFC" onChange={e => setS(k(), i(), { purposes: e.currentTarget.value })} /></td>
-                <td><select value={s.returned ? "1" : ""} onChange={e => setS(k(), i(), { returned: !!e.currentTarget.value })}><option value="">sent</option><option value="1">comes back</option></select></td>
-                <td><input style={{ width: "110px" }} disabled={!s.returned} value={s.codes} placeholder={s.returned ? "any that accepts" : ""} onChange={e => setS(k(), i(), { codes: e.currentTarget.value })} /></td>
-                <td><input type="number" min="0" max="100" style={{ width: "56px" }} value={s.weight} onChange={e => setS(k(), i(), { weight: +e.currentTarget.value || 0 })} /></td>
-                <td><input type="number" min="0" style={{ width: "50px" }} value={s.days ?? ""} placeholder="auto" onChange={e => setS(k(), i(), { days: e.currentTarget.value === "" ? null : Math.max(0, +e.currentTarget.value) })} /></td>
-                <td class="nowrap"><button class="x" title="Up" onClick={() => move(k(), i(), -1)}>↑</button><button class="x" title="Down" onClick={() => move(k(), i(), 1)}>↓</button><button class="x" title="Remove the step" onClick={() => setC(k(), { steps: c.steps.filter((_, j) => j !== i()) })}>×</button></td></tr>}</For></tbody></table>
-            <button class="btn sm" onClick={() => setC(k(), { steps: [...c.steps, { name: "New step", purposes: "", returned: false, codes: "", weight: 0, days: null }] })}>+ Step</button></fieldset>}</For>
-          <datalist id="dpurposes"><For each={purposes()}>{p => <option value={p} />}</For></datalist>
-          <div class="inline"><button class="btn sm" onClick={() => put({ classes: [...cls(), { name: String(cls().length + 1), steps: JSON.parse(JSON.stringify(cls()[cls().length - 1]?.steps ?? [])) }] })}>+ Class</button>
-            <button class="btn sm" onClick={() => put({ classes: classesOf({ ...r(), classes: [] }) })}>Back to the standard classes</button></div>
           <h3>Return codes</h3>
           <p class="muted">Each client's codes mean what you say here: tick <b>Accepted</b> for a code that lets the document go on, <b>Resubmit</b> for one that sends it back (even if that is Code 1).</p>
           <table class="tbl"><thead><tr><th>Code</th><th>Meaning</th><th title="Counts as accepted">Accepted</th><th title="Asks for the document again">Resubmit</th><th /></tr></thead>
@@ -145,6 +128,25 @@ export const docSettings = () => openDialog(() => {
           <textarea rows="5" value={r().purposes.map(p => `${p[0]} = ${p[1]}`).join("\n")} onChange={e => put({ purposes: e.currentTarget.value.split("\n").map(l => l.split("=").map(x => x.trim())).filter(x => x[0]).map(x => [x[0], x[1] ?? ""] as [string, string]) })} />
           <p class="muted">One per line: code = meaning.</p>
         </div>
+      </div>
+      <div class="dclasses">
+          <h3>Classes and their steps</h3>
+          <p class="muted">Each class has its own steps. A step counts when an issue with one of its purposes is <b>sent</b>, or when it <b>comes back</b> with a code that accepts it (or one of the codes you name, such as Code 1, Code 4). Its weight is the % of the document earned there. Days: from the step before (empty: the review period before a return, the turnaround after one).</p>
+          <For each={cls()}>{(c, k) => <fieldset class="dcls"><legend><input class="dcname" value={c.name} title="The class's name, as the register writes it (1, 2, A, Approval…)" onChange={e => setC(k(), { name: e.currentTarget.value })} />
+            <span classList={{ bad: Math.abs(total(k()) - 100) > 0.01 }}>Total {total(k())} %</span><button class="x" title="Remove the class" disabled={cls().length < 2} onClick={() => put({ classes: cls().filter((_, j) => j !== k()) })}>×</button></legend>
+            <div class="dscroll"><table class="tbl dsteps"><thead><tr><th>Step</th><th>Issue purposes</th><th>Counts when</th><th>Codes that count</th><th>Weight %</th><th>Days</th><th /></tr></thead>
+              <tbody><For each={c.steps}>{(s, i) => <tr>
+                <td><input value={s.name} onChange={e => setS(k(), i(), { name: e.currentTarget.value })} /></td>
+                <td><input list="dpurposes" style={{ width: "92px" }} value={s.purposes} placeholder="ICR, IFC" onChange={e => setS(k(), i(), { purposes: e.currentTarget.value })} /></td>
+                <td><select value={s.returned ? "1" : ""} onChange={e => setS(k(), i(), { returned: !!e.currentTarget.value })}><option value="">sent</option><option value="1">comes back</option></select></td>
+                <td><input style={{ width: "110px" }} disabled={!s.returned} value={s.codes} placeholder={s.returned ? "any that accepts" : ""} onChange={e => setS(k(), i(), { codes: e.currentTarget.value })} /></td>
+                <td><input type="number" min="0" max="100" style={{ width: "56px" }} value={s.weight} onChange={e => setS(k(), i(), { weight: +e.currentTarget.value || 0 })} /></td>
+                <td><input type="number" min="0" style={{ width: "50px" }} value={s.days ?? ""} placeholder="auto" onChange={e => setS(k(), i(), { days: e.currentTarget.value === "" ? null : Math.max(0, +e.currentTarget.value) })} /></td>
+                <td class="nowrap"><button class="x" title="Up" onClick={() => move(k(), i(), -1)}>↑</button><button class="x" title="Down" onClick={() => move(k(), i(), 1)}>↓</button><button class="x" title="Remove the step" onClick={() => setC(k(), { steps: c.steps.filter((_, j) => j !== i()) })}>×</button></td></tr>}</For></tbody></table></div>
+            <button class="btn sm" onClick={() => setC(k(), { steps: [...c.steps, { name: "New step", purposes: "", returned: false, codes: "", weight: 0, days: null }] })}>+ Step</button></fieldset>}</For>
+          <datalist id="dpurposes"><For each={purposes()}>{p => <option value={p} />}</For></datalist>
+          <div class="inline"><button class="btn sm" onClick={() => put({ classes: [...cls(), { name: String(cls().length + 1), steps: JSON.parse(JSON.stringify(cls()[cls().length - 1]?.steps ?? [])) }] })}>+ Class</button>
+            <button class="btn sm" onClick={() => put({ classes: classesOf({ ...r(), classes: [] }) })}>Back to the standard classes</button></div>
       </div>
     </Dialog>
   );
@@ -327,13 +329,13 @@ export const DocumentsView = () => {
                 <tr>
                   <td title={d()?.title}><b class="mono">{d()?.number || "?"}</b><div class="muted small">{d()?.title}</div></td>
                   <td><input style={{ width: "44px" }} value={s.rev} onChange={e => putSub({ ...s, rev: e.currentTarget.value })} /></td>
-                  <td><select value={s.purpose} onChange={e => putSub({ ...s, purpose: e.currentTarget.value })}><For each={[...new Set([...purposeOpts(), s.purpose].filter(Boolean))]}>{p => <option>{p}</option>}</For></select></td>
+                  <td><select style={{ "min-width": "70px" }} value={s.purpose} onChange={e => putSub({ ...s, purpose: e.currentTarget.value })}><For each={[...new Set([...purposeOpts(), s.purpose].filter(Boolean))]}>{p => <option selected={p === s.purpose}>{p}</option>}</For></select></td>
                   <td><input style={{ width: "110px" }} value={s.transmittal} onChange={e => putSub({ ...s, transmittal: e.currentTarget.value })} /></td>
                   <td><input type="date" value={s.sent ?? ""} onChange={e => putSub({ ...s, sent: e.currentTarget.value || null })} /></td>
                   <td>{dt(x()?.due)}</td>
                   <td><input style={{ width: "110px" }} value={s.ret_transmittal} onChange={e => putSub({ ...s, ret_transmittal: e.currentTarget.value })} /></td>
                   <td><input type="date" value={s.returned ?? ""} onChange={e => putSub({ ...s, returned: e.currentTarget.value || null })} /></td>
-                  <td><select value={s.code} onChange={e => putSub({ ...s, code: e.currentTarget.value })}><option value="">—</option><For each={reg().codes}>{c => <option value={c.code} title={c.meaning}>{c.code}</option>}</For></select></td>
+                  <td><select style={{ "min-width": "96px" }} value={s.code} onChange={e => putSub({ ...s, code: e.currentTarget.value })}><option value="">—</option><For each={reg().codes}>{c => <option value={c.code} title={c.meaning} selected={c.code === s.code}>{c.code}</option>}</For></select></td>
                   <td><input style={{ width: "110px" }} value={s.crs} onChange={e => putSub({ ...s, crs: e.currentTarget.value })} /></td>
                   <td class="r">{x()?.days ?? ""}</td><td class="r" classList={{ bad: (x()?.late ?? 0) > 0 }}>{x()?.late || ""}</td>
                   <td><span class={`st ${x()?.state === "Review overdue" ? "bad" : x()?.accepted ? "good" : ""}`}>{x()?.state}{x()?.accepted ? " · accepted" : ""}</span></td>
