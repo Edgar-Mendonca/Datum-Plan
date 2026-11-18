@@ -681,8 +681,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".page button:has-text('Settings…')"); await p.waitForTimeout(250);
   check("Settings list the three standard classes with their steps, each adding up to 100 %", (await p.$$(".dlg .dcls")).length === 3 && (await p.$$(".dlg .dcls >> nth=0 >> .dsteps tbody tr")).length === 6 && (await p.textContent(".dlg .dcls >> nth=2")).includes("Total 100 %"));
   await p.fill(".dlg .dcls >> nth=0 >> input.dcname", "A"); await p.press(".dlg .dcls >> nth=0 >> input.dcname", "Tab");
-  await p.fill(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=5 >> td >> nth=3 >> input", "Code 3"); await p.press(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=5 >> td >> nth=3 >> input", "Tab");
-  await p.fill(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=5 >> td >> nth=5 >> input", "20"); await p.press(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=5 >> td >> nth=5 >> input", "Tab");
+  await p.fill(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=1 >> td >> nth=3 >> input", "Code 3"); await p.press(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=1 >> td >> nth=3 >> input", "Tab");
+  await p.fill(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=1 >> td >> nth=5 >> input", "20"); await p.press(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=1 >> td >> nth=5 >> input", "Tab");
   await p.click(".dlg button:text-is('+ Class')"); await p.waitForTimeout(100);
   check("+ Class adds a fourth class with the last one's steps", (await p.$$(".dlg .dcls")).length === 4);
   await p.click(".dlg button:has-text('Save as Template…')"); await p.waitForTimeout(150); await p.fill(".dlg input.asktext", "Client X"); await p.click(".ov:last-child .dlg .btn.pri"); await p.waitForTimeout(200);
@@ -690,7 +690,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Save as Template keeps the client's rules in the app options, not in the plan", tpl && tpl.classes.length === 4 && tpl.classes[0].name === "A" && !tpl.docs, JSON.stringify(tpl && tpl.classes.map(c => c.name)));
   await p.click(".dlg .btn.pri:text-is('Save')"); await p.waitForTimeout(300);
   const rc = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.classes);
-  check("…saved with the register: class A's approval counts only Code 3, after 20 days of its own", rc?.length === 4 && rc[0].name === "A" && rc[0].steps[5].codes === "Code 3" && rc[0].steps[5].days === 20, JSON.stringify(rc && rc[0]));
+  check("…saved with the register: class A's first acceptance counts only Code 3, after 20 days of its own", rc?.length === 4 && rc[0].name === "A" && rc[0].steps[1].codes === "Code 3" && rc[0].steps[1].days === 20, JSON.stringify(rc && rc[0]));
   await p.click(".page button:has-text('Settings…')"); await p.waitForTimeout(250); await p.click(".dlg button:text-is('Back to the standard classes')"); await p.click(".dlg .btn.pri:text-is('Save')"); await p.waitForTimeout(300);
   await p.click(".page button:has-text('Import…')"); await p.waitForTimeout(300);
   const mapped = await p.$$eval(".dlg .dmap select", ss => ss.map(x => x.value));
