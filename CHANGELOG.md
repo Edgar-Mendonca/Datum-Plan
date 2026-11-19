@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.28 — 2026-11-19
+
+The Document Register works like a spreadsheet.
+
+- **Register and transmittal log as spreadsheets:** type in cells, Tab and Enter, paste rows straight from a workbook, Ctrl+D fills down, Delete clears, Ctrl+Z undoes. Type in the empty row at the foot to add a document. Vendor, package, discipline, type, class and state drop down as you type. White cells are typed; grey cells are worked out by the app. Sort and filter by any column; show or hide columns.
+- **The log is linked to the register:** type or pick a document number in the transmittal log and its title, class and vendor fill in; the revision, purpose and date are proposed. Or select documents in the register and **Log submission** (one transmittal number for all of them) or **Log return** (one date and code for all of them).
+- **The document card:** double-click a document to see where it stands in its steps and every revision, code and date.
+- **Transmittals:** each transmittal number with its documents, and its cover sheet as a PDF.
+- **Settings in tabs**, with new **Lists** (vendors, packages, disciplines with names, document types, states, and lists of your own: rename a value and every document follows), **Columns** of your own (text, number, date, list, or a formula per document such as `=[Review due]-TODAY()`), the client's **Status words**, and **Delete register**.
+- **States:** Active, Hold, Deleted, Superseded (or your own); a document in a state that does not count stays in the register, struck through, and is left out of progress.
+- **Import** also reads a workbook's settings sheet: return codes, issue purposes, the P date, review days and public holidays (as a calendar for the reviews).
+- **Sheets:** `Documents[…]` and `Transmittals[…]` are tables every formula can use, your own columns included.
+
 ## 0.9.27 — 2026-11-18
 
 Fixes to the registers.

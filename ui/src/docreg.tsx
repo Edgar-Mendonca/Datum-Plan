@@ -105,7 +105,11 @@ export const docSettings = (first = "general") => openDialog(() => {
   const [r, setR] = createSignal<DocRegister>({ ...start, classes: classesOf(start) });
   const [tab, setTab] = createSignal(first);
   // Lists and columns remember their first value, so a rename reaches every document using it.
-  const [lists, setLists] = createSignal<LList[]>(listsOf(start).map(l => ({ ...l, items: l.items.map(i => ({ ...i, was: i.value })) })));
+  // Values the documents use that a list lacks (plans from before the lists) join it here.
+  const [lists, setLists] = createSignal<LList[]>(listsOf(start).map(l => {
+    const more = [...new Set(start.docs.map(d => fieldOf(d, l.field).trim()).filter(v => v && !l.items.some(i => i.value.toLowerCase() === v.toLowerCase())))].sort();
+    return { ...l, items: [...l.items.map(i => ({ ...i, was: i.value })), ...more.map(v => ({ value: v, label: "", off: false, was: v }))] };
+  }));
   const [cols, setCols] = createSignal<LCol[]>((start.columns ?? []).map(c => ({ ...c, was: c.name })));
   const put = (x: Partial<DocRegister>) => setR({ ...r(), ...x });
   const cls = () => r().classes ?? [];

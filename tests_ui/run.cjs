@@ -677,8 +677,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg .btn.pri:text-is('Save')"); await p.waitForTimeout(300);
   const rs = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r);
   check("…saved with the register: the review counts on its own calendar, 14 working days", rs && rs.review_days === 14 && rs.review_cal !== "" && rs.work_cal === "", JSON.stringify(rs && [rs.review_days, rs.review_cal, rs.work_cal]));
-  // 0.9.26: the client's own classes, steps and codes, kept as a template.
-  await p.click(".page button:has-text('Settings…')"); await p.waitForTimeout(250);
+  // 0.9.26: the client's own classes, steps and codes, kept as a template (0.9.28: on the Classes & steps tab).
+  await p.click(".page button:has-text('Settings…')"); await p.waitForTimeout(250); await p.click(".dlg .stabs2 button:has-text('Classes')"); await p.waitForTimeout(150);
   check("Settings list the three standard classes with their steps, each adding up to 100 %", (await p.$$(".dlg .dcls")).length === 3 && (await p.$$(".dlg .dcls >> nth=0 >> .dsteps tbody tr")).length === 6 && (await p.textContent(".dlg .dcls >> nth=2")).includes("Total 100 %"));
   await p.fill(".dlg .dcls >> nth=0 >> input.dcname", "A"); await p.press(".dlg .dcls >> nth=0 >> input.dcname", "Tab");
   await p.fill(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=1 >> td >> nth=3 >> input", "Code 3"); await p.press(".dlg .dcls >> nth=0 >> .dsteps tbody tr >> nth=1 >> td >> nth=3 >> input", "Tab");
@@ -691,19 +691,23 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg .btn.pri:text-is('Save')"); await p.waitForTimeout(300);
   const rc = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.classes);
   check("…saved with the register: class A's first acceptance counts only Code 3, after 20 days of its own", rc?.length === 4 && rc[0].name === "A" && rc[0].steps[1].codes === "Code 3" && rc[0].steps[1].days === 20, JSON.stringify(rc && rc[0]));
-  await p.click(".page button:has-text('Settings…')"); await p.waitForTimeout(250); await p.click(".dlg button:text-is('Back to the standard classes')"); await p.click(".dlg .btn.pri:text-is('Save')"); await p.waitForTimeout(300);
+  await p.click(".page button:has-text('Settings…')"); await p.waitForTimeout(250); await p.click(".dlg .stabs2 button:has-text('Classes')"); await p.click(".dlg button:text-is('Back to the standard classes')"); await p.click(".dlg .btn.pri:text-is('Save')"); await p.waitForTimeout(300);
   await p.click(".page button:has-text('Import…')"); await p.waitForTimeout(300);
   const mapped = await p.$$eval(".dlg .dmap select", ss => ss.map(x => x.value));
   check("Import finds the heading row under the title and guesses what each column holds", JSON.stringify(mapped) === JSON.stringify(["", "number", "title", "disc", "class", "offset", "flag:MRB"]) && (await p.inputValue(".dlg label:has-text('Headings are in row') input")) === "2", JSON.stringify(mapped));
   await p.click(".dlg .btn.pri:text-is('Import')"); await p.waitForTimeout(300);
   const im = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.docs);
   check("…and brings the documents in with their class, P + n and flags", im?.length === 2 && im[0].number === "DOC-001" && im[0].class === 1 && im[0].offset === 2 && im[0].flags.join() === "MRB" && im[1].offset === 61 && im[1].flags.length === 0, JSON.stringify(im));
-  check("the register lists them with the engine's dates and status", (await p.textContent(".tbl.dreg")).includes("Not submitted") && (await p.$$(".tbl.dreg tbody tr")).length === 2);
-  await p.click(".tbl.dreg tbody tr >> nth=0 >> button:has-text('+ Sub')"); await p.waitForTimeout(300);
+  check("the register is a spreadsheet: the documents with the engine's dates and status (grey)", (await p.textContent(".rg")).includes("Not submitted") && (await p.$$eval(".rg td.rh", t => t.filter(x => /^\d+$/.test(x.textContent)).length)) === 2 && !!(await p.$(".rg td.calc")));
+  await p.click(".rg td.rh >> nth=0"); await p.waitForTimeout(150);
+  await p.click(".rgbar button:has-text('Log submission')"); await p.waitForTimeout(300);
+  await p.click(".dlg .btn.pri"); await p.waitForTimeout(300);
   const dlg = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.log);
-  check("+ Sub logs the next submission: revision A, the first-issue purpose of its class", dlg?.length === 1 && dlg[0].rev === "A" && dlg[0].purpose === "ICR" && !!dlg[0].sent && (await p.textContent(".page")).includes("Transmittal"), JSON.stringify(dlg));
-  await p.selectOption(".panel.ctr tbody tr >> nth=0 >> select >> nth=1", "Code 1"); await p.waitForTimeout(250);
-  check("the client's return code is picked from the codes in Settings", (await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.log[0].code)) === "Code 1");
+  check("Log submission logs the selected document's next issue: revision A, the first-issue purpose of its class, transmittal TR-0001", dlg?.length === 1 && dlg[0].rev === "A" && dlg[0].purpose === "ICR" && !!dlg[0].sent && dlg[0].transmittal === "TR-0001", JSON.stringify(dlg));
+  await p.click(".dtabs button:has-text('Transmittal log')"); await p.waitForTimeout(300);
+  const codeCol = await p.$$eval(".rg thead th span", s => s.findIndex(x => x.textContent.trim() === "Code") + 1);
+  await p.click(`.rg td[data-rc="0:${codeCol}"]`); await p.keyboard.type("Code 1"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
+  check("the client's return code is typed or picked in the log from the codes in Settings", (await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.log[0].code)) === "Code 1");
   await p.click(".dtabs button:has-text('Progress')"); await p.waitForTimeout(400);
   check("Progress shows the weighted S-curve, first issues per period and breakdowns", (await p.$$(".page .chartbox svg")).length >= 2 && (await p.textContent(".page")).includes("By vendor"));
   if (process.env.SHOT) { await p.click(".dtabs button:has-text('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-docs.png") }); }

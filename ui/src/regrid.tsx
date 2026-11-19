@@ -254,7 +254,7 @@ export const RegGrid = <R,>(p: {
   const [dropAt, setDropAt] = createSignal<{ x: number; y: number; w: number } | null>(null);
   createEffect(() => {
     if (edit() === null || !col(cur()[1])?.options) { setDropAt(null); return; }
-    const [r, c] = cur(); queueMicrotask(() => { const el = box?.querySelector(`[data-rc="${r}:${c}"]`)?.getBoundingClientRect(); if (el) setDropAt({ x: el.left, y: el.bottom, w: Math.max(260, el.width) }); });
+    const [r, c] = cur(); queueMicrotask(() => { const el = box?.querySelector(`[data-rc="${r}:${c}"]`)?.getBoundingClientRect(); if (el) setDropAt({ x: Math.min(el.left, innerWidth - 480), y: el.bottom, w: Math.max(col(c)?.strict ? 460 : 260, el.width) }); });
   });
   const ekey = (e: KeyboardEvent) => {
     const cl = col(cur()[1]), list = !!cl.options && !!dropAt();
