@@ -1174,7 +1174,7 @@ fn sheet_check(st: State<St>, k: usize, cell: String, input: String) -> Option<(
 
 /// What a sheet formula can name: functions (with signatures), the plan's names and table columns.
 #[derive(serde::Serialize)]
-struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(String, String)>, tasks: Vec<String>, resources: Vec<&'static str> }
+struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(String, String)>, tasks: Vec<String>, resources: Vec<&'static str>, documents: Vec<String>, transmittals: Vec<&'static str> }
 
 #[tauri::command]
 fn sheet_catalog(st: State<St>) -> SheetCatalog {
@@ -1186,6 +1186,9 @@ fn sheet_catalog(st: State<St>) -> SheetCatalog {
             .chain(a.doc.p.names.iter().map(|n| (n.name.clone(), format!("{}{}", if n.comment.is_empty() { n.formula.clone() } else { format!("{} ({})", n.comment, n.formula) }, if n.sheet.is_empty() { String::new() } else { format!(" · {} only", n.sheet) })))).collect(),
         tasks: datum_core::sheet::task_columns(&c).into_iter().map(|x| x.1).collect(),
         resources: datum_core::sheet::RES_COLS.iter().map(|x| x.1).collect(),
+        // The Document Register's tables, once it has documents.
+        documents: if a.doc.p.documents.docs.is_empty() { vec![] } else { datum_core::regtable::DOC_COLS.iter().map(|x| x.1.to_string()).chain(a.doc.p.documents.columns.iter().map(|c| c.name.clone())).collect() },
+        transmittals: if a.doc.p.documents.docs.is_empty() { vec![] } else { datum_core::regtable::LOG_COLS.iter().map(|x| x.1).collect() },
     }
 }
 

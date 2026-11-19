@@ -33,6 +33,10 @@ pub struct DocRow {
     pub returned: Option<NaiveDate>,
     pub code: String,
     pub status: String,
+    /// The status's key (not_sub, not_sub_late, review, review_late, resubmit, accepted, final, off).
+    pub skey: String,
+    /// What the register's own columns show (formula columns worked out), in their order.
+    pub own: Vec<String>,
     /// First issue: days after its planned date (to today while not sent).
     pub late1: i64,
     /// Days the client kept the document past the review period, over all submissions.
@@ -151,13 +155,17 @@ pub fn status(c: &Calc) -> RegOut {
         let last = subs.last();
         let due = last.and_then(|s| s.sent).map(|x| add_wd(&review, x, rv));
         let done = n > 0 && a[n - 1].is_some();
-        let status = match last {
-            None => if pl.first().copied().flatten().is_some_and(|x| x < today) { "Not submitted – overdue" } else { "Not submitted" },
-            Some(_) if done => "Final issued",
-            Some(s) if s.returned.is_none() => if due.is_some_and(|x| today > x) { "Review overdue" } else { "Under review" },
-            Some(s) if resubmit(&s.code) => "Resubmit",
-            _ => "Accepted – next issue",
+        let counted = r.counts(d);
+        let skey = match last {
+            _ if !counted => "off",
+            None => if pl.first().copied().flatten().is_some_and(|x| x < today) { "not_sub_late" } else { "not_sub" },
+            Some(_) if done => "final",
+            Some(s) if s.returned.is_none() => if due.is_some_and(|x| today > x) { "review_late" } else { "review" },
+            Some(s) if resubmit(&s.code) => "resubmit",
+            _ => "accepted",
         };
+        let status = r.words.get(skey).filter(|w| !w.trim().is_empty()).cloned()
+            .unwrap_or_else(|| DOC_STATUS.iter().find(|x| x.0 == skey).map_or(String::new(), |x| x.1.to_string()));
         let wt = |i: usize| steps[i].weight / 100.0;
         let earned: f64 = (0..n).filter(|&i| a[i].is_some_and(|x| x <= today)).map(wt).sum();
         let planned: f64 = (0..n).filter(|&i| pl[i].is_some_and(|x| x <= today)).map(wt).sum();
@@ -168,7 +176,7 @@ pub fn status(c: &Calc) -> RegOut {
             id: d.id, steps: steps.iter().map(|s| s.name.clone()).collect(), done, finish, approved, approved_fc, planned: pl, actual: a, forecast: f, subs: subs.len(), cycles: subs.iter().filter(|s| s.returned.is_some() && resubmit(&s.code)).count(),
             rev: last.map(|s| s.rev.clone()).unwrap_or_default(), purpose: last.map(|s| s.purpose.clone()).unwrap_or_default(),
             sent: last.and_then(|s| s.sent), due, returned: last.and_then(|s| s.returned), code: last.map(|s| s.code.clone()).unwrap_or_default(),
-            status: status.into(), late1, earned: earned * 100.0, planned_pct: planned * 100.0, ..Default::default()
+            status, skey: skey.into(), own: r.columns.iter().map(|x| d.own.get(&x.name).cloned().unwrap_or_default()).collect(), late1, earned: earned * 100.0, planned_pct: planned * 100.0, ..Default::default()
         };
         for s in &subs {
             let due = s.sent.map(|x| add_wd(&review, x, rv));
@@ -184,12 +192,18 @@ pub fn status(c: &Calc) -> RegOut {
             row.late_for_task = need_fc.zip(row.need).is_some_and(|(x, n)| x > n);
         }
         o.client_late += row.client_late;
-        let w = if d.progress && !d.recurring { d.weight.max(0.0) } else { 0.0 };
+        let w = if d.progress && !d.recurring && counted { d.weight.max(0.0) } else { 0.0 };
         wsum += w; esum += w * earned; psum += w * planned;
         eff.push((w, cls));
         o.docs.push(row);
     }
     if wsum > 0.0 { o.earned = esum / wsum * 100.0; o.planned = psum / wsum * 100.0; }
+    // The register's own formula columns, worked out per document.
+    if r.columns.iter().any(|x| x.kind == "formula") {
+        for (k, v) in crate::regtable::own_formulas(c, &o).into_iter().enumerate() {
+            for (i, x) in r.columns.iter().enumerate() { if x.kind == "formula" { if let Some(s) = v.get(i) { o.docs[k].own[i] = s.clone() } } }
+        }
+    }
     o.weekly = curve(&classes, &o.docs, &eff, wsum, today, |d| { let back = (d.weekday().num_days_from_monday() as i64 - p.periods.week_end.min(6) as i64).rem_euclid(7); d.checked_add_days(Days::new(((7 - back) % 7) as u64)).unwrap_or(d) });
     o.monthly = curve(&classes, &o.docs, &eff, wsum, today, |d| { let (y, m) = if d.month() == 12 { (d.year() + 1, 1) } else { (d.year(), d.month() + 1) }; NaiveDate::from_ymd_opt(y, m, 1).and_then(|x| x.pred_opt()).unwrap_or(d) });
     o
@@ -236,6 +250,33 @@ pub fn clean(r: &mut DocRegister) {
             s.days = s.days.map(|d| d.clamp(0, 3650));
         }
     }
+    // Lists: named, without repeats, and holding every value the documents use.
+    r.lists.truncate(40);
+    for l in &mut r.lists {
+        t(&mut l.name, 60); t(&mut l.field, 60);
+        let mut seen = std::collections::HashSet::new();
+        l.items.retain(|i| !i.value.trim().is_empty() && seen.insert(i.value.trim().to_lowercase()));
+        l.items.truncate(2000);
+        for i in &mut l.items { t(&mut i.value, 120); t(&mut i.label, 200); }
+    }
+    r.columns.retain(|c| !c.name.trim().is_empty());
+    r.columns.truncate(40);
+    for c in &mut r.columns { t(&mut c.name, 60); t(&mut c.formula, 2000); if !["text", "number", "date", "list", "formula"].contains(&c.kind.as_str()) { c.kind = "text".into() } }
+    r.words.retain(|k, v| DOC_STATUS.iter().any(|x| x.0 == k) && !v.trim().is_empty());
+    for v in r.words.values_mut() { t(v, 80) }
+    let fields: Vec<String> = r.lists.iter().map(|l| l.field.clone()).collect();
+    for f in fields {
+        let used: Vec<String> = r.docs.iter().map(|d| match f.as_str() {
+            "vendor" => d.vendor.clone(), "package" => d.package.clone(), "disc" => d.disc.clone(), "kind" => d.kind.clone(), "state" => d.state.clone(),
+            own => d.own.get(own).cloned().unwrap_or_default(),
+        }).collect();
+        let Some(l) = r.lists.iter_mut().find(|l| l.field == f) else { continue };
+        for v in used {
+            let v = v.trim();
+            if !v.is_empty() && !l.items.iter().any(|i| i.value.trim().eq_ignore_ascii_case(v)) && l.items.len() < 2000 { l.items.push(ListItem { value: v.into(), ..Default::default() }) }
+        }
+    }
+    let names: std::collections::HashSet<String> = r.columns.iter().map(|c| c.name.clone()).collect();
     let nc = r.classes.len().max(1) as u8;
     r.docs.truncate(10_000);
     r.log.truncate(50_000);
@@ -246,7 +287,9 @@ pub fn clean(r: &mut DocRegister) {
         d.class = d.class.clamp(1, nc);
         if !d.weight.is_finite() || d.weight < 0.0 { d.weight = 0.0 }
         if d.offset.is_some_and(|v| !v.is_finite() || !(-1000.0..=10_000.0).contains(&v)) { d.offset = None }
-        for s in [&mut d.number, &mut d.title, &mut d.vendor, &mut d.package, &mut d.disc, &mut d.kind, &mut d.remarks] { t(s, 300) }
+        for s in [&mut d.number, &mut d.title, &mut d.vendor, &mut d.package, &mut d.disc, &mut d.kind, &mut d.remarks, &mut d.state] { t(s, 300) }
+        d.own.retain(|k, v| names.contains(k) && !v.is_empty());
+        for v in d.own.values_mut() { t(v, 500) }
         d.flags.retain(|f| !f.is_empty()); d.flags.truncate(20);
     }
     let docs = seen;

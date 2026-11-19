@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// 1970-01-01 as a spreadsheet date serial.
-const EPOCH: f64 = 25569.0;
+pub(crate) const EPOCH: f64 = 25569.0;
 
 /// Our value as a spreadsheet value: dates become serials, durations become days.
 pub fn to_value(v: &F, kind: Kind, day_min: i64) -> Value {
@@ -386,7 +386,7 @@ fn parse(body: &str) -> Option<Expr> {
 
 /// A formula cell for the engine; one nested too deeply is #VALUE!. Dates written as text in criteria,
 /// DATEVALUE and arithmetic (`COUNTIF(A:A,">13/01/2026")`) are read in the plan's day order.
-fn formula_cell(f: &str, fmt: &str) -> Cell {
+pub(crate) fn formula_cell(f: &str, fmt: &str) -> Cell {
     if too_deep(f) { return Cell::value(Value::Error(gridcraft_core::CellError::Value)) }
     let dated = f.contains('"') && f.contains(['/', '-', '.']);
     match parse(f.strip_prefix('=').unwrap_or(f)).filter(|_| dated) {
@@ -790,6 +790,8 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
         sh.set_cell(CellRef::new(0, 0), formula_cell(&f, &c.fmt));
         wb.sheets.push(Arc::new(sh));
     }
+    // The Document Register's tables (Documents[…], Transmittals[…]), after every other sheet.
+    crate::regtable::add_tables(c, &mut wb);
     gridcraft_calc::Calc::new().recalc_all(&mut wb);
     wb
 }
@@ -874,7 +876,7 @@ fn sheet_range(f: &str) -> Option<(String, gridcraft_core::RangeRef)> {
 /// The sheets before the user's tabs in [`book`].
 pub const BUILT_IN: usize = 2;
 
-fn table(id: u32, name: &str, cols: Vec<String>, rows: u32) -> gridcraft_model::Table {
+pub(crate) fn table(id: u32, name: &str, cols: Vec<String>, rows: u32) -> gridcraft_model::Table {
     use gridcraft_core::RangeRef;
     gridcraft_model::Table {
         id, name: name.into(), range: RangeRef::new(CellRef::new(0, 0), CellRef::new(rows.max(1), cols.len().max(1) as u32 - 1)),

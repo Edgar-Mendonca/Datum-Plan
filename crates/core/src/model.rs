@@ -907,12 +907,43 @@ pub struct DocRegister {
     pub flow: Flow,
     /// The classes of document, each with its own steps (empty in older files: made from `flow` and `weights`).
     pub classes: Vec<DocClass>,
+    /// The drop-down lists: vendors, packages, disciplines, document types, states, and the user's own.
+    pub lists: Vec<RegList>,
+    /// The register's own columns (text, number, date, a list, or a formula per row).
+    pub columns: Vec<OwnCol>,
+    /// The client's words for each status (key → words; a key left out keeps the standard words).
+    pub words: BTreeMap<String, String>,
     pub docs: Vec<VDoc>,
     pub log: Vec<Submission>,
 }
 impl DocRegister {
     pub fn is_empty(&self) -> bool { *self == Self::default() }
+    /// The list that feeds a field ("vendor", "package", "disc", "kind", "state", or an own column's name).
+    pub fn list(&self, field: &str) -> Option<&RegList> { self.lists.iter().find(|l| l.field.eq_ignore_ascii_case(field)) }
+    /// Whether a document counts (its state is not one marked as left out, such as Deleted).
+    pub fn counts(&self, d: &VDoc) -> bool {
+        !self.list("state").is_some_and(|l| l.items.iter().any(|i| i.off && i.value.eq_ignore_ascii_case(d.state.trim())))
+    }
 }
+/// The standard status words, by key; the client's own replace them (`DocRegister::words`).
+pub const DOC_STATUS: [(&str, &str); 8] = [
+    ("not_sub", "Not submitted"), ("not_sub_late", "Not submitted – overdue"), ("review", "Under review"), ("review_late", "Review overdue"),
+    ("resubmit", "Resubmit"), ("accepted", "Accepted – next issue"), ("final", "Final issued"), ("off", "Not counted"),
+];
+/// A drop-down list of the register: its name, the field it feeds and its items.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RegList { pub name: String, pub field: String, pub items: Vec<ListItem> }
+/// An item of a list: the value written in the register, a longer name (MR = Mechanical) and,
+/// for states, whether documents in it are left out of the counts (`off`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ListItem { pub value: String, pub label: String, pub off: bool }
+/// A column of the register's own: "text", "number", "date", "list" (fed by the list of the same
+/// name) or "formula" (`formula` per row, such as `=[Review due]-TODAY()`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OwnCol { pub name: String, pub kind: String, pub formula: String }
 impl Default for DocRegister {
     fn default() -> Self {
         let code = |c: &str, m: &str, accepted: bool, resubmit: bool| ReturnCode { code: c.into(), meaning: m.into(), accepted, resubmit };
@@ -927,7 +958,14 @@ impl Default for DocRegister {
             ],
             purposes: vec![pur("ICR", "Issued for client review"), pur("IFA", "Issued for approval"), pur("IFI", "Issued for information"), pur("IFD", "Issued for design"),
                 pur("IFP", "Issued for purchase"), pur("IFH", "Issued for HAZOP"), pur("IFC1", "Issued for construction"), pur("IFC2", "Issued final"), pur("RED-LINE", "Red-line mark-up"), pur("AS-BUILT", "As built")],
-            flow: Flow::default(), classes: vec![], docs: vec![], log: vec![],
+            flow: Flow::default(), classes: vec![], docs: vec![], log: vec![], columns: vec![], words: BTreeMap::new(),
+            lists: vec![
+                RegList { name: "Vendors".into(), field: "vendor".into(), items: vec![] },
+                RegList { name: "Packages".into(), field: "package".into(), items: vec![] },
+                RegList { name: "Disciplines".into(), field: "disc".into(), items: vec![] },
+                RegList { name: "Document types".into(), field: "kind".into(), items: vec![] },
+                RegList { name: "States".into(), field: "state".into(), items: ["Active", "Hold", "Deleted", "Superseded"].iter().map(|v| ListItem { value: v.to_string(), label: String::new(), off: matches!(*v, "Deleted" | "Superseded") }).collect() },
+            ],
         }
     }
 }
@@ -1003,6 +1041,11 @@ pub struct VDoc {
     /// The task that needs the document.
     pub task: u32,
     pub remarks: String,
+    /// Active, Hold, Deleted… (the States list says which are left out of the counts); "" = active.
+    pub state: String,
+    /// Values of the register's own columns, by column name.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub own: BTreeMap<String, String>,
 }
 
 /// One submission of a document and the client's return.

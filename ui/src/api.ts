@@ -35,18 +35,22 @@ export interface ContractOut {
   payments: { id: number; name: string; amount: number; task_name: string; planned: string | null; due: string | null; invoiced: string | null; paid: string | null; status: string }[];
   cash: [string, number, number, number | null][];
 }
-export interface VDoc { id: number; number: string; title: string; vendor: string; package: string; disc: string; kind: string; class: number; key: boolean; flags: string[]; offset: number | null; first: string | null; weight: number; progress: boolean; recurring: boolean; task: number; remarks: string }
+export interface VDoc { id: number; number: string; title: string; vendor: string; package: string; disc: string; kind: string; class: number; key: boolean; flags: string[]; offset: number | null; first: string | null; weight: number; progress: boolean; recurring: boolean; task: number; remarks: string; state?: string; own?: Record<string, string> }
 export interface Submission { id: number; doc: number; rev: string; purpose: string; transmittal: string; sent: string | null; ret_transmittal: string; returned: string | null; code: string; crs: string }
 export interface ReturnCode { code: string; meaning: string; accepted: boolean; resubmit: boolean }
 export interface DocRegister {
   p_date: string | null; p_unit: string; review_days: number; turnaround_days: number; review_cal: string; work_cal: string; weights: number[][];
   codes: ReturnCode[]; purposes: [string, string][]; flow: { first: string; approval: string; construction: string; final: string }; classes?: DocClass[]; docs: VDoc[]; log: Submission[];
+  lists?: RegList[]; columns?: OwnCol[]; words?: Record<string, string>;
 }
 /** A class of document and its steps: an issue with one of the purposes sent, or returned with a code that counts. */
 export interface DocStep { name: string; purposes: string; returned: boolean; codes: string; weight: number; days: number | null }
 export interface DocClass { name: string; steps: DocStep[] }
 export type D6 = (string | null)[];
-export interface DocRow { id: number; planned: D6; actual: D6; forecast: D6; steps: string[]; done: boolean; finish: string | null; approved: string | null; approved_fc: string | null; subs: number; cycles: number; rev: string; purpose: string; sent: string | null; due: string | null; returned: string | null; code: string; status: string; late1: number; client_late: number; earned: number; planned_pct: number; task_name: string; need: string | null; late_for_task: boolean }
+export interface RegList { name: string; field: string; items: ListItem[] }
+export interface ListItem { value: string; label: string; off: boolean }
+export interface OwnCol { name: string; kind: string; formula: string }
+export interface DocRow { id: number; skey: string; own: string[]; planned: D6; actual: D6; forecast: D6; steps: string[]; done: boolean; finish: string | null; approved: string | null; approved_fc: string | null; subs: number; cycles: number; rev: string; purpose: string; sent: string | null; due: string | null; returned: string | null; code: string; status: string; late1: number; client_late: number; earned: number; planned_pct: number; task_name: string; need: string | null; late_for_task: boolean }
 export interface RegPoint { end: string; planned: number; actual: number | null; first_planned: number; first_done: number }
 export interface RegOut { data_date: string | null; docs: DocRow[]; subs: { id: number; due: string | null; accepted: boolean; days: number; late: number; state: string }[]; earned: number; planned: number; client_late: number; weekly: RegPoint[]; monthly: RegPoint[]; weights_ok: boolean[]; classes: string[] }
 export type D5 = (string | null)[];
