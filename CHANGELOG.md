@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.29 — 2026-11-19
+
+A formula bar for the registers.
+
+- **Above the Document Register and the transmittal log:** the selected cell's column and row, and its whole content, as in a spreadsheet's formula bar. Click in it to change the value (Enter keeps it, Esc leaves it); a long title or document number can be read and edited in full there. On a worked-out (grey) cell it shows the value, read-only.
+- Settings › Lists: the name box beside a discipline hints “name” (its grey hint read like a value).
+
 ## 0.9.28 — 2026-11-19
 
 The Document Register works like a spreadsheet.

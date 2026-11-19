@@ -131,6 +131,29 @@ export const RegGrid = <R,>(p: {
     go(r + dr, c + dc); focus();
   };
   const cancel = () => { setEdit(null); focus(); };
+  // ---- the formula bar: the selected cell's whole content, to read or change ----
+  const [bar, setBar] = createSignal<string | null>(null);
+  const curCol = () => col(cur()[1]), curRow = () => row(cur()[0]);
+  /** What the bar shows: the cell as it is typed (a date as 18 Nov 26), or what the app worked out. */
+  const raw = () => { const c = curCol(), r = curRow(); if (!c || !r) return ""; return c.kind === "date" || c.date ? dt(c.get(r)) : c.kind === "check" ? (c.get(r) ? "Yes" : "") : c.get(r); };
+  const barText = () => (edit() !== null ? edit()! : bar() !== null ? bar()! : raw());
+  const barSave = () => {
+    const t = bar(); if (t === null) return true;
+    const cl = curCol(), x = curRow(); setBar(null);
+    if (!cl || cl.kind === "calc" || t === raw()) return true;
+    if (cl.strict && t && !cl.options?.().some(o => o.value.toLowerCase() === t.trim().toLowerCase())) { toast(`“${t}” is not in the list.`); return false; }
+    const v = value(cl, t); if (v === null) return false;
+    if (x) { if (v !== cl.get(x)) p.set([{ row: x, key: cl.key, value: v }]); }
+    else if (v !== "" && p.add) p.add([{ [cl.key]: v }]);
+    return true;
+  };
+  const barKey = (e: KeyboardEvent) => {
+    if (e.key === "Enter") { e.preventDefault(); if (barSave()) { go(cur()[0] + 1, cur()[1]); focus(); } }
+    else if (e.key === "Escape") { e.preventDefault(); setBar(null); focus(); }
+    else if (e.key === "Tab") { e.preventDefault(); if (barSave()) { go(cur()[0], cur()[1] + (e.shiftKey ? -1 : 1)); focus(); } }
+  };
+  /** Where the cursor is: the column and row, or the size of the selection. */
+  const where = () => { const [a, b, x, y] = rect(); const c = curCol(); if (b > a || y > x) return `${b - a + 1} rows × ${y - x + 1} columns`; return c ? `${c.name} · ${cur()[0] < view().length ? `row ${cur()[0] + 1}` : "new row"}` : ""; };
   // ---- keyboard ----
   const key = (e: KeyboardEvent) => {
     if (edit() !== null) return;
@@ -269,6 +292,13 @@ export const RegGrid = <R,>(p: {
   const filters = () => Object.entries(filt());
   return (
     <div class="rgwrap">
+      <div class="rgfx">
+        <span class="rgwhere" title="The selected cell">{where()}</span><i>fx</i>
+        <input value={barText()} readOnly={!curCol() || curCol()!.kind === "calc" || (!curRow() && !p.add)} classList={{ calc: curCol()?.kind === "calc" }}
+          title={curCol()?.kind === "calc" ? `Worked out by the app${curCol()?.tip ? `: ${curCol()!.tip}` : ""}` : "The cell's content: type here to change it, Enter to keep it, Esc to leave it"}
+          onFocus={() => { if (edit() !== null) commit(0, 0); if (curCol()?.kind !== "calc") setBar(raw()); }}
+          onInput={e => setBar(e.currentTarget.value)} onKeyDown={barKey} onBlur={() => { if (bar() !== null) barSave(); }} />
+      </div>
       <Show when={filters().length || sort()}>
         <div class="rgchips">
           <For each={filters()}>{([k, v]) => <button class="chip on" onClick={() => { const x = { ...filt() }; delete x[k]; setFilt(x); }}>{p.cols.find(c => c.key === k)?.name}: {v || "(empty)"} ×</button>}</For>

@@ -90,6 +90,16 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const r = await R();
     check("Ctrl+D fills the discipline down four rows", r.docs.every(d => d.disc === "MR"), JSON.stringify(r.docs.map(d => d.disc)));
   });
+  await T("the formula bar shows and changes the cell", async () => {
+    const c = await colOf("Title");
+    await p.click(cell(2, c)); await W(150);
+    const shown = await p.inputValue(".rgfx input"), where = await p.textContent(".rgfx .rgwhere");
+    await p.click(".rgfx input"); await p.fill(".rgfx input", "Lube oil system P&ID, all skids"); await p.keyboard.press("Enter"); await W(500);
+    const r = await R();
+    check("the formula bar shows the selected cell whole (Title · row 3) and Enter keeps a change typed in it", shown === "Lube oil P&ID" && where.includes("Title") && where.includes("row 3") && r.docs[2].title === "Lube oil system P&ID, all skids", JSON.stringify([shown, where, r.docs[2].title]));
+    await p.click(cell(0, await colOf("Status"))); await W(150);
+    check("…on a worked-out cell it shows the value, read-only", (await p.inputValue(".rgfx input")).length > 0 && (await p.$eval(".rgfx input", i => i.readOnly)));
+  });
   await T("a calculated cell cannot be typed over", async () => {
     await p.click(cell(0, await colOf("Status"))); await p.keyboard.type("x"); await W(200);
     check("a grey (worked-out) cell cannot be typed in", !(await p.$(".rg .rgin")));
