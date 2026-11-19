@@ -53,11 +53,13 @@ struct Options {
     chart_styles: serde_json::Value,
     /// Document register templates by name: a client's codes, purposes, classes, steps and review days.
     doc_templates: serde_json::Value,
+    /// Procurement register templates by name: a client's weights, lists, columns and words.
+    proc_templates: serde_json::Value,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true, spell_lang: "en-GB".into(), dictionary: vec![], ai_link: false, chart_styles: serde_json::json!({}), doc_templates: serde_json::json!({}) }
+        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true, spell_lang: "en-GB".into(), dictionary: vec![], ai_link: false, chart_styles: serde_json::json!({}), doc_templates: serde_json::json!({}), proc_templates: serde_json::json!({}) }
     }
 }
 
@@ -1174,7 +1176,7 @@ fn sheet_check(st: State<St>, k: usize, cell: String, input: String) -> Option<(
 
 /// What a sheet formula can name: functions (with signatures), the plan's names and table columns.
 #[derive(serde::Serialize)]
-struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(String, String)>, tasks: Vec<String>, resources: Vec<&'static str>, documents: Vec<String>, transmittals: Vec<&'static str> }
+struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(String, String)>, tasks: Vec<String>, resources: Vec<&'static str>, documents: Vec<String>, transmittals: Vec<&'static str>, orders: Vec<String>, expediting: Vec<&'static str> }
 
 #[tauri::command]
 fn sheet_catalog(st: State<St>) -> SheetCatalog {
@@ -1189,6 +1191,8 @@ fn sheet_catalog(st: State<St>) -> SheetCatalog {
         // The Document Register's tables, once it has documents.
         documents: if a.doc.p.documents.docs.is_empty() { vec![] } else { datum_core::regtable::DOC_COLS.iter().map(|x| x.1.to_string()).chain(a.doc.p.documents.columns.iter().map(|c| c.name.clone())).collect() },
         transmittals: if a.doc.p.documents.docs.is_empty() { vec![] } else { datum_core::regtable::LOG_COLS.iter().map(|x| x.1).collect() },
+        orders: if a.doc.p.procurement.items.is_empty() { vec![] } else { datum_core::regtable::ORDER_COLS.iter().map(|x| x.1.to_string()).chain(a.doc.p.procurement.columns.iter().map(|c| c.name.clone())).collect() },
+        expediting: if a.doc.p.procurement.items.is_empty() { vec![] } else { datum_core::regtable::NOTE_COLS.iter().map(|x| x.1).collect() },
     }
 }
 

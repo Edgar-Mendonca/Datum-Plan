@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.30 — 2026-11-19
+
+The Procurement Register works like a spreadsheet too.
+
+- **Register and expediting log as spreadsheets**, as in the Document Register: type in cells, Tab and Enter, paste rows straight from a workbook, fill down, sort and filter, show or hide columns, the formula bar. Every milestone (RFQ, PO, manufacturing start, inspection release, delivery) has a planned and an actual column; a planned date left empty comes from the order's task and shows grey.
+- **Record milestone** for every selected order at once (one date), and **Note** (one expediting note for all of them). The expediting log is its own grid: type an item number in its empty row to add a note there.
+- **The order card:** double-click an order for its milestones planned and actual, forecast, float and notes.
+- **Settings in tabs:** General (weights, weighting, inspection days, amber float, link to the Document Register), **Lists** (sub-vendors, countries of origin, states, your own), **Columns** of your own (formulas per order such as `=[Delivery planned]-14`), **Status words**, **Templates**, **Delete register**.
+- **States:** Active, Hold, Cancelled (or your own); a cancelled order stays in the register, struck through, and is left out of progress.
+- **Import** also reads a workbook's settings sheet: the milestone weights in use, the weighting and the inspection release days.
+- **Sheets:** `Orders[…]` and `Expediting[…]` are tables every formula can use, your own columns included.
+
 ## 0.9.29 — 2026-11-19
 
 A formula bar for the registers.

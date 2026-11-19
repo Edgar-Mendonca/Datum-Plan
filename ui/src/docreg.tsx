@@ -4,7 +4,7 @@
 // Documents[…] and Transmittals[…] (regtable.rs); this page shows them and edits the register.
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 import { Portal } from "solid-js/web";
-import { DocClass, DocRegister, DocRow, DocStep, ListItem, Options, OwnCol, RegList, RegOut, Submission, VDoc } from "./api";
+import { DocClass, DocRegister, DocRow, DocStep, ListItem, Options, RegList, RegOut, Submission, VDoc } from "./api";
 import { act, call, grid, out, P, tick, setView, openDialog, closeDialog, toast, opts, setOpts, openMenu, Item } from "./store";
 import { Page } from "./views";
 import { Kpi } from "./reports";
@@ -12,6 +12,7 @@ import { ChartBox, COL, bar, line } from "./charts";
 import { Dialog, Seg, askText, askYes } from "./ui";
 import { showTab } from "./plans";
 import { Col, Edit, Opt, RegGrid, dt, parseDate } from "./regrid";
+import { ColumnsTab, LCol, LList, ListsTab, WordsTab, editLists, settle } from "./regkit";
 import * as D from "./dialogs";
 
 const FLAGS = ["MRB", "VDB", "IOM", "PIM", "Native", "Eng. review", "QA review"];
@@ -95,9 +96,6 @@ const CalChoice = (p: { label: string; value: string; set: (v: string) => void }
   </div>;
 };
 
-type LItem = ListItem & { was?: string };
-type LList = Omit<RegList, "items"> & { items: LItem[] };
-type LCol = OwnCol & { was?: string };
 const TABS: [string, string][] = [["general", "General"], ["codes", "Codes & purposes"], ["classes", "Classes & steps"], ["lists", "Lists"], ["columns", "Columns"], ["words", "Status words"], ["templates", "Templates"], ["delete", "Delete register"]];
 
 export const docSettings = (first = "general") => openDialog(() => {
@@ -105,11 +103,7 @@ export const docSettings = (first = "general") => openDialog(() => {
   const [r, setR] = createSignal<DocRegister>({ ...start, classes: classesOf(start) });
   const [tab, setTab] = createSignal(first);
   // Lists and columns remember their first value, so a rename reaches every document using it.
-  // Values the documents use that a list lacks (plans from before the lists) join it here.
-  const [lists, setLists] = createSignal<LList[]>(listsOf(start).map(l => {
-    const more = [...new Set(start.docs.map(d => fieldOf(d, l.field).trim()).filter(v => v && !l.items.some(i => i.value.toLowerCase() === v.toLowerCase())))].sort();
-    return { ...l, items: [...l.items.map(i => ({ ...i, was: i.value })), ...more.map(v => ({ value: v, label: "", off: false, was: v }))] };
-  }));
+  const [lists, setLists] = createSignal<LList[]>(editLists(listsOf(start), f => start.docs.map(d => fieldOf(d, f))));
   const [cols, setCols] = createSignal<LCol[]>((start.columns ?? []).map(c => ({ ...c, was: c.name })));
   const put = (x: Partial<DocRegister>) => setR({ ...r(), ...x });
   const cls = () => r().classes ?? [];
@@ -119,9 +113,6 @@ export const docSettings = (first = "general") => openDialog(() => {
   const setS = (k: number, i: number, x: Partial<DocStep>) => setC(k, { steps: cls()[k].steps.map((s, j) => (j === i ? { ...s, ...x } : s)) });
   const move = <T,>(v: T[], i: number, d: number) => { const w = [...v], j = i + d; if (j < 0 || j >= w.length) return w; [w[i], w[j]] = [w[j], w[i]]; return w; };
   const used = (field: string, value: string) => start.docs.filter(d => fieldOf(d, field).toLowerCase() === value.toLowerCase()).length;
-  const setL = (k: number, x: Partial<LList>) => setLists(lists().map((l, j) => (j === k ? { ...l, ...x } : l)));
-  const setI = (k: number, i: number, x: Partial<LItem>) => setL(k, { items: lists()[k].items.map((it, j) => (j === i ? { ...it, ...x } : it)) });
-  const [pasteIn, setPasteIn] = createSignal<number | null>(null);
   // Templates: a client's rules kept by name, for any plan (vendors and packages stay with the project).
   const tpls = () => opts()?.docTemplates ?? {};
   const RULES = ["p_unit", "review_days", "turnaround_days", "codes", "purposes", "flow", "classes", "words", "columns"] as const;
@@ -144,36 +135,9 @@ export const docSettings = (first = "general") => openDialog(() => {
   const ok = async () => {
     const bad = cls().findIndex((_, k) => Math.abs(total(k) - 100) > 0.01);
     if (bad >= 0) { toast(`The step weights of class ${cls()[bad].name} must add up to 100 %.`); setTab("classes"); return false; }
-    let docs: VDoc[] = start.docs.map(d => ({ ...d, own: { ...(d.own ?? {}) } }));
-    // Renamed list values and columns follow into every document; removed values in use may be cleared.
-    for (const l of lists()) for (const it of l.items) if (it.was && it.was !== it.value) docs = docs.map(d => (fieldOf(d, l.field) === it.was ? setField(d, l.field, it.value) : d));
-    const gone = lists().flatMap(l => (listsOf(start).find(x => x.field === l.field)?.items ?? []).filter(i => !l.items.some(x => x.was === i.value)).map(i => [l.field, i.value] as const)).filter(([f, v]) => used(f, v));
-    if (gone.length && await askYes("Values removed from the lists", `${gone.map(g => `“${g[1]}”`).join(", ")} ${gone.length > 1 ? "are" : "is"} still used by documents. Clear ${gone.length > 1 ? "them" : "it"} from those documents too? (No keeps the documents as they are and the value comes back to its list.)`, "Clear from documents"))
-      docs = docs.map(d => gone.reduce<VDoc>((x, [f, v]) => (fieldOf(x, f) === v ? setField(x, f, "") : x), d));
-    for (const c of cols()) if (c.was && c.was !== c.name) docs = docs.map(d => { const own = { ...(d.own ?? {}) }; if (c.was! in own) { own[c.name] = own[c.was!]; delete own[c.was!]; } return { ...d, own }; });
-    const columns = cols().filter(c => c.name.trim()).map(({ was, ...c }) => ({ ...c, name: c.name.trim() }));
-    // A list column has its list (named as the column); a list renamed with its column follows.
-    let ls = lists().map(l => { const c = cols().find(c => c.was === l.field && c.was !== c.name); return c ? { ...l, field: c.name, name: c.name } : l; });
-    for (const c of columns.filter(c => c.kind === "list")) if (!ls.some(l => l.field === c.name)) ls = [...ls, { name: c.name, field: c.name, items: [] }];
-    return save({ ...r(), docs, columns, lists: ls.map(l => ({ ...l, items: l.items.filter(i => i.value.trim()).map(({ was, ...i }) => ({ ...i, value: i.value.trim() })) })) });
+    const s = await settle(start.docs, lists(), cols(), listsOf(start), fieldOf, setField);
+    return save({ ...r(), docs: s.rows, columns: s.columns, lists: s.lists });
   };
-  const ListBox = (p: { l: LList; k: number }) => (
-    <div class="dlist"><h4>{["vendor", "package", "disc", "kind", "state"].includes(p.l.field) ? <span>{p.l.name}</span> : <span>{p.l.name} <small class="muted">(own)</small></span>}<span class="grow" /><small class="muted">{p.l.items.length}</small>
-      <Show when={!["vendor", "package", "disc", "kind", "state"].includes(p.l.field)}><button class="x" title="Remove the list" onClick={() => { setLists(lists().filter((_, j) => j !== p.k)); }}>×</button></Show></h4>
-      <For each={p.l.items}>{(it, i) => <div class="li">
-        <input class="v" value={it.value} onChange={e => setI(p.k, i(), { value: e.currentTarget.value })} title="As written in the register" />
-        <Show when={p.l.field === "state"} fallback={<input value={it.label} placeholder={p.l.field === "disc" ? "name" : "note"} onChange={e => setI(p.k, i(), { label: e.currentTarget.value })} />}>
-          <label class="chk" title="Documents in this state count in progress and status"><input type="checkbox" checked={!it.off} onChange={e => setI(p.k, i(), { off: !e.currentTarget.checked })} /> counts</label></Show>
-        <span class="u">{it.was ? used(p.l.field, it.was) || "" : ""}</span>
-        <button class="x" title="Up" onClick={() => setL(p.k, { items: move(p.l.items, i(), -1) })}>↑</button><button class="x" title="Down" onClick={() => setL(p.k, { items: move(p.l.items, i(), 1) })}>↓</button>
-        <button class="x" title="Remove" onClick={() => setL(p.k, { items: p.l.items.filter((_, j) => j !== i()) })}>×</button></div>}</For>
-      <Show when={pasteIn() === p.k}><textarea placeholder={"One per line (a column copied from a spreadsheet).\nTwo columns (value, name) for codes with names: MR → Mechanical."} onChange={e => {
-        const rows = e.currentTarget.value.split(/\r?\n/).map(l => l.split("\t").map(x => x.trim())).filter(x => x[0]);
-        setL(p.k, { items: [...p.l.items, ...rows.filter(x => !p.l.items.some(i => i.value.toLowerCase() === x[0].toLowerCase())).map(x => ({ value: x[0], label: x[1] ?? "", off: false }))] }); setPasteIn(null);
-      }} /></Show>
-      <div class="add"><a onClick={() => setL(p.k, { items: [...p.l.items, { value: "", label: "", off: false }] })}>+ Add</a><a onClick={() => setPasteIn(pasteIn() === p.k ? null : p.k)}>Paste a list…</a></div>
-    </div>
-  );
   return (
     <Dialog title="Document Register Settings" wide help="documents" okText="Save" ok={ok}
       extra={<div class="inline"><button class="btn sm" onClick={e => openMenu(e, Object.keys(tpls()).length ? Object.keys(tpls()).map(n => ({ label: n, run: () => useTpl(n) })) : [{ label: "No templates yet: Save as Template first", off: true }])}>Use a template ▾</button>
@@ -234,30 +198,9 @@ export const docSettings = (first = "general") => openDialog(() => {
         <div class="inline"><button class="btn sm" onClick={() => put({ classes: [...cls(), { name: String(cls().length + 1), steps: JSON.parse(JSON.stringify(cls()[cls().length - 1]?.steps ?? [])) }] })}>+ Class</button>
           <button class="btn sm" onClick={() => put({ classes: classesOf({ ...r(), classes: [] }) })}>Back to the standard classes</button></div>
       </div></Show>
-      <Show when={tab() === "lists"}>
-        <p class="muted">Each list is a drop-down in the register: type in a cell to search it. Rename a value here and every document using it follows; the number beside a value is how many documents use it. A value typed in the register that is not in its list is added to it.</p>
-        <div class="dlists"><For each={lists()}>{(l, k) => <ListBox l={l} k={k()} />}</For></div>
-        <div class="inline" style={{ "margin-top": "10px" }}><button class="btn sm" onClick={async () => {
-          const n = (await askText("New list", "Name of the list (it becomes a column of the register too): Area, Unit, Originator…", ""))?.trim(); if (!n) return;
-          if (lists().some(l => l.name.toLowerCase() === n.toLowerCase() || l.field === n) || cols().some(c => c.name === n)) { toast(`There is already a list or a column called “${n}”.`); return; }
-          setLists([...lists(), { name: n, field: n, items: [] }]); setCols([...cols(), { name: n, kind: "list", formula: "" }]);
-        }}>+ New list</button></div>
-      </Show>
-      <Show when={tab() === "columns"}>
-        <p class="muted">Columns of your own, after the standard ones: text, a number, a date, a list (its values in <b>Lists</b>) or a formula worked out per document. A formula reads the document's columns by name: <code>=[Review due]-TODAY()</code>, <code>=IF([Status]="Resubmit","Chase","")</code>, <code>=[First planned]+14</code>. The sheets read them too: <code>Documents[Area]</code>.</p>
-        <table class="tbl"><thead><tr><th>Column</th><th>Holds</th><th>Formula</th><th /></tr></thead>
-          <tbody><For each={cols()}>{(c, i) => { const set = (x: Partial<LCol>) => setCols(cols().map((y, j) => (j === i() ? { ...y, ...x } : y))); return <tr>
-            <td><input value={c.name} onChange={e => set({ name: e.currentTarget.value })} /></td>
-            <td><select value={c.kind} onChange={e => set({ kind: e.currentTarget.value })}><For each={[["text", "Text"], ["number", "Number"], ["date", "Date"], ["list", "A list"], ["formula", "A formula"]]}>{o => <option value={o[0]} selected={o[0] === c.kind}>{o[1]}</option>}</For></select></td>
-            <td><input style={{ width: "360px" }} class="mono" disabled={c.kind !== "formula"} value={c.formula} placeholder={c.kind === "formula" ? "=[Review due]-TODAY()" : ""} onChange={e => set({ formula: e.currentTarget.value })} /></td>
-            <td class="nowrap"><button class="x" onClick={() => setCols(move(cols(), i(), -1))}>↑</button><button class="x" onClick={() => setCols(move(cols(), i(), 1))}>↓</button><button class="x" onClick={() => setCols(cols().filter((_, j) => j !== i()))}>×</button></td></tr>; }}</For></tbody></table>
-        <button class="btn sm" onClick={() => setCols([...cols(), { name: `Column ${cols().length + 1}`, kind: "text", formula: "" }])}>+ Column</button>
-      </Show>
-      <Show when={tab() === "words"}>
-        <p class="muted">The words the Status column uses, as the client writes them. Leave one empty to keep the standard words.</p>
-        <table class="tbl"><thead><tr><th>When</th><th>Standard words</th><th>The client's words</th></tr></thead>
-          <tbody><For each={WORDS}>{w => <tr><td class="muted">{w[2]}</td><td>{w[1]}</td><td><input style={{ width: "260px" }} value={r().words?.[w[0]] ?? ""} placeholder={w[1]} onChange={e => put({ words: { ...(r().words ?? {}), [w[0]]: e.currentTarget.value } })} /></td></tr>}</For></tbody></table>
-      </Show>
+      <Show when={tab() === "lists"}><ListsTab lists={lists} set={setLists} cols={cols} setCols={setCols} fixed={["vendor", "package", "disc", "kind", "state"]} count={used} names={{ disc: "name" }} rows="document" /></Show>
+      <Show when={tab() === "columns"}><ColumnsTab cols={cols} set={setCols} table="Documents" examples={["=[Review due]-TODAY()", '=IF([Status]="Resubmit","Chase","")', "=[First planned]+14"]} /></Show>
+      <Show when={tab() === "words"}><WordsTab words={WORDS} value={() => r().words ?? {}} set={w => put({ words: w })} /></Show>
       <Show when={tab() === "templates"}>
         <p class="muted">A template keeps one client's rules: review days, codes, purposes, classes and steps, status words, your own columns, and the lists (not the vendors and packages, which belong to the project). Use it for the next project with that client.</p>
         <div class="inline"><button class="btn" onClick={saveTpl}>Save as Template…</button></div>

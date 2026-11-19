@@ -28,22 +28,22 @@ export const refs = (t: string): Ref[] => {
 export const canPoint = (t: string, caret: number) => t.startsWith("=") && /[=(,+\-*/^&<>:;%\s]$/.test(blankStrings(t.slice(0, caret)));
 
 export type Fn = [name: string, signature: string, about: string, category: string];
-export type Catalog = { functions: Fn[]; names: [string, string][]; tasks: string[]; resources: string[]; documents?: string[]; transmittals?: string[] };
+export type Catalog = { functions: Fn[]; names: [string, string][]; tasks: string[]; resources: string[]; documents?: string[]; transmittals?: string[]; orders?: string[]; expediting?: string[] };
 export type Suggestion = { label: string; insert: string; about: string; from: number };
 /** What to offer while typing a formula: functions, the plan's names and tables, or a table's columns. */
 export const suggest = (t: string, caret: number, cat: Catalog | undefined): Suggestion[] => {
   if (!cat || !t.startsWith("=")) return [];
   const before = blankStrings(t.slice(0, caret));
-  const col = before.match(/(Tasks|Resources|Documents|Transmittals)\[([^\[\]]*)$/i);
+  const col = before.match(/(Tasks|Resources|Documents|Transmittals|Orders|Expediting)\[([^\[\]]*)$/i);
   if (col) {
-    const t = col[1].toLowerCase(), q = col[2].toLowerCase(), list = (t === "tasks" ? cat.tasks : t === "resources" ? cat.resources : t === "documents" ? cat.documents : cat.transmittals) ?? [];
+    const t = col[1].toLowerCase(), q = col[2].toLowerCase(), list = (t === "tasks" ? cat.tasks : t === "resources" ? cat.resources : t === "documents" ? cat.documents : t === "transmittals" ? cat.transmittals : t === "orders" ? cat.orders : cat.expediting) ?? [];
     return list.filter(c => c.toLowerCase().includes(q)).slice(0, 12).map(c => ({ label: c, insert: `${c}]`, about: `${col[1]} column`, from: caret - col[2].length }));
   }
   const w = before.match(/(?:^=|[=(,+\-*/^&<>:;\s])([A-Za-z_][\w.]*)$/);
   if (!w) return [];
   const q = w[1].toUpperCase(), from = caret - w[1].length;
-  const about: Record<string, string> = { Tasks: "Every task of the plan, one row each", Resources: "Every resource of the plan", Documents: "Every document of the Document Register", Transmittals: "Every submission in the transmittal log" };
-  const tables: Suggestion[] = ["Tasks", "Resources", ...(cat.documents?.length ? ["Documents", "Transmittals"] : [])].filter(n => n.toUpperCase().startsWith(q)).map(n => ({ label: n, insert: `${n}[`, about: about[n], from }));
+  const about: Record<string, string> = { Tasks: "Every task of the plan, one row each", Resources: "Every resource of the plan", Documents: "Every document of the Document Register", Transmittals: "Every submission in the transmittal log", Orders: "Every order of the Procurement Register", Expediting: "Every expediting note" };
+  const tables: Suggestion[] = ["Tasks", "Resources", ...(cat.documents?.length ? ["Documents", "Transmittals"] : []), ...(cat.orders?.length ? ["Orders", "Expediting"] : [])].filter(n => n.toUpperCase().startsWith(q)).map(n => ({ label: n, insert: `${n}[`, about: about[n], from }));
   const names: Suggestion[] = cat.names.filter(([n]) => n.toUpperCase().startsWith(q)).map(([n, d]) => ({ label: n, insert: n, about: d, from }));
   const fns: Suggestion[] = cat.functions.filter(f => f[0].startsWith(q)).sort((a, b) => a[0].length - b[0].length).map(f => ({ label: f[0], insert: `${f[0]}(`, about: f[2], from }));
   return [...tables, ...names, ...fns].slice(0, 10);

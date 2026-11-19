@@ -27,6 +27,10 @@ pub struct ItemOut {
     /// "red", "amber", "green", "" (no required date).
     pub rag: String,
     pub status: String,
+    /// The status's key (not_started, rfq, po, mfg, irn, delivered, off).
+    pub skey: String,
+    /// What the register's own columns show (formula columns worked out), in their order.
+    pub own: Vec<String>,
     pub next: String,
     pub next_date: Option<NaiveDate>,
     pub days_late: i64,
@@ -86,7 +90,7 @@ pub fn status(c: &Calc) -> ProcOut {
     let w = weights(r);
     let docs = (r.link_docs && p.modules.iter().any(|m| m == "documents")).then(|| crate::docreg::status(c));
     let mut o = ProcOut { data_date: Some(today), weights: w, weights_ok: (w.iter().sum::<f64>() - 100.0).abs() < 0.01, ..Default::default() };
-    let values: f64 = r.items.iter().map(|x| x.value.max(0.0)).sum();
+    let values: f64 = r.items.iter().filter(|x| r.counts(x)).map(|x| x.value.max(0.0)).sum();
     let mut wsum = 0.0;
     for it in &r.items {
         let task = (it.task > 0).then(|| p.idx(it.task)).flatten();
@@ -102,17 +106,20 @@ pub fn status(c: &Calc) -> ProcOut {
         let forecast = a[4].or(it.promised).or(pl[4]);
         let required = it.required.or(need.map(|i| date_of(c.s.es[i])));
         let float = required.zip(forecast).map(|(r, f)| (r - f).num_days());
-        let status = if a[4].is_some() { "Delivered" } else if a[3].is_some() { "Inspection released" } else if a[2].is_some() { "In manufacture" } else if a[1].is_some() { "PO placed" } else if a[0].is_some() { "RFQ issued" } else { "Not started" };
+        let counted = r.counts(it);
+        let skey = if !counted { "off" } else if a[4].is_some() { "delivered" } else if a[3].is_some() { "irn" } else if a[2].is_some() { "mfg" } else if a[1].is_some() { "po" } else if a[0].is_some() { "rfq" } else { "not_started" };
+        let status = r.words.get(skey).filter(|w| !w.trim().is_empty()).cloned()
+            .unwrap_or_else(|| PROC_STATUS.iter().find(|x| x.0 == skey).map_or(String::new(), |x| x.1.to_string()));
         let k = (0..5).find(|&i| a[i].is_none());
         let next_date = k.and_then(|i| pl[i]);
         let mfg_now = if a[3].is_some() || a[4].is_some() { 1.0 } else { (it.mfg_pct.clamp(0.0, 100.0)) / 100.0 };
         let earned = share(&w, &a, today, |_| if a[2].is_some() { mfg_now } else { 0.0 });
         let planned = share(&w, &pl, today, |e| line(pl[2], pl[3], e));
-        let weight = match r.weighting.as_str() { "equal" => 1.0, "manual" => it.manual_w.max(0.0), _ => if values > 0.0 { it.value.max(0.0) } else { 1.0 } };
+        let weight = if !counted { 0.0 } else { match r.weighting.as_str() { "equal" => 1.0, "manual" => it.manual_w.max(0.0), _ => if values > 0.0 { it.value.max(0.0) } else { 1.0 } } };
         let mut row = ItemOut {
             id: it.id, planned: pl, actual: a, forecast, var: forecast.zip(pl[4]).map(|(f, p)| (f - p).num_days()), required, float,
             rag: match float { None => "", Some(f) if f < 0 => "red", Some(f) if f < r.warn_days.max(0) => "amber", _ => "green" }.into(),
-            status: status.into(), next: k.map(|i| MILESTONES[i].to_string()).unwrap_or_default(), next_date, days_late: next_date.map(|d| (today - d).num_days().max(0)).unwrap_or(0),
+            status, skey: skey.into(), own: r.columns.iter().map(|x| it.own.get(&x.name).cloned().unwrap_or_default()).collect(), next: k.map(|i| MILESTONES[i].to_string()).unwrap_or_default(), next_date, days_late: next_date.map(|d| (today - d).num_days().max(0)).unwrap_or(0),
             weight, earned: earned * 100.0, planned_pct: planned * 100.0,
             task_name: task.map(|i| p.tasks[i].name.clone()).unwrap_or_default(), need_name: need.map(|i| p.tasks[i].name.clone()).unwrap_or_default(), ..Default::default()
         };
@@ -130,6 +137,12 @@ pub fn status(c: &Calc) -> ProcOut {
     if wsum > 0.0 {
         o.earned = o.items.iter().map(|x| x.weight * x.earned).sum::<f64>() / wsum;
         o.planned = o.items.iter().map(|x| x.weight * x.planned_pct).sum::<f64>() / wsum;
+    }
+    // The register's own formula columns, worked out per order.
+    if r.columns.iter().any(|x| x.kind == "formula") {
+        for (k, v) in crate::regtable::order_formulas(c, &o).into_iter().enumerate() {
+            for (i, x) in r.columns.iter().enumerate() { if x.kind == "formula" { if let Some(s) = v.get(i) { o.items[k].own[i] = s.clone() } } }
+        }
     }
     let mfg = |x: &ItemOut, it: &PItem| -> Box<dyn Fn(NaiveDate) -> f64> {
         let (s, end) = (x.actual[2], x.actual[3].or(x.actual[4]));
@@ -164,6 +177,11 @@ pub fn clean(r: &mut ProcRegister) {
     r.irn_days = r.irn_days.clamp(0, 3650);
     r.warn_days = r.warn_days.clamp(0, 3650);
     if !["value", "equal", "manual"].contains(&r.weighting.as_str()) { r.weighting = "value".into() }
+    let items = r.items.clone();
+    crate::regtable::tidy(&mut r.lists, &mut r.columns, &mut r.words, &PROC_STATUS, |f| items.iter().map(|it| match f {
+        "vendor" => it.vendor.clone(), "origin" => it.origin.clone(), "state" => it.state.clone(), own => it.own.get(own).cloned().unwrap_or_default(),
+    }).collect());
+    let names: std::collections::HashSet<String> = r.columns.iter().map(|c| c.name.clone()).collect();
     r.items.truncate(5000);
     let mut seen = std::collections::HashSet::new();
     let mut next = r.items.iter().map(|x| x.id).max().unwrap_or(0) + 1;
@@ -171,7 +189,9 @@ pub fn clean(r: &mut ProcRegister) {
         if it.id == 0 || !seen.insert(it.id) { it.id = next; next += 1; seen.insert(it.id); }
         for v in [&mut it.value, &mut it.manual_w, &mut it.mfg_pct] { num(v) }
         it.mfg_pct = it.mfg_pct.min(100.0);
-        for s in [&mut it.tag, &mut it.name, &mut it.vendor, &mut it.origin, &mut it.po_no, &mut it.remarks] { t(s, 300) }
+        for s in [&mut it.tag, &mut it.name, &mut it.vendor, &mut it.origin, &mut it.po_no, &mut it.remarks, &mut it.state] { t(s, 300) }
+        it.own.retain(|k, v| names.contains(k) && !v.is_empty());
+        for v in it.own.values_mut() { t(v, 500) }
         it.log.truncate(2000);
         for x in &mut it.log { t(&mut x.note, 2000); t(&mut x.by, 120); }
         it.docs.dedup();

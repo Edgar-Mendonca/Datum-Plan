@@ -24,6 +24,7 @@ fn answer(doc: &mut Doc, c: &str, a: &Value) -> Result<Value, String> {
         "history" => { if a["redo"].as_bool() == Some(true) { doc.redo() } else { doc.undo() } state(doc) }
         "reset" => { *doc = Doc::new(plan()); state(doc) }
         "state" => state(doc),
+        "procurement" => json!([{ "tab": 0, "name": doc.p.name, "on": true, "out": procure::status(&Calc::new(&doc.p, FMT, today)) }]),
         "documents" => json!([{ "tab": 0, "name": doc.p.name, "on": true, "out": docreg::status(&Calc::new(&doc.p, FMT, today)) }]),
         "sheet_view" => json!(sheet::sheet_view(&Calc::new(&doc.p, FMT, today), a["k"].as_u64().unwrap_or(0) as usize)),
         "sheet_check" => json!(sheet::check_input(&Calc::new(&doc.p, FMT, today), a["k"].as_u64().unwrap_or(0) as usize, a["cell"].as_str().unwrap_or(""), a["input"].as_str().unwrap_or(""))),

@@ -250,32 +250,12 @@ pub fn clean(r: &mut DocRegister) {
             s.days = s.days.map(|d| d.clamp(0, 3650));
         }
     }
-    // Lists: named, without repeats, and holding every value the documents use.
-    r.lists.truncate(40);
-    for l in &mut r.lists {
-        t(&mut l.name, 60); t(&mut l.field, 60);
-        let mut seen = std::collections::HashSet::new();
-        l.items.retain(|i| !i.value.trim().is_empty() && seen.insert(i.value.trim().to_lowercase()));
-        l.items.truncate(2000);
-        for i in &mut l.items { t(&mut i.value, 120); t(&mut i.label, 200); }
-    }
-    r.columns.retain(|c| !c.name.trim().is_empty());
-    r.columns.truncate(40);
-    for c in &mut r.columns { t(&mut c.name, 60); t(&mut c.formula, 2000); if !["text", "number", "date", "list", "formula"].contains(&c.kind.as_str()) { c.kind = "text".into() } }
-    r.words.retain(|k, v| DOC_STATUS.iter().any(|x| x.0 == k) && !v.trim().is_empty());
-    for v in r.words.values_mut() { t(v, 80) }
-    let fields: Vec<String> = r.lists.iter().map(|l| l.field.clone()).collect();
-    for f in fields {
-        let used: Vec<String> = r.docs.iter().map(|d| match f.as_str() {
-            "vendor" => d.vendor.clone(), "package" => d.package.clone(), "disc" => d.disc.clone(), "kind" => d.kind.clone(), "state" => d.state.clone(),
-            own => d.own.get(own).cloned().unwrap_or_default(),
-        }).collect();
-        let Some(l) = r.lists.iter_mut().find(|l| l.field == f) else { continue };
-        for v in used {
-            let v = v.trim();
-            if !v.is_empty() && !l.items.iter().any(|i| i.value.trim().eq_ignore_ascii_case(v)) && l.items.len() < 2000 { l.items.push(ListItem { value: v.into(), ..Default::default() }) }
-        }
-    }
+    // Lists, own columns and words (shared with the Procurement Register).
+    let docs = r.docs.clone();
+    crate::regtable::tidy(&mut r.lists, &mut r.columns, &mut r.words, &DOC_STATUS, |f| docs.iter().map(|d| match f {
+        "vendor" => d.vendor.clone(), "package" => d.package.clone(), "disc" => d.disc.clone(), "kind" => d.kind.clone(), "state" => d.state.clone(),
+        own => d.own.get(own).cloned().unwrap_or_default(),
+    }).collect());
     let names: std::collections::HashSet<String> = r.columns.iter().map(|c| c.name.clone()).collect();
     let nc = r.classes.len().max(1) as u8;
     r.docs.truncate(10_000);

@@ -841,14 +841,37 @@ pub struct ProcRegister {
     pub warn_days: i64,
     /// Orders list the vendor documents they wait for (the Document Register), when the user wants it.
     pub link_docs: bool,
+    /// Drop-down lists (sub-vendors, countries, states, the user's own), the register's own columns
+    /// and the client's words for each status, as in the Document Register.
+    pub lists: Vec<RegList>,
+    pub columns: Vec<OwnCol>,
+    pub words: BTreeMap<String, String>,
     pub items: Vec<PItem>,
 }
 impl ProcRegister {
     pub fn is_empty(&self) -> bool { *self == Self::default() }
 }
 impl Default for ProcRegister {
-    fn default() -> Self { Self { preset: "balanced".into(), weights: vec![5.0, 15.0, 60.0, 10.0, 10.0], weighting: "value".into(), irn_days: 14, warn_days: 14, link_docs: false, items: vec![] } }
+    fn default() -> Self {
+        Self { preset: "balanced".into(), weights: vec![5.0, 15.0, 60.0, 10.0, 10.0], weighting: "value".into(), irn_days: 14, warn_days: 14, link_docs: false, items: vec![], columns: vec![], words: BTreeMap::new(),
+            lists: vec![
+                RegList { name: "Sub-vendors".into(), field: "vendor".into(), items: vec![] },
+                RegList { name: "Countries of origin".into(), field: "origin".into(), items: vec![] },
+                RegList { name: "States".into(), field: "state".into(), items: ["Active", "Hold", "Cancelled"].iter().map(|v| ListItem { value: v.to_string(), label: String::new(), off: *v == "Cancelled" }).collect() },
+            ] }
+    }
 }
+impl ProcRegister {
+    pub fn list(&self, field: &str) -> Option<&RegList> { self.lists.iter().find(|l| l.field.eq_ignore_ascii_case(field)) }
+    /// Whether an order counts (its state is not one marked as left out, such as Cancelled).
+    pub fn counts(&self, it: &PItem) -> bool {
+        !self.list("state").is_some_and(|l| l.items.iter().any(|i| i.off && i.value.eq_ignore_ascii_case(it.state.trim())))
+    }
+}
+/// The standard words of an order's status, by key.
+pub const PROC_STATUS: [(&str, &str); 7] = [
+    ("not_started", "Not started"), ("rfq", "RFQ issued"), ("po", "PO placed"), ("mfg", "In manufacture"), ("irn", "Inspection released"), ("delivered", "Delivered"), ("off", "Not counted"),
+];
 
 /// A sub-order or equipment item.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -878,6 +901,11 @@ pub struct PItem {
     /// Vendor documents (Document Register ids) the order waits for.
     pub docs: Vec<u32>,
     pub remarks: String,
+    /// Active, Hold, Cancelled… (the States list says which are left out); "" = active.
+    pub state: String,
+    /// Values of the register's own columns, by column name.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub own: BTreeMap<String, String>,
 }
 
 /// A note in an order's expediting log.

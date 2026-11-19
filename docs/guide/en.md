@@ -675,15 +675,15 @@ A new register starts with three standard classes: 1 and 2 go first issue → ap
 
 ### Procurement Register
 
-**Procurement** (sidebar) follows each sub-order or equipment item from enquiry to delivery.
+**Procurement** (sidebar) follows each sub-order or equipment item from enquiry to delivery, as two spreadsheets like the Document Register: the **Register** (one row per order) and the **Expediting log** (one row per note).
 
-1. **Settings…**: the milestone weights (balanced, more credit at the order, more credit at delivery, or your own), how orders weigh against each other (PO value, equally, or a typed weight), how many days before delivery the inspection release is planned, the days of float under which an order turns amber, and whether **orders link to the Document Register**.
-2. **Import…** a procurement status register from a workbook (.xlsx) (the heading row and the planned and actual columns are found by themselves), or add orders with **+ Order**. In each order (**✎**), choose the task for its manufacture and delivery (its planned manufacturing start and delivery come from it) and the task that needs it (the required date), or type dates of their own.
-3. Keep it up to date in the register: the **manufacturing %**, the vendor's **promised** delivery, and **Done on** for the next milestone. **Float** is the required date less the forecast delivery: red when late for the plan.
-4. **Expediting log**: dated notes per order (**✉** on a row opens it for that order).
-5. **Progress**: the weighted planned and actual S-curve by week or month, and orders by sub-vendor and country. **Export to Workbook** writes the register and the log.
+1. **Settings…**, in tabs: **General** (the milestone weights: balanced, more credit at the order, more credit at delivery, or your own; how orders weigh against each other: PO value, equally or a typed weight; the inspection release days before delivery; the float under which an order turns amber; and whether **orders link to the Document Register**), **Lists** (sub-vendors, countries of origin, states such as Active, Hold and Cancelled, and lists of your own), **Columns** of your own (text, number, date, list, or a formula per order such as `=[Delivery planned]-14`), the client's **Status words**, **Templates** and **Delete register**.
+2. Fill the **Register** as a spreadsheet: type an item number in the empty row at the foot, Tab to the order, the sub-vendor (a drop-down that grows as you type new ones), the PO number; **paste rows straight from your workbook**. Each milestone (RFQ, PO, manufacturing start, inspection release, delivery) has a planned and an actual column: a planned date left empty comes from the task for the order's manufacture and delivery (shown grey). The **formula bar** shows the selected cell whole. Or **Import…** the register, or its **settings sheet** (the milestone weights in use, the weighting and the inspection release days), from a workbook (.xlsx).
+3. Keep it up to date: select orders and **Record milestone** (one date for all of them), type the **Mfg %** and the vendor's **Promised** delivery. Grey columns are worked out: **Forecast**, **Var.** against the planned delivery, **Float** to the date the plan needs it (red when late, amber when little), **Status**, **Next** (with the days it is late) and **Earned**. A **Cancelled** order stays in the register, struck through, and is left out of progress.
+4. **Note** adds an expediting note to every selected order; the **Expediting log** lists them all: type an item number in its empty row to add one there. Double-click an order for its **card**: milestones planned and actual, forecast and float, and its notes.
+5. **Progress**: the weighted planned and actual S-curve by week or month, and orders by sub-vendor and country. **Export…** writes the register and the log to a workbook.
 
-With the link to the Document Register on, an order lists the vendor documents it waits for; the register shows how many are accepted and flags orders whose drawings hold up manufacturing. With it off, orders stand on their own.
+With the link to the Document Register on, an order lists the vendor documents it waits for (**Details…**); the **Documents** column shows how many are accepted and flags orders whose drawings hold up manufacturing. With it off, orders stand on their own. In Sheets, `Orders[…]` and `Expediting[…]` are tables every formula can use, such as `=COUNTIFS(Orders[Sub-vendor],"Forge Co",Orders[RAG],"red")`.
 
 ### Portfolio and the resource pool
 
