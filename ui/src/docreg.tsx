@@ -162,7 +162,7 @@ export const docSettings = (first = "general") => openDialog(() => {
       <Show when={!["vendor", "package", "disc", "kind", "state"].includes(p.l.field)}><button class="x" title="Remove the list" onClick={() => { setLists(lists().filter((_, j) => j !== p.k)); }}>×</button></Show></h4>
       <For each={p.l.items}>{(it, i) => <div class="li">
         <input class="v" value={it.value} onChange={e => setI(p.k, i(), { value: e.currentTarget.value })} title="As written in the register" />
-        <Show when={p.l.field === "state"} fallback={<input value={it.label} placeholder={p.l.field === "disc" ? "Mechanical…" : "note"} onChange={e => setI(p.k, i(), { label: e.currentTarget.value })} />}>
+        <Show when={p.l.field === "state"} fallback={<input value={it.label} placeholder={p.l.field === "disc" ? "name" : "note"} onChange={e => setI(p.k, i(), { label: e.currentTarget.value })} />}>
           <label class="chk" title="Documents in this state count in progress and status"><input type="checkbox" checked={!it.off} onChange={e => setI(p.k, i(), { off: !e.currentTarget.checked })} /> counts</label></Show>
         <span class="u">{it.was ? used(p.l.field, it.was) || "" : ""}</span>
         <button class="x" title="Up" onClick={() => setL(p.k, { items: move(p.l.items, i(), -1) })}>↑</button><button class="x" title="Down" onClick={() => setL(p.k, { items: move(p.l.items, i(), 1) })}>↓</button>
