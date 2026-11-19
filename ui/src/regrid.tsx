@@ -153,7 +153,8 @@ export const RegGrid = <R,>(p: {
     else if (e.key === "Tab") { e.preventDefault(); if (barSave()) { go(cur()[0], cur()[1] + (e.shiftKey ? -1 : 1)); focus(); } }
   };
   /** Where the cursor is: the column and row, or the size of the selection. */
-  const where = () => { const [a, b, x, y] = rect(); const c = curCol(); if (b > a || y > x) return `${b - a + 1} rows × ${y - x + 1} columns`; return c ? `${c.name} · ${cur()[0] < view().length ? `row ${cur()[0] + 1}` : "new row"}` : ""; };
+  const where = () => { const [a, b, x, y] = rect(); const c = curCol(); const nr = b - a + 1, nc = y - x + 1;
+    if (nr > 1 || nc > 1) return nc === C() ? (nr > 1 ? `${nr} rows` : `Row ${a + 1}`) : `${nr} row${nr > 1 ? "s" : ""} × ${nc} column${nc > 1 ? "s" : ""}`; return c ? `${c.name} · ${cur()[0] < view().length ? `row ${cur()[0] + 1}` : "new row"}` : ""; };
   // ---- keyboard ----
   const key = (e: KeyboardEvent) => {
     if (edit() !== null) return;
