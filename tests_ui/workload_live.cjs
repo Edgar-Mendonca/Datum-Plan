@@ -17,6 +17,9 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const br = spawn(exe, [], { stdio: ["ignore", "pipe", "inherit"] });
   const port = await new Promise(ok => br.stdout.once("data", d => ok(+String(d).trim())));
   const call = async (c, a = {}) => { const r = await fetch(`http://127.0.0.1:${port}/`, { method: "POST", body: JSON.stringify({ c, a }) }); const j = await r.json(); if (j.err) throw new Error(j.err); return j.ok; };
+  // Overload the busiest person: half their usual units, so they are over capacity in some weeks.
+  { const w = await call("workload", { unit: "week" }), ps = w.trades.flatMap(t => t.people).sort((a, b) => b.peak - a.peak);
+    await call("apply", { op: { ResSet: { uid: ps[0].uid, field: "max", value: "40%" } } }); }
   await new Promise(ok => srv.listen(0, ok));
   const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
   const p = await (await b.newContext({ viewport: { width: 1500, height: 950 } })).newPage();

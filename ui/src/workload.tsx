@@ -18,7 +18,7 @@ const [unit, setUnit] = kept("wl-unit", "week");
 const [show, setShow] = kept("wl-show", "hours");
 const [onlyOver, setOnlyOver] = kept("wl-over", false);
 const pct = (b: number, c: number) => (c > 0 ? (b / c) * 100 : b > 0 ? 999 : 0);
-/** A cell's colour: free (white) to full (blue), over (red). */
+/** A cell's colour: free (white) to full (blue), over (red). A person's cell is red when they are over on any day of it (the engine's flag). */
 const tone = (b: number, c: number) => { const v = pct(b, c); return v > 100.5 ? "over" : v >= 85 ? "full" : v >= 50 ? "half" : v > 0 ? "low" : ""; };
 
 export const WorkloadView = () => {
@@ -63,7 +63,7 @@ export const WorkloadView = () => {
                   <tr class="wlperson" classList={{ isover: p.over.some(Boolean) }}>
                     <td class="wln"><button class="wltog" onClick={() => toggle(p.uid)}>{open().has(p.uid) ? "▾" : "▸"}</button>{p.name} <span class="muted">· {p.tasks.length}</span></td>
                     <td class="r" classList={{ late: p.peak > 100 }}>{p.peak ? `${Math.round(p.peak)}%` : ""}</td>
-                    <For each={d().periods}>{(_, j) => <td class={`wc ${tone(p.booked[j()], p.cap[j()])}`} classList={{ drop: over() === `${p.uid}|${j()}` }} title={`${p.name}: ${p.booked[j()].toFixed(1)} h of ${p.cap[j()].toFixed(1)} h`}
+                    <For each={d().periods}>{(_, j) => <td class={`wc ${p.over[j()] ? "over" : tone(p.booked[j()], p.cap[j()])}`} classList={{ drop: over() === `${p.uid}|${j()}` }} title={`${p.name}: ${p.booked[j()].toFixed(1)} h of ${p.cap[j()].toFixed(1)} h${p.over[j()] ? " · over capacity on some days" : ""}`}
                       onDragOver={e => { if (drag()) { e.preventDefault(); setOver(`${p.uid}|${j()}`); } }} onDragLeave={() => setOver("")} onDrop={e => { e.preventDefault(); drop(p, j()); }}>{cell(p.booked[j()], p.cap[j()])}</td>}</For>
                   </tr>
                   <Show when={open().has(p.uid)}><For each={p.tasks}>{k => <tr class="wltask" classList={{ crit: k.crit }} draggable={true} onDragStart={e => { setDrag({ task: k, from: p }); e.dataTransfer?.setData("text/plain", String(k.uid)); }} onDragEnd={() => { setDrag(null); setOver(""); }}
