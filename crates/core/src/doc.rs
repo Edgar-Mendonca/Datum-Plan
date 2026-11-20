@@ -35,7 +35,7 @@ pub enum Op {
     AdoptSetup { from: Box<Project>, parts: Vec<String> },
     /// Sets the modules switched on (Project › Modules).
     Modules { on: Vec<String> },
-    /// Replaces the contract (Contract Dates & Payments).
+    /// Replaces the contract (the Contract Register).
     Contract { c: Box<Contract> },
     /// Replaces the Document Register.
     Documents { r: Box<DocRegister> },

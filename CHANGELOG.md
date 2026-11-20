@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.33 — 2026-11-20
+
+The Contract Register: the whole contract as a workbook.
+
+- **Contract Dates & Payments becomes the Contract Register**, with eight tabs along the bottom: Dashboard, Contract dates, Payments, **Variations**, **Notices**, **Guarantees**, **Invoices** and **Obligations**. Each is a spreadsheet grid (type, paste from a workbook, fill down, sort, filter, the formula bar), and a tab's badge counts its rows that need attention.
+- **Variations:** claimed and approved money and days, waiting days, the delay event it comes from (**From a delay event**); approved ones make the revised contract value.
+- **Notices and time bars:** due the days the contract allows after the event, per kind of notice (Settings); counted down in amber and red; **Mark sent**.
+- **Guarantees and insurances:** days to expiry, the task whose finish releases them, and **Extend or reduce** when one expires before it is released.
+- **Invoices:** **Raise invoice** from the selected payments; due by their terms, overdue after; certified, retention and paid. A payment is invoiced and paid by the invoices that bill it.
+- **Obligations:** once or every week, month or quarter, the next due date worked out; **Mark done**.
+- **Dashboard:** the revised value, damages at risk, what is waiting in variations, and six lists of what needs attention.
+- **Sheets:** `Variations[…]`, `Notices[…]`, `Guarantees[…]`, `Invoices[…]` and `Obligations[…]` in every formula.
+- **AI tools:** the contract's variations, notices, guarantees, invoices and obligations; and for the registers, many at once: log the next submission of several documents (`log_submissions`, the same revisions, purposes and transmittal numbers as the window), log their returns, record a milestone for several orders, a document's or order's card, and the registers' lists, own columns and status words.
+
 ## 0.9.32 — 2026-11-20
 
 The registers work like workbooks: a Dashboard first, then their sheets on tabs along the bottom.

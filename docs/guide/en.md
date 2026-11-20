@@ -637,19 +637,24 @@ Below, **Other open plans wait for** lists the tasks of this plan that tasks in 
 
 ## Modules: registers when you need them
 
-A plan can take on extra registers, called **modules**: Contract Dates & Payments, the Document Register and the Procurement Register. **Project › Modules** lists them. Tick one and **Apply**: its view joins the sidebar and the Project tab. A plan without modules stays exactly as it was. Untick a module to hide it; the dialog asks whether to keep its data in the plan (the default) or delete it.
+A plan can take on extra registers, called **modules**: the Contract Register, the Document Register and the Procurement Register. **Project › Modules** lists them. Tick one and **Apply**: its view joins the sidebar and the Project tab. A plan without modules stays exactly as it was. Untick a module to hide it; the dialog asks whether to keep its data in the plan (the default) or delete it.
 
-### Contract Dates & Payments
+### Contract Register
 
-**Contract** (sidebar) shows the dates the contract fixes against the forecast, the delay damages at risk, and the payments. Like the other registers it opens on its **Dashboard** (the key figures, the contract dates late or at risk, the payments due and next, and the cash-in curve), with its sheets on tabs along the bottom, as in Sheets: **Dashboard**, **Contract dates** and **Payments**.
+**Contract** (sidebar) keeps the contract as a workbook. It opens on its **Dashboard**; the tabs along the bottom, as in Sheets, hold one spreadsheet each: **Contract dates**, **Payments**, **Variations**, **Notices**, **Guarantees**, **Invoices** and **Obligations**. A tab shows a badge with how many of its rows need attention. Each sheet works like the other registers: type in a cell, Tab and Enter, type in the empty row at the foot to add one, paste rows from your workbook, Ctrl+D fills down; white cells are yours, grey cells the app works out. Select rows (click their numbers) for the buttons that act on many at once.
 
-1. Type the contract number and value at the top.
-2. On **Contract dates**, select the task that meets a contract date, for example a delivery milestone, and click **+ Contract date**. Type the date the contract fixes.
-3. The row shows the task's forecast (its actual finish once done), the baseline, the days late or early, and a status: **On track**, **At risk** (less float than the days set at the top), **Late**, **Met** or **Met late**. **Trend** draws the forecast at each period close, so a slipping date shows as a rising red line.
-4. **Delay damages:** a % per week or part week late, after the **grace** days, up to the **cap** %, of **Of value** (the unit's price; empty means the contract value). **At risk** shows the damages at today's forecast.
-5. **Payments:** **+ Payment**, then the task whose finish triggers it, the share (%) or an amount, and the **terms** (days to payment). Type the invoiced and paid dates as they happen. The Dashboard's chart shows planned, forecast and received cash.
+1. **Settings…**: the contract number and value, the days of float under which a contract date is at risk, the days before expiry to flag a guarantee, the days to pay an invoice, and the **kinds of notice** with the days the contract allows for each (**Add the usual ones** starts with Delay 28, Variation 28, Claim particulars 42, Force majeure 14; type your contract's own).
+2. **Contract dates**: select the task that meets one in the task sheet (a delivery milestone), click **+ Contract date** (or type in the empty row and pick the task by its ID) and type the date the contract fixes. Grey columns show the task's forecast (its actual finish once done), the baseline, the days late or early and a status: **On track**, **At risk**, **Late**, **Met** or **Met late**. **Delay damages:** a % per week or part week late, after the **grace** days, up to the **cap** %, of **Of value** (the unit's price; empty means the contract value); **At risk** shows them at today's forecast.
+3. **Payments**: a share (%) or an amount, the task whose finish earns it and the **terms** (days to payment); the due date follows the task's forecast, so a slipping task moves its cash. Select payments and **Raise invoice** to bill them: one invoice each, numbered, for its amount, dated today, on the Invoices tab.
+4. **Variations**: the VO number, description, who raised it, its status (Draft, Submitted, Approved, Rejected), the dates, money and days claimed and approved, and the **delay event** it comes from (**From a delay event** starts one from an event in Delay analysis). Approved variations add to the contract value; the bar above the grid adds up claimed, approved and waiting, and **Waiting (d)** counts the days a submitted one has been with the client.
+5. **Notices**: the event, its kind and date. **Due by** is the event date plus the days allowed (its kind's, unless you type others); a notice not yet sent counts down, amber within 30 days and red within 7 or once overdue. **Mark sent** dates the selected ones today; one sent after its date says **Sent late**.
+6. **Guarantees** and insurances: the amount, issuer, number, from and expiry, and the task whose finish releases it (plus days). **Days left** counts to the expiry; a guarantee that expires before its release says **Extend or reduce**, one close to expiry **Expiring**.
+7. **Invoices**: the number, the payment it bills, the amount, the date sent, certified, retention and paid. It is due its terms' days after it is sent (the contract's when empty), and **Overdue** after that. A payment milestone counts as invoiced and paid by the invoices that bill it.
+8. **Obligations**: the clause, what is to be done and by whom, the first due date and whether it repeats every week, month or quarter. **Mark done** records today and moves it to its next date.
 
-On a master, a table on the Dashboard adds up the contract dates, damages and payments of its open subplans, with a button to open each one.
+The **Dashboard** shows the contract value with the approved variations, the contract dates late or at risk with their damages, what is waiting in variations, and six short lists of what needs attention (contract dates, notices to send, guarantees to act on, invoices overdue, obligations due, payments due): click a row to open its tab. It also draws the cash-in curve and, with period closes, each contract date's forecast trend. On a master, a table adds up the contract registers of its open subplans.
+
+In Sheets, `Variations[…]`, `Notices[…]`, `Guarantees[…]`, `Invoices[…]` and `Obligations[…]` are tables every formula can use, such as `=SUMIFS(Variations[Approved],Variations[Status],"Approved")`.
 
 ### Document Register
 

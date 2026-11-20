@@ -106,8 +106,8 @@ pub fn tools() -> Value {
     let item = |what: &str, fields: &str| json!({ "type": "object", "description": format!("{what} fields to set: {fields}. Dates YYYY-MM-DD.") });
     let style = || json!({ "type": "object", "description": "bold, italic, underline, strike (true/false), color and fill (#RRGGBB), size (px), font, align (left, center, right), border (\"thin #000000\": thin, med, thick, dbl, dash, dot); an empty value removes it" });
     let fourth = json!([
-        { "name": "contract_status", "description": "The contract: value, contract dates (forecast against the date, float, delay damages) and payment milestones (due, invoiced, paid).", "inputSchema": none() },
-        { "name": "set_contract", "description": "The contract's number, value and warning days (a contract date with less float is at risk).", "inputSchema": obj(json!({ "number": { "type": "string" }, "value": { "type": "number" }, "warn_days": { "type": "integer" } }), &[]) },
+        { "name": "contract_status", "description": "The Contract Register: value and revised value, contract dates (forecast against the date, float, delay damages), payment milestones (due, invoiced, paid), variations, notices and their time bars, guarantees and their expiry, invoices and obligations, each with the status the app works out.", "inputSchema": none() },
+        { "name": "set_contract", "description": "The contract's number, value, warning days (a contract date with less float is at risk), the kinds of notice with the days each allows, the days before a guarantee's expiry to flag it, and the days to pay an invoice.", "inputSchema": obj(json!({ "number": { "type": "string" }, "value": { "type": "number" }, "warn_days": { "type": "integer" }, "notice_kinds": { "type": "array", "items": { "type": "object" }, "description": "[{name, days}]" }, "expiry_warn": { "type": "integer" }, "invoice_terms": { "type": "integer" } }), &[]) },
         { "name": "set_contract_date", "description": "Add or change a contract date (met by a task's finish), or remove it.", "inputSchema": obj(json!({ "id": rid("contract date"), "fields": item("Contract date", "name, task (uid), date, value, ld_rate (% per week), ld_cap (%), grace (days), note"), "remove": { "type": "boolean" } }), &[]) },
         { "name": "set_payment", "description": "Add or change a payment milestone (a share or amount, due some days after its task finishes), or remove it.", "inputSchema": obj(json!({ "id": rid("payment"), "fields": item("Payment", "name, pct, amount, task (uid), terms (days), invoiced, paid"), "remove": { "type": "boolean" } }), &[]) },
         { "name": "document_register", "description": "The vendor document register: each document's planned, actual and forecast dates of the steps its class sets (the register's own classes, steps and return codes), revisions and resubmissions, and the progress earned against planned.", "inputSchema": none() },
@@ -115,6 +115,16 @@ pub fn tools() -> Value {
         { "name": "log_submission", "description": "Record a submission of a vendor document and the client's return (or change one by id).", "inputSchema": obj(json!({ "id": rid("submission"), "fields": item("Submission", "doc (document id), rev, purpose (ICR, IFA, IFC1…), transmittal, sent, ret_transmittal, returned, code (Code 1…), crs") }), &[]) },
         { "name": "procurement_status", "description": "The procurement register: each order's planned and actual RFQ, PO, manufacturing, inspection release and delivery, promised date, float to need, and progress.", "inputSchema": none() },
         { "name": "set_order", "description": "Add or change an order (equipment item or sub-order), or remove it.", "inputSchema": obj(json!({ "id": rid("order"), "fields": item("Order", "tag, name, vendor, origin, po_no, value, long_lead, task (uid), need (uid), required, planned and actual ([RFQ, PO, manufacturing, IRN, delivery] dates or null), mfg_pct, promised, remarks"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "set_variation", "description": "Add or change a variation (change order) in the Contract Register, or remove it. Approved variations add their approved amount to the contract value.", "inputSchema": obj(json!({ "id": rid("variation"), "fields": item("Variation", "no, desc, raised_by (Client or Us), status (Draft, Submitted, Approved, Rejected), submitted, decided, claimed, approved, days_claimed, days_granted, delay_event, remarks"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "set_notice", "description": "Add or change a contract notice (its time bar: due the days allowed after the event; 0 days takes its kind's days from set_contract notice_kinds), or remove it.", "inputSchema": obj(json!({ "id": rid("notice"), "fields": item("Notice", "no, event, kind, event_date, days, sent, our_ref, linked (a variation number)"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "set_guarantee", "description": "Add or change a bond, guarantee or insurance (expiry against the task that releases it), or remove it.", "inputSchema": obj(json!({ "id": rid("guarantee"), "fields": item("Guarantee", "name, basis, amount, issuer, number, from, expires, task (uid that releases it), after (days after that task), released"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "set_invoice", "description": "Add or change an invoice (optionally billing a payment milestone by its id), or remove it.", "inputSchema": obj(json!({ "id": rid("invoice"), "fields": item("Invoice", "no, payment (payment milestone id), amount, invoiced, terms (days; 0 = the contract's), certified, retention, paid, remarks"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "set_obligation", "description": "Add or change a contract obligation (once, or every week, month or quarter from its first due date), or remove it.", "inputSchema": obj(json!({ "id": rid("obligation"), "fields": item("Obligation", "clause, what, party (Us or Client), owner, due, every ('', week, month, quarter), done (last done), remarks"), "remove": { "type": "boolean" } }), &[]) },
+        { "name": "log_submissions", "description": "Log the next submission of several vendor documents at once, as the window's Log submission does: one transmittal (default the next number) and date (default today), each document's next revision and the purpose its class needs next unless given.", "inputSchema": obj(json!({ "docs": { "type": "array", "items": {}, "description": "Document ids or numbers" }, "transmittal": { "type": "string" }, "sent": { "type": "string" }, "rev": { "type": "string" }, "purpose": { "type": "string" } }), &["docs"]) },
+        { "name": "log_returns", "description": "Log the client's return of several documents at once: each one's latest submission not yet returned gets the code, the date (default today) and the return transmittal.", "inputSchema": obj(json!({ "docs": { "type": "array", "items": {}, "description": "Document ids or numbers" }, "code": { "type": "string" }, "returned": { "type": "string" }, "ret_transmittal": { "type": "string" }, "crs": { "type": "string" } }), &["docs", "code"]) },
+        { "name": "record_milestone", "description": "Record a procurement milestone for several orders at once: milestone 0 RFQ, 1 PO, 2 manufacturing start, 3 inspection release, 4 delivery (default each order's next one), on a date (default today).", "inputSchema": obj(json!({ "orders": { "type": "array", "items": {}, "description": "Order ids or item numbers" }, "milestone": { "type": "integer" }, "date": { "type": "string" } }), &["orders"]) },
+        { "name": "register_card", "description": "One document's or order's card: its fields, where it stands and its whole history (submissions, or expediting notes).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement"] }, "key": { "description": "Its id, document number or item number" } }), &["register", "key"]) },
+        { "name": "set_register_settings", "description": "A register's lists (vendors, disciplines, states, your own…), own columns (text, number, date, list, or a formula per row such as =[Review due]-TODAY()) and status words (the client's word for each status key). Only the keys given change; renames do not reach the rows (use set_vendor_document or set_order for that).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement"] }, "lists": { "type": "array", "items": { "type": "object" }, "description": "[{key, name, items:[{value, label, off}]}]" }, "columns": { "type": "array", "items": { "type": "object" }, "description": "[{name, kind, formula}]" }, "words": { "type": "object", "description": "{status key: word}" } }), &["register"]) },
         { "name": "log_expediting", "description": "Add a note to an order's expediting log.", "inputSchema": obj(json!({ "id": { "type": "integer" }, "note": { "type": "string" }, "date": { "type": "string" }, "by": { "type": "string" } }), &["id", "note"]) },
         { "name": "list_baselines", "description": "Which baselines (0–10) are set: how many tasks, and the project finish in each.", "inputSchema": none() },
         { "name": "baseline_variance", "description": "Tasks against a baseline (default 0): start and finish variance in days, slipped most first.", "inputSchema": obj(json!({ "n": { "type": "integer" }, "limit": { "type": "integer" } }), &[]) },
@@ -404,11 +414,21 @@ pub fn changes(name: &str) -> bool {
         | "hide_rows_columns" | "set_sheet_tab" | "set_row_heights" | "sort_range" | "remove_duplicates" | "place_picture"
         | "set_page_setup" | "set_report" | "delete_report" | "set_chart" | "delete_chart"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
+        | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" | "log_submissions" | "log_returns" | "record_milestone" | "set_register_settings"
         | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
         | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
 }
 
 fn s<'a>(a: &'a Value, k: &str) -> Option<&'a str> { a[k].as_str().filter(|x| !x.trim().is_empty()) }
+/// A register row named by its id or by its number.
+enum Pick { Id(u32), Text(String) }
+fn pick(v: &Value, find: impl Fn(&Pick) -> Option<u32>) -> Result<Vec<u32>, String> {
+    let list = v.as_array().filter(|l| !l.is_empty()).ok_or("Give a list of ids or numbers.")?;
+    list.iter().map(|x| {
+        let k = match x { Value::Number(n) => Pick::Id(n.as_u64().unwrap_or(0) as u32), _ => Pick::Text(txt(x).trim().to_string()) };
+        find(&k).ok_or_else(|| format!("{} is not in the register.", txt(x)))
+    }).collect()
+}
 fn txt(v: &Value) -> String { v.as_str().map(String::from).unwrap_or_else(|| v.to_string()) }
 fn uid_list(a: &Value, k: &str) -> Result<Vec<u32>, String> {
     let v: Vec<u32> = match &a[k] { Value::Array(v) => v.iter().filter_map(|x| x.as_u64().map(|x| x as u32)).collect(), x => x.as_u64().map(|x| vec![x as u32]).unwrap_or_default() };
@@ -1501,17 +1521,19 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
         "contract_status" => {
             let c = Calc::new(&doc.p, fmt, today);
             if let Some(e) = &c.error { return Err(e.clone()) }
-            Ok(json!({ "number": doc.p.contract.number, "status": crate::contract::status(&c) }))
+            let k = &doc.p.contract;
+            Ok(json!({ "number": k.number, "status": crate::contract::status(&c), "variations": k.variations, "notices": k.notices, "guarantees": k.guarantees, "invoices": k.invoices,
+                "obligations": k.obligations, "notice_kinds": k.notice_kinds }))
         }
         "set_contract" => {
-            let f = json!({ "number": a.get("number"), "value": a.get("value"), "warn_days": a.get("warn_days") });
+            let f = json!({ "number": a.get("number"), "value": a.get("value"), "warn_days": a.get("warn_days"), "notice_kinds": a.get("notice_kinds"), "expiry_warn": a.get("expiry_warn"), "invoice_terms": a.get("invoice_terms") });
             let f = Value::Object(f.as_object().cloned().unwrap_or_default().into_iter().filter(|(_, v)| !v.is_null()).collect());
-            if f.as_object().is_none_or(|m| m.is_empty()) { return Err("Give number, value or warn_days.".into()) }
-            let c = patch(&doc.p.contract, &f, &["dates", "payments"])?;
+            if f.as_object().is_none_or(|m| m.is_empty()) { return Err("Give number, value, warn_days, notice_kinds, expiry_warn or invoice_terms.".into()) }
+            let c = patch(&doc.p.contract, &f, &["dates", "payments", "variations", "notices", "guarantees", "invoices", "obligations"])?;
             apply(doc, Op::Contract { c: Box::new(c) })?;
             Ok(json!({ "number": doc.p.contract.number, "value": doc.p.contract.value }))
         }
-        "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" => {
+        "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" => {
             let id = a["id"].as_u64().unwrap_or(0) as u32;
             let remove = a["remove"].as_bool() == Some(true);
             let f = &a["fields"];
@@ -1530,9 +1552,18 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
                 Ok(())
             }
             let op = match name {
-                "set_contract_date" | "set_payment" => {
+                "set_contract_date" | "set_payment" | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" => {
                     let mut c = p.contract.clone();
-                    if name == "set_payment" { put(&mut c.payments, id, |x| x.id, f, remove)? } else { put(&mut c.dates, id, |x| x.id, f, remove)? }
+                    if name == "set_invoice" && f["payment"].as_u64().is_some_and(|x| x > 0 && !c.payments.iter().any(|y| u64::from(y.id) == x)) { return Err("No payment milestone with that id (see contract_status).".into()) }
+                    match name {
+                        "set_payment" => put(&mut c.payments, id, |x| x.id, f, remove)?,
+                        "set_variation" => put(&mut c.variations, id, |x| x.id, f, remove)?,
+                        "set_notice" => put(&mut c.notices, id, |x| x.id, f, remove)?,
+                        "set_guarantee" => put(&mut c.guarantees, id, |x| x.id, f, remove)?,
+                        "set_invoice" => put(&mut c.invoices, id, |x| x.id, f, remove)?,
+                        "set_obligation" => put(&mut c.obligations, id, |x| x.id, f, remove)?,
+                        _ => put(&mut c.dates, id, |x| x.id, f, remove)?,
+                    }
                     Op::Contract { c: Box::new(c) }
                 }
                 "set_vendor_document" | "log_submission" => {
@@ -1548,9 +1579,95 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             };
             apply(doc, op)?;
             let p = &doc.p;
-            let last = match name { "set_contract_date" => p.contract.dates.last().map(|x| x.id), "set_payment" => p.contract.payments.last().map(|x| x.id),
+            let k = &p.contract;
+            let last = match name { "set_contract_date" => k.dates.last().map(|x| x.id), "set_payment" => k.payments.last().map(|x| x.id),
+                "set_variation" => k.variations.last().map(|x| x.id), "set_notice" => k.notices.last().map(|x| x.id), "set_guarantee" => k.guarantees.last().map(|x| x.id),
+                "set_invoice" => k.invoices.last().map(|x| x.id), "set_obligation" => k.obligations.last().map(|x| x.id),
                 "set_vendor_document" => p.documents.docs.last().map(|x| x.id), "log_submission" => p.documents.log.last().map(|x| x.id), _ => p.procurement.items.last().map(|x| x.id) };
             Ok(json!({ if remove { "removed" } else { "id" }: if id == 0 { last.unwrap_or(0) } else { id } }))
+        }
+        "log_submissions" | "log_returns" => {
+            let mut r = doc.p.documents.clone();
+            let ids = pick(&a["docs"], |k| r.docs.iter().find(|d| matches!(k, Pick::Id(i) if d.id == *i) || matches!(k, Pick::Text(t) if d.number.eq_ignore_ascii_case(t))).map(|d| d.id))?;
+            let date = |k: &str| -> Result<NaiveDate, String> { Ok(s(a, k).map(|x| parse::date_in(x, fmt)).transpose()?.unwrap_or(today)) };
+            let mut done = vec![];
+            if name == "log_submissions" {
+                let tr = s(a, "transmittal").map(String::from).unwrap_or_else(|| crate::docreg::next_transmittal(&r));
+                let sent = date("sent")?;
+                for id in ids {
+                    let Some(d) = r.docs.iter().find(|d| d.id == id).cloned() else { continue };
+                    let mut x = crate::docreg::next_sub(&r, &d, sent);
+                    x.transmittal = tr.clone();
+                    if let Some(v) = s(a, "rev") { x.rev = v.into() }
+                    if let Some(v) = s(a, "purpose") { x.purpose = v.into() }
+                    done.push(json!({ "document": d.number, "rev": x.rev, "purpose": x.purpose }));
+                    r.log.push(x);
+                }
+                if done.is_empty() { return Err("No document to log.".into()) }
+                apply(doc, Op::Documents { r: Box::new(r) })?;
+                return Ok(json!({ "transmittal": tr, "logged": done }));
+            }
+            let code = s(a, "code").ok_or("code is needed (a return code of the register).")?.to_string();
+            if !r.codes.is_empty() && !r.codes.iter().any(|c| c.code == code) { return Err(format!("{code} is not one of the register's return codes: {}.", r.codes.iter().map(|c| c.code.as_str()).collect::<Vec<_>>().join(", "))) }
+            let ret = date("returned")?;
+            for id in ids {
+                let number = r.docs.iter().find(|d| d.id == id).map(|d| d.number.clone()).unwrap_or_default();
+                match r.log.iter_mut().rev().find(|x| x.doc == id && x.returned.is_none() && x.sent.is_some()) {
+                    Some(x) => {
+                        x.returned = Some(ret); x.code = code.clone();
+                        if let Some(v) = s(a, "ret_transmittal") { x.ret_transmittal = v.into() }
+                        if let Some(v) = s(a, "crs") { x.crs = v.into() }
+                        done.push(json!({ "document": number, "rev": x.rev, "code": code }));
+                    }
+                    None => done.push(json!({ "document": number, "skipped": "nothing with the client" })),
+                }
+            }
+            if !done.iter().any(|x| x.get("code").is_some()) { return Err("None of these documents is with the client.".into()) }
+            apply(doc, Op::Documents { r: Box::new(r) })?;
+            Ok(json!({ "returned": done }))
+        }
+        "record_milestone" => {
+            let mut r = doc.p.procurement.clone();
+            let ids = pick(&a["orders"], |k| r.items.iter().find(|x| matches!(k, Pick::Id(i) if x.id == *i) || matches!(k, Pick::Text(t) if x.tag.eq_ignore_ascii_case(t) || x.name.eq_ignore_ascii_case(t))).map(|x| x.id))?;
+            let date = Some(s(a, "date").map(|x| parse::date_in(x, fmt)).transpose()?.unwrap_or(today));
+            let fixed = a["milestone"].as_u64().map(|m| m.min(4) as usize);
+            let mut done = vec![];
+            for it in r.items.iter_mut().filter(|x| ids.contains(&x.id)) {
+                let Some(k) = fixed.or_else(|| it.actual.iter().position(|d| d.is_none())) else { continue };
+                it.actual[k] = date;
+                if k >= 3 { it.mfg_pct = 100.0 }
+                let ms = ["RFQ", "PO", "Manufacturing start", "Inspection release", "Delivery"][k];
+                done.push(json!({ "order": if it.tag.is_empty() { &it.name } else { &it.tag }, "milestone": ms }));
+            }
+            if done.is_empty() { return Err("These orders have every milestone recorded.".into()) }
+            apply(doc, Op::Procurement { r: Box::new(r) })?;
+            Ok(json!({ "recorded": done }))
+        }
+        "register_card" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            let key = &a["key"];
+            let hit = |id: u32, texts: &[&str]| key.as_u64() == Some(u64::from(id)) || key.as_str().is_some_and(|k| texts.iter().any(|t| t.eq_ignore_ascii_case(k.trim())));
+            if s(a, "register") == Some("procurement") {
+                let r = &doc.p.procurement;
+                let k = r.items.iter().position(|x| hit(x.id, &[&x.tag, &x.name])).ok_or("No order with that id or item number.")?;
+                let o = crate::procure::status(&c);
+                return Ok(json!({ "order": r.items[k], "status": o.items.get(k) }));
+            }
+            let r = &doc.p.documents;
+            let k = r.docs.iter().position(|x| hit(x.id, &[&x.number])).ok_or("No document with that id or number.")?;
+            let o = crate::docreg::status(&c);
+            Ok(json!({ "document": r.docs[k], "status": o.docs.get(k), "submissions": r.log.iter().filter(|x| x.doc == r.docs[k].id).collect::<Vec<_>>() }))
+        }
+        "set_register_settings" => {
+            let f = json!({ "lists": a.get("lists"), "columns": a.get("columns"), "words": a.get("words") });
+            let f = Value::Object(f.as_object().cloned().unwrap_or_default().into_iter().filter(|(_, v)| !v.is_null()).collect());
+            if f.as_object().is_none_or(|m| m.is_empty()) { return Err("Give lists, columns or words.".into()) }
+            match s(a, "register") {
+                Some("procurement") => { let r = patch(&doc.p.procurement, &f, &["items"])?; apply(doc, Op::Procurement { r: Box::new(r) })?; let r = &doc.p.procurement; Ok(json!({ "lists": r.lists, "columns": r.columns, "words": r.words })) }
+                Some("documents") => { let r = patch(&doc.p.documents, &f, &["docs", "log"])?; apply(doc, Op::Documents { r: Box::new(r) })?; let r = &doc.p.documents; Ok(json!({ "lists": r.lists, "columns": r.columns, "words": r.words })) }
+                _ => Err("register is documents or procurement.".into()),
+            }
         }
         "log_expediting" => {
             let id = a["id"].as_u64().ok_or("id is needed (an order id from procurement_status).")? as u32;
@@ -1762,6 +1879,48 @@ mod tests {
     fn d(y: i32, m: u32, dd: u32) -> NaiveDate { NaiveDate::from_ymd_opt(y, m, dd).unwrap() }
     fn plan() -> Doc { Doc::new(crate::templates::build(&crate::templates::TEMPLATES[0], d(2026, 11, 2))) }
     fn run(doc: &mut Doc, name: &str, a: Value) -> Result<Value, String> { call(doc, "%d-%b-%y", d(2026, 11, 13), name, &a) }
+
+    #[test]
+    fn the_contract_register_and_many_at_once_register_tools() {
+        let mut doc = plan();
+        let a = doc.p.tasks.last().unwrap().uid;
+        run(&mut doc, "set_contract", json!({ "value": 1000, "notice_kinds": [{ "name": "Delay", "days": 28 }], "invoice_terms": 45 })).unwrap();
+        let pay = run(&mut doc, "set_payment", json!({ "fields": { "name": "Advance", "pct": 10, "task": a } })).unwrap()["id"].as_u64().unwrap();
+        run(&mut doc, "set_variation", json!({ "fields": { "no": "VO-1", "status": "Approved", "claimed": 120, "approved": 100, "days_granted": 3 } })).unwrap();
+        run(&mut doc, "set_notice", json!({ "fields": { "no": "N-1", "kind": "Delay", "event_date": "2026-11-01" } })).unwrap();
+        run(&mut doc, "set_guarantee", json!({ "fields": { "name": "Performance bond", "number": "PB-1", "expires": "2027-06-30", "task": a } })).unwrap();
+        run(&mut doc, "set_invoice", json!({ "fields": { "no": "INV-1", "payment": pay, "amount": 100, "invoiced": "2026-11-02" } })).unwrap();
+        assert!(run(&mut doc, "set_invoice", json!({ "fields": { "payment": 99 } })).unwrap_err().contains("payment milestone"));
+        run(&mut doc, "set_obligation", json!({ "fields": { "what": "Monthly report", "due": "2026-11-05", "every": "month" } })).unwrap();
+        let k = run(&mut doc, "contract_status", json!({})).unwrap();
+        assert_eq!(k["status"]["revised_value"], 1100.0);
+        assert_eq!(k["status"]["notices"][0]["due"], "2026-11-29", "the kind's 28 days");
+        assert_eq!(k["status"]["invoices"][0]["due"], "2026-12-17", "the contract's 45 days");
+        assert_eq!(k["status"]["payments"][0]["status"], "Invoiced", "billed by the invoice");
+        assert_eq!(k["status"]["obligations"][0]["status"], "Overdue 8 d");
+        // Documents: log three at once, return two, then a card.
+        for (n, t) in [("V-1", "GA"), ("V-2", "P&ID"), ("V-3", "Datasheet")] { run(&mut doc, "set_vendor_document", json!({ "fields": { "number": n, "title": t } })).unwrap(); }
+        let l = run(&mut doc, "log_submissions", json!({ "docs": ["V-1", "v-2", 3] })).unwrap();
+        assert_eq!(l["transmittal"], "TR-0001");
+        assert_eq!((l["logged"][0]["rev"].as_str(), l["logged"][2]["purpose"].as_str()), (Some("A"), Some("ICR")));
+        assert!(run(&mut doc, "log_submissions", json!({ "docs": ["V-9"] })).unwrap_err().contains("V-9"));
+        assert!(run(&mut doc, "log_returns", json!({ "docs": ["V-1"], "code": "Code 9" })).unwrap_err().contains("return codes"));
+        let code = doc.p.documents.codes.iter().find(|c| c.resubmit).map(|c| c.code.clone()).unwrap();
+        run(&mut doc, "log_returns", json!({ "docs": ["V-1", "V-2"], "code": code })).unwrap();
+        let again = run(&mut doc, "log_submissions", json!({ "docs": ["V-1"] })).unwrap();
+        assert_eq!((again["transmittal"].as_str(), again["logged"][0]["rev"].as_str(), again["logged"][0]["purpose"].as_str()), (Some("TR-0002"), Some("B"), Some("ICR")), "sent back: the same purpose again, the next revision and transmittal");
+        let card = run(&mut doc, "register_card", json!({ "register": "documents", "key": "V-1" })).unwrap();
+        assert_eq!(card["submissions"].as_array().unwrap().len(), 2);
+        run(&mut doc, "set_register_settings", json!({ "register": "documents", "words": { "resubmit": "Revise and resubmit" } })).unwrap();
+        assert_eq!(doc.p.documents.words.get("resubmit").map(String::as_str), Some("Revise and resubmit"));
+        // Orders: the next milestone of each, at once.
+        for t in ["1.1", "1.2"] { run(&mut doc, "set_order", json!({ "fields": { "tag": t, "name": format!("Order {t}") } })).unwrap(); }
+        run(&mut doc, "record_milestone", json!({ "orders": ["1.1", "1.2"] })).unwrap();
+        let r = run(&mut doc, "record_milestone", json!({ "orders": ["1.1"], "milestone": 4 })).unwrap();
+        assert_eq!(r["recorded"][0]["milestone"], "Delivery");
+        assert_eq!(doc.p.procurement.items.iter().map(|x| x.actual.iter().filter(|d| d.is_some()).count()).collect::<Vec<_>>(), [2, 1]);
+        assert_eq!(doc.p.procurement.items[0].mfg_pct, 100.0);
+    }
 
     #[test]
     fn project_setup_details_resources_rules_and_text() {

@@ -9,11 +9,11 @@ import { toast } from "./store";
 
 /** A register as a workbook: the Dashboard first, then its sheets, with tabs along the bottom as in
  *  Sheets. Grid tabs (`grids`) fill the window; the others scroll. */
-export const RegBook = (p: { title: string; help: string; tools: JSX.Element; tabs: [string, string][]; grids: string[]; tab: string; set: (k: string) => void; children: JSX.Element }) => (
+export const RegBook = (p: { title: string; help: string; tools: JSX.Element; tabs: [string, string, number?][]; grids: string[]; tab: string; set: (k: string) => void; children: JSX.Element }) => (
   <section class="page regbook">
     <div class="ptools"><h1>{p.title}<Help k={p.help} /></h1><span class="grow" />{p.tools}</div>
     <div class="rbbody" classList={{ full: p.grids.includes(p.tab) }}>{p.children}</div>
-    <div class="sheettabs regtabs"><For each={p.tabs}>{([k, l]) => <button classList={{ on: p.tab === k }} onClick={() => p.set(k)}>{l}</button>}</For></div>
+    <div class="sheettabs regtabs"><For each={p.tabs}>{([k, l, n]) => <button classList={{ on: p.tab === k }} onClick={() => p.set(k)}>{l}<Show when={n}><span class="tbadge">{n}</span></Show></button>}</For></div>
   </section>
 );
 /** "Needs attention" on a dashboard: a few rows, each opening its card. */

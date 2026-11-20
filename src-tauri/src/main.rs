@@ -820,7 +820,7 @@ fn level_preview(st: State<St>, uids: Vec<u32>) -> R<datum_core::level::Preview>
     guard(|| datum_core::level::preview(&st.lock().doc.p, &uids))
 }
 
-/// Contract Dates & Payments of the plan shown, and (on a master) of its open subplans.
+/// The Contract Register of the plan shown, and (on a master) of its open subplans.
 #[derive(serde::Serialize)]
 struct PlanContract { tab: usize, name: String, on: bool, out: datum_core::contract::Out }
 
@@ -1176,7 +1176,7 @@ fn sheet_check(st: State<St>, k: usize, cell: String, input: String) -> Option<(
 
 /// What a sheet formula can name: functions (with signatures), the plan's names and table columns.
 #[derive(serde::Serialize)]
-struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(String, String)>, tasks: Vec<String>, resources: Vec<&'static str>, documents: Vec<String>, transmittals: Vec<&'static str>, orders: Vec<String>, expediting: Vec<&'static str> }
+struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(String, String)>, tasks: Vec<String>, resources: Vec<&'static str>, documents: Vec<String>, transmittals: Vec<&'static str>, orders: Vec<String>, expediting: Vec<&'static str>, more: Vec<(&'static str, &'static str, Vec<&'static str>)> }
 
 #[tauri::command]
 fn sheet_catalog(st: State<St>) -> SheetCatalog {
@@ -1193,6 +1193,9 @@ fn sheet_catalog(st: State<St>) -> SheetCatalog {
         transmittals: if a.doc.p.documents.docs.is_empty() { vec![] } else { datum_core::regtable::LOG_COLS.iter().map(|x| x.1).collect() },
         orders: if a.doc.p.procurement.items.is_empty() { vec![] } else { datum_core::regtable::ORDER_COLS.iter().map(|x| x.1.to_string()).chain(a.doc.p.procurement.columns.iter().map(|c| c.name.clone())).collect() },
         expediting: if a.doc.p.procurement.items.is_empty() { vec![] } else { datum_core::regtable::NOTE_COLS.iter().map(|x| x.1).collect() },
+        // The Contract Register's tables, once it has variations, notices, guarantees, invoices or obligations.
+        more: { let k = &a.doc.p.contract; if k.variations.is_empty() && k.notices.is_empty() && k.guarantees.is_empty() && k.invoices.is_empty() && k.obligations.is_empty() { vec![] } else {
+            datum_core::regtable::CONTRACT_TABLES.iter().map(|(n, about, cols)| (*n, *about, cols.iter().map(|x| x.1).collect())).collect() } },
     }
 }
 

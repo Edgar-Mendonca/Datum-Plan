@@ -815,7 +815,7 @@ pub struct Project {
     pub baseline_unlocked: bool,
     /// Decimal places for percentages in the task sheet (0–2): 0.01 % of progress can show.
     pub pct_decimals: u8,
-    /// Contract Dates & Payments (kept when the module is switched off, until deleted).
+    /// The Contract Register (kept when the module is switched off, until deleted).
     #[serde(skip_serializing_if = "Contract::is_empty")]
     pub contract: Contract,
     /// The Document Register (kept when the module is switched off, until deleted).
@@ -1103,6 +1103,17 @@ pub struct Contract {
     pub warn_days: i64,
     pub dates: Vec<ContractDate>,
     pub payments: Vec<Payment>,
+    pub variations: Vec<Variation>,
+    pub notices: Vec<Notice>,
+    pub guarantees: Vec<Guarantee>,
+    pub invoices: Vec<Invoice>,
+    pub obligations: Vec<Obligation>,
+    /// The kinds of notice the contract names, with the days it allows for each (a time bar).
+    pub notice_kinds: Vec<NoticeKind>,
+    /// A guarantee expiring within this many days is flagged (0 = 60).
+    pub expiry_warn: i64,
+    /// Days to pay an invoice when it does not say (0 = 30).
+    pub invoice_terms: i64,
 }
 impl Contract {
     pub fn is_empty(&self) -> bool { *self == Self::default() }
@@ -1123,6 +1134,105 @@ pub struct ContractDate {
     pub ld_cap: f64,
     pub grace: i64,
     pub note: String,
+}
+
+/// A variation (change order): claimed and approved money and days.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Variation {
+    pub id: u32,
+    pub no: String,
+    pub desc: String,
+    /// Client or Us.
+    pub raised_by: String,
+    /// Draft, Submitted, Approved, Rejected (or the contract's own words).
+    pub status: String,
+    pub submitted: Option<NaiveDate>,
+    pub decided: Option<NaiveDate>,
+    pub claimed: f64,
+    pub approved: f64,
+    pub days_claimed: i64,
+    pub days_granted: i64,
+    /// The delay event it comes from (Delay analysis), by name.
+    pub delay_event: String,
+    pub remarks: String,
+}
+
+/// A notice the contract requires within a time bar: due `days` after the event.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Notice {
+    pub id: u32,
+    pub no: String,
+    pub event: String,
+    pub kind: String,
+    pub event_date: Option<NaiveDate>,
+    /// Days allowed; 0 takes the kind's days.
+    pub days: i64,
+    pub sent: Option<NaiveDate>,
+    pub our_ref: String,
+    /// The variation it supports, by number.
+    pub linked: String,
+}
+
+/// A kind of notice and the days the contract allows for it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NoticeKind { pub name: String, pub days: i64 }
+
+/// A bond, guarantee or insurance: in force from `from` to `expires`, released when its task
+/// finishes (plus `after` days).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Guarantee {
+    pub id: u32,
+    pub name: String,
+    pub basis: String,
+    pub amount: f64,
+    pub issuer: String,
+    pub number: String,
+    pub from: Option<NaiveDate>,
+    pub expires: Option<NaiveDate>,
+    /// The task whose finish releases it, and days after.
+    pub task: u32,
+    pub after: i64,
+    pub released: Option<NaiveDate>,
+}
+
+/// An invoice: raised for a payment milestone (or on its own), certified, paid.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Invoice {
+    pub id: u32,
+    pub no: String,
+    /// The payment milestone it bills (its id), 0 for none.
+    pub payment: u32,
+    pub amount: f64,
+    pub invoiced: Option<NaiveDate>,
+    /// Days to pay; 0 takes the contract's.
+    pub terms: i64,
+    pub certified: f64,
+    pub retention: f64,
+    pub paid: Option<NaiveDate>,
+    pub remarks: String,
+}
+
+/// Something the contract makes one party do, once or every week, month or quarter.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Obligation {
+    pub id: u32,
+    pub clause: String,
+    pub what: String,
+    /// Us or Client.
+    pub party: String,
+    pub owner: String,
+    pub due: Option<NaiveDate>,
+    /// "", "week", "month" or "quarter".
+    pub every: String,
+    /// When it was last done.
+    pub done: Option<NaiveDate>,
+    pub remarks: String,
 }
 
 /// A payment milestone: a share of the contract value (or an amount), due `terms` days after its task finishes.

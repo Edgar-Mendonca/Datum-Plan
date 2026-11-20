@@ -38,6 +38,21 @@ pub const ORDER_COLS: [(&str, &str); 35] = [
 ];
 /// The Expediting table's columns.
 pub const NOTE_COLS: [(&str, &str); 5] = [("tag", "Item"), ("name", "Order"), ("d:date", "Date"), ("note", "Note"), ("by", "By")];
+/// The Contract Register's tables: name, what it holds, its columns (dates marked `d:`).
+/// A table: its name, what it holds, its columns (key, name).
+pub type RegTable = (&'static str, &'static str, &'static [(&'static str, &'static str)]);
+pub const CONTRACT_TABLES: [RegTable; 5] = [
+    ("Variations", "Every variation of the Contract Register", &[("no", "VO No."), ("desc", "Description"), ("raised_by", "Raised by"), ("status", "Status"), ("d:submitted", "Submitted"), ("d:decided", "Decided"),
+        ("claimed", "Claimed"), ("approved", "Approved"), ("days_claimed", "Days claimed"), ("days_granted", "Days granted"), ("delay_event", "Delay event"), ("remarks", "Remarks")]),
+    ("Notices", "Every notice and its time bar", &[("no", "Notice"), ("event", "Event"), ("kind", "Kind"), ("d:event_date", "Event date"), ("days", "Days allowed"), ("d:due", "Due by"), ("d:sent", "Sent"),
+        ("our_ref", "Our ref."), ("status", "Status"), ("left", "Days left"), ("linked", "Linked")]),
+    ("Guarantees", "Every guarantee and insurance", &[("name", "Guarantee"), ("basis", "Basis"), ("amount", "Amount"), ("issuer", "Issuer"), ("number", "Number"), ("d:from", "From"), ("d:expires", "Expires"),
+        ("left", "Days left"), ("d:due", "Release"), ("d:released", "Released"), ("status", "Status")]),
+    ("Invoices", "Every invoice", &[("no", "Invoice"), ("payment", "Payment"), ("amount", "Amount"), ("d:invoiced", "Invoiced"), ("d:due", "Due"), ("certified", "Certified"), ("retention", "Retention"),
+        ("d:paid", "Paid"), ("status", "Status"), ("left", "Days left"), ("remarks", "Remarks")]),
+    ("Obligations", "Every obligation of the contract", &[("clause", "Clause"), ("what", "Obligation"), ("party", "Party"), ("owner", "Owner"), ("every", "Every"), ("d:done", "Last done"), ("d:due", "Next due"),
+        ("left", "Days left"), ("status", "Status"), ("remarks", "Remarks")]),
+];
 
 fn date(d: Option<NaiveDate>) -> Value {
     d.map_or(Value::Empty, |d| Value::number((d - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap_or_default()).num_days() as f64 + EPOCH))
@@ -172,9 +187,45 @@ pub fn own_formulas(c: &Calc, o: &RegOut) -> Vec<Vec<String>> { own_eval(c, &doc
 /// The Procurement Register's own formula columns, per order.
 pub fn order_formulas(c: &Calc, o: &ProcOut) -> Vec<Vec<String>> { own_eval(c, &order_rows(c, o, false), &c.p.procurement.columns) }
 
+/// One row of a Contract Register table: the row's own fields (by its JSON) and what the app works out.
+fn contract_row(cols: &[(&str, &str)], item: &serde_json::Value, o: Option<&crate::contract::RowOut>, extra: impl Fn(&str) -> Option<Value>) -> Vec<Value> {
+    cols.iter().map(|(key, _)| {
+        let k = key.trim_start_matches("d:");
+        if let Some(v) = extra(k) { return v }
+        match k {
+            "due" => date(o.and_then(|x| x.due)), "left" => num(o.and_then(|x| x.left)), "status" if o.is_some() => text(o.map_or("", |x| x.status.as_str())),
+            _ => match &item[k] {
+                serde_json::Value::String(s) if key.starts_with("d:") => date(NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()),
+                serde_json::Value::String(s) => text(s),
+                serde_json::Value::Number(n) => n.as_f64().map_or(Value::Empty, Value::number),
+                _ => Value::Empty,
+            },
+        }
+    }).collect()
+}
+
 /// Adds the registers' sheets and tables to a workbook (for the registers that have rows).
 pub fn add_tables(c: &Calc, wb: &mut Workbook) {
     let p = c.p;
+    let k = &p.contract;
+    if !(k.variations.is_empty() && k.notices.is_empty() && k.guarantees.is_empty() && k.invoices.is_empty() && k.obligations.is_empty()) {
+        let o = crate::contract::status(c);
+        fn js<T: serde::Serialize>(v: &[T]) -> Vec<serde_json::Value> { v.iter().map(|x| serde_json::to_value(x).unwrap_or_default()).collect() }
+        let pay = |id: u32| k.payments.iter().find(|x| x.id == id).map(|x| text(&x.name));
+        let lists: [(Vec<serde_json::Value>, &[crate::contract::RowOut]); 5] = [
+            (js(&k.variations), &[]), (js(&k.notices), &o.notices), (js(&k.guarantees), &o.guarantees),
+            (js(&k.invoices), &o.invoices), (js(&k.obligations), &o.obligations),
+        ];
+        for (n, ((name, _, cols), (items, outs))) in CONTRACT_TABLES.iter().zip(lists.iter()).enumerate() {
+            let t = Rows { names: cols.iter().map(|x| x.1.to_string()).collect(), dates: vec![], rows: items.iter().enumerate().map(|(i, it)| contract_row(cols, it, outs.get(i), |key| match (n, key) {
+                (3, "payment") => Some(pay(it["payment"].as_u64().unwrap_or(0) as u32).unwrap_or(Value::Empty)),
+                _ => None,
+            })).collect() };
+            let mut sh = sheet(&t, &format!("_{name}"));
+            sh.tables.push(table(7 + n as u32, name, t.names.clone(), items.len() as u32));
+            wb.sheets.push(Arc::new(sh));
+        }
+    }
     if !p.documents.docs.is_empty() {
         let o = crate::docreg::status(c);
         let t = doc_rows(c, &o, true);
@@ -268,6 +319,23 @@ mod tests {
     }
 
     /// The Procurement Register: states, own columns (a formula per order), the client's words, and
+    /// Variations[…], Notices[…], Invoices[…] in sheet formulas.
+    #[test]
+    fn the_contract_register_in_sheet_formulas() {
+        let mut p = Project::new("K", NaiveDate::from_ymd_opt(2026, 11, 2).unwrap());
+        p.contract.variations = vec![Variation { id: 1, no: "VO-1".into(), status: "Approved".into(), approved: 100.0, ..Default::default() }, Variation { id: 2, no: "VO-2".into(), status: "Submitted".into(), claimed: 40.0, ..Default::default() }];
+        p.contract.notices = vec![Notice { id: 1, no: "N1".into(), event_date: NaiveDate::from_ymd_opt(2026, 11, 1), days: 10, ..Default::default() }];
+        p.contract.payments = vec![Payment { id: 4, name: "Advance".into(), ..Default::default() }];
+        p.contract.invoices = vec![Invoice { id: 1, no: "I1".into(), payment: 4, amount: 250.0, ..Default::default() }];
+        let mut sd = SheetData { name: "S".into(), ..Default::default() };
+        for (a, f) in [("A1", "=SUMIFS(Variations[Approved],Variations[Status],\"Approved\")"), ("A2", "=INDEX(Notices[Due by],1)-DATE(2026,11,11)"), ("A3", "=INDEX(Invoices[Payment],1)"), ("A4", "=COUNTA(Variations[VO No.])")] { sd.cells.insert(a.into(), f.into()); }
+        p.sheets.push(sd);
+        let c = Calc::new(&p, "%Y-%m-%d", NaiveDate::from_ymd_opt(2026, 11, 20).unwrap());
+        let v = crate::sheet::sheet_view(&c, p.sheets.len() - 1).unwrap();
+        let at = |a: &str| v.cells.iter().find(|x| x.0 == a).map(|x| x.2.clone()).unwrap_or_default();
+        assert_eq!((at("A1"), at("A2"), at("A3"), at("A4")), ("100".into(), "0".into(), "Advance".into(), "2".into()));
+    }
+
     /// Orders[…] / Expediting[…] in sheet formulas.
     #[test]
     fn orders_in_sheet_formulas_states_words_and_own_columns() {

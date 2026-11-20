@@ -28,12 +28,21 @@ export interface SchedOpts {
 }
 export interface ContractDate { id: number; name: string; task: number; date: string | null; value: number; ld_rate: number; ld_cap: number; grace: number; note: string }
 export interface Payment { id: number; name: string; pct: number; amount: number; task: number; terms: number; invoiced: string | null; paid: string | null }
-export interface Contract { number: string; value: number; warn_days: number; dates: ContractDate[]; payments: Payment[] }
+export interface Variation { id: number; no: string; desc: string; raised_by: string; status: string; submitted: string | null; decided: string | null; claimed: number; approved: number; days_claimed: number; days_granted: number; delay_event: string; remarks: string }
+export interface Notice { id: number; no: string; event: string; kind: string; event_date: string | null; days: number; sent: string | null; our_ref: string; linked: string }
+export interface Guarantee { id: number; name: string; basis: string; amount: number; issuer: string; number: string; from: string | null; expires: string | null; task: number; after: number; released: string | null }
+export interface Invoice { id: number; no: string; payment: number; amount: number; invoiced: string | null; terms: number; certified: number; retention: number; paid: string | null; remarks: string }
+export interface Obligation { id: number; clause: string; what: string; party: string; owner: string; due: string | null; every: string; done: string | null; remarks: string }
+export interface Contract { number: string; value: number; warn_days: number; dates: ContractDate[]; payments: Payment[]; variations?: Variation[]; notices?: Notice[]; guarantees?: Guarantee[]; invoices?: Invoice[]; obligations?: Obligation[]; notice_kinds?: { name: string; days: number }[]; expiry_warn?: number; invoice_terms?: number }
+export interface CRow { id: number; due: string | null; left: number | null; status: string; key: string }
 export interface ContractOut {
   value: number; status_day: string | null; late: number; at_risk: number; ld: number; ld_max: number; pay_pct: number; received: number;
   milestones: { id: number; name: string; task: number; task_name: string; date: string | null; forecast: string | null; baseline: string | null; done: boolean; var: number | null; status: string; ld: number; ld_max: number; trend: [string, string][] }[];
   payments: { id: number; name: string; amount: number; task_name: string; planned: string | null; due: string | null; invoiced: string | null; paid: string | null; status: string }[];
   cash: [string, number, number, number | null][];
+  variations: CRow[]; notices: CRow[]; guarantees: CRow[]; invoices: CRow[]; obligations: CRow[];
+  revised_value: number; vo_claimed: number; vo_approved: number; vo_pending: number; vo_days: number; notices_due: number; notices_late: number; guar_warn: number;
+  invoiced: number; certified: number; inv_paid: number; inv_overdue: number; retention: number; obl_late: number; obl_due: number;
 }
 export interface VDoc { id: number; number: string; title: string; vendor: string; package: string; disc: string; kind: string; class: number; key: boolean; flags: string[]; offset: number | null; first: string | null; weight: number; progress: boolean; recurring: boolean; task: number; remarks: string; state?: string; own?: Record<string, string> }
 export interface Submission { id: number; doc: number; rev: string; purpose: string; transmittal: string; sent: string | null; ret_transmittal: string; returned: string | null; code: string; crs: string }

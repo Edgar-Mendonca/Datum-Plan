@@ -231,6 +231,43 @@ fn curve(classes: &[DocClass], docs: &[DocRow], eff: &[(f64, usize)], wsum: f64,
 
 /// Tidies a register before it is stored: classes 1–3, finite weights, unique ids, short texts,
 /// submissions only for documents in the register.
+/// A document's next submission, as the window proposes it: the revision after the last one
+/// (A → B, 0 → 1, B1 → B2) and the purpose its cycle needs next (the same again while it is with
+/// the client or sent back, else the first issue step of its class not yet sent), sent `today`.
+pub fn next_sub(r: &DocRegister, d: &VDoc, today: NaiveDate) -> Submission {
+    let mine: Vec<&Submission> = r.log.iter().filter(|s| s.doc == d.id).collect();
+    let last = mine.last();
+    let rev = match last.map(|s| s.rev.trim()) {
+        None => "A".to_string(),
+        Some(v) if v.len() == 1 && v.as_bytes()[0].is_ascii_uppercase() && v != "Z" => ((v.as_bytes()[0] + 1) as char).to_string(),
+        Some(v) if !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()) => v.parse::<u64>().map_or(v.to_string(), |n| (n + 1).to_string()),
+        Some(v) => {
+            let k = v.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+            match (v[..k].chars().all(|c| c.is_ascii_uppercase()) && k > 0, v[k..].parse::<u64>()) { (true, Ok(n)) => format!("{}{}", &v[..k], n + 1), _ => v.to_string() }
+        }
+    };
+    let purposes = |s: &DocStep| s.purposes.split([',', ';', '/']).map(|x| x.trim().to_uppercase()).filter(|x| !x.is_empty()).collect::<Vec<_>>();
+    let classes = r.classes();
+    let steps = classes.get((d.class.max(1) as usize) - 1).map(|c| c.steps.clone()).unwrap_or_default();
+    let sent_for = |s: &DocStep| mine.iter().any(|x| x.sent.is_some() && purposes(s).contains(&x.purpose.trim().to_uppercase()));
+    let next_issue = steps.iter().find(|s| !s.returned && !sent_for(s));
+    let again = last.is_some_and(|l| l.returned.is_none() || r.codes.iter().any(|c| c.code == l.code && c.resubmit));
+    let purpose = match (last, next_issue) {
+        (Some(l), _) if again => l.purpose.clone(),
+        (_, Some(s)) => s.purposes.split([',', ';', '/']).map(str::trim).find(|x| !x.is_empty()).map(String::from).unwrap_or_else(|| r.flow.first.clone()),
+        (Some(l), None) => l.purpose.clone(),
+        (None, None) => r.flow.first.clone(),
+    };
+    Submission { id: r.log.iter().map(|s| s.id).max().unwrap_or(0) + 1, doc: d.id, rev, purpose, sent: Some(today), ..Default::default() }
+}
+
+/// The transmittal number after the highest in the log (TR-0009 → TR-0010), or TR-0001.
+pub fn next_transmittal(r: &DocRegister) -> String {
+    let num = |t: &str| { let t = t.trim_end(); let k = t.trim_end_matches(|c: char| c.is_ascii_digit()).len(); (k < t.len()).then(|| (t[k..].parse::<u64>().unwrap_or(0), k, t.len() - k)) };
+    let best = r.log.iter().filter_map(|s| num(&s.transmittal).map(|n| (n, s.transmittal.trim_end().to_string()))).max_by_key(|x| x.0 .0);
+    match best { Some(((n, k, w), t)) => format!("{}{:0w$}", &t[..k], n + 1, w = w), None => "TR-0001".into() }
+}
+
 pub fn clean(r: &mut DocRegister) {
     let t = |s: &mut String, n: usize| { if s.chars().count() > n { *s = s.chars().take(n).collect() } };
     r.review_days = r.review_days.clamp(0, 365);
