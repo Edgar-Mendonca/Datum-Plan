@@ -35,6 +35,7 @@ pub mod sheetx;
 pub mod spell;
 pub mod templates;
 pub mod tutorial;
+pub mod workload;
 
 pub use model::*;
 

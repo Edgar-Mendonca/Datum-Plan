@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.36 — 2026-11-20
+
+The Workload view.
+
+- **Workload** (sidebar): people against weeks or months, grouped by trade. Each cell is the hours booked against the hours the person can work (their calendar and maximum units), coloured from free to full, red when over; a trade adds up its people; Peak is a person's busiest period.
+- Show **hours booked**, **% of capacity** or **hours free**; **only people over capacity**.
+- Open a person to the tasks that make up their hours, week by week.
+- **Drag a task to another person** to hand it over (same units), or **to a later week** to start it then. One Undo step each.
+- **AI tools:** `workload` and `move_work`.
+
 ## 0.9.35 — 2026-11-20
 
 Milestones, and several baselines on the Gantt.

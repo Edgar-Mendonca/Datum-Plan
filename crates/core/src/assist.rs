@@ -125,6 +125,8 @@ pub fn tools() -> Value {
         { "name": "record_milestone", "description": "Record a procurement milestone for several orders at once: milestone 0 RFQ, 1 PO, 2 manufacturing start, 3 inspection release, 4 delivery (default each order's next one), on a date (default today).", "inputSchema": obj(json!({ "orders": { "type": "array", "items": {}, "description": "Order ids or item numbers" }, "milestone": { "type": "integer" }, "date": { "type": "string" } }), &["orders"]) },
         { "name": "register_card", "description": "One document's or order's card: its fields, where it stands and its whole history (submissions, or expediting notes).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement"] }, "key": { "description": "Its id, document number or item number" } }), &["register", "key"]) },
         { "name": "set_register_settings", "description": "A register's lists (vendors, disciplines, states, your own…), own columns (text, number, date, list, or a formula per row such as =[Review due]-TODAY()) and status words (the client's word for each status key). Only the keys given change; renames do not reach the rows (use set_vendor_document or set_order for that).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement"] }, "lists": { "type": "array", "items": { "type": "object" }, "description": "[{key, name, items:[{value, label, off}]}]" }, "columns": { "type": "array", "items": { "type": "object" }, "description": "[{name, kind, formula}]" }, "words": { "type": "object", "description": "{status key: word}" } }), &["register"]) },
+        { "name": "workload", "description": "People against weeks (or months), by trade: hours booked and capacity per period, where each person is over capacity, their highest share of capacity, and the tasks that make up their hours.", "inputSchema": obj(json!({ "unit": { "type": "string", "enum": ["week", "month"] } }), &[]) },
+        { "name": "move_work", "description": "Move a task's work from one person to another (to: resource uid, keeping the units), and/or make it start no earlier than a date (start). One Undo step.", "inputSchema": obj(json!({ "uid": uid(), "from": { "type": "integer", "description": "Resource uid on the task" }, "to": { "type": "integer" }, "start": { "type": "string" } }), &["uid"]) },
         { "name": "milestones", "description": "Every milestone: forecast (or actual) against a baseline (default 0) and every saved baseline, the deadline and contract date it meets, float in working days, days moved since the last period close, the forecast at each period close, and a status (Achieved, Achieved late, Late, Slipping, At risk, On track, No baseline).", "inputSchema": obj(json!({ "baseline": { "type": "integer" } }), &[]) },
         { "name": "task_board", "description": "The Task Board: cards in columns with their lane, the critical edge, float in days, progress, steps, people, dates, late, blocked (and why) and what each task waits for (vendor documents, orders). kind: tasks (default), documents or orders; by: status (default) or a field key (res, responsible, a code…); lanes: a field key or phase; weeks: a look-ahead (0 = all). Only the keys given change what is shown, not the plan.", "inputSchema": obj(json!({ "kind": { "type": "string", "enum": ["tasks", "documents", "orders"] }, "by": { "type": "string" }, "lanes": { "type": "string" }, "weeks": { "type": "integer" } }), &[]) },
         { "name": "move_card", "description": "Move a card on the Task Board, as dragging it does. Tasks by status: todo (clears the actuals), doing (actual start on the date), done (actual finish), blocked (needs reason). Tasks by a field: the column's value. Documents: review (logs the next submission), resubmit or done (logs the return with the register's code), blocked. Orders: m1–m5 records the milestones up to that column on the date, blocked. One Undo step.", "inputSchema": obj(json!({ "kind": { "type": "string", "enum": ["tasks", "documents", "orders"] }, "id": { "type": "integer", "description": "Task uid, document id or order id (see task_board)" }, "to": { "type": "string", "description": "Column key" }, "date": { "type": "string" }, "reason": { "type": "string" } }), &["id", "to"]) },
@@ -418,7 +420,7 @@ pub fn changes(name: &str) -> bool {
         | "hide_rows_columns" | "set_sheet_tab" | "set_row_heights" | "sort_range" | "remove_duplicates" | "place_picture"
         | "set_page_setup" | "set_report" | "delete_report" | "set_chart" | "delete_chart"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
-        | "move_card" | "set_board" | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" | "log_submissions" | "log_returns" | "record_milestone" | "set_register_settings"
+        | "move_card" | "set_board" | "move_work" | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" | "log_submissions" | "log_returns" | "record_milestone" | "set_register_settings"
         | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
         | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
 }
@@ -1646,6 +1648,19 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             if done.is_empty() { return Err("These orders have every milestone recorded.".into()) }
             apply(doc, Op::Procurement { r: Box::new(r) })?;
             Ok(json!({ "recorded": done }))
+        }
+        "workload" => {
+            let c = Calc::new(&doc.p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            Ok(json!(crate::workload::workload(&c, if s(a, "unit") == Some("month") { "month" } else { "week" })))
+        }
+        "move_work" => {
+            let uid = a["uid"].as_u64().ok_or("uid is needed.")? as u32;
+            let i = doc.p.idx(uid).ok_or("No task with that uid.")?;
+            let from = a["from"].as_u64().map(|x| x as u32).or_else(|| (doc.p.tasks[i].res.len() == 1).then(|| doc.p.tasks[i].res[0].res)).unwrap_or(0);
+            let start = match s(a, "start") { Some(x) => parse::date_in(x, fmt)?.format("%Y-%m-%d").to_string(), None => String::new() };
+            apply(doc, Op::WorkMove { uid, from, to: a["to"].as_u64().unwrap_or(0) as u32, start })?;
+            Ok(json!({ "task": uid, "res": Calc::new(&doc.p, fmt, today).text(i, "res") }))
         }
         "milestones" => {
             let c = Calc::new(&doc.p, fmt, today);

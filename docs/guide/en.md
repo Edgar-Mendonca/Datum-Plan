@@ -407,6 +407,17 @@ Go through the look-ahead with your team every week: clear what is open, chase w
 
 Double-click a card to select the task in the Gantt chart (or open the register for a document or an order).
 
+### Workload
+
+**Workload** (sidebar) puts the people against the weeks (or months), grouped by trade. Each cell is the hours a person is booked against the hours they can work there (their calendar and maximum units): white when free, light to darker blue as it fills, red when over capacity. A trade's row adds up its people, and **Peak** is a person's highest share of capacity in any period.
+
+1. **Hours booked**, **% of capacity** or **Hours free**: what the cells show. **Weeks** or **Months**.
+2. **Only people over capacity** keeps just those who need help; the figures at the top count them and the hours booked and free.
+3. Open a person (▸) to see the tasks that make up their hours, week by week.
+4. **Drag a task onto another person's row**: the task goes to them, at the same units (added to theirs when they are on it already). **Drag it to a later week of the same person**: it starts no earlier than that week. Each move is one Undo step ([[Ctrl+Z]]).
+
+Double-click a task to show it in the Gantt chart. For the plan's own way of solving over-allocation, use **Resource › Level** with its preview.
+
 ### Manpower
 
 ![Manpower by trade.](img/manpower.png)

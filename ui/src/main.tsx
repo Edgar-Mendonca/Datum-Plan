@@ -24,6 +24,7 @@ import { Network, CalendarView, UsageView, ResourceSheet, ResourceGraph, TeamPla
 import { Dashboard, Reports, SCurves, Progress } from "./reports";
 import { BoardView } from "./board";
 import { MilestonesView } from "./milestones";
+import { WorkloadView } from "./workload";
 import { Sheets } from "./sheets";
 import { UpdateProgress, Relationships, ReportBuilder } from "./tools";
 import { Backstage, update, checkUpdate } from "./backstage";
@@ -42,7 +43,7 @@ import { ProcurementView } from "./procure";
 
 const SIDE: ([View, string, string] | "-")[] = [
   ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
-  ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["manpower", "team", "Manpower"], ["team", "team", "Team"], "-",
+  ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["workload", "load", "Workload"], ["manpower", "team", "Manpower"], ["team", "team", "Team"], "-",
   ["sheets", "table", "Sheets"], "-",
   ["update", "update", "Update"], ["board", "board", "Board"], ["milestones", "ms", "Milestones"], ["lookahead", "cal", "Look-ahead"], ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["builder", "builder", "Builder"], ["checks", "check", "Checks"], ["delay", "track", "Delay"], ["risks", "risk", "Risks"], ["simrisk", "ev", "Sched. Risk"], ["portfolio", "folder", "Portfolio"],
 ];
@@ -199,6 +200,7 @@ const App = () => {
               <Match when={view() === "portfolio"}><Portfolio /></Match>
               <Match when={view() === "board"}><BoardView /></Match>
               <Match when={view() === "milestones"}><MilestonesView /></Match>
+              <Match when={view() === "workload"}><WorkloadView /></Match>
               <Match when={view() === "contract"}><ContractView /></Match>
               <Match when={view() === "documents"}><DocumentsView /></Match>
               <Match when={view() === "procurement"}><ProcurementView /></Match>

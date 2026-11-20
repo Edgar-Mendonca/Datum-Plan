@@ -46,6 +46,8 @@ pub enum Op {
     /// Moves a card on the Task Board (see `board::move_card`): a task's actual dates or field, a
     /// document's next submission or return, an order's milestones, or a block with its reason.
     BoardMove { kind: String, id: u32, to: String, date: String, reason: String },
+    /// Moves a task's work from one person to another (`to`, 0 = keep) and/or to start no earlier than `start` (Workload view).
+    WorkMove { uid: u32, from: u32, to: u32, start: String },
     /// Takes the pool's resources (same names): rates, units, availability, calendars; `add` brings the others too.
     PoolTake { from: Vec<Resource>, cals: Vec<Calendar>, add: bool },
     /// Replaces a custom field definition (empty alias and formula with no values removes it).
@@ -834,6 +836,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         }
         // Blocks change only by moving cards (BoardMove), so settings sent from a stale copy cannot bring one back.
         Op::Board { b } => { let mut b = b; b.blocked = std::mem::take(&mut p.board.blocked); crate::board::clean(&mut b); p.board = b; }
+        Op::WorkMove { uid, from, to, start } => { for o in crate::workload::move_ops(p, uid, from, to, &start, fmt)? { exec(p, o, fmt)?; } }
         Op::BoardMove { kind, id, to, date, reason } => {
             let (ops, blocked) = crate::board::move_ops(p, &kind, id, &to, &date, &reason, fmt)?;
             for o in ops { exec(p, o, fmt)?; }

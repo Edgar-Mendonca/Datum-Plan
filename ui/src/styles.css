@@ -1527,3 +1527,23 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 .msdia { top: 5px; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg); background: var(--blue); border: 1px solid #fff; }
 .mslegend .msdia { position: static; display: inline-block; width: 9px; height: 9px; margin: 0 6px 0 2px; vertical-align: middle; }
 .msdia.done { background: var(--green, #1E7D46); } .msdia.late { background: var(--crit); }
+/* 0.9.36: the Workload view. */
+.wlwrap { overflow: auto; flex: 1; min-height: 0; border: 1px solid var(--line); background: var(--bg2); }
+.wl { border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.wl th { position: sticky; top: 0; z-index: 2; background: var(--panel2); font: 500 10px var(--mono); color: var(--text2); padding: 4px 6px; border-bottom: 1px solid var(--line3); white-space: nowrap; min-width: 46px; }
+.wl td { padding: 2px 6px; border-bottom: 1px solid var(--line2); text-align: center; white-space: nowrap; }
+.wl .wln { position: sticky; left: 0; z-index: 1; background: var(--bg2); text-align: left; min-width: 280px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+.wl th.wln { z-index: 3; background: var(--panel2); }
+.wltrade td { background: var(--panel2); font-weight: 600; } .wltrade .wln { background: var(--panel2); }
+.wlperson .wln { padding-left: 10px; } .wlperson.isover .wln { box-shadow: inset 3px 0 var(--crit); }
+.wltog { width: 18px; color: var(--muted); }
+.wltask { cursor: grab; color: var(--text2); } .wltask .wln { padding-left: 34px; font-size: 11.5px; }
+.wltask.crit .wln { box-shadow: inset 3px 0 var(--crit); }
+.wlgrip { color: var(--muted); margin-right: 6px; }
+.wt i { font-style: normal; display: inline-block; min-width: 24px; background: var(--pale); color: var(--blue); border-radius: 2px; }
+.wc { font: 11px var(--mono); }
+.wc.low { background: #EEF4FC; } .wc.half { background: #D6E6FA; } .wc.full { background: #A9CAF6; } .wc.over { background: #F8D4D4; color: #9B1C1C; font-weight: 700; }
+.wc.drop { outline: 2px solid var(--blue); outline-offset: -2px; }
+.wl td.late { color: var(--crit); font-weight: 700; }
+.wlkey .wc { display: inline-block; width: 16px; height: 10px; margin: 0 4px 0 10px; vertical-align: middle; }
+.page:has(.wlwrap) { overflow: hidden; }
