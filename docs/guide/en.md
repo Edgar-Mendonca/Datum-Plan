@@ -567,7 +567,7 @@ What a formula can read from the plan:
 
 | Write | What it is |
 | --- | --- |
-| `Tasks[Finish]` | One value per task. Columns include Name, WBS, Start, Finish, Duration, % Complete (0–100), Baseline Start, Baseline Finish, Cost, Work, Total Float, Critical, Late, Milestone, Summary, Resources, Status, Planned Value, Earned Value, and your custom fields. |
+| `Tasks[Finish]` | One value per task. Columns include Name, WBS (the outline number, such as 1.2.3), Activity ID, Start, Finish, Duration, % Complete (0–100), Baseline Start, Baseline Finish, Cost, Work, Total Float, Critical, Late, Milestone, Summary, Resources, Status, Planned Value, Earned Value, and your custom fields. |
 | `Resources[Country]` | One value per resource: Name, Type, Group, Initials, Max Units, Rate, Work (hours), Cost, Country, Email. |
 | `ProjectFinish` | Also ProjectName, ProjectStart, StatusDate, BaselineFinish, FinishVariance (working days), PercentComplete (0–100), PlannedPercent (0–100), TotalCost, PlannedValue, EarnedValue, ActualCost, SPI, CPI, TaskCount, TasksDone, TasksLate, CriticalCount, MilestoneCount. |
 

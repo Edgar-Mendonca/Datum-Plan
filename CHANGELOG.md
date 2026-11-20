@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.9.37 — 2026-11-20
+
+Hardening: a full audit of the calculations, with a test for every fault found (118 new tests). What was wrong, and is now right:
+
+**Scheduling**
+- A completed milestone took time; free float could exceed total float; finish-to-finish from the end lost float on the forward dates.
+- A summary's deadline did not limit its subtasks; a task with an actual start after the status date lost its work done.
+- A percentage lag from a summary used the wrong span; a critical milestone's late finish fell one working day late.
+- Changing the duration of a Fixed Work task, or the people on an effort-driven Fixed Duration task, did not rescale the work.
+
+**Progress and cost**
+- Rate tables: a rate change did not reach the cost; the latest dated rate now applies.
+- Split tasks booked work into their pause; level-of-effort work now spreads over its span.
+- Planned value left out fixed costs charged at the start; Resource Usage left out per-use and material costs; the actual cost curve now adds up to the actual cost.
+- An on-plan progress update finished a task a day late: % complete from dates, typed actual or remaining durations now rounds to the nearest (2 of 3 days is 67 %).
+- Summary planned % is weighted by duration; flag columns roll up as yes/no.
+
+**Analysis**
+- Check Schedule counted every open end as missing logic but one start and one finish; links to other plans now count as logic; leads and lags are shares of links.
+- Time-impact and risk delays on a task under way now add to the work left; risk cost moves only with work-resource hours.
+- A collapsed as-built schedule keeps a hold as a hold; Milestones: at risk means float at or under the warning.
+
+**Registers**
+- Own formula columns showed counts of days as dates; recurring obligations from a month end drifted; new rows could reuse a deleted row's number; an invoice kept a removed payment.
+- Procurement: a delivered order earned no manufacturing; Document Register: revisions Z → AA, 01 → 02, codes match ignoring case, negative offsets, submissions read in the order sent.
+
+**Files and Sheets**
+- XER: resource limits, group, initials and e-mail; must-start/finish-on constraints; finish constraints at the day end; text in Windows code pages (also CSV).
+- XML: finish constraints at the end of the day; initials, e-mail and overtime rate written. MPX and project XML percentages.
+- Sheets: `^` is left-associative; dates with times; elapsed durations; `Tasks[WBS]` is the outline number and `Tasks[Activity ID]` the activity code.
+
+**Many plans**
+- Scenarios: tasks added on both sides no longer share numbers; a merge keeps tasks the plan deleted deleted; resources matched by name; snapshots left out; built from the open tab with unsaved edits.
+- Links to a plan that cannot be scheduled keep their dates and are reported; pasting tasks into another plan keeps the people by name.
+- Subplans: % complete as the plan shows it; a copied project folder opens its own subplans; a subplan cannot take subplans or a second master; portfolio averages are weighted by work.
+
+**Window**
+- Print date ranges, today lines, register dates and fill series follow the computer's own day (not UTC); typed register dates follow Options › Date format.
+
 ## 0.9.36 — 2026-11-20
 
 The Workload view.

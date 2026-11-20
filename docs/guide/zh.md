@@ -567,7 +567,7 @@ S 曲线右上角的 **Format**（格式）设置计划中所有 S 曲线的外�
 
 | 写法 | 含义 |
 | --- | --- |
-| `Tasks[Finish]` | 每个任务一个值。列包括 Name（名称）、WBS、Start（开始）、Finish（完成）、Duration（工期）、% Complete（完成百分比，0–100）、Baseline Start / Baseline Finish（基准开始/完成）、Cost（费用）、Work（工时）、Total Float（总浮动时间）、Critical（关键）、Late（延误）、Milestone（里程碑）、Summary（摘要）、Resources（资源）、Status（状态）、Planned Value / Earned Value（计划值/挣值），以及自定义字段。 |
+| `Tasks[Finish]` | 每个任务一个值。列包括 Name（名称）、WBS（大纲编号，如 1.2.3）、Activity ID（作业代码）、Start（开始）、Finish（完成）、Duration（工期）、% Complete（完成百分比，0–100）、Baseline Start / Baseline Finish（基准开始/完成）、Cost（费用）、Work（工时）、Total Float（总浮动时间）、Critical（关键）、Late（延误）、Milestone（里程碑）、Summary（摘要）、Resources（资源）、Status（状态）、Planned Value / Earned Value（计划值/挣值），以及自定义字段。 |
 | `Resources[Country]` | 每个资源一个值：Name、Type（类型）、Group（组）、Initials（缩写）、Max Units（最大单位）、Rate（费率）、Work（工时，小时）、Cost、Country（国家）、Email。 |
 | `ProjectFinish` | 另有 ProjectName、ProjectStart、StatusDate（状态日期）、BaselineFinish、FinishVariance（完成偏差，工作日）、PercentComplete（0–100）、PlannedPercent（计划百分比，0–100）、TotalCost、PlannedValue、EarnedValue、ActualCost、SPI、CPI、TaskCount、TasksDone、TasksLate、CriticalCount、MilestoneCount。 |
 
