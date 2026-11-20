@@ -160,8 +160,13 @@ fn own_eval(c: &Calc, t: &Rows, cols: &[OwnCol]) -> Vec<Vec<String>> {
     let (a, b) = (run(0.0), run(1000.0));
     for k in 0..t.rows.len() {
         for (n, &(i, _)) in f.iter().enumerate() {
+            // A date: it moves with the dates it reads and is itself a date serial (a count of days such
+            // as [Review due]-TODAY() moves too, but is small); or it reads no date but is built from
+            // TODAY() or DATE() and lands in this century.
+            let made = f.iter().find(|x| x.0 == i).is_some_and(|x| { let u = x.1.formula.to_uppercase(); u.contains("TODAY(") || u.contains("DATE(") });
+            let serial = |x: f64| (36526.0..73051.0).contains(&x);
             out[k][i] = match (&a[k][n], &b[k][n]) {
-                (Value::Number(x), Value::Number(y)) if (y - x - 1000.0).abs() < 1e-6 => {
+                (Value::Number(x), Value::Number(y)) if serial(*x) && ((y - x - 1000.0).abs() < 1e-6 || ((y - x).abs() < 1e-6 && made)) => {
                     let d = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap_or_default() + chrono::Duration::days((x - EPOCH).floor() as i64);
                     d.format(&c.fmt).to_string()
                 }

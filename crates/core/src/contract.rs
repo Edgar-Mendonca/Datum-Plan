@@ -111,12 +111,12 @@ fn row(id: u32, due: Option<NaiveDate>, left: Option<i64>, status: impl Into<Str
 
 /// The next time an obligation is due: its first date, then every week, month or quarter after the last time it was done.
 pub fn next_due(o: &Obligation) -> Option<NaiveDate> {
-    let mut d = o.due?;
-    let step = |d: NaiveDate| match o.every.as_str() { "week" => d.checked_add_days(Days::new(7)), "month" => d.checked_add_months(Months::new(1)), "quarter" => d.checked_add_months(Months::new(3)), _ => None };
-    if o.every.is_empty() || !["week", "month", "quarter"].contains(&o.every.as_str()) { return if o.done.is_some() { None } else { Some(d) } }
-    let Some(done) = o.done else { return Some(d) };
-    for _ in 0..5000 { if d > done { return Some(d) } d = step(d)? }
-    None
+    let first = o.due?;
+    // Each time counted from the first date, so a month end stays a month end (31 Jan, 28 Feb, 31 Mar).
+    let nth = |n: u32| match o.every.as_str() { "week" => first.checked_add_days(Days::new(7 * u64::from(n))), "month" => first.checked_add_months(Months::new(n)), "quarter" => first.checked_add_months(Months::new(3 * n)), _ => None };
+    if o.every.is_empty() || !["week", "month", "quarter"].contains(&o.every.as_str()) { return if o.done.is_some() { None } else { Some(first) } }
+    let Some(done) = o.done else { return Some(first) };
+    (0..5000).filter_map(nth).find(|d| *d > done)
 }
 
 /// The finish of a task as a date: actual when it has one.
@@ -293,19 +293,19 @@ pub fn clean(k: &mut Contract) {
     num(&mut k.value);
     k.warn_days = k.warn_days.clamp(0, 3650);
     text(&mut k.number, 120);
-    let mut next = 1;
     let mut seen = std::collections::HashSet::new();
+    let mut next = k.dates.iter().map(|m| m.id).max().unwrap_or(0) + 1;
     for m in &mut k.dates {
-        if m.id == 0 || !seen.insert(m.id) { while seen.contains(&next) { next += 1 } m.id = next; seen.insert(next); }
+        if m.id == 0 || !seen.insert(m.id) { m.id = next; seen.insert(next); next += 1; }
         for v in [&mut m.value, &mut m.ld_rate, &mut m.ld_cap] { num(v) }
         m.grace = m.grace.clamp(0, 3650);
         text(&mut m.name, 200);
         text(&mut m.note, 2000);
     }
     let mut seen = std::collections::HashSet::new();
-    next = 1;
+    next = k.payments.iter().map(|x| x.id).max().unwrap_or(0) + 1;
     for x in &mut k.payments {
-        if x.id == 0 || !seen.insert(x.id) { while seen.contains(&next) { next += 1 } x.id = next; seen.insert(next); }
+        if x.id == 0 || !seen.insert(x.id) { x.id = next; seen.insert(next); next += 1; }
         for v in [&mut x.amount, &mut x.pct] { num(v) }
         x.terms = x.terms.clamp(0, 3650);
         text(&mut x.name, 200);
@@ -314,14 +314,18 @@ pub fn clean(k: &mut Contract) {
     k.invoice_terms = k.invoice_terms.clamp(0, 3650);
     fn ids<T>(v: &mut Vec<T>, id: impl Fn(&mut T) -> &mut u32) {
         v.truncate(2000);
+        // New rows (and repeats) take the next number after the highest, never a removed row's number.
         let mut seen = std::collections::HashSet::new();
-        let mut next = 1;
-        for x in v.iter_mut() { let i = id(x); if *i == 0 || !seen.insert(*i) { while seen.contains(&next) { next += 1 } *i = next; seen.insert(next); } }
+        let mut next = v.iter_mut().map(|x| *id(x)).max().unwrap_or(0) + 1;
+        for x in v.iter_mut() { let i = id(x); if *i == 0 || !seen.insert(*i) { *i = next; seen.insert(next); next += 1; } }
     }
     ids(&mut k.variations, |x| &mut x.id);
     ids(&mut k.notices, |x| &mut x.id);
     ids(&mut k.guarantees, |x| &mut x.id);
     ids(&mut k.invoices, |x| &mut x.id);
+    // An invoice whose payment milestone was removed bills none (a later payment must not take it over).
+    let pays: std::collections::HashSet<u32> = k.payments.iter().map(|x| x.id).collect();
+    for v in &mut k.invoices { if !pays.contains(&v.payment) { v.payment = 0 } }
     ids(&mut k.obligations, |x| &mut x.id);
     for v in &mut k.variations {
         for x in [&mut v.claimed, &mut v.approved] { num(x) }

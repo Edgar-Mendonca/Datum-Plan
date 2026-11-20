@@ -87,7 +87,7 @@ pub fn list(c: &Calc, base: u8, warn: i64) -> MsOut {
             if target.is_some_and(|d| when > d) { ("Achieved late", "warn") } else { ("Achieved", "ok") }
         } else if target.is_some_and(|d| forecast > d) || float_days.is_some_and(|f| f < 0) { ("Late", "bad") }
         else if moved.is_some_and(|m| m > 0) { ("Slipping", "warn") }
-        else if float_days.is_some_and(|f| f <= warn) && s.critical(p, i) { ("At risk", "warn") }
+        else if float_days.is_some_and(|f| f <= warn) { ("At risk", "warn") }
         else if bdate.is_none() && t.deadline.is_none() && contract_date.is_none() { ("No baseline", "") }
         else { ("On track", "ok") };
         match status { "Achieved" | "Achieved late" => out.achieved += 1, "Late" => out.late += 1, "At risk" => out.at_risk += 1, _ => {} }

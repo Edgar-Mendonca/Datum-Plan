@@ -189,12 +189,19 @@ pub struct Impact { pub key: &'static str, pub basis: String, pub fidelity: Opti
 pub fn frag_name(e: &DelayEvent, f: &FragTask) -> String { format!("{}: {}", e.name, f.name) }
 
 /// Adds an event's effect to a plan; returns what could not be applied.
+/// Adds `m` working minutes to the work a task has left: under way, the duration grows so that the
+/// part still to do (duration × (1 − % complete), as the schedule plans it) grows by `m`.
+pub fn extend_left(t: &mut Task, m: i64) {
+    let left = 100 - i64::from(t.pct.min(99));
+    t.dur = (t.dur + (m * 100 + left - 1) / left).max(0);
+}
+
 fn add(q: &mut Project, e: &DelayEvent) -> Vec<String> {
     let mut notes = vec![];
     for &(uid, m) in &e.extend {
         match q.idx(uid) {
             Some(i) if q.tasks[i].act_finish.is_some() => notes.push(format!("\u{201c}{}\u{201d} is finished; its extension was not added.", q.tasks[i].name)),
-            Some(i) => q.tasks[i].dur += m,
+            Some(i) => extend_left(&mut q.tasks[i], m),
             None => notes.push(format!("Task #{uid} is not in this plan.")),
         }
     }
@@ -311,11 +318,16 @@ fn as_built(c: &Calc) -> Project {
         if t.act_start.is_some() { t.dur = cal.between(a, b) }
         // Only the driving predecessor (the one that finished last) keeps the gap that happened, so
         // taking time out of any path that drove the task moves it.
+        // A hold (an event that kept the task from starting before a date) stays a hold, so taking the
+        // event out frees the task; only the gap after the hold date is kept as a lag.
+        let hold = p.delays.iter().filter(|e| e.on).flat_map(|e| e.hold.iter()).filter(|h| h.0 == t.uid).map(|h| h.1).max();
+        let from = |pf: i64| hold.map_or(pf, |d| pf.max(crate::cal::at(d)));
         let drv = t.preds.iter().filter(|l| l.kind == LinkType::FS && !l.pct && !l.elapsed).filter_map(|l| es.get(&l.pred).map(|x| (x.1, l.pred))).max();
-        if let Some((pf, u)) = drv.filter(|(pf, _)| a > *pf) {
-            if let Some(l) = t.preds.iter_mut().find(|l| l.pred == u && l.kind == LinkType::FS) { l.lag = l.lag.max(cal.between(pf, a)) }
+        if let Some((pf, u)) = drv.filter(|(pf, _)| a > from(*pf)) {
+            if let Some(l) = t.preds.iter_mut().find(|l| l.pred == u && l.kind == LinkType::FS) { l.lag = l.lag.max(cal.between(from(pf), a)) }
         }
-        if t.preds.is_empty() && t.act_start.is_some() { (t.constraint, t.cdate) = (Constraint::SNET, Some(date_of(a))) }
+        if let Some(d) = hold.filter(|_| t.act_start.is_some()) { (t.constraint, t.cdate) = (Constraint::SNET, Some(d)) }
+        else if t.preds.is_empty() && t.act_start.is_some() { (t.constraint, t.cdate) = (Constraint::SNET, Some(date_of(a))) }
         (t.pct, t.phys, t.act_start, t.act_finish) = (0, 0, None, None);
     }
     q.status = None;

@@ -113,7 +113,7 @@ pub fn status(c: &Calc) -> ProcOut {
         let k = (0..5).find(|&i| a[i].is_none());
         let next_date = k.and_then(|i| pl[i]);
         let mfg_now = if a[3].is_some() || a[4].is_some() { 1.0 } else { (it.mfg_pct.clamp(0.0, 100.0)) / 100.0 };
-        let earned = share(&w, &a, today, |_| if a[2].is_some() { mfg_now } else { 0.0 });
+        let earned = share(&w, &a, today, |_| if a[2].is_some() || a[3].is_some() || a[4].is_some() { mfg_now } else { 0.0 });
         let planned = share(&w, &pl, today, |e| line(pl[2], pl[3], e));
         let weight = if !counted { 0.0 } else { match r.weighting.as_str() { "equal" => 1.0, "manual" => it.manual_w.max(0.0), _ => if values > 0.0 { it.value.max(0.0) } else { 1.0 } } };
         let mut row = ItemOut {
@@ -147,7 +147,7 @@ pub fn status(c: &Calc) -> ProcOut {
     let mfg = |x: &ItemOut, it: &PItem| -> Box<dyn Fn(NaiveDate) -> f64> {
         let (s, end) = (x.actual[2], x.actual[3].or(x.actual[4]));
         let pct = if end.is_some() { 1.0 } else { it.mfg_pct.clamp(0.0, 100.0) / 100.0 };
-        Box::new(move |e: NaiveDate| match (s, end) { (Some(s), _) if e < s => 0.0, (Some(s), Some(f)) => line(Some(s), Some(f), e), (Some(s), None) => if today > s { pct * line(Some(s), Some(today), e) } else { pct }, _ => 0.0 })
+        Box::new(move |e: NaiveDate| match (s, end) { (None, Some(f)) => if e >= f { 1.0 } else { 0.0 }, (Some(s), _) if e < s => 0.0, (Some(s), Some(f)) => line(Some(s), Some(f), e), (Some(s), None) => if today > s { pct * line(Some(s), Some(today), e) } else { pct }, _ => 0.0 })
     };
     let curve = |end_of: &dyn Fn(NaiveDate) -> NaiveDate| -> Vec<Point> {
         let all: Vec<NaiveDate> = o.items.iter().flat_map(|x| x.planned.iter().chain(x.actual.iter()).flatten().copied()).collect();

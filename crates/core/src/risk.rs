@@ -94,7 +94,16 @@ fn pct(sorted: &[i64], q: f64) -> i64 { sorted[((sorted.len() - 1) as f64 * q).r
 pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     let base = schedule(p)?;
     let n = p.tasks.len();
-    let cost0 = load::compute(p, &base).cost;
+    let loads = load::compute(p, &base);
+    let cost0 = loads.cost.clone();
+    // Each task's cost of work-resource hours (the part that grows with the duration).
+    let mut vary = vec![0.0; n];
+    for (&(k, i, d), &m) in &loads.assign_daily {
+        let r = &p.resources[k];
+        if r.kind != ResKind::Work { continue }
+        let table = p.tasks[i].res.iter().find(|a| p.res_idx(a.res) == Some(k)).map_or(0, |a| a.table);
+        vary[i] += m / 60.0 * r.rate_on(table, crate::cal::date_of(d * DAY)).0;
+    }
     let leaves: Vec<usize> = (0..n).filter(|&i| !base.summary[i] && !base.off[i] && p.tasks[i].act_finish.is_none()).collect();
     let range = |i: usize| {
         let t = &p.tasks[i];
@@ -140,11 +149,14 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
             let (a, m, b) = range(i);
             let u = match group[k] { Some(g) => phi(rho.sqrt() * shared[g] + (1.0 - rho).sqrt() * normal(&mut rng)), None => rng.f() };
             let x = if uniform { a + (b - a) * u } else { tri(u, a, m, b) };
-            let d = ((x.round() as i64) + add[i]).max(0);
+            // A risk's delay adds to the work left (as the schedule plans a task under way).
+            let left = 100 - i64::from(p.tasks[i].pct.min(99));
+            let d = ((x.round() as i64) + (add[i] * 100 + left - 1) / left).max(0);
             q.tasks[i].dur = d;
             drawn.push(d as f64);
-            let fixed = p.tasks[i].fixed_cost;
-            cost += fixed + (cost0[i] - fixed) * if m > 0.0 { d as f64 / m } else { 1.0 };
+            // Only the work of work resources (hours × rate) moves with the duration; fixed costs,
+            // materials, lump sums and per-use costs stay as they are.
+            cost += (cost0[i] - vary[i]) + vary[i] * if m > 0.0 { d as f64 / m } else { 1.0 };
         }
         let Ok(s) = schedule(&q) else { failed += 1; continue };
         // Only runs kept count, so a risk's rate shares the runs the other results use.

@@ -133,7 +133,7 @@ pub fn status(c: &Calc) -> RegOut {
         };
         // Planned: the first issue from the P date (or a date of its own), then step by step.
         let mut pl: Vec<Option<NaiveDate>> = vec![None; n];
-        if let Some(f) = d.first.or_else(|| d.offset.and_then(|k| p_date.checked_add_days(Days::new((k.max(0.0) * unit).round() as u64)))) {
+        if let Some(f) = d.first.or_else(|| d.offset.and_then(|k| p_date.checked_add_signed(chrono::Duration::days((k * unit).round() as i64)))) {
             for i in 0..n { pl[i] = Some(if i == 0 { f } else { gap(i, pl[i - 1].unwrap_or(f)) }) }
         }
         // Forecast: actual, else the chain from the last thing done (a return waits on the issue with the client), never before today.
@@ -191,7 +191,7 @@ pub fn status(c: &Calc) -> RegOut {
             row.need = Some(date_of(c.s.es[i]));
             row.late_for_task = need_fc.zip(row.need).is_some_and(|(x, n)| x > n);
         }
-        o.client_late += row.client_late;
+        if counted { o.client_late += row.client_late; }
         let w = if d.progress && !d.recurring && counted { d.weight.max(0.0) } else { 0.0 };
         wsum += w; esum += w * earned; psum += w * planned;
         eff.push((w, cls));
@@ -235,23 +235,26 @@ fn curve(classes: &[DocClass], docs: &[DocRow], eff: &[(f64, usize)], wsum: f64,
 /// (A → B, 0 → 1, B1 → B2) and the purpose its cycle needs next (the same again while it is with
 /// the client or sent back, else the first issue step of its class not yet sent), sent `today`.
 pub fn next_sub(r: &DocRegister, d: &VDoc, today: NaiveDate) -> Submission {
-    let mine: Vec<&Submission> = r.log.iter().filter(|s| s.doc == d.id).collect();
+    // In the order they were sent (as the status reads them), the last one deciding what comes next.
+    let mut mine: Vec<&Submission> = r.log.iter().filter(|s| s.doc == d.id).collect();
+    mine.sort_by_key(|s| (s.sent, s.id));
     let last = mine.last();
     let rev = match last.map(|s| s.rev.trim()) {
         None => "A".to_string(),
-        Some(v) if v.len() == 1 && v.as_bytes()[0].is_ascii_uppercase() && v != "Z" => ((v.as_bytes()[0] + 1) as char).to_string(),
-        Some(v) if !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()) => v.parse::<u64>().map_or(v.to_string(), |n| (n + 1).to_string()),
+        // Letters count on like columns (A, B … Z, AA, AB …), in the case typed; numbers keep their width (01 → 02).
+        Some(v) if !v.is_empty() && v.chars().all(|c| c.is_ascii_alphabetic()) => next_letters(v),
+        Some(v) if !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()) => v.parse::<u64>().map_or(v.to_string(), |n| format!("{:0w$}", n + 1, w = v.len())),
         Some(v) => {
             let k = v.trim_end_matches(|c: char| c.is_ascii_digit()).len();
-            match (v[..k].chars().all(|c| c.is_ascii_uppercase()) && k > 0, v[k..].parse::<u64>()) { (true, Ok(n)) => format!("{}{}", &v[..k], n + 1), _ => v.to_string() }
+            match (v[..k].chars().all(|c| c.is_ascii_alphabetic()) && k > 0, v[k..].parse::<u64>()) { (true, Ok(n)) => format!("{}{:0w$}", &v[..k], n + 1, w = v.len() - k), _ => format!("{v}-1") }
         }
     };
     let purposes = |s: &DocStep| s.purposes.split([',', ';', '/']).map(|x| x.trim().to_uppercase()).filter(|x| !x.is_empty()).collect::<Vec<_>>();
     let classes = r.classes();
-    let steps = classes.get((d.class.max(1) as usize) - 1).map(|c| c.steps.clone()).unwrap_or_default();
+    let steps = classes.get(((d.class.max(1) as usize) - 1).min(classes.len().saturating_sub(1))).map(|c| c.steps.clone()).unwrap_or_default();
     let sent_for = |s: &DocStep| mine.iter().any(|x| x.sent.is_some() && purposes(s).contains(&x.purpose.trim().to_uppercase()));
     let next_issue = steps.iter().find(|s| !s.returned && !sent_for(s));
-    let again = last.is_some_and(|l| l.returned.is_none() || r.codes.iter().any(|c| c.code == l.code && c.resubmit));
+    let again = last.is_some_and(|l| l.returned.is_none() || r.codes.iter().any(|c| c.code.trim().eq_ignore_ascii_case(l.code.trim()) && c.resubmit));
     let purpose = match (last, next_issue) {
         (Some(l), _) if again => l.purpose.clone(),
         (_, Some(s)) => s.purposes.split([',', ';', '/']).map(str::trim).find(|x| !x.is_empty()).map(String::from).unwrap_or_else(|| r.flow.first.clone()),
@@ -259,6 +262,20 @@ pub fn next_sub(r: &DocRegister, d: &VDoc, today: NaiveDate) -> Submission {
         (None, None) => r.flow.first.clone(),
     };
     Submission { id: r.log.iter().map(|s| s.id).max().unwrap_or(0) + 1, doc: d.id, rev, purpose, sent: Some(today), ..Default::default() }
+}
+
+/// The revision after `v` in letters: A → B, Z → AA, AZ → BA (the case kept).
+fn next_letters(v: &str) -> String {
+    let lower = v.chars().all(|c| c.is_ascii_lowercase());
+    let mut b: Vec<u8> = v.to_ascii_uppercase().into_bytes();
+    let mut i = b.len();
+    loop {
+        if i == 0 { b.insert(0, b'A'); break }
+        i -= 1;
+        if b[i] == b'Z' { b[i] = b'A' } else { b[i] += 1; break }
+    }
+    let s = String::from_utf8(b).unwrap_or_default();
+    if lower { s.to_lowercase() } else { s }
 }
 
 /// The transmittal number after the highest in the log (TR-0009 → TR-0010), or TR-0001.

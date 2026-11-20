@@ -51,17 +51,26 @@ pub fn run(c: &Calc, lim: &Limits) -> Vec<Check> {
         has_succ[e.p] = true;
         has_pred[e.s] = true;
     }
+    // A link to a task in another plan is logic too.
+    for (i, t) in p.tasks.iter().enumerate() { if !t.ext.is_empty() { has_pred[i] = true } }
     let links: Vec<&crate::sched::Edge> = s.edges.iter().filter(|e| c.pct[e.s] < 100).collect();
     let uid = |v: &[usize]| v.iter().map(|&i| p.tasks[i].uid).collect::<Vec<u32>>();
     let mut out = vec![];
-    let first = s.start;
-    let last = s.finish;
-    let ends = |i: usize| (!has_pred[i] && s.es[i] > first) || (!has_succ[i] && s.ef[i] < last);
-    ratio(&mut out, p, "logic", "1. Missing logic", "Incomplete tasks without a predecessor or a successor (the project start and finish excepted).", &open,
+    // One open start and one open finish are the project's own (the first task with no predecessor
+    // that starts with the project, the last with no successor that finishes it); every other open end counts.
+    let start_ok = all.iter().copied().find(|&i| !has_pred[i] && s.es[i] <= s.start);
+    let finish_ok = all.iter().copied().rev().find(|&i| !has_succ[i] && s.ef[i] >= s.finish);
+    let ends = |i: usize| (!has_pred[i] && Some(i) != start_ok) || (!has_succ[i] && Some(i) != finish_ok);
+    ratio(&mut out, p, "logic", "1. Missing logic", "Incomplete tasks without a predecessor or a successor (one project start and one finish excepted).", &open,
         open.iter().copied().filter(|&i| ends(i)).collect(), lim.pct);
-    let lead_tasks: Vec<usize> = links.iter().filter(|e| e.lag < 0).map(|e| e.s).collect();
-    ratio(&mut out, p, "leads", "2. Leads", "Links with a negative lag. None are allowed.", &open, dedup(lead_tasks), 0.0);
-    ratio(&mut out, p, "lags", "3. Lags", "Links with a positive lag.", &open, dedup(links.iter().filter(|e| e.lag > 0).map(|e| e.s).collect()), lim.pct);
+    // Leads and lags are shares of the links (not of the tasks); the tasks they lead to are highlighted.
+    let share = |out: &mut Vec<Check>, key: &'static str, name: &'static str, about: &'static str, f: &dyn Fn(&&crate::sched::Edge) -> bool, limit: f64| {
+        let bad: Vec<&&crate::sched::Edge> = links.iter().filter(|e| f(e)).collect();
+        let value = if links.is_empty() { 0.0 } else { bad.len() as f64 * 100.0 / links.len() as f64 };
+        out.push(Check { key, name, about, count: bad.len(), total: links.len(), value, limit: format!("≤ {limit}%"), pass: value <= limit + 1e-9, uids: uid(&dedup(bad.iter().map(|e| e.s).collect())), lim: limit });
+    };
+    share(&mut out, "leads", "2. Leads", "Links with a negative lag, as a share of all links. None are allowed.", &|e| e.lag < 0, 0.0);
+    share(&mut out, "lags", "3. Lags", "Links with a positive lag, as a share of all links.", &|e| e.lag > 0, lim.pct);
     let fs = links.iter().filter(|e| e.kind == LinkType::FS).count();
     let non_fs = dedup(links.iter().filter(|e| e.kind != LinkType::FS).map(|e| e.s).collect());
     let v = if links.is_empty() { 100.0 } else { fs as f64 * 100.0 / links.len() as f64 };
