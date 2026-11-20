@@ -477,6 +477,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("…Turn on switches the link on and the status bar says the AI Link is on", (await p.evaluate(() => window.__calls.some(c => c[0] === "ai_link" && c[1]?.on === true))) && !!(await p.$(".aion")));
   await p.click(".dlg .ailink-step button:text-is('Add to Claude Desktop')"); await p.waitForTimeout(300);
   check("…Add to Claude makes the extension and says where it is when Claude did not open it (0.9.3)", (await p.evaluate(() => window.__calls.some(c => c[0] === "ai_add_to_claude"))) && (await p.$$eval(".dlg .ailink-step", s => s[1].textContent)).includes("Datum Plan.mcpb"));
+  { const code = (await p.textContent(".dlg .ailink-code")) ?? "";
+    check("…Claude Code shows two commands to copy: the plan open here (--mcp) and plan files without the window (--mcp-file) (0.9.31)", code.includes('claude mcp add --scope user datum-plan -- "C:/Apps/Datum Plan/Datum Plan.exe" --mcp') && code.includes("datum-plan-files") && code.includes("--mcp-file") && (await p.$$(".dlg .ailink-code button:text-is('Copy')")).length === 2); }
   await p.click(".dlg .ailink-more summary"); await p.click(".dlg .ailink-more button:text-is('Write settings')"); await p.waitForTimeout(300);
   check("…the settings file is still there as the other way", await p.evaluate(() => window.__calls.some(c => c[0] === "ai_setup_claude")));
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);

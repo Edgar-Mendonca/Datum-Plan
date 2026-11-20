@@ -3,7 +3,7 @@
 //! tools to AI assistants over the Model Context Protocol (JSON-RPC on stdin/stdout).
 use datum_core::{doc::Doc, fields::Calc, io, ops, progress, risk, templates, Project};
 use serde_json::{json, Value};
-use std::{io::{BufRead, Write}, path::Path};
+use std::path::Path;
 
 const HELP: &str = "datum-cli: Datum Plan on the command line
 
@@ -17,7 +17,8 @@ const HELP: &str = "datum-cli: Datum Plan on the command line
   datum-cli lookahead FILE [--weeks N]    the next weeks' work and open constraints
   datum-cli new NAME START [TEMPLATE]     start a plan (START like 2026-11-02; templates: see `datum-cli templates`)
   datum-cli templates                     the plan templates
-  datum-cli mcp                           serve the tools above to an AI assistant (Model Context Protocol, stdio)
+  datum-cli mcp [FILE]                    serve every plan tool to an AI assistant (Model Context Protocol, stdio),
+                                          e.g. claude mcp add datum-plan -- datum-cli mcp plan.dplan
 
 FILE is a .dplan, Project XML or XER file. Nothing is saved unless you say --save or export.";
 
@@ -85,7 +86,7 @@ fn run(args: &[String]) -> Result<String, String> {
             save(&mut d, &out)?;
             Ok(format!("Saved {out}"))
         }
-        Some("mcp") => { mcp(std::io::stdin().lock(), std::io::stdout().lock()); Ok(String::new()) }
+        Some("mcp") => { datum_core::mcpfile::serve(std::io::stdin().lock(), std::io::stdout().lock(), args.get(1).map(String::as_str), today()); Ok(String::new()) }
         Some(x) => Err(format!("Unknown command {x}.\n\n{HELP}")),
     }
 }
@@ -150,88 +151,6 @@ fn sim(p: &Project, runs: u32) -> Result<Value, String> {
         "cost_p50": r.cost_p50, "cost_p80": r.cost_p80, "drivers": r.drivers.iter().map(|x| json!({"task": x.name, "correlation": (x.value * 100.0).round() / 100.0})).collect::<Vec<_>>(), "notes": r.notes }))
 }
 
-// ---------- MCP (Model Context Protocol) over stdio ----------
-
-fn tools() -> Value {
-    let obj = |props: Value, req: &[&str]| json!({ "type": "object", "properties": props, "required": req });
-    json!([
-        { "name": "open_plan", "description": "Open a plan file (.dplan, Project XML or XER) to work on. Returns its facts.", "inputSchema": obj(json!({ "path": { "type": "string" } }), &["path"]) },
-        { "name": "new_plan", "description": "Start a new plan (optionally from a template: see list_templates).", "inputSchema": obj(json!({ "name": { "type": "string" }, "start": { "type": "string", "description": "YYYY-MM-DD" }, "template": { "type": "string" } }), &["name", "start"]) },
-        { "name": "list_templates", "description": "The plan templates.", "inputSchema": obj(json!({}), &[]) },
-        { "name": "plan_info", "description": "Facts about the open plan: dates, tasks, progress, cost, critical tasks.", "inputSchema": obj(json!({}), &[]) },
-        { "name": "get_schedule", "description": "Every task with uid, dates, links, resources, progress, float and whether it is critical.", "inputSchema": obj(json!({}), &[]) },
-        { "name": "list_operations", "description": "The named operations that change a plan, each with an example.", "inputSchema": obj(json!({}), &[]) },
-        { "name": "apply_operation", "description": "Change the open plan with one named operation (see list_operations), e.g. {\"Set\":{\"uid\":2,\"field\":\"dur\",\"value\":\"4d\"}}. A failed operation changes nothing.", "inputSchema": obj(json!({ "operation": { "type": "object" } }), &["operation"]) },
-        { "name": "undo", "description": "Undo the last change.", "inputSchema": obj(json!({}), &[]) },
-        { "name": "schedule_risk", "description": "Monte Carlo schedule risk: P50, P80 and P90 finish, and the tasks that drive it.", "inputSchema": obj(json!({ "runs": { "type": "integer" } }), &[]) },
-        { "name": "lookahead", "description": "The work in the next weeks from the status date, with open constraints.", "inputSchema": obj(json!({ "weeks": { "type": "integer" } }), &[]) },
-        { "name": "save_plan", "description": "Save the plan: .dplan, or export as .xml .xer .csv .xlsx .json .html .ics .mpx .pmxml (by extension).", "inputSchema": obj(json!({ "path": { "type": "string" } }), &["path"]) },
-    ])
-}
-
-fn call(doc: &mut Option<Doc>, name: &str, a: &Value) -> Result<Value, String> {
-    let s = |k: &str| a[k].as_str().map(String::from);
-    let need = |d: &Option<Doc>| d.is_some().then_some(()).ok_or_else(|| "Open or start a plan first (open_plan or new_plan).".to_string());
-    match name {
-        "open_plan" => { let p = load(&s("path").ok_or("path is needed")?)?; let v = info(&p)?; *doc = Some(Doc::new(p)); Ok(v) }
-        "new_plan" => { let p = new_plan(&s("name").ok_or("name is needed")?, &s("start").ok_or("start is needed")?, s("template").as_deref())?; let v = info(&p)?; *doc = Some(Doc::new(p)); Ok(v) }
-        "list_templates" => Ok(json!(templates::TEMPLATES.iter().map(|t| json!({"id": t.id, "name": t.name, "about": t.desc})).collect::<Vec<_>>())),
-        "list_operations" => Ok(json!(ops::catalog())),
-        _ => {
-            need(doc)?;
-            let d = doc.as_mut().ok_or("no plan")?;
-            match name {
-                "plan_info" => info(&d.p),
-                "get_schedule" => Ok(json!(rows(&d.p)?)),
-                "apply_operation" => {
-                    let op = serde_json::from_value(a["operation"].clone()).map_err(|e| format!("Not an operation ({e}). See list_operations."))?;
-                    d.apply(op, FMT)?;
-                    info(&d.p)
-                }
-                "undo" => { d.undo(); info(&d.p) }
-                "schedule_risk" => sim(&d.p, a["runs"].as_u64().unwrap_or(1000).min(10_000) as u32),
-                "lookahead" => Ok(json!(progress::lookahead(&Calc::new(&d.p, FMT, today()), a["weeks"].as_u64().unwrap_or(3).min(12) as u32))),
-                "save_plan" => { let out = s("path").ok_or("path is needed")?; save(d, &out)?; Ok(json!({ "saved": out })) }
-                x => Err(format!("Unknown tool {x}.")),
-            }
-        }
-    }
-}
-
-/// One JSON-RPC message per line in, one per line out.
-fn mcp(input: impl BufRead, mut out: impl Write) {
-    let mut doc: Option<Doc> = None;
-    for line in input.lines() {
-        let Ok(line) = line else { break };
-        if line.trim().is_empty() { continue }
-        let msg: Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(e) => { let _ = writeln!(out, "{}", json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": format!("Parse error: {e}")}})); let _ = out.flush(); continue }
-        };
-        let Some(id) = msg.get("id").cloned() else { continue }; // a notification: no answer
-        let p = &msg["params"];
-        let result = match msg["method"].as_str().unwrap_or("") {
-            "initialize" => Ok(json!({ "protocolVersion": p["protocolVersion"].as_str().unwrap_or("2025-06-18"), "capabilities": { "tools": {} },
-                "serverInfo": { "name": "datum-plan", "version": env!("CARGO_PKG_VERSION") },
-                "instructions": "Datum Plan schedules projects. Open or start a plan, read it with get_schedule, change it only with apply_operation (see list_operations; tasks are named by uid), and save it with save_plan. Nothing is written to disk unless save_plan is called." })),
-            "ping" => Ok(json!({})),
-            "tools/list" => Ok(json!({ "tools": tools() })),
-            "tools/call" => {
-                let name = p["name"].as_str().unwrap_or("");
-                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| call(&mut doc, name, &p["arguments"]))).unwrap_or_else(|_| Err("Internal error; the plan is unchanged.".into()));
-                Ok(match r {
-                    Ok(v) => json!({ "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }], "isError": false }),
-                    Err(e) => json!({ "content": [{ "type": "text", "text": e }], "isError": true }),
-                })
-            }
-            m => Err(json!({ "code": -32601, "message": format!("Method not found: {m}") })),
-        };
-        let reply = match result { Ok(r) => json!({"jsonrpc": "2.0", "id": id, "result": r}), Err(e) => json!({"jsonrpc": "2.0", "id": id, "error": e}) };
-        let _ = writeln!(out, "{reply}");
-        let _ = out.flush();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,7 +158,7 @@ mod tests {
     fn session(lines: &[Value]) -> Vec<Value> {
         let input: String = lines.iter().map(|l| l.to_string() + "\n").collect::<String>() + "not json at all\n";
         let mut out = vec![];
-        mcp(input.as_bytes(), &mut out);
+        datum_core::mcpfile::serve(input.as_bytes(), &mut out, None, today());
         String::from_utf8_lossy(&out).lines().map(|l| serde_json::from_str(l).unwrap_or(Value::Null)).collect()
     }
     fn tool(id: u64, name: &str, args: Value) -> Value { json!({"jsonrpc": "2.0", "id": id, "method": "tools/call", "params": {"name": name, "arguments": args}}) }
@@ -264,11 +183,11 @@ mod tests {
         ]);
         assert_eq!(r[0]["result"]["serverInfo"]["name"], "datum-plan");
         assert_eq!(r.len(), 11, "the notification gets no answer");
-        assert!(r[1]["result"]["tools"].as_array().is_some_and(|t| t.len() == 11));
+        assert!(r[1]["result"]["tools"].as_array().is_some_and(|t| t.len() > 100));
         assert_eq!(r[2]["result"]["isError"], true);
         assert_eq!(r.iter().find(|x| x["id"] == 4).map(|x| x["result"]["isError"].clone()), Some(json!(false)));
         let facts: Value = serde_json::from_str(r[5]["result"]["content"][0]["text"].as_str().unwrap_or("")).unwrap_or_default();
-        assert_eq!((facts["tasks"].as_u64(), facts["finish"].as_str(), facts["work"].as_str()), (Some(2), Some("2026-11-11"), Some("0 hrs")));
+        assert_eq!((facts["tasks"].as_u64(), facts["finish"].as_str()), (Some(2), Some("2026-11-11")));
         assert_eq!(r[6]["result"]["isError"], true);
         assert_eq!(r[7]["result"]["isError"], false);
         assert!(Doc::open(Path::new(&path)).is_ok_and(|d| d.p.tasks.len() == 2));

@@ -74,7 +74,7 @@ The assistant reads before it changes, keeps to the plan's rules (a locked basel
 
 </details>
 
-The link is a standard MCP server: other AI apps that run local MCP tools may work with it too (the command is in the AI Link dialog). `datum-cli mcp` also works on plan files without the window.
+The link is a standard MCP server: other AI apps that run local MCP tools may work with it too (the command is in the AI Link dialog). `Datum Plan.exe --mcp-file` and `datum-cli mcp` serve every plan tool on plan files without the window (for Claude Code: the commands are in the AI Link dialog).
 
 ## Everything else, in one window
 
@@ -156,7 +156,7 @@ datum-cli schedule plan.xer --csv             # every task with its dates and fl
 datum-cli apply plan.dplan --op '{"Set":{"uid":2,"field":"dur","value":"4d"}}' --save new.dplan
 datum-cli export plan.dplan plan.xlsx         # any export format
 datum-cli risk plan.dplan --runs 2000         # P50, P80, P90 finish
-datum-cli mcp                                 # an MCP server that works on plan files
+datum-cli mcp [FILE]                          # an MCP server with every plan tool, on plan files
 ```
 
 ## Build from source

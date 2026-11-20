@@ -126,6 +126,8 @@ export const aiLink = () => openDialog(() => {
   const [added, setAdded] = createSignal<{ file: string; opened: boolean } | null>(null);
   const add = async () => { setBusy(true); const x = await call<{ file: string; opened: boolean }>("ai_add_to_claude"); setBusy(false); if (x) { setAdded(x); toast(x.opened ? "Claude Desktop is asking to install Datum Plan: click Install." : "Datum Plan.mcpb is in Downloads: drag it onto Claude Desktop › Settings › Extensions and click Install.", true); } };
   const setup = async () => { const f = await call<string>("ai_setup_claude"); if (f) { toast(`Claude Desktop knows Datum Plan now (${f}). Restart Claude Desktop once.`, true); load(); } };
+  const live = (x: Info) => `claude mcp add --scope user datum-plan -- "${x.exe}" --mcp`;
+  const files = (x: Info) => `claude mcp add --scope user datum-plan-files -- "${x.exe}" --mcp-file`;
   const copy = (t: string, what: string) => navigator.clipboard?.writeText(t).then(() => toast(`${what} copied.`, true));
   load();
   return (
@@ -145,16 +147,21 @@ export const aiLink = () => openDialog(() => {
           <div class="ailink-step">
             <b>3</b><div><div class="t">Ask</div><div class="muted">In Claude Desktop, check Settings › Extensions shows Datum Plan switched on, then start a new chat: <i>“What plan is open in Datum Plan, and what is its finish date?”</i></div></div>
           </div>
+          <div class="ailink-code">
+            <div class="t">Claude Code</div>
+            <div class="muted">Run one of these once in a terminal; then ask Claude Code about your plan.</div>
+            <div class="row"><div><b>The plan open here</b> <span class="muted">(the AI Link above on): you see each change at once.</span></div>
+              <pre>{live(x())}</pre><button class="btn sm" onClick={() => copy(live(x()), "The command")}>Copy</button></div>
+            <div class="row"><div><b>Plan files, without this window</b> <span class="muted">(every plan tool; .dplan, Project XML or XER; nothing is saved unless asked).</span></div>
+              <pre>{files(x())}</pre><button class="btn sm" onClick={() => copy(files(x()), "The command")}>Copy</button></div>
+          </div>
           <details class="ailink-more">
-            <summary>Other ways: Claude's settings file, Claude Code, or another AI app</summary>
+            <summary>Other ways: Claude's settings file, or another AI app</summary>
             <p class="muted">Write Datum Plan into Claude Desktop's settings file{x().claude_config ? ` (${x().claude_config})` : ""}, with a backup; close Claude Desktop first, then open it again: <button class="btn sm" onClick={setup}>{x().claude_set ? "Write again" : "Write settings"}</button></p>
             <p class="muted">Or by hand: add this to {x().claude_config ?? "claude_desktop_config.json"} (Settings › Developer › Edit Config):</p>
             <pre>{x().snippet}</pre>
             <button class="btn sm" onClick={() => copy(x().snippet, "The settings text")}>Copy</button>
-            <p class="muted">Claude Code (in a terminal):</p>
-            <pre>{`claude mcp add datum-plan -- "${x().exe}" --mcp`}</pre>
-            <button class="btn sm" onClick={() => copy(`claude mcp add datum-plan -- "${x().exe}" --mcp`, "The command")}>Copy</button>
-            <p class="muted">Another AI app on this computer that can use local MCP servers (tools): add a server with this command and the argument <code>--mcp</code>. The AI Link is made and tested with Claude Desktop and Claude Code; other apps may work differently.</p>
+            <p class="muted">Another AI app on this computer that can use local MCP servers (tools): add a server with this command and the argument <code>--mcp</code> (the plan open here), or <code>--mcp-file</code> and a plan file (no window). The AI Link is made and tested with Claude Desktop and Claude Code; other apps may work differently.</p>
             <pre>{`"${x().exe}" --mcp`}</pre>
             <button class="btn sm" onClick={() => copy(`"${x().exe}" --mcp`, "The command")}>Copy</button>
           </details>

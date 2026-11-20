@@ -713,7 +713,7 @@ S 曲线右上角的 **Format**（格式）设置计划中所有 S 曲线的外�
 **Home › AI Link**（AI 链接）通过模型上下文协议（MCP）让您电脑上的 AI 助手读取并修改您当前打开的计划，修改过程您可以实时看到。它适用于 Claude Desktop 应用（以及 Claude Code），使用您自己的账户，无需 API 密钥。您用日常语言提出要求，助手在 Datum Plan 中完成。
 
 1. **打开链接。** Home › AI Link › **Turn on**（打开）。只有本机上的助手能访问计划，且每次使用不同的密钥；关闭时不监听任何连接。状态栏显示 **AI Link on**。下次启动时保持打开，直到您关闭为止。
-2. **Add to Claude Desktop**（添加到 Claude Desktop，只需一次）。Datum Plan 会在"下载"文件夹中保存一个 Claude Desktop 扩展 **Datum Plan.mcpb** 并显示它。打开 Claude Desktop › Settings › Extensions，将该文件拖到此页面，然后点击 **Install**（安装），无需编辑任何文件。（在某些电脑上 Claude Desktop 会自动打开该文件，此时只需点击 Install。）不要让助手替您安装 Datum Plan：它做不到，反而可能去查看您的屏幕。如果 Claude Desktop 还能使用您的电脑（Settings › Capabilities），请关闭该功能，使其只使用 AI Link 的工具。Datum Plan 更新后扩展仍可继续使用。（对话框最后一部分还提供其他方式：写入 Claude Desktop 的设置文件，或 Claude Code 的命令。）
+2. **Add to Claude Desktop**（添加到 Claude Desktop，只需一次）。Datum Plan 会在"下载"文件夹中保存一个 Claude Desktop 扩展 **Datum Plan.mcpb** 并显示它。打开 Claude Desktop › Settings › Extensions，将该文件拖到此页面，然后点击 **Install**（安装），无需编辑任何文件。（在某些电脑上 Claude Desktop 会自动打开该文件，此时只需点击 Install。）不要让助手替您安装 Datum Plan：它做不到，反而可能去查看您的屏幕。如果 Claude Desktop 还能使用您的电脑（Settings › Capabilities），请关闭该功能，使其只使用 AI Link 的工具。Datum Plan 更新后扩展仍可继续使用。（对话框最后一部分还提供其他方式：手动写入 Claude Desktop 的设置文件。）
 3. **提问。** 在 Claude Desktop 中，Settings › Extensions 显示 Datum Plan 已开启。新建对话并提问，例如：*"Datum Plan 中打开的是哪个计划？完工日期是哪天？"* Claude 第一次使用每个工具前会征求同意：对您放心的工具选择 **Always allow**（始终允许）。
 
 之后即可就当前显示的计划提出任何要求，例如：
@@ -726,9 +726,14 @@ S 曲线右上角的 **Format**（格式）设置计划中所有 S 曲线的外�
 
 Claude 的每项修改都会立即显示，底部有提示，并且是一个 **Undo**（撤销）步骤（[[Ctrl+Z]]）。Claude 在当前显示的选项卡中的计划上工作（也可以列出已打开的计划并切换选项卡），遵守与您相同的规则（锁定的基准计划保持锁定），并且除非您要求，否则绝不保存文件。Claude 可以读取进度计划、检查结果、S 曲线、风险结果、前瞻计划和工作表，也可以添加、修改、链接、删除和更新任务，设置状态日期并在工作表中输入内容。它还可以管理资源和分配、日历及其节假日、作业代码、自定义字段、限制条件、截止日期和备注，运行任意筛选器，并对任务进行升级、降级或移动：*"添加一个 300% 的 Rigger 资源并分配给吊装任务"*，*"在项目日历中添加 12 月 24 日至 26 日的停工"*，*"将任务 12 到 18 的 Area 代码设为 U-100"*。它还可以处理风险登记册、延误事件和延误分析、快照、期间报告、里程碑趋势、挣值、资源使用、健康设置、资源平衡、更新项目以及约束日志：*"在任务 6 上添加一个供应商图纸延迟 10 天的风险"*，*"为第 47 周拍摄快照并编写月报"*。它还可以维护合同、文件和采购登记册，将任务与基准计划比较，创建并格式化工作表和仪表板，设置任务表格式，并将导出文件保存到"下载"文件夹：*"记录 V-001 的 B 版，返回 Code 2"*，*"添加一个包含 SPI、CPI、进度和 S 曲线的仪表板"*，*"将计划导出为 Project XML"*。Claude 还可以追踪任务路径、设置项目详细信息、添加周期性任务，并处理进度计量规则和任务步骤。它还可以改变窗口显示的内容：*"显示跟踪甘特图"*，*"筛选延误任务并按 Area 分组"*，*"缩放到整个项目"*，*"选择任务 24"*，*"打开 Documents\\Plans\\Unit 100.dplan"*；这些只改变视图，从不改变计划。它还可以设置项目：*"项目于 12 月 1 日开始，使用六天日历，每天 10 小时"*，*"将 Text1 重命名为 Vendor"*，*"将负浮动时间显示为红色"*，*"记录 John 12 月 20 日至 24 日的休假"*，*"将所有任务名称中的 Pump 替换为 Compressor"*。在工作表中，它的操作方式与您相同：*"在第 5 行上方插入 3 行"*，*"合并 A1:D1 并冻结首行"*，*"按金额从大到小对供应商列表排序"*，*"删除重复的供应商"*，*"将大于 150 的值标为橙色"*，*"在 E1 放置客户的标志"*。多个计划时：*"让 Commissioning 等待 Construction 计划中的 Mechanical Completion"*，*"哪些链接的任务移动了？"*，*"建一个打桩两班倒的方案，告诉我有哪些变化"*，*"整个项目组合中哪些资源超出产能？"*。最后：*"做一份月度客户报告，包括关键数据、S 曲线、里程碑和摘要，并保存为 PDF"*，*"把甘特图打印在 A3 上，两页宽，右侧放客户的标志"*。Datum Plan 新增工具后，Claude 在下一次新建对话时即可使用，无需重新安装。Datum Plan 还为 Claude 提供三个现成的请求：Plan a project（规划项目）、Status report（状态报告）和 Schedule review（进度审查），显示在 Claude Desktop 列出扩展提示的位置。
 
+**Claude Code。** AI Link 对话框中有一个 **Claude Code** 区域，提供两条命令；复制其中一条，在终端中运行一次即可：
+
+- **此处打开的计划**：`claude mcp add --scope user datum-plan -- "…\Datum Plan.exe" --mcp`。AI Link 打开时，Claude Code 与 Claude Desktop 一样处理窗口中的计划。
+- **计划文件，无需此窗口**：`claude mcp add --scope user datum-plan-files -- "…\Datum Plan.exe" --mcp-file`。Claude Code 自行打开 .dplan、Project XML 或 XER 文件（*"打开 C:\Plans\Unit 100.dplan 并列出延误的任务"*）或新建计划，并可使用全部计划工具：任务、资源、日历、进度、基准计划、风险、挣值、工作表和各登记册。在您要求之前不会写入任何文件：保存到计划自身的文件、另存为新的 .dplan（只有在您同意时才会替换已有文件）或导出。在 `--mcp-file` 后加上文件路径，即可在开始时打开该文件。
+
 ## 命令行与 AI 助手
 
-`datum-cli`（在发布页面下载）无需打开窗口即可处理计划：查看计划概况或进度表、修改计划、导出，或运行风险分析。`datum-cli mcp` 让 AI 助手可以打开计划、读取计划、用与窗口相同的操作修改计划并保存。输入 `datum-cli help` 查看全部命令。
+`datum-cli`（在发布页面下载）无需打开窗口即可处理计划：查看计划概况或进度表、修改计划、导出，或运行风险分析。`datum-cli mcp [FILE]` 为 AI 助手提供与上面 `--mcp-file` 相同的计划工具。输入 `datum-cli help` 查看全部命令。
 
 ## 软件内的帮助
 

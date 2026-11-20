@@ -1931,6 +1931,12 @@ async fn install_update(app: AppHandle, url: String, sums: Option<String>) -> R<
 fn main() {
     // Started by Claude as `Datum Plan.exe --mcp`: be the bridge to the open window, no window of our own.
     if std::env::args().any(|a| a == "--mcp") { ai::bridge(); return }
+    // `Datum Plan.exe --mcp-file [FILE]`: the plan tools on files, no window (Claude Code and other assistants).
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(k) = args.iter().position(|a| a == "--mcp-file") {
+        datum_core::mcpfile::serve(std::io::stdin().lock(), std::io::stdout().lock(), args.get(k + 1).map(String::as_str), chrono::Local::now().date_naive());
+        return;
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.31 — 2026-11-20
+
+The AI Link reaches Claude Code, and plan files without the window.
+
+- **Claude Code:** Home › AI Link shows two commands to copy and run once in a terminal: one for the plan open here (with the AI Link on, you see each change at once), one for plan files without the window.
+- **Plan files without the window:** `Datum Plan.exe --mcp-file [FILE]` and `datum-cli mcp [FILE]` now give an assistant every plan tool (tasks, resources, calendars, codes, progress, baselines, risk, delay analysis, earned value, sheets, dashboards, the contract, document and procurement registers), not only a few. It opens a .dplan, Project XML or XER file, or starts a new plan, and writes only when asked: save_plan, save_plan_as (an existing file is replaced only when the user agrees) or export_plan.
+- **Registers:** the formula bar says "Row 4" or "3 rows" when whole rows are selected.
+
 ## 0.9.30 — 2026-11-19
 
 The Procurement Register works like a spreadsheet too.
