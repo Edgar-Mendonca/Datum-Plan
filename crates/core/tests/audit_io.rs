@@ -161,7 +161,14 @@ fn mpx_header_records_follow_the_format() {
     let mut p = rich();
     p.day_min = 600; // 10-hour days: the reader needs this to read "5d" right
     let (_, text) = out(&p, "mpx");
-    let rec = |n: &str| -> Vec<String> { text.lines().find(|l| l.starts_with(&format!("{n},"))).unwrap().trim_end_matches('\r').split(',').map(String::from).collect() };
+    // Fields split as MPX quotes them: a separator inside quotes (the "," thousands separator) is text.
+    let rec = |n: &str| -> Vec<String> {
+        let line = text.lines().find(|l| l.starts_with(&format!("{n},"))).unwrap().trim_end_matches('\r');
+        let (mut out, mut cur, mut q) = (vec![], String::new(), false);
+        for ch in line.chars() { match ch { '"' => q = !q, ',' if !q => out.push(std::mem::take(&mut cur)), c => cur.push(c) } }
+        out.push(cur);
+        out
+    };
     let (r10, r11, r30) = (rec("10"), rec("11"), rec("30"));
     let s = sched::schedule(&p).unwrap();
     let start = datum_core::cal::date_of(s.start).format("%m/%d/%Y").to_string();

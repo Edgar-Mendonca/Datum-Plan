@@ -199,8 +199,11 @@ pub fn read_sheet(path: &Path, sheet: Option<&str>) -> Result<(Vec<String>, Vec<
         let name = sheet.filter(|s| names.iter().any(|n| n == s)).map(String::from).or_else(|| names.first().cloned()).ok_or("The workbook has no sheets.")?;
         let mut rd = wb.worksheet_cells_reader(&name).map_err(|e| e.to_string())?;
         let mut got = vec![];
-        while let Some(c) = rd.next_cell().map_err(|e| e.to_string())? {
-            let ((y, x), v) = (c.get_position(), cell(&Data::from(c.get_value().clone())));
+        while let Some((c, st)) = rd.next_cell_with_style_id().map_err(|e| e.to_string())? {
+            // A number in a percent format (50 % is stored as 0.5) reads as the percentage it shows.
+            let pct = rd.styles().get(st).and_then(|s| s.number_format.as_ref()).is_some_and(|f| f.format_code.split('"').step_by(2).any(|x| x.contains('%')));
+            let v = match Data::from(c.get_value().clone()) { Data::Float(f) if pct => format!("{}%", (f * 1e8).round() / 1e6), Data::Int(i) if pct => format!("{}%", i * 100), d => cell(&d) };
+            let (y, x) = c.get_position();
             if y < 1_048_576 && x < 1024 && !v.is_empty() { got.push((y, x, v)) }
         }
         let (y0, x0) = got.iter().fold((u32::MAX, u32::MAX), |(a, b), c| (a.min(c.0), b.min(c.1)));
@@ -650,7 +653,9 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             if let Some(x) = xl_chart(ch, &c.p.sheets, &names, k_of(&c.p.sheets, &s.name)) { ws.insert_chart_with_offset(r, k, &x, ch.dx as u32, ch.dy as u32).map_err(e)?; }
         }
     }
-    if !c.p.sheets.is_empty() {
+    // Formula columns may read the plan's names and tables too: then they go in without sheet tabs.
+    let read = !sheets_only && keys.iter().filter_map(|k| k.strip_prefix("c:")).filter_map(|f| c.p.fields.iter().find(|d| d.key == f)).any(|d| crate::sheet::is_excel(&d.formula) && crate::sheet::reads_plan(c.p, &d.formula));
+    if !c.p.sheets.is_empty() || read {
         // The sheets' formulas read the plan as tables (Tasks[Finish]) and names (=ProjectFinish).
         let table = |cols: &[String]| rust_xlsxwriter::Table::new().set_columns(&cols.iter().map(|n| rust_xlsxwriter::TableColumn::new().set_header(n)).collect::<Vec<_>>());
         let ws = wb.add_worksheet();

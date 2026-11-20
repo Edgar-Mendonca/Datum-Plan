@@ -188,7 +188,7 @@ fn names_in(f: &str) -> Vec<String> {
 /// plan's defined names, or the Tasks and Resources tables.
 pub fn reads_plan(p: &Project, src: &str) -> bool {
     let up = src.to_uppercase();
-    up.contains("TASKS[") || up.contains("RESOURCES[") || translate(src, |_| Some("A1".into())).is_ok_and(|t| names_in(&t).iter().any(|n| crate::sheetx::PLAN_NAMES.iter().chain(p.names.iter().map(|d| &d.name).collect::<Vec<_>>().iter().map(|s| s.as_str()).collect::<Vec<_>>().iter()).any(|x| x.eq_ignore_ascii_case(n))))
+    up.contains("TASKS[") || up.contains("RESOURCES[") || translate(src, |_| Some("A1".into())).is_ok_and(|t| names_in(&t).iter().any(|n| crate::sheetx::PLAN_NAMES.iter().any(|x| x.eq_ignore_ascii_case(n)) || p.names.iter().any(|d| d.name.eq_ignore_ascii_case(n))))
 }
 
 /// A name's value as a workbook name's formula (a number, or quoted text).

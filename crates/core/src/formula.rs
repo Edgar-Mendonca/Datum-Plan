@@ -93,9 +93,16 @@ impl P<'_> {
         self.d -= 1;
         Ok(e)
     }
+    /// `^` binds left to right (2^3^2 = 64); signs may follow it (2^-1).
     fn pow(&mut self) -> Result<Ex, String> {
-        let b = self.atom()?;
-        if self.eat("^") { Ok(Ex::Bin("^".into(), Box::new(b), Box::new(self.neg()?))) } else { Ok(b) }
+        let mut b = self.atom()?;
+        while self.eat("^") {
+            let mut neg = false;
+            loop { if self.eat("-") { neg = !neg } else if !self.eat("+") { break } }
+            let e = self.atom()?;
+            b = Ex::Bin("^".into(), Box::new(b), Box::new(if neg { Ex::Neg(Box::new(e)) } else { e }));
+        }
+        Ok(b)
     }
     fn atom(&mut self) -> Result<Ex, String> {
         self.ws();

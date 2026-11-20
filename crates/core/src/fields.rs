@@ -480,7 +480,7 @@ impl<'a> Calc<'a> {
         let kind = self.kind(&format!("c:{key}"));
         let summary = self.s.summary[i];
         if let Some((d, _)) = def.filter(|(d, _)| summary && !matches!(d.rollup, Rollup::None | Rollup::Formula)) {
-            let vals: Vec<f64> = self.p.subtree(i).skip(1).filter(|&j| !self.s.summary[j]).map(|j| self.custom(j, key)).filter(|v| *v != F::Null).map(|v| v.num()).collect();
+            let vals: Vec<f64> = self.p.subtree(i).skip(1).filter(|&j| !self.s.summary[j]).map(|j| self.custom(j, key)).filter(|v| *v != F::Null).map(|v| match v { F::Bool(b) => b as u8 as f64, v => v.num() }).collect(); // a Yes counts 1 here
             if vals.is_empty() {
                 return F::Null;
             }

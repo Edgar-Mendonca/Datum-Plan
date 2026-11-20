@@ -151,7 +151,8 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
             let x = if uniform { a + (b - a) * u } else { tri(u, a, m, b) };
             // A risk's delay adds to the work left (as the schedule plans a task under way).
             let left = 100 - i64::from(p.tasks[i].pct.min(99));
-            let d = ((x.round() as i64) + (add[i] * 100 + left - 1) / left).max(0);
+            let grow = if add[i] >= 0 { (add[i] * 100 + left - 1) / left } else { -((-add[i] * 100 + left - 1) / left) };
+            let d = ((x.round() as i64) + grow).max(0);
             q.tasks[i].dur = d;
             drawn.push(d as f64);
             // Only the work of work resources (hours × rate) moves with the duration; fixed costs,
