@@ -38,8 +38,12 @@ export const MilestonesView = () => {
   });
   const months = createMemo(() => {
     const ax = axis(); if (!ax) return [];
-    const out: { x: number; l: string }[] = [], d = new Date(ax.a); d.setDate(1); d.setMonth(d.getMonth() + 1);
-    while (d.getTime() < ax.b && out.length < 60) { out.push({ x: ((d.getTime() - ax.a) / (ax.b - ax.a)) * 100, l: d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) }); d.setMonth(d.getMonth() + 1); }
+    // The axis is in UTC days (Date.parse of YYYY-MM-DD), so the 1st of each month is too.
+    const out: { x: number; l: string }[] = [], a = new Date(ax.a);
+    for (let k = 1; out.length < 60; k++) {
+      const t = Date.UTC(a.getUTCFullYear(), a.getUTCMonth() + k, 1); if (t >= ax.b) break;
+      out.push({ x: ((t - ax.a) / (ax.b - ax.a)) * 100, l: new Date(t).toLocaleDateString("en-GB", { month: "short", year: "2-digit", timeZone: "UTC" }) });
+    }
     return out;
   });
   return (

@@ -38,7 +38,7 @@ export const runRisk = async () => {
   setBusy(true);
   try {
     const r = await call<SimResult>("risk_run", { opts: opts() });
-    if (r) { setRes(r); act({ Ui: { key: "risk", value: { result: r, at: new Date().toISOString().slice(0, 16).replace("T", " "), opts: opts() } } }); }
+    if (r) { setRes(r); act({ Ui: { key: "risk", value: { result: r, at: (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`)(new Date()), opts: opts() } } }); }
   } finally { setBusy(false); }
 };
 

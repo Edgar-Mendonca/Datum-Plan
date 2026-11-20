@@ -434,8 +434,10 @@ export const Checks = () => {
 };
 
 // ---------- Portfolio (workspace folder) ----------
-/** Plans grouped by folder (the EPS), with a rollup row per folder. */
-const eps = (cards: any[]) => {
+/** % complete of several plans, each counting for its working days (`weight`); milestones only: a plain mean. */
+const pctOf = (cs: Card[]) => { const w = cs.reduce((a, c) => a + c.weight, 0); return w > 0 ? cs.reduce((a, c) => a + c.pct * c.weight, 0) / w : cs.reduce((a, c) => a + c.pct, 0) / Math.max(1, cs.length); };
+/** Plans grouped by folder (the EPS), with a rollup row per folder (plans that could not be read count in no rollup). */
+const eps = (cards: Card[]) => {
   const out: any[] = [];
   const folders = [...new Set(cards.map(c => c.folder))].sort();
   const all = new Set<string>();
@@ -444,14 +446,14 @@ const eps = (cards: any[]) => {
   const under = (h: string) => cards.filter(c => c.folder === h || c.folder.startsWith(h + " › "));
   for (const c of cards.filter(c => !c.folder)) out.push({ ...c, depth: 0 });
   for (const h of heads) {
-    const u = under(h);
+    const every = under(h), u = every.filter(c => !c.error);
     const depth = h.split(" › ").length - 1;
-    out.push({ head: h, depth, n: u.length, pct: u.reduce((a, c) => a + c.pct, 0) / Math.max(1, u.length), late: u.reduce((a, c) => a + c.late, 0), cost: "" });
+    out.push({ head: h, depth, n: every.length, pct: pctOf(u), late: u.reduce((a, c) => a + c.late, 0), cost: "" });
     for (const c of cards.filter(c => c.folder === h)) out.push({ ...c, depth: depth + 1 });
   }
   return out;
 };
-type Card = { path: string; folder: string; name: string; manager: string; client: string; start: string; finish: string; s: number; f: number; bf: number | null; var_finish: string; pct: number; cost: string; spi: number | null; cpi: number | null; tasks: number; late: number; critical: number; error: string | null; modules: string[];
+type Card = { path: string; folder: string; name: string; manager: string; client: string; start: string; finish: string; s: number; f: number; bf: number | null; var_finish: string; pct: number; weight: number; cost: string; spi: number | null; cpi: number | null; tasks: number; late: number; critical: number; error: string | null; modules: string[];
   contract: [number, number, number] | null; documents: [number, number, number] | null; procurement: [number, number, number, number] | null };
 type PoolRow = { name: string; group: string; plans: number[][]; load: number[]; cap: number[]; over: number; peak: number; in_pool: boolean };
 const PCOL = ["#3B82F6", "#F59E0B", "#10B981", "#8B5CF6", "#EF4444", "#38BDF8", "#EAB308", "#64748B"];
@@ -467,7 +469,7 @@ export const Portfolio = () => {
   const day = (d: number) => fmtDay(d);
   const span = createMemo(() => { const l = cards().filter(c => c.f > c.s); return l.length ? [Math.min(...l.map(c => c.s)), Math.max(...l.map(c => Math.max(c.f, c.bf ?? 0)))] : [0, 1]; });
   const W = 900, px = (d: number) => ((d - span()[0]) / Math.max(1, span()[1] - span()[0])) * W;
-  const today = () => Math.floor(Date.now() / 864e5);
+  const today = () => dateDay(new Date());
   const setPool = async (path: string) => { await call("set_pool", { path }); rePool(); };
   const take = async (add: boolean) => { const r = await call<[any, string]>("pool_take", { add }); if (r) { setOut(r[0]); toast(r[1], true); rePool(); } };
   // Load against capacity; the colour-blind safe scale runs pale blue → blue → orange → vermillion.
@@ -479,7 +481,7 @@ export const Portfolio = () => {
           <div class="kpi"><div class="v">{cards().length}</div><div class="l">plans · {sum(c => c.tasks).toLocaleString()} tasks</div></div>
           <div class="kpi" classList={{ bad: lateFinish() > 0 }}><div class="v">{lateFinish()}</div><div class="l">plans finishing after their baseline</div></div>
           <div class="kpi" classList={{ bad: sum(c => c.late) > 0 }}><div class="v">{sum(c => c.late)}</div><div class="l">late tasks across the plans</div></div>
-          <div class="kpi"><div class="v">{(sum(c => c.pct) / Math.max(1, cards().length)).toFixed(1)} %</div><div class="l">average complete</div></div>
+          <div class="kpi"><div class="v">{pctOf(cards()).toFixed(1)} %</div><div class="l">average complete</div></div>
           <Show when={mods("contract")}><div class="kpi" classList={{ bad: sum(c => c.contract?.[0] ?? 0) > 0 }}><div class="v">{sum(c => c.contract?.[0] ?? 0)} · {sum(c => c.contract?.[1] ?? 0)}</div><div class="l">contract dates late · at risk</div></div></Show>
           <Show when={mods("procurement")}><div class="kpi" classList={{ bad: sum(c => c.procurement?.[2] ?? 0) > 0 }}><div class="v">{sum(c => c.procurement?.[2] ?? 0)}</div><div class="l">orders late for their plans</div></div></Show>
         </div>
@@ -527,7 +529,7 @@ export const Portfolio = () => {
           <p class="muted">Every resource's work across the workspace's plans (matched by name) against its capacity. Green: within capacity; amber: up to 30 % over; red: more (blue, orange and vermillion with colour-blind safe colours); a dot marks every period over capacity. Click a resource for its work by plan.</p>
           <Show when={pool()} fallback={<p class="empty">{pool.error ? String(pool.error) : "Working out the pool…"}</p>}>{pv => <>
             <div class="pool"><table class="tbl"><thead><tr><th>Resource</th><th>Group</th><th class="r" title="Highest load against capacity">Peak</th><th class="r" title="Periods over capacity">Over</th>
-              <For each={pv().view.buckets}>{b => <th class="pb" title={day(b)}>{unit() === "month" ? new Date(b * 864e5).toLocaleDateString("en-GB", { month: "short" }) : ""}</th>}</For></tr></thead>
+              <For each={pv().view.buckets}>{b => <th class="pb" title={day(b)}>{unit() === "month" ? dayDate(b).toLocaleDateString("en-GB", { month: "short" }) : ""}</th>}</For></tr></thead>
               <tbody><For each={pv().view.rows}>{r => <>
                 <tr class="link" onClick={() => setOpen(open() === r.name ? "" : r.name)}><td><b>{r.name}</b>{r.in_pool && <span class="muted" title="Defined in the pool plan"> · pool</span>}</td><td class="muted">{r.group}</td>
                   <td class="r" classList={{ late: r.peak > 1.0001 }}>{(r.peak * 100).toFixed(0)} %</td><td class="r" classList={{ late: r.over > 0 }}>{r.over}</td>

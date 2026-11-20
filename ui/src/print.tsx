@@ -174,8 +174,8 @@ const layout = createMemo(() => {
   // (the chart keeps at least 25 % of the new page width, so the pages come out exactly `fit` wide)
   if (ps.fit > 0 && TW > (ps.fit - 0.25) * W) { W = TW / (ps.fit - 0.25); k = W0 / W; H = H0 / k; }
   const RW = ps.repeat && nameAt >= 0 && nameAt < 3 ? lefts[nameAt] + colsP[nameAt].w : 0;
-  const d0 = ps.range === "dates" && ps.from ? dateDay(new Date(ps.from)) : Math.floor(s.s) - 3;
-  const d1 = Math.max(d0 + 1, ps.range === "dates" && ps.to ? dateDay(new Date(ps.to)) + 1 : Math.ceil(s.f) + 7);
+  const d0 = ps.range === "dates" && ps.from ? dateDay(new Date(ps.from + "T00:00")) : Math.floor(s.s) - 3;
+  const d1 = Math.max(d0 + 1, ps.range === "dates" && ps.to ? dateDay(new Date(ps.to + "T00:00")) + 1 : Math.ceil(s.f) + 7);
   const CW = ps.fit > 0 ? Math.max(W * 0.22, ps.fit * W - (ps.fit - 1) * RW - TW - 0.5) : (d1 - d0) * zoom(), pd = CW / (d1 - d0), total = TW + CW;
   const across: [number, number][] = [];
   for (let x = 0; x < total - 1;) {
@@ -486,7 +486,7 @@ const vpages = createMemo((): VPage[] => {
   const G = geom(), d = vdata(), K = pkind(), out_: VPage[] = [];
   if (K === "cal") {
     const s = out()?.summary; if (!s) return [];
-    const a = ps.range === "dates" && ps.from ? new Date(ps.from) : dayDate(s.s), b = ps.range === "dates" && ps.to ? new Date(ps.to) : dayDate(s.f);
+    const a = ps.range === "dates" && ps.from ? new Date(ps.from + "T00:00") : dayDate(s.s), b = ps.range === "dates" && ps.to ? new Date(ps.to + "T00:00") : dayDate(s.f);
     for (let m = new Date(a.getFullYear(), a.getMonth(), 1); m <= b; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) out_.push({ n: out_.length + 1, month: m.getTime() });
     return out_;
   }

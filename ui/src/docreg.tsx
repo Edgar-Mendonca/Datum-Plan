@@ -47,7 +47,8 @@ const purposesOf = (s: DocStep) => s.purposes.split(/[,;/]/).map(x => x.trim()).
 export const className = (d: VDoc) => classesOf(reg())[Math.max(1, d.class) - 1]?.name ?? String(d.class);
 const blankDoc = (id: number): VDoc => ({ id, number: "", title: "", vendor: "", package: "", disc: "", kind: "", class: 1, key: false, flags: [], offset: null, first: null, weight: 1, progress: true, recurring: false, task: 0, remarks: "", state: "", own: {} });
 const next = (l: { id: number }[]) => Math.max(0, ...l.map(x => x.id)) + 1;
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today on this computer (local), as YYYY-MM-DD. */
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 /** The register's lists (older plans: the standard ones). */
 const listsOf = (r: DocRegister) => (r.lists?.length ? r.lists : LISTS());
 /** A list's values for a drop-down, and any value the documents use that the list lacks (plans from before the lists). */

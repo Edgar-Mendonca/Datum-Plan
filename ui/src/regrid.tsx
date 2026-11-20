@@ -6,6 +6,7 @@
 import { For, JSX, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { Portal } from "solid-js/web";
 import { openMenu, Item, toast } from "./store";
+import { order } from "./cells";
 
 export type Opt = { value: string; label?: string };
 export type Col<R> = {
@@ -33,7 +34,8 @@ const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct
 export const parseDate = (v: string): string | null => {
   const t = v.trim(); if (!t) return "";
   let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return iso(+m[1], +m[2], +m[3]);
-  m = t.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/); if (m) return iso(yr(+m[3]), +m[2], +m[1]);
+  // 18/11/2026 or 11/18/2026, as Options › Date format orders day and month.
+  m = t.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/); if (m) return order.dayFirst ? iso(yr(+m[3]), +m[2], +m[1]) : iso(yr(+m[3]), +m[1], +m[2]);
   m = t.match(/^(\d{1,2})[\s\-/]+([A-Za-z]{3,})[a-z]*[\s\-/,]+(\d{2,4})$/); if (m && MON.indexOf(m[2].slice(0, 3).toLowerCase()) >= 0) return iso(yr(+m[3]), MON.indexOf(m[2].slice(0, 3).toLowerCase()) + 1, +m[1]);
   if (/^\d{5}(\.\d+)?$/.test(t)) { const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(+t) * 864e5); return d.toISOString().slice(0, 10); }
   const n = Date.parse(t); return isNaN(n) ? null : new Date(n - new Date(n).getTimezoneOffset() * 6e4).toISOString().slice(0, 10);

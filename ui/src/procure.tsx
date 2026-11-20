@@ -28,7 +28,8 @@ export const preg = (): ProcRegister => ({ ...DEF, ...(P().procurement ?? {}) })
 const save = (r: Partial<ProcRegister>) => act({ Procurement: { r: { ...preg(), ...r } } });
 const blank = (id: number): PItem => ({ id, tag: "", name: "", vendor: "", origin: "", po_no: "", value: 0, manual_w: 1, long_lead: false, task: 0, need: 0, required: null, planned: [null, null, null, null, null], actual: [null, null, null, null, null], mfg_pct: 0, promised: null, log: [], docs: [], remarks: "", state: "", own: {} });
 const next = (l: { id: number }[]) => Math.max(0, ...l.map(x => x.id)) + 1;
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today on this computer (local), as YYYY-MM-DD. */
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const docsOn = () => (P().modules ?? []).includes("documents");
 const listsOf = (r: ProcRegister) => (r.lists?.length ? r.lists : LISTS());
 const fieldOf = (it: PItem, f: string) => (f === "vendor" ? it.vendor : f === "origin" ? it.origin : f === "state" ? it.state ?? "" : it.own?.[f] ?? "");

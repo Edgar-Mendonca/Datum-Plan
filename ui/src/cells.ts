@@ -62,6 +62,14 @@ export const series = (src: string[], k: number, copy = false): string => {
   const dates = src.map(asDate);
   if (dates.every(d => d !== null)) {
     if (dates.length < 2) return rep;
+    // On the same day of the month (or month ends), a step of whole months goes on by months: 31 Jan, 28 Feb, 31 Mar.
+    const ds = dates.map(d => dayDate(d!)), mon = (x: Date) => x.getFullYear() * 12 + x.getMonth(), end = (x: Date) => new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate() === x.getDate();
+    const dm = (mon(ds[ds.length - 1]) - mon(ds[0])) / (ds.length - 1);
+    if (dm >= 1 && Number.isInteger(dm) && (ds.every(x => x.getDate() === ds[0].getDate()) || ds.every(end)) && ds.every((x, i) => mon(x) - mon(ds[0]) === dm * i)) {
+      const last = ds[ds.length - 1], n = new Date(last.getFullYear(), last.getMonth() + dm * k, 1), dim = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
+      n.setDate(ds.every(end) ? dim : Math.min(ds[0].getDate(), dim));
+      return like(src[src.length - 1], dateDay(n));
+    }
     const step = (dates[dates.length - 1]! - dates[0]!) / (dates.length - 1);
     return like(src[src.length - 1], dates[dates.length - 1]! + step * k);
   }
