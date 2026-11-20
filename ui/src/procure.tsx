@@ -6,15 +6,14 @@
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 import { Portal } from "solid-js/web";
 import { ItemOut, Options, PItem, ProcOut, ProcRegister, RegList } from "./api";
-import { act, call, grid, out, P, tick, setView, openDialog, closeDialog, toast, opts, setOpts, openMenu, Item } from "./store";
-import { Page } from "./views";
+import { act, call, grid, out, P, tick, setView, openDialog, closeDialog, toast, opts, setOpts, openMenu, Item, kept } from "./store";
 import { Kpi } from "./reports";
 import { ChartBox, COL, line } from "./charts";
 import { Dialog, Seg, askText, askYes } from "./ui";
 import { showTab } from "./plans";
 import { asDate, reg as docReg } from "./docreg";
 import { Col, Edit, Opt, RegGrid, dt } from "./regrid";
-import { ColumnsTab, LCol, LList, ListsTab, WordsTab, editLists, settle } from "./regkit";
+import { Attention, ColumnsTab, LCol, LList, ListsTab, RegBook, WordsTab, editLists, settle } from "./regkit";
 
 const MS = ["RFQ issued", "PO placed", "Manufacturing start", "Inspection release (IRN)", "Delivered"];
 const SHORT = ["RFQ", "PO", "Mfg start", "IRN", "Delivery"];
@@ -306,11 +305,13 @@ export const procImport = async () => {
 };
 
 // ---------- The view ----------
+const procTab = kept("proc-tab", "dashboard");
+const itemOf = (id: number) => preg().items.find(x => x.id === id);
 type Note = { it: PItem; k: number; date: string | null; note: string; by: string; id: number };
 export const ProcurementView = () => {
   const [data] = createResource(() => [tick(), out()?.tab] as const, () => call<{ tab: number; name: string; on: boolean; out: ProcOut }[]>("procurement"));
   const me = () => data()?.find(d => d.tab === out()?.tab)?.out;
-  const [tab, setTab] = createSignal("register"), [q, setQ] = createSignal(""), [per, setPer] = createSignal<"weekly" | "monthly">("monthly");
+  const [tab, setTab] = procTab, [q, setQ] = createSignal(""), [per, setPer] = createSignal<"weekly" | "monthly">("monthly");
   const [sel, setSel] = createSignal<PItem[]>([]), [selN, setSelN] = createSignal<Note[]>([]);
   const rowOf = (id: number) => me()?.items.find(x => x.id === id);
   const items = createMemo(() => { const t = q().toLowerCase(); return preg().items.filter(it => !t || `${it.tag} ${it.name} ${it.vendor} ${it.origin} ${it.po_no} ${it.remarks}`.toLowerCase().includes(t)); });
@@ -409,15 +410,26 @@ export const ProcurementView = () => {
   };
   const removeNotes = (rows: Note[]) => { const gone = new Set(rows.map(n => n.id)); save({ items: preg().items.map(it => ({ ...it, log: it.log.filter((_, k) => !gone.has(it.id * 10000 + k)) })) }); };
   const by = (key: (it: PItem) => string) => { const m = new Map<string, { n: number; red: number; done: number; e: number; w: number }>(); for (const it of preg().items) { const r = rowOf(it.id); if (!r || r.skey === "off") continue; const k = key(it) || "(none)", g = m.get(k) ?? { n: 0, red: 0, done: 0, e: 0, w: 0 }; g.n++; if (r.rag === "red") g.red++; if (r.actual[4]) g.done++; g.e += r.weight * r.earned; g.w += r.weight; m.set(k, g); } return [...m].sort((a, b) => b[1].n - a[1].n); };
+  const Plans = () => <Show when={(data()?.length ?? 0) > 1}>
+        <div class="panel ctr"><h2>The project's plans</h2>
+          <table class="tbl"><thead><tr><th>Plan</th><th class="r">Orders</th><th class="r">PO placed</th><th class="r">Delivered</th><th class="r">Late</th><th class="r">Earned</th><th class="r">Planned</th><th /></tr></thead>
+            <tbody><For each={data()}>{d => <tr><td><b>{d.name}</b>{d.tab === out()?.tab ? " (this plan)" : ""}{!d.on && <span class="muted"> · module off</span>}</td><td class="r">{d.out.items.length}</td><td class="r">{d.out.items.filter(x => x.actual[1]).length}</td><td class="r">{d.out.items.filter(x => x.actual[4]).length}</td>
+              <td class="r">{d.out.items.filter(x => x.rag === "red").length}</td><td class="r">{d.out.earned.toFixed(1)} %</td><td class="r">{d.out.planned.toFixed(1)} %</td>
+              <td>{d.tab !== out()?.tab && <button class="btn sm" onClick={() => showTab(d.tab).then(() => setView("procurement"))}>Open</button>}</td></tr>}</For></tbody></table>
+        </div>
+      </Show>;
   const legend = <span class="rglegend"><span><i />you type</span><span><i class="calc" />the app works it out</span><span>grey dates: from the task</span></span>;
   const columnsMenu = (e: MouseEvent) => openMenu(e, [...allCols().map(c => ({ label: c.name, on: !hidden().includes(c.key), run: () => setHidden(hidden().includes(c.key) ? hidden().filter(x => x !== c.key) : [...hidden(), c.key]) })), "-" as const, { label: "Your own columns…", run: () => procSettings("columns") }]);
   const n = (f: (x: ItemOut) => boolean) => me()?.items.filter(x => x.skey !== "off" && f(x)).length ?? 0;
   return (
-    <Page title="Procurement Register" help="procurement" tools={<>
+    <RegBook title="Procurement Register" help="procurement" tab={tab()} set={setTab} grids={["register", "log"]}
+      tabs={[["dashboard", "Dashboard"], ["register", "Register"], ["log", "Expediting log"]]} tools={<>
       <button class="btn" onClick={() => procSettings()}>Settings…</button><button class="btn" onClick={procImport}>Import…</button>
       <button class="btn" onClick={async () => { const f = await call<string | null>("proc_export"); if (f) toast(`Saved ${f}`, true); }} title="A workbook (.xlsx) or an OpenDocument spreadsheet (.ods): choose the type in the Save window">Export…</button>
     </>}>
       <Show when={me()}>{o => <>
+        <Show when={!o().weights_ok}><p class="dwarn">The milestone weights do not add up to 100 %: Settings.</p></Show>
+        <Show when={tab() === "dashboard"}>
         <div class="kpis">
           <Kpi v={String(n(() => true))} l={`orders · ${preg().items.filter(x => x.long_lead).length} long lead`} />
           <Kpi v={`${n(x => !!x.actual[1])} / ${n(() => true)}`} l="purchase orders placed" />
@@ -427,8 +439,24 @@ export const ProcurementView = () => {
           <Kpi v={`${o().earned.toFixed(1)} %`} l={`earned · planned ${o().planned.toFixed(1)} %`} bad={o().earned < o().planned - 0.05} good={o().earned >= o().planned && o().planned > 0} />
           <Show when={preg().link_docs}><Kpi v={String(n(x => x.docs_late))} l="held up by vendor documents" bad={n(x => x.docs_late) > 0} /></Show>
         </div>
-        <Show when={!o().weights_ok}><p class="dwarn">The milestone weights do not add up to 100 %: Settings.</p></Show>
-        <div class="dtabs"><Seg value={tab()} set={setTab} options={[["register", "Register"], ["log", "Expediting log"], ["progress", "Progress"]]} /></div>
+        <div class="cols3">
+          <Attention title="Late for the plan" empty="No order is late for the task that needs it." more={() => setTab("register")}
+            rows={o().items.filter(x => x.skey !== "off" && x.rag === "red").sort((x, y) => (x.float ?? 0) - (y.float ?? 0)).map(x => ({ key: itemOf(x.id)?.tag || itemOf(x.id)?.name || "", text: `${itemOf(x.id)?.name ?? ""} · ${itemOf(x.id)?.vendor ?? ""}`, note: x.float != null ? `float ${x.float} d` : x.status, bad: true, open: () => setCardId(x.id) }))} />
+          <Attention title="Milestones overdue" empty="No milestone is past its planned date." more={() => setTab("register")}
+            rows={o().items.filter(x => x.skey !== "off" && x.days_late > 0).sort((x, y) => y.days_late - x.days_late).map(x => ({ key: itemOf(x.id)?.tag || itemOf(x.id)?.name || "", text: `${x.next} · ${itemOf(x.id)?.vendor ?? ""}`, note: `${x.days_late} d late`, bad: true, open: () => setCardId(x.id) }))} />
+          <Attention title="Next deliveries" empty="No delivery forecast yet." more={() => setTab("register")}
+            rows={o().items.filter(x => x.skey !== "off" && !x.actual[4] && x.forecast).sort((x, y) => (x.forecast ?? "").localeCompare(y.forecast ?? "")).map(x => ({ key: itemOf(x.id)?.tag || itemOf(x.id)?.name || "", text: `${itemOf(x.id)?.name ?? ""} · ${itemOf(x.id)?.vendor ?? ""}`, note: dt(x.forecast), open: () => setCardId(x.id) }))} />
+        </div>
+        <div class="phead"><h2>Progress</h2><span class="grow" /><Seg value={per()} set={v => setPer(v as "monthly")} options={[["weekly", "Weekly"], ["monthly", "Monthly"]]} /></div>
+        <Show when={o()[per()].length > 1} fallback={<p class="empty">Give the orders planned dates (or link them to tasks) to see the S-curve.</p>}>
+          <ChartBox title="Procurement progress (weighted)" type="line" fmt="pct" max={100} labels={o()[per()].map(p => dt(p.end))} days={o()[per()].map(p => Math.round(Date.parse(p.end) / 864e5))}
+            datasets={[line("Planned", o()[per()].map(p => p.planned), COL.grey, [5, 4]), line("Actual", o()[per()].map(p => p.actual), COL.blue)]} />
+        </Show>
+        <div class="cols2"><For each={[["By sub-vendor", (it: PItem) => it.vendor], ["By country of origin", (it: PItem) => it.origin]] as [string, (it: PItem) => string][]}>{([t, f]) =>
+          <div class="panel ctr"><h2>{t}</h2><table class="tbl"><thead><tr><th>{t.replace("By ", "")}</th><th class="r">Orders</th><th class="r">Late</th><th class="r">Delivered</th><th class="r">Earned</th></tr></thead>
+            <tbody><For each={by(f)}>{([k, g]) => <tr><td>{k}</td><td class="r">{g.n}</td><td class="r" classList={{ bad: g.red > 0 }}>{g.red}</td><td class="r">{g.done}</td><td class="r">{g.w ? (g.e / g.w).toFixed(1) : "—"} %</td></tr>}</For></tbody></table></div>}</For></div>
+        <Plans />
+        </Show>
         <Show when={tab() === "register"}>
           <div class="rgbar">
             <button class="btn pri" onClick={() => addItems([{ name: "New order" }])} title="Or type in the empty row at the foot of the register">+ Order</button>
@@ -453,26 +481,9 @@ export const ProcurementView = () => {
           </div>
           <RegGrid id="notes" rows={notes()} cols={noteCols()} rowId={x => x.id} set={setNotes} add={addNotes} remove={removeNotes} open={x => setCardId(x.it.id)} selected={setSelN} newHint="Type or pick an order's item number to add a note" />
         </Show>
-        <Show when={tab() === "progress"}>
-          <div class="phead"><Seg value={per()} set={v => setPer(v as "monthly")} options={[["weekly", "Weekly"], ["monthly", "Monthly"]]} /></div>
-          <Show when={o()[per()].length > 1} fallback={<p class="empty">Give the orders planned dates (or link them to tasks) to see the S-curve.</p>}>
-            <ChartBox title="Procurement progress (weighted)" type="line" fmt="pct" max={100} labels={o()[per()].map(p => dt(p.end))} days={o()[per()].map(p => Math.round(Date.parse(p.end) / 864e5))}
-              datasets={[line("Planned", o()[per()].map(p => p.planned), COL.grey, [5, 4]), line("Actual", o()[per()].map(p => p.actual), COL.blue)]} />
-          </Show>
-          <div class="cols2"><For each={[["By sub-vendor", (it: PItem) => it.vendor], ["By country of origin", (it: PItem) => it.origin]] as [string, (it: PItem) => string][]}>{([t, f]) =>
-            <div class="panel ctr"><h2>{t}</h2><table class="tbl"><thead><tr><th>{t.replace("By ", "")}</th><th class="r">Orders</th><th class="r">Late</th><th class="r">Delivered</th><th class="r">Earned</th></tr></thead>
-              <tbody><For each={by(f)}>{([k, g]) => <tr><td>{k}</td><td class="r">{g.n}</td><td class="r" classList={{ bad: g.red > 0 }}>{g.red}</td><td class="r">{g.done}</td><td class="r">{g.w ? (g.e / g.w).toFixed(1) : "—"} %</td></tr>}</For></tbody></table></div>}</For></div>
-        </Show>
         <Card o={o()} />
       </>}</Show>
-      <Show when={(data()?.length ?? 0) > 1}>
-        <div class="panel ctr"><h2>The project's plans</h2>
-          <table class="tbl"><thead><tr><th>Plan</th><th class="r">Orders</th><th class="r">PO placed</th><th class="r">Delivered</th><th class="r">Late</th><th class="r">Earned</th><th class="r">Planned</th><th /></tr></thead>
-            <tbody><For each={data()}>{d => <tr><td><b>{d.name}</b>{d.tab === out()?.tab ? " (this plan)" : ""}{!d.on && <span class="muted"> · module off</span>}</td><td class="r">{d.out.items.length}</td><td class="r">{d.out.items.filter(x => x.actual[1]).length}</td><td class="r">{d.out.items.filter(x => x.actual[4]).length}</td>
-              <td class="r">{d.out.items.filter(x => x.rag === "red").length}</td><td class="r">{d.out.earned.toFixed(1)} %</td><td class="r">{d.out.planned.toFixed(1)} %</td>
-              <td>{d.tab !== out()?.tab && <button class="btn sm" onClick={() => showTab(d.tab).then(() => setView("procurement"))}>Open</button>}</td></tr>}</For></tbody></table>
-        </div>
-      </Show>
-    </Page>
+      <Show when={!me()}><Plans /></Show>
+    </RegBook>
   );
 };

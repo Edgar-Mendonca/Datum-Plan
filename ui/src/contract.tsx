@@ -3,8 +3,8 @@
 // every figure out (contract.rs); this page shows them and edits the contract.
 import { For, Show, createResource, createSignal } from "solid-js";
 import { Contract, ContractDate, ContractOut, Payment, money } from "./api";
-import { act, call, grid, out, P, sel, tick, setView, openDialog, toast } from "./store";
-import { Page } from "./views";
+import { act, call, grid, out, P, sel, tick, setView, openDialog, toast, kept } from "./store";
+import { Attention, RegBook } from "./regkit";
 import { Kpi } from "./reports";
 import { ChartBox, COL, line } from "./charts";
 import { Dialog } from "./ui";
@@ -49,7 +49,9 @@ const blankDate = (id: number): ContractDate => ({ id, name: "Contract date", ta
 const blankPay = (id: number): Payment => ({ id, name: "Payment", pct: 0, amount: 0, task: 0, terms: 30, invoiced: null, paid: null });
 const STATUS: Record<string, string> = { Met: "good", "Met late": "warn", "On track": "good", "At risk": "warn", Late: "bad", Overdue: "bad", Paid: "good", Invoiced: "warn", Due: "warn" };
 
+const conTab = kept("contract-tab", "dashboard");
 export const ContractView = () => {
+  const [tab, setTab] = conTab;
   const [data] = createResource(() => [tick(), out()?.tab] as const, () => call<{ tab: number; name: string; on: boolean; out: ContractOut }[]>("contract"));
   const k = (): Contract => ({ number: "", value: 0, warn_days: 14, dates: [], payments: [], ...(P().contract ?? {}) });
   const save = (c: Partial<Contract>) => act({ Contract: { c: { ...k(), ...c } } });
@@ -78,13 +80,29 @@ export const ContractView = () => {
       <polyline fill="none" stroke={pts()[pts().length - 1] > 0 ? "#C73B3B" : "#2E9D57"} stroke-width="1.5" points={pts().map((v, i) => `${(i / (pts().length - 1)) * (W - 4) + 2},${H / 2 - (v / max()) * (H / 2 - 2)}`).join(" ")} />
       <title>{p.t.map(([d, f]) => `${dt(d)}: forecast ${dt(f)}`).join("\n")}</title></svg></Show>;
   };
+  const Plans = () => <Show when={(data()?.length ?? 0) > 1}>
+        <div class="panel ctr"><h2>The project's plans</h2>
+          <table class="tbl"><thead><tr><th>Plan</th><th>Contract dates</th><th>Late</th><th>At risk</th><th class="r">Damages at risk</th><th class="r">Payments</th><th class="r">Received</th><th /></tr></thead>
+            <tbody><For each={data()}>{d => <tr>
+              <td><b>{d.name}</b>{d.tab === out()?.tab ? " (this plan)" : ""}</td>
+              <td>{d.on ? d.out.milestones.length : <span class="muted">module off</span>}</td><td classList={{ bad: d.out.late > 0 }}>{d.out.late}</td><td>{d.out.at_risk}</td>
+              <td class="r">{m$(d.out.ld)}</td><td class="r">{m$(d.out.payments.reduce((a, p) => a + p.amount, 0))}</td><td class="r">{m$(d.out.received)}</td>
+              <td>{d.tab !== out()?.tab && <button class="btn sm" onClick={() => showTab(d.tab).then(() => setView("contract"))}>Open</button>}</td>
+            </tr>}</For>
+            <tr class="tot"><td><b>Total</b></td><td>{data()!.reduce((a, d) => a + d.out.milestones.length, 0)}</td><td>{data()!.reduce((a, d) => a + d.out.late, 0)}</td><td>{data()!.reduce((a, d) => a + d.out.at_risk, 0)}</td>
+              <td class="r">{m$(data()!.reduce((a, d) => a + d.out.ld, 0))}</td><td class="r">{m$(data()!.reduce((a, d) => a + d.out.payments.reduce((x, p) => x + p.amount, 0), 0))}</td><td class="r">{m$(data()!.reduce((a, d) => a + d.out.received, 0))}</td><td /></tr></tbody></table>
+          <p class="muted">The master and its open subplans. Open a subplan to edit its contract dates.</p>
+        </div>
+      </Show>;
   return (
-    <Page title="Contract Dates & Payments" help="contract" tools={<>
+    <RegBook title="Contract Dates & Payments" help="contract" tab={tab()} set={setTab} grids={[]}
+      tabs={[["dashboard", "Dashboard"], ["dates", "Contract dates"], ["payments", "Payments"]]} tools={<>
       <label class="muted">Contract no. <input style={{ width: "130px" }} value={k().number} onChange={e => save({ number: e.currentTarget.value })} /></label>
       <label class="muted">Value ({cur().symbol || cur().code}) <input type="number" min="0" style={{ width: "120px" }} value={k().value || ""} onChange={e => save({ value: +e.currentTarget.value || 0 })} /></label>
       <label class="muted" title="A contract date with less float than this is At risk">At risk under <input type="number" min="0" style={{ width: "52px" }} value={k().warn_days} onChange={e => save({ warn_days: +e.currentTarget.value || 0 })} /> days</label>
     </>}>
       <Show when={o()}>{s => <>
+        <Show when={tab() === "dashboard"}>
         <div class="kpis">
           <Kpi v={m$(s().value)} l={k().number ? `Contract ${k().number}` : "Contract value"} />
           <Kpi v={`${s().late} late · ${s().at_risk} at risk`} l={`of ${s().milestones.length} contract dates`} bad={s().late > 0} good={!s().late && !s().at_risk && s().milestones.length > 0} />
@@ -92,6 +110,21 @@ export const ContractView = () => {
           <Kpi v={m$(s().received)} l={`received of ${m$(s().payments.reduce((a, p) => a + p.amount, 0))}`} />
           <Kpi v={`${s().pay_pct.toFixed(1)} %`} l="of the value in payment milestones" bad={s().payments.length > 0 && Math.abs(s().pay_pct - 100) > 0.05} />
         </div>
+        <div class="cols3">
+          <Attention title="Contract dates late or at risk" empty="Every contract date is on track." more={() => setTab("dates")}
+            rows={s().milestones.filter(m => m.status === "Late" || m.status === "At risk").map(m => ({ key: m.name, text: `contract ${dt(m.date)} · forecast ${dt(m.forecast)}`, note: m.status, bad: m.status === "Late", open: () => setTab("dates") }))} />
+          <Attention title="Payments due or overdue" empty="Nothing due to invoice." more={() => setTab("payments")}
+            rows={s().payments.filter(p => p.status === "Due" || p.status === "Overdue").map(p => ({ key: p.name, text: `${m$(p.amount)} · due ${dt(p.due)}`, note: p.status, bad: p.status === "Overdue", open: () => setTab("payments") }))} />
+          <Attention title="Next payments" empty="No payment milestones yet." more={() => setTab("payments")}
+            rows={s().payments.filter(p => !p.paid && p.due).sort((x, y) => (x.due ?? "").localeCompare(y.due ?? "")).map(p => ({ key: p.name, text: `${m$(p.amount)} · ${p.task_name}`, note: dt(p.due), open: () => setTab("payments") }))} />
+        </div>
+        <Show when={s().cash.length > 1}>
+          <ChartBox title="Cash in" type="line" fmt="money" labels={s().cash.map(c => dt(c[0]))} days={s().cash.map(c => Math.round(Date.parse(c[0]) / 864e5))}
+            datasets={[line("Planned", s().cash.map(c => c[1]), COL.grey, [5, 4]), line("Forecast", s().cash.map(c => c[2]), COL.blue), line("Received", s().cash.map(c => c[3]), COL.green)]} />
+        </Show>
+        <Plans />
+        </Show>
+        <Show when={tab() === "dates"}>
         <div class="panel ctr">
           <div class="phead"><h2>Contract dates</h2><span class="grow" /><button class="btn sm pri" onClick={() => save({ dates: [...k().dates, { ...blankDate(next(k().dates)), task: picked() }] })}>+ Contract date</button></div>
           <table class="tbl"><thead><tr><th>Contract date</th><th>Met by task</th><th>Contract</th><th>Forecast</th><th>Baseline</th><th>Against contract</th><th>Status</th><th title="Forecast at each period close">Trend</th>
@@ -114,6 +147,8 @@ export const ContractView = () => {
               </tr>); }}</For></tbody></table>
           <Show when={!k().dates.length}><p class="empty">No contract dates yet. Select the task that meets one (a delivery milestone, say) and click <b>+ Contract date</b>, then type the date the contract fixes.</p></Show>
         </div>
+        </Show>
+        <Show when={tab() === "payments"}>
         <div class="panel ctr">
           <div class="phead"><h2>Payment milestones</h2><span class="grow" /><button class="btn sm pri" onClick={() => save({ payments: [...k().payments, { ...blankPay(next(k().payments)), task: picked() }] })}>+ Payment</button></div>
           <table class="tbl"><thead><tr><th>Payment</th><th>When this task finishes</th><th title="Share of the contract value">%</th><th title="An amount instead of a share">Amount</th><th title="Days from the event to payment">Terms (d)</th><th>Planned</th><th>Forecast due</th><th>Invoiced</th><th>Paid</th><th>Status</th><th class="r">Value</th><th /></tr></thead>
@@ -133,26 +168,10 @@ export const ContractView = () => {
               </tr>); }}</For></tbody></table>
           <Show when={!k().payments.length}><p class="empty">No payment milestones yet. Each is a share of the contract value (or an amount) due some days after a task finishes: an advance on the purchase order, a share on drawings approved, on FAT, on delivery.</p></Show>
         </div>
-        <Show when={s().cash.length > 1}>
-          <ChartBox title="Cash in" type="line" fmt="money" labels={s().cash.map(c => dt(c[0]))} days={s().cash.map(c => Math.round(Date.parse(c[0]) / 864e5))}
-            datasets={[line("Planned", s().cash.map(c => c[1]), COL.grey, [5, 4]), line("Forecast", s().cash.map(c => c[2]), COL.blue), line("Received", s().cash.map(c => c[3]), COL.green)]} />
         </Show>
       </>}</Show>
-      <Show when={(data()?.length ?? 0) > 1}>
-        <div class="panel ctr"><h2>The project's plans</h2>
-          <table class="tbl"><thead><tr><th>Plan</th><th>Contract dates</th><th>Late</th><th>At risk</th><th class="r">Damages at risk</th><th class="r">Payments</th><th class="r">Received</th><th /></tr></thead>
-            <tbody><For each={data()}>{d => <tr>
-              <td><b>{d.name}</b>{d.tab === out()?.tab ? " (this plan)" : ""}</td>
-              <td>{d.on ? d.out.milestones.length : <span class="muted">module off</span>}</td><td classList={{ bad: d.out.late > 0 }}>{d.out.late}</td><td>{d.out.at_risk}</td>
-              <td class="r">{m$(d.out.ld)}</td><td class="r">{m$(d.out.payments.reduce((a, p) => a + p.amount, 0))}</td><td class="r">{m$(d.out.received)}</td>
-              <td>{d.tab !== out()?.tab && <button class="btn sm" onClick={() => showTab(d.tab).then(() => setView("contract"))}>Open</button>}</td>
-            </tr>}</For>
-            <tr class="tot"><td><b>Total</b></td><td>{data()!.reduce((a, d) => a + d.out.milestones.length, 0)}</td><td>{data()!.reduce((a, d) => a + d.out.late, 0)}</td><td>{data()!.reduce((a, d) => a + d.out.at_risk, 0)}</td>
-              <td class="r">{m$(data()!.reduce((a, d) => a + d.out.ld, 0))}</td><td class="r">{m$(data()!.reduce((a, d) => a + d.out.payments.reduce((x, p) => x + p.amount, 0), 0))}</td><td class="r">{m$(data()!.reduce((a, d) => a + d.out.received, 0))}</td><td /></tr></tbody></table>
-          <p class="muted">The master and its open subplans. Open a subplan to edit its contract dates.</p>
-        </div>
-      </Show>
-    </Page>
+      <Show when={!o()}><Plans /></Show>
+    </RegBook>
   );
 };
 

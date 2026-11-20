@@ -1,10 +1,30 @@
 // What the registers' Settings share (Document and Procurement): the Lists tab (values with names,
 // states that count or not, lists of your own), your own Columns (text, number, date, list, a
 // formula per row), the client's Status words, and how renames and removals reach every row.
-import { For, Show, createSignal } from "solid-js";
+import { For, JSX, Show, createSignal } from "solid-js";
+import { Help } from "./help";
 import { ListItem, OwnCol, RegList } from "./api";
 import { askText, askYes } from "./ui";
 import { toast } from "./store";
+
+/** A register as a workbook: the Dashboard first, then its sheets, with tabs along the bottom as in
+ *  Sheets. Grid tabs (`grids`) fill the window; the others scroll. */
+export const RegBook = (p: { title: string; help: string; tools: JSX.Element; tabs: [string, string][]; grids: string[]; tab: string; set: (k: string) => void; children: JSX.Element }) => (
+  <section class="page regbook">
+    <div class="ptools"><h1>{p.title}<Help k={p.help} /></h1><span class="grow" />{p.tools}</div>
+    <div class="rbbody" classList={{ full: p.grids.includes(p.tab) }}>{p.children}</div>
+    <div class="sheettabs regtabs"><For each={p.tabs}>{([k, l]) => <button classList={{ on: p.tab === k }} onClick={() => p.set(k)}>{l}</button>}</For></div>
+  </section>
+);
+/** "Needs attention" on a dashboard: a few rows, each opening its card. */
+export const Attention = (p: { title: string; rows: { key: string; text: string; note: string; bad?: boolean; open: () => void }[]; empty: string; more?: () => void }) => (
+  <div class="panel ctr attn"><h2>{p.title}</h2>
+    <Show when={p.rows.length} fallback={<p class="muted">{p.empty}</p>}>
+      <For each={p.rows.slice(0, 8)}>{r => <button class="attnrow" onClick={r.open}><b>{r.key}</b><span>{r.text}</span><span class="st" classList={{ bad: !!r.bad }}>{r.note}</span></button>}</For>
+      <Show when={p.rows.length > 8}><button class="btn sm" onClick={p.more}>All {p.rows.length}…</button></Show>
+    </Show>
+  </div>
+);
 
 export type LItem = ListItem & { was?: string };
 export type LList = Omit<RegList, "items"> & { items: LItem[] };

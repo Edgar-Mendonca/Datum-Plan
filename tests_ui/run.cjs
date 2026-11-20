@@ -652,6 +652,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg label.chk:has-text('Contract Dates') input"); await p.click(".dlg .btn.pri:text-is('Apply')"); await p.waitForTimeout(400);
   check("Project › Modules switches a module on, and its view opens and joins the sidebar", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Modules).pop()?.[1].op)) === '{"Modules":{"on":["contract"]}}' && !!(await p.$('.side button[title="Contract"]')) && (await p.textContent(".page h1")).includes("Contract Dates"));
   await p.fill(".page .ptools label:has-text('Value') input", "1000"); await p.press(".page .ptools label:has-text('Value') input", "Tab"); await p.waitForTimeout(250);
+  check("a register opens on its Dashboard, with its tabs along the bottom (0.9.32)", JSON.stringify(await p.$$eval(".regtabs button", b => b.map(x => x.textContent))) === '["Dashboard","Contract dates","Payments"]' && (await p.textContent(".regtabs button.on")) === "Dashboard");
+  await p.click(".regtabs button:text-is('Contract dates')"); await p.waitForTimeout(250);
   await p.click(".page button:has-text('+ Contract date')"); await p.waitForTimeout(250);
   await p.fill(".panel.ctr tbody tr >> nth=0 >> input[type=date]", "2027-01-18"); await p.press(".panel.ctr tbody tr >> nth=0 >> input[type=date]", "Tab"); await p.waitForTimeout(150);
   await p.selectOption(".panel.ctr tbody tr >> nth=0 >> select", { index: 2 }); await p.waitForTimeout(300);
@@ -659,9 +661,12 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("a contract date keeps its date and the task that meets it, in the plan's contract", ct.includes('"date":"2027-01-18"') && /"task":[1-9]/.test(ct) && ct.includes('"value":1000'), ct);
   const row = await p.textContent(".panel.ctr tbody tr >> nth=0");
   check("the engine's forecast, days late and status show against it, with a trend line", row.includes("10 d late") && row.includes("Late") && !!(await p.$(".panel.ctr .spark")), row);
+  await p.click(".regtabs button:text-is('Payments')"); await p.waitForTimeout(250);
   await p.click(".page button:has-text('+ Payment')"); await p.waitForTimeout(250);
-  await p.fill(".panel.ctr >> nth=1 >> tbody tr >> nth=0 >> input[type=number] >> nth=0", "100"); await p.press(".panel.ctr >> nth=1 >> tbody tr >> nth=0 >> input[type=number] >> nth=0", "Tab"); await p.waitForTimeout(300);
-  check("payment milestones and the cash-in curve", (await p.textContent(".panel.ctr >> nth=1")).includes("Forecast") && !!(await p.$(".page .chartbox svg")) && (await p.textContent(".kpis")).includes("100.0 %"));
+  await p.fill(".panel.ctr >> nth=0 >> tbody tr >> nth=0 >> input[type=number] >> nth=0", "100"); await p.press(".panel.ctr >> nth=0 >> tbody tr >> nth=0 >> input[type=number] >> nth=0", "Tab"); await p.waitForTimeout(300);
+  const payTxt = await p.textContent(".panel.ctr >> nth=0");
+  await p.click(".regtabs button:text-is('Dashboard')"); await p.waitForTimeout(250);
+  check("payment milestones, and on the Dashboard the cash-in curve, the key figures and what needs attention", payTxt.includes("Forecast") && !!(await p.$(".page .chartbox svg")) && (await p.textContent(".kpis")).includes("100.0 %") && (await p.textContent(".page")).includes("Contract dates late or at risk"));
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-contract.png") });
   await p.click(".tabs > button:text-is('Project')"); await p.click(".ribbon button:has-text('Modules')"); await p.waitForTimeout(250);
   await p.click(".dlg label.chk:has-text('Contract Dates') input"); await p.waitForTimeout(150);
@@ -700,19 +705,20 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg .btn.pri:text-is('Import')"); await p.waitForTimeout(300);
   const im = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.docs);
   check("…and brings the documents in with their class, P + n and flags", im?.length === 2 && im[0].number === "DOC-001" && im[0].class === 1 && im[0].offset === 2 && im[0].flags.join() === "MRB" && im[1].offset === 61 && im[1].flags.length === 0, JSON.stringify(im));
+  await p.click(".regtabs button:text-is('Register')"); await p.waitForTimeout(250);
   check("the register is a spreadsheet: the documents with the engine's dates and status (grey)", (await p.textContent(".rg")).includes("Not submitted") && (await p.$$eval(".rg td.rh", t => t.filter(x => /^\d+$/.test(x.textContent)).length)) === 2 && !!(await p.$(".rg td.calc")));
   await p.click(".rg td.rh >> nth=0"); await p.waitForTimeout(150);
   await p.click(".rgbar button:has-text('Log submission')"); await p.waitForTimeout(300);
   await p.click(".dlg .btn.pri"); await p.waitForTimeout(300);
   const dlg = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.log);
   check("Log submission logs the selected document's next issue: revision A, the first-issue purpose of its class, transmittal TR-0001", dlg?.length === 1 && dlg[0].rev === "A" && dlg[0].purpose === "ICR" && !!dlg[0].sent && dlg[0].transmittal === "TR-0001", JSON.stringify(dlg));
-  await p.click(".dtabs button:has-text('Transmittal log')"); await p.waitForTimeout(300);
+  await p.click(".regtabs button:text-is('Transmittal log')"); await p.waitForTimeout(300);
   const codeCol = await p.$$eval(".rg thead th span", s => s.findIndex(x => x.textContent.trim() === "Code") + 1);
   await p.click(`.rg td[data-rc="0:${codeCol}"]`); await p.keyboard.type("Code 1"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
   check("the client's return code is typed or picked in the log from the codes in Settings", (await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Documents).pop()?.[1].op.Documents.r.log[0].code)) === "Code 1");
-  await p.click(".dtabs button:has-text('Progress')"); await p.waitForTimeout(400);
-  check("Progress shows the weighted S-curve, first issues per period and breakdowns", (await p.$$(".page .chartbox svg")).length >= 2 && (await p.textContent(".page")).includes("By vendor"));
-  if (process.env.SHOT) { await p.click(".dtabs button:has-text('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-docs.png") }); }
+  await p.click(".regtabs button:text-is('Dashboard')"); await p.waitForTimeout(400);
+  check("the Dashboard shows the key figures, what needs attention, the weighted S-curve, first issues per period and breakdowns (0.9.32)", (await p.$$(".page .chartbox svg")).length >= 2 && (await p.textContent(".page")).includes("By vendor") && (await p.$$(".page .attn")).length === 3 && !!(await p.$(".page .kpis")));
+  if (process.env.SHOT) { await p.click(".regtabs button:text-is('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-docs.png") }); }
   await p.click(".tabs > button:text-is('Project')"); await p.click(".ribbon button:has-text('Modules')"); await p.waitForTimeout(250);
   await p.click(".dlg label.chk:has-text('Document Register') input"); await p.waitForTimeout(150);
   check("switching the register off offers to keep or delete its documents", (await p.textContent(".dlg .modoff")).includes("Document Register"));
@@ -735,6 +741,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.evaluate(() => { delete window.__procRows; });
   const pitems = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Procurement).pop()?.[1].op.Procurement.r.items);
   check("…and brings the orders in: actual PO date, manufacturing %, the vendor's promise", pitems?.length === 2 && pitems[0].tag === "2.1" && pitems[0].actual[1] === "2026-11-10" && pitems[0].mfg_pct === 40 && pitems[0].promised === "2027-01-29", JSON.stringify(pitems?.[0]));
+  await p.click(".regtabs button:text-is('Register')"); await p.waitForTimeout(250);
   const pcol = async n => p.$$eval(".rg thead th span", (s, x) => s.findIndex(y => y.textContent.trim() === x) + 1, n);
   await p.click(".rgbar button:has-text('Columns')"); await p.waitForTimeout(150); await p.click(".menu >> text=Documents"); await p.waitForTimeout(300);
   check("the register is a spreadsheet: float to the date the plan needs each order, in red when late, and the Documents column when linked", (await p.$$eval(".rg td.rh", t => t.filter(x => /^\d+$/.test(x.textContent)).length)) === 2 && !!(await p.$(".rg .st.bad")) && (await pcol("Documents")) > 0);
@@ -750,9 +757,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".rgbar button:text-is('Note')"); await p.waitForTimeout(250);
   await p.fill(".dlg textarea", "Forging poured, heat treatment next week"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(400);
   check("the expediting log keeps dated notes per order", (await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Procurement).pop()?.[1].op.Procurement.r.items[0].log[0]?.note)) === "Forging poured, heat treatment next week" && (await p.textContent(".rg")).includes("Forging poured"));
-  await p.click(".dtabs button:has-text('Progress')"); await p.waitForTimeout(400);
-  check("Progress shows the weighted S-curve and orders by sub-vendor", !!(await p.$(".page .chartbox svg")) && (await p.textContent(".page")).includes("By sub-vendor"));
-  if (process.env.SHOT) { await p.click(".dtabs button:has-text('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-proc.png") }); }
+  await p.click(".regtabs button:text-is('Dashboard')"); await p.waitForTimeout(400);
+  check("the Dashboard shows the weighted S-curve, orders by sub-vendor and the late orders to chase", !!(await p.$(".page .chartbox svg")) && (await p.textContent(".page")).includes("By sub-vendor") && (await p.textContent(".page .attn >> nth=0")).includes("Late for the plan"));
+  { const g = await p.evaluate(() => { const r = document.querySelector(".rbbody")?.getBoundingClientRect(); return r ? r.height : 0; });
+    await p.click(".regtabs button:text-is('Register')"); await p.waitForTimeout(250);
+    const h = await p.evaluate(() => document.querySelector(".rg")?.getBoundingClientRect().height ?? 0);
+    check("on the Register tab the grid fills the window down to the tabs (0.9.32)", h > g - 140 && h > 200, `${h} of ${g}`); }
+  if (process.env.SHOT) { await p.click(".regtabs button:text-is('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-proc.png") }); }
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   // 0.7.2 (from Datum Plot's testers): Enter keeps what was typed; dialogs move; small screens.
   await p.click(".tabs > button:text-is('Project')"); await p.waitForTimeout(150);

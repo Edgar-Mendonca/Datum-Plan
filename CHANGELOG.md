@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.32 — 2026-11-20
+
+The registers work like workbooks: a Dashboard first, then their sheets on tabs along the bottom.
+
+- **Document, Procurement and Contract registers** open on a **Dashboard**, with tabs along the bottom as in Sheets: Dashboard, Register, Transmittal log, Transmittals; Dashboard, Register, Expediting log; Dashboard, Contract dates, Payments.
+- **The whole window for the grid:** on a register or log tab the spreadsheet fills the window down to the tabs; the key figures stay on the Dashboard.
+- **Dashboards** show the key figures, **what needs attention** (first issues overdue, reviews past their period, documents to resubmit; orders late for the plan, milestones overdue, next deliveries; contract dates late or at risk, payments due), the S-curves and the breakdowns. Click a row to open its card.
+- Each register remembers the tab it was on.
+
 ## 0.9.31 — 2026-11-20
 
 The AI Link reaches Claude Code, and plan files without the window.

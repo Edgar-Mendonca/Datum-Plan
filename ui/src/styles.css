@@ -1448,3 +1448,20 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 .rgfx input:focus { outline: 2px solid var(--blue) !important; outline-offset: -2px; }
 .rgfx input.calc { background: #F1F2EE; color: var(--text2); }
 :root[data-theme="dark"] .rgfx input.calc { background: #121B26; }
+/* 0.9.32: registers as workbooks: Dashboard first, tabs along the bottom, grids fill the window. */
+.page.regbook { padding: 0; gap: 0; overflow: hidden; }
+.regbook > .ptools { padding: 12px 24px 8px; flex: none; }
+.rbbody { flex: 1; min-height: 0; overflow: auto; padding: 4px 24px 16px; display: flex; flex-direction: column; gap: 12px; }
+.rbbody > * { flex-shrink: 0; }
+.rbbody.full { overflow: hidden; padding: 0 12px 6px; gap: 4px; }
+.rbbody.full > .rgwrap { flex: 1 1 0; min-height: 0; }
+.rbbody.full .rg { max-height: none; min-height: 120px; }
+.regtabs button { padding: 5px 16px; }
+.cols3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.attn h2 { margin-bottom: 6px; }
+.attnrow { display: grid; grid-template-columns: minmax(70px, auto) 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line2); font-size: 12px; }
+.attnrow:hover { background: var(--sel); }
+.attnrow b { font: 600 11px var(--mono); white-space: nowrap; }
+.attnrow span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); }
+.attnrow .st { font-size: 11px; white-space: nowrap; }
+.attnrow .st.bad { color: var(--crit); }

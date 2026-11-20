@@ -42,6 +42,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.goto(`http://localhost:${srv.address().port}/`); await p.waitForTimeout(700);
   await p.click(".bs aside .back"); await p.waitForTimeout(200);
   await p.click('.side button[title="Documents"]'); await p.waitForTimeout(700);
+  await p.click(".regtabs button:text-is('Register')"); await p.waitForTimeout(300);
   const R = async () => (await call("state")).project.documents;
   const W = ms => p.waitForTimeout(ms);
   /** A cell of the grid on screen (row i from 0, column j from 1). */
@@ -114,7 +115,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("select three rows, Log submission (3): one transmittal (TR-0001), a row each with revision A and the first-issue purpose", label.includes("(3)") && tr === "TR-0001" && r.log.length === 3 && r.log.every(s => s.transmittal === "TR-0001" && s.rev === "A" && s.purpose === "ICR"), JSON.stringify([label, tr, r.log]));
   });
   await T("log a return", async () => {
-    await p.click(".dtabs button:has-text('Register')"); await W(300);
+    await p.click(".regtabs button:text-is('Register')"); await W(300);
     await p.click(".rg td.rh >> nth=1"); await W(100);
     await p.click(".rgbar button:has-text('Log return')"); await W(300);
     await p.selectOption(".dlg label:has-text('Code') select", "Code 3"); await p.click(".dlg .btn.pri"); await W(600);
@@ -122,7 +123,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("Log return puts the date and code on the open submission; Code 3 makes it Resubmit", r.log.find(s => s.doc === r.docs[1].id).code === "Code 3" && /Resubmit/.test(st), JSON.stringify([r.log, st]));
   });
   await T("the transmittal log fills itself from the document number", async () => {
-    await p.click(".dtabs button:has-text('Transmittal log')"); await W(400);
+    await p.click(".regtabs button:text-is('Transmittal log')"); await W(400);
     const n = (await R()).log.length, c = await colOf("Document No.");
     await p.click(cell(n, c)); await p.keyboard.type("DOC-002"); await W(200);
     const drop = await p.textContent(".rgdrop");
@@ -135,11 +136,11 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.keyboard.press("Escape"); await W(100);
   });
   await T("the transmittals list", async () => {
-    await p.click(".dtabs button:has-text('Transmittals')"); await W(300);
+    await p.click(".regtabs button:text-is('Transmittals')"); await W(300);
     check("Transmittals lists each transmittal number with its documents", (await p.textContent(".page")).includes("TR-0001") && (await p.$$(".page .tbl tbody tr")).length >= 1);
   });
   await T("the document card", async () => {
-    await p.click(".dtabs button:has-text('Register')"); await W(300);
+    await p.click(".regtabs button:text-is('Register')"); await W(300);
     await p.dblclick(".rg td.rh >> nth=1"); await W(400);
     const t = await p.textContent(".dcard");
     check("double-click a row: the card shows its steps and history (sent, returned Code 3, next issue)", t.includes("HISTORY") && t.includes("Returned Code 3") && t.includes("Compressor datasheet"), t.slice(0, 200));

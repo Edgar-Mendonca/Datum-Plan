@@ -641,19 +641,19 @@ A plan can take on extra registers, called **modules**: Contract Dates & Payment
 
 ### Contract Dates & Payments
 
-**Contract** (sidebar) shows the dates the contract fixes against the forecast, the delay damages at risk, and the payments.
+**Contract** (sidebar) shows the dates the contract fixes against the forecast, the delay damages at risk, and the payments. Like the other registers it opens on its **Dashboard** (the key figures, the contract dates late or at risk, the payments due and next, and the cash-in curve), with its sheets on tabs along the bottom, as in Sheets: **Dashboard**, **Contract dates** and **Payments**.
 
 1. Type the contract number and value at the top.
-2. Select the task that meets a contract date, for example a delivery milestone, and click **+ Contract date**. Type the date the contract fixes.
+2. On **Contract dates**, select the task that meets a contract date, for example a delivery milestone, and click **+ Contract date**. Type the date the contract fixes.
 3. The row shows the task's forecast (its actual finish once done), the baseline, the days late or early, and a status: **On track**, **At risk** (less float than the days set at the top), **Late**, **Met** or **Met late**. **Trend** draws the forecast at each period close, so a slipping date shows as a rising red line.
 4. **Delay damages:** a % per week or part week late, after the **grace** days, up to the **cap** %, of **Of value** (the unit's price; empty means the contract value). **At risk** shows the damages at today's forecast.
-5. **Payment milestones:** **+ Payment**, then the task whose finish triggers it, the share (%) or an amount, and the **terms** (days to payment). Type the invoiced and paid dates as they happen. The chart shows planned, forecast and received cash.
+5. **Payments:** **+ Payment**, then the task whose finish triggers it, the share (%) or an amount, and the **terms** (days to payment). Type the invoiced and paid dates as they happen. The Dashboard's chart shows planned, forecast and received cash.
 
-On a master, a table at the bottom adds up the contract dates, damages and payments of its open subplans, with a button to open each one.
+On a master, a table on the Dashboard adds up the contract dates, damages and payments of its open subplans, with a button to open each one.
 
 ### Document Register
 
-**Documents** (sidebar) keeps the vendor documents of a package and every submission of them, as two spreadsheets: the **Register** (one row per document) and the **Transmittal log** (one row per submission).
+**Documents** (sidebar) keeps the vendor documents of a package and every submission of them, as two spreadsheets: the **Register** (one row per document) and the **Transmittal log** (one row per submission). It opens on its **Dashboard**; the tabs along the bottom, as in Sheets, switch to **Register**, **Transmittal log** and **Transmittals**, and a register or log tab uses the whole window for its grid.
 
 1. **Settings…** first, in tabs:
    - **General**: the **P date** (purchase order or kick-off; empty means the plan's start), P + n in weeks or days, the client's **review** and our **turnaround** in working days, each on **the plan's calendar** or **a calendar of its own** (**New calendar…** makes one with its own holidays).
@@ -667,7 +667,7 @@ On a master, a table at the bottom adds up the contract dates, damages and payme
 2. Fill the **Register** as a spreadsheet: type in a cell, Tab and Enter to move, type in the empty row at the foot to add a document, **paste rows straight from your workbook**, Ctrl+D fills down, Delete clears. List cells (vendor, package, discipline, type, class, state) drop down as you type. **P +** takes P + n or a date. White cells are what you type; grey cells are worked out (planned dates, latest submission, review due, status, earned, client delay, forecast final issue) and cannot be typed over. The **formula bar** above the grid shows the selected cell whole and edits it (Enter keeps the change). Click the row numbers to select rows (Shift for a run, Ctrl for more) and act on them; **Columns ▾** shows or hides columns; each heading's ▾ sorts and filters. Or **Import…** the register, its transmittal log, or its **settings sheet** (return codes, issue purposes, P date, review days and public holidays) from a workbook (.xlsx).
 3. Log submissions either way. In the register, select documents and click **Log submission**: one transmittal number and date for all of them, a row each, with the revision and purpose their class needs next. In the **Transmittal log**, type or pick a document number in the empty row: its title, class and vendor fill in from the register, and the revision, purpose and date are proposed. When the client answers, **Log return** (date and code for every selected document) or type the return date and code in the log.
 4. Double-click a document for its **card**: where it stands in its class steps, and every revision, return code and date. **Transmittals** lists each transmittal number with its documents; **Cover sheet…** makes the transmittal sheet (PDF).
-5. **Progress** draws the weighted planned and actual S-curve by week or month, the first issues per period, and progress by vendor, discipline, type and class. **Export…** writes the register and the log to a workbook.
+5. The **Dashboard** shows the key figures, what needs attention (first issues overdue, documents with the client past the review period, documents to resubmit: click one for its card), the weighted planned and actual S-curve by week or month, the first issues per period, and progress by vendor, discipline, type and class. **Export…** writes the register and the log to a workbook.
 
 The register is also two tables for Sheets: `Documents[Vendor]`, `Documents[Status]`, `Documents[Earned %]`, `Transmittals[Code]`, `Transmittals[Days late]`… (your own columns too), so `=COUNTIFS(Documents[Vendor],"Northwind",Documents[Status],"Resubmit")` or a `FILTER` of the overdue reviews make your own summaries.
 
@@ -675,13 +675,13 @@ A new register starts with three standard classes: 1 and 2 go first issue → ap
 
 ### Procurement Register
 
-**Procurement** (sidebar) follows each sub-order or equipment item from enquiry to delivery, as two spreadsheets like the Document Register: the **Register** (one row per order) and the **Expediting log** (one row per note).
+**Procurement** (sidebar) follows each sub-order or equipment item from enquiry to delivery, as two spreadsheets like the Document Register: the **Register** (one row per order) and the **Expediting log** (one row per note). It opens on its **Dashboard**, with **Register** and **Expediting log** on the tabs along the bottom.
 
 1. **Settings…**, in tabs: **General** (the milestone weights: balanced, more credit at the order, more credit at delivery, or your own; how orders weigh against each other: PO value, equally or a typed weight; the inspection release days before delivery; the float under which an order turns amber; and whether **orders link to the Document Register**), **Lists** (sub-vendors, countries of origin, states such as Active, Hold and Cancelled, and lists of your own), **Columns** of your own (text, number, date, list, or a formula per order such as `=[Delivery planned]-14`), the client's **Status words**, **Templates** and **Delete register**.
 2. Fill the **Register** as a spreadsheet: type an item number in the empty row at the foot, Tab to the order, the sub-vendor (a drop-down that grows as you type new ones), the PO number; **paste rows straight from your workbook**. Each milestone (RFQ, PO, manufacturing start, inspection release, delivery) has a planned and an actual column: a planned date left empty comes from the task for the order's manufacture and delivery (shown grey). The **formula bar** shows the selected cell whole. Or **Import…** the register, or its **settings sheet** (the milestone weights in use, the weighting and the inspection release days), from a workbook (.xlsx).
 3. Keep it up to date: select orders and **Record milestone** (one date for all of them), type the **Mfg %** and the vendor's **Promised** delivery. Grey columns are worked out: **Forecast**, **Var.** against the planned delivery, **Float** to the date the plan needs it (red when late, amber when little), **Status**, **Next** (with the days it is late) and **Earned**. A **Cancelled** order stays in the register, struck through, and is left out of progress.
 4. **Note** adds an expediting note to every selected order; the **Expediting log** lists them all: type an item number in its empty row to add one there. Double-click an order for its **card**: milestones planned and actual, forecast and float, and its notes.
-5. **Progress**: the weighted planned and actual S-curve by week or month, and orders by sub-vendor and country. **Export…** writes the register and the log to a workbook.
+5. The **Dashboard**: the key figures, the orders to chase (late for the plan, milestones overdue, the next deliveries: click one for its card), the weighted planned and actual S-curve by week or month, and orders by sub-vendor and country. **Export…** writes the register and the log to a workbook.
 
 With the link to the Document Register on, an order lists the vendor documents it waits for (**Details…**); the **Documents** column shows how many are accepted and flags orders whose drawings hold up manufacturing. With it off, orders stand on their own. In Sheets, `Orders[…]` and `Expediting[…]` are tables every formula can use, such as `=COUNTIFS(Orders[Sub-vendor],"Forge Co",Orders[RAG],"red")`.
 

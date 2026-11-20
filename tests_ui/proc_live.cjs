@@ -42,6 +42,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.goto(`http://localhost:${srv.address().port}/`); await p.waitForTimeout(700);
   await p.click(".bs aside .back"); await p.waitForTimeout(200);
   await p.click('.side button[title="Procurement"]'); await p.waitForTimeout(700);
+  await p.click(".regtabs button:text-is('Register')"); await p.waitForTimeout(300);
   const R = async () => (await call("state")).project.procurement;
   const W = ms => p.waitForTimeout(ms);
   const cell = (i, j) => `.rg td[data-rc="${i}:${j}"]`;
@@ -82,7 +83,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.fill(".dlg textarea", "Vendor confirms the forgings ship in week 5"); await p.fill(".dlg label:has-text('By') input", "EM");
     await p.click(".dlg .btn.pri"); await W(700);
     const r = await R(), rows = await p.$$eval(".rg td.rh", t => t.filter(x => /^\d+$/.test(x.textContent)).length);
-    check("Note for two orders adds the note to each, and the expediting log (opened after) lists them", r.items[0].log.length === 1 && r.items[1].log[0].note.includes("week 5") && rows === 2 && (await p.textContent(".dtabs .on")).includes("Expediting"), JSON.stringify([r.items.map(x => x.log.length), rows]));
+    check("Note for two orders adds the note to each, and the expediting log (opened after) lists them", r.items[0].log.length === 1 && r.items[1].log[0].note.includes("week 5") && rows === 2 && (await p.textContent(".regtabs .on")).includes("Expediting"), JSON.stringify([r.items.map(x => x.log.length), rows]));
     const c = await colOf("Item");
     await p.click(cell(2, c)); await p.keyboard.type("2.3"); await W(200);
     const drop = await p.textContent(".rgdrop");
@@ -92,7 +93,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("in the log's empty row, an item number (offered from the register) starts a note for that order", drop.includes("Bearings") && r2.items[2].log.length === 1 && r2.items[2].log[0].note === "RFQ answered", JSON.stringify([drop, r2.items[2].log]));
   });
   await T("the order card", async () => {
-    await p.click(".dtabs button:has-text('Register')"); await W(300);
+    await p.click(".regtabs button:text-is('Register')"); await W(300);
     await p.dblclick(".rg td.rh >> nth=0"); await W(400);
     const t = await p.textContent(".dcard");
     check("double-click an order: its card shows the milestones and the expediting notes", t.includes("Rotor forgings") && t.includes("EXPEDITING") && t.includes("week 5") && t.includes("PO placed"), t.slice(0, 160));

@@ -5,14 +5,13 @@
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 import { Portal } from "solid-js/web";
 import { DocClass, DocRegister, DocRow, DocStep, ListItem, Options, RegList, RegOut, Submission, VDoc } from "./api";
-import { act, call, grid, out, P, tick, setView, openDialog, closeDialog, toast, opts, setOpts, openMenu, Item } from "./store";
-import { Page } from "./views";
+import { act, call, grid, out, P, tick, setView, openDialog, closeDialog, toast, opts, setOpts, openMenu, Item, kept } from "./store";
 import { Kpi } from "./reports";
 import { ChartBox, COL, bar, line } from "./charts";
 import { Dialog, Seg, askText, askYes } from "./ui";
 import { showTab } from "./plans";
 import { Col, Edit, Opt, RegGrid, dt, parseDate } from "./regrid";
-import { ColumnsTab, LCol, LList, ListsTab, WordsTab, editLists, settle } from "./regkit";
+import { Attention, ColumnsTab, LCol, LList, ListsTab, RegBook, WordsTab, editLists, settle } from "./regkit";
 import * as D from "./dialogs";
 
 const FLAGS = ["MRB", "VDB", "IOM", "PIM", "Native", "Eng. review", "QA review"];
@@ -470,11 +469,12 @@ export const docImport = async () => {
 };
 
 // ---------- The view ----------
+const docTab = kept("docs-tab", "dashboard");
 const pct = (v: number) => `${v.toFixed(0)} %`;
 export const DocumentsView = () => {
   const [data] = createResource(() => [tick(), out()?.tab] as const, () => call<{ tab: number; name: string; on: boolean; out: RegOut }[]>("documents"));
   const me = () => data()?.find(d => d.tab === out()?.tab)?.out;
-  const [tab, setTab] = createSignal("register"), [q, setQ] = createSignal(""), [per, setPer] = createSignal<"weekly" | "monthly">("monthly");
+  const [tab, setTab] = docTab, [q, setQ] = createSignal(""), [per, setPer] = createSignal<"weekly" | "monthly">("monthly");
   const [selDocs, setSelDocs] = createSignal<VDoc[]>([]), [selSubs, setSelSubs] = createSignal<Submission[]>([]);
   const rowOf = (id: number) => me()?.docs.find(x => x.id === id);
   const docs = createMemo(() => { const t = q().toLowerCase(); return reg().docs.filter(d => !t || `${d.number} ${d.title} ${d.vendor} ${d.package} ${d.disc} ${d.kind} ${d.remarks}`.toLowerCase().includes(t)); });
@@ -603,14 +603,25 @@ export const DocumentsView = () => {
   };
   const Breakdown = (p: { title: string; key: (d: VDoc) => string }) => <div class="panel ctr"><h2>{p.title}</h2><table class="tbl"><thead><tr><th>{p.title.replace("By ", "")}</th><th class="r">Documents</th><th class="r">1st issued</th><th class="r">Final</th><th class="r">Earned</th></tr></thead>
     <tbody><For each={groupBy(p.key)}>{([k, g]) => <tr><td>{k}</td><td class="r">{g.n}</td><td class="r">{g.first}</td><td class="r">{g.fin}</td><td class="r">{g.w ? (g.earned / g.w).toFixed(1) : "—"} %</td></tr>}</For></tbody></table></div>;
+  const Plans = () => <Show when={(data()?.length ?? 0) > 1}>
+        <div class="panel ctr"><h2>The project's plans</h2>
+          <table class="tbl"><thead><tr><th>Plan</th><th class="r">Documents</th><th class="r">1st issued</th><th class="r">Final</th><th class="r">Earned</th><th class="r">Planned</th><th class="r">Client late (d)</th><th /></tr></thead>
+            <tbody><For each={data()}>{d => <tr><td><b>{d.name}</b>{d.tab === out()?.tab ? " (this plan)" : ""}{!d.on && <span class="muted"> · module off</span>}</td><td class="r">{d.out.docs.length}</td><td class="r">{d.out.docs.filter(x => x.actual[0]).length}</td><td class="r">{d.out.docs.filter(x => x.done).length}</td>
+              <td class="r">{d.out.earned.toFixed(1)} %</td><td class="r">{d.out.planned.toFixed(1)} %</td><td class="r">{d.out.client_late}</td>
+              <td>{d.tab !== out()?.tab && <button class="btn sm" onClick={() => showTab(d.tab).then(() => setView("documents"))}>Open</button>}</td></tr>}</For></tbody></table>
+        </div>
+      </Show>;
   const legend = <span class="rglegend"><span><i />you type</span><span><i class="calc" />the app works it out</span><span>▾ lists: Settings › Lists</span></span>;
   const columnsMenu = (e: MouseEvent) => openMenu(e, [...allCols().map(c => ({ label: c.name, on: !hidden().includes(c.key), run: () => setHidden(hidden().includes(c.key) ? hidden().filter(x => x !== c.key) : [...hidden(), c.key]) })), "-" as const, { label: "Your own columns…", run: () => docSettings("columns") }]);
   return (
-    <Page title="Document Register" help="documents" tools={<>
+    <RegBook title="Document Register" help="documents" tab={tab()} set={setTab} grids={["register", "log"]}
+      tabs={[["dashboard", "Dashboard"], ["register", "Register"], ["log", "Transmittal log"], ["trans", "Transmittals"]]} tools={<>
       <button class="btn" onClick={() => docSettings()}>Settings…</button><button class="btn" onClick={docImport}>Import…</button>
       <button class="btn" onClick={async () => { const f = await call<string | null>("docs_export"); if (f) toast(`Saved ${f}`, true); }} title="A workbook (.xlsx) or an OpenDocument spreadsheet (.ods): choose the type in the Save window">Export…</button>
     </>}>
       <Show when={me()}>{o => <>
+        <Show when={!o().weights_ok.every(Boolean)}><p class="dwarn">The progress weights of a class do not add up to 100 %: Settings › Classes & steps.</p></Show>
+        <Show when={tab() === "dashboard"}>
         <div class="kpis">
           <Kpi v={String(o().docs.filter(d => d.skey !== "off").length)} l={`documents · ${reg().log.length} submissions`} />
           <Kpi v={`${o().docs.filter(d => d.actual[0]).length} / ${o().docs.filter(d => d.planned[0] && d.skey !== "off").length}`} l="first issues sent / planned" />
@@ -621,8 +632,25 @@ export const DocumentsView = () => {
           <Kpi v={`${o().earned.toFixed(1)} %`} l={`earned · planned ${o().planned.toFixed(1)} %`} bad={o().earned < o().planned - 0.05} good={o().earned >= o().planned && o().planned > 0} />
           <Kpi v={`${o().client_late} d`} l="the client kept documents past the review period" />
         </div>
-        <Show when={!o().weights_ok.every(Boolean)}><p class="dwarn">The progress weights of a class do not add up to 100 %: Settings › Classes & steps.</p></Show>
-        <div class="dtabs"><Seg value={tab()} set={setTab} options={[["register", "Register"], ["log", "Transmittal log"], ["trans", "Transmittals"], ["progress", "Progress"]]} /></div>
+        <div class="cols3">
+          <Attention title="First issues overdue" empty="None: every first issue due is sent." more={() => setTab("register")}
+            rows={o().docs.filter(d => d.skey === "not_sub_late").map(d => ({ key: docOf(d.id)?.number ?? "", text: docOf(d.id)?.title ?? "", note: d.late1 ? `${d.late1} d late` : d.status, bad: true, open: () => openCard(d.id) }))} />
+          <Attention title="With the client past the review period" empty="None overdue." more={() => setTab("log")}
+            rows={o().docs.filter(d => d.skey === "review_late").map(d => ({ key: docOf(d.id)?.number ?? "", text: docOf(d.id)?.title ?? "", note: d.status, bad: true, open: () => openCard(d.id) }))} />
+          <Attention title="To resubmit" empty="Nothing returned for resubmission." more={() => setTab("register")}
+            rows={o().docs.filter(d => d.skey === "resubmit").map(d => ({ key: docOf(d.id)?.number ?? "", text: docOf(d.id)?.title ?? "", note: d.status, open: () => openCard(d.id) }))} />
+        </div>
+        <div class="phead"><h2>Progress</h2><span class="grow" /><Seg value={per()} set={v => setPer(v as "monthly")} options={[["weekly", "Weekly"], ["monthly", "Monthly"]]} /></div>
+        <Show when={o()[per()].length > 1} fallback={<p class="empty">Give the documents planned dates (P + n) to see the S-curve.</p>}>
+          <div class="cols2">
+            <ChartBox title="Document progress (weighted)" type="line" fmt="pct" max={100} labels={o()[per()].map(p => dt(p.end))} days={o()[per()].map(p => Math.round(Date.parse(p.end) / 864e5))}
+              datasets={[line("Planned", o()[per()].map(p => p.planned), COL.grey, [5, 4]), line("Actual", o()[per()].map(p => p.actual), COL.blue)]} />
+            <ChartBox title="First issues per period" type="bar" labels={o()[per()].map(p => dt(p.end))} datasets={[bar("Planned", o()[per()].map(p => p.first_planned), COL.grey), bar("Sent", o()[per()].map(p => p.first_done), COL.green)]} />
+          </div>
+        </Show>
+        <div class="cols2"><Breakdown title="By vendor" key={d => d.vendor} /><Breakdown title="By discipline" key={d => d.disc} /><Breakdown title="By document type" key={d => d.kind} /><Breakdown title="By class" key={d => `Class ${className(d)}`} /></div>
+        <Plans />
+        </Show>
         <Show when={tab() === "register"}>
           <div class="rgbar">
             <button class="btn pri" onClick={() => addDocs([{ title: "New document" }])} title="Or type in the empty row at the foot of the register">+ Document</button>
@@ -658,25 +686,9 @@ export const DocumentsView = () => {
                 <td><button class="btn sm" onClick={() => printTransmittal(no)}>Cover sheet…</button></td></tr>}</For></tbody></table>
           </div>
         </Show>
-        <Show when={tab() === "progress"}>
-          <div class="phead"><Seg value={per()} set={v => setPer(v as "monthly")} options={[["weekly", "Weekly"], ["monthly", "Monthly"]]} /></div>
-          <Show when={o()[per()].length > 1} fallback={<p class="empty">Give the documents planned dates (P + n) to see the S-curve.</p>}>
-            <ChartBox title="Document progress (weighted)" type="line" fmt="pct" max={100} labels={o()[per()].map(p => dt(p.end))} days={o()[per()].map(p => Math.round(Date.parse(p.end) / 864e5))}
-              datasets={[line("Planned", o()[per()].map(p => p.planned), COL.grey, [5, 4]), line("Actual", o()[per()].map(p => p.actual), COL.blue)]} />
-            <ChartBox title="First issues per period" type="bar" labels={o()[per()].map(p => dt(p.end))} datasets={[bar("Planned", o()[per()].map(p => p.first_planned), COL.grey), bar("Sent", o()[per()].map(p => p.first_done), COL.green)]} />
-          </Show>
-          <div class="cols2"><Breakdown title="By vendor" key={d => d.vendor} /><Breakdown title="By discipline" key={d => d.disc} /><Breakdown title="By document type" key={d => d.kind} /><Breakdown title="By class" key={d => `Class ${className(d)}`} /></div>
-        </Show>
         <Card o={o()} />
       </>}</Show>
-      <Show when={(data()?.length ?? 0) > 1}>
-        <div class="panel ctr"><h2>The project's plans</h2>
-          <table class="tbl"><thead><tr><th>Plan</th><th class="r">Documents</th><th class="r">1st issued</th><th class="r">Final</th><th class="r">Earned</th><th class="r">Planned</th><th class="r">Client late (d)</th><th /></tr></thead>
-            <tbody><For each={data()}>{d => <tr><td><b>{d.name}</b>{d.tab === out()?.tab ? " (this plan)" : ""}{!d.on && <span class="muted"> · module off</span>}</td><td class="r">{d.out.docs.length}</td><td class="r">{d.out.docs.filter(x => x.actual[0]).length}</td><td class="r">{d.out.docs.filter(x => x.done).length}</td>
-              <td class="r">{d.out.earned.toFixed(1)} %</td><td class="r">{d.out.planned.toFixed(1)} %</td><td class="r">{d.out.client_late}</td>
-              <td>{d.tab !== out()?.tab && <button class="btn sm" onClick={() => showTab(d.tab).then(() => setView("documents"))}>Open</button>}</td></tr>}</For></tbody></table>
-        </div>
-      </Show>
-    </Page>
+      <Show when={!me()}><Plans /></Show>
+    </RegBook>
   );
 };
