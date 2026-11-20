@@ -19,7 +19,7 @@ export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", auto
 // Fill series read 03/04/2026 the way the plan writes dates (day first unless the format starts with the month).
 createRoot(() => createEffect(() => { fillOrder.dayFirst = !opts().dateFmt.startsWith("%m"); }));
 
-export type View = "setup" | "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "simrisk" | "checks" | "lookahead" | "manpower" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder" | "contract" | "documents" | "procurement" | "delay" | "board";
+export type View = "setup" | "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "simrisk" | "checks" | "lookahead" | "manpower" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder" | "contract" | "documents" | "procurement" | "delay" | "board" | "milestones";
 export const [view, setView] = createSignal<View>("gantt");
 export const [backstage, setBackstage] = createSignal<string | null>("home");
 export const [tab, setTab] = createSignal("task");
@@ -67,9 +67,14 @@ export const kept = <T,>(key: string, first: T) => {
   const [get, put] = createSignal<T>(v);
   return [get, (x: T) => { put(() => x); try { localStorage.setItem(key, JSON.stringify(x)); } catch { /* no storage */ } }] as const;
 };
+export const [showBase, setShowBase] = pane("show-base", false);
 export const [projSum, setProjSum] = pane("show-projsum", false);
 export const [hideSum, setHideSum] = pane("hide-summaries", false);
 export const [baseline, setBaseline] = createSignal(0);
+/** More baselines drawn under the Gantt bars, each in its own colour (kept on this computer). */
+export const [moreBls, setMoreBls] = kept<number[]>("gantt-more-baselines", []);
+/** A baseline's colour on the Gantt (the main one keeps the theme's grey). */
+export const BL_COLOURS = ["#AEB7C4", "#2F80ED", "#9B51E0", "#F2994A", "#27AE60", "#EB5757", "#56CCF2", "#BB6BD9", "#6FCF97", "#F2C94C", "#828282"];
 /** Ghost bars: another version's bars (uid → start, finish in days) drawn behind the Gantt's, and its name. */
 export const [ghost, setGhost] = createSignal<{ name: string; bars: Map<number, [number, number]> } | null>(null);
 /** A master's combined view: its subplans shown under its tasks, and which are expanded (files). */
@@ -80,7 +85,7 @@ export const [grid, setGrid] = createSignal<Grid>({ cols: [], rows: [], shown: 0
 
 export const query = (): Query => ({
   cols: cols().map(c => c[0]), filter: filter(), group: group(), sort: sort(), flat: false, collapsed: collapsed(), level: level(),
-  hide_summaries: hideSum(), project_summary: projSum(), baseline: baseline(),
+  hide_summaries: hideSum(), project_summary: projSum(), baseline: baseline(), bls: showBase() ? moreBls() : [],
 });
 
 /** Switches table; the plan's own columns (saved with the file) back the Entry table. */

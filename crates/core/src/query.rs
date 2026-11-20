@@ -41,6 +41,8 @@ pub struct Query {
     pub project_summary: bool,
     /// Baseline drawn on the Gantt.
     pub baseline: u8,
+    /// More baselines drawn under it, each in its own colour (Multiple Baselines Gantt).
+    pub bls: Vec<u8>,
 }
 
 #[derive(Serialize, Default)]
@@ -63,6 +65,9 @@ pub struct Bar {
     pub pct: u8,
     pub segs: Vec<(f64, f64)>,
     pub links: Vec<(u32, LinkType)>,
+    /// The other baselines asked for: (number, start, finish).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub more: Vec<(u8, f64, f64)>,
 }
 
 fn r5<S: serde::Serializer>(v: &f64, s: S) -> Result<S::Ok, S::Error> { s.serialize_f64((v * 1e5).round() / 1e5) }
@@ -168,7 +173,7 @@ impl Calc<'_> {
         a.cmp(&b)
     }
 
-    pub fn bar(&self, i: usize, baseline: u8) -> Bar {
+    pub fn bar(&self, i: usize, baseline: u8, bls: &[u8]) -> Bar {
         let (p, s) = (self.p, &self.s);
         let t = &p.tasks[i];
         let b = t.bls.get(&baseline);
@@ -189,6 +194,7 @@ impl Calc<'_> {
             bs: b.map(|b| day(b.start)), bf: b.map(|b| day(b.finish)),
             dl: t.deadline.map(|d| day(at(d) + DAY)), pct: self.pct[i], segs,
             links: t.preds.iter().map(|l| (l.pred, l.kind)).collect(),
+            more: bls.iter().filter(|n| **n != baseline).take(10).filter_map(|n| t.bls.get(n).map(|b| (*n, day(b.start), day(b.finish)))).collect(),
         }
     }
 
@@ -206,7 +212,7 @@ impl Calc<'_> {
             uid: t.uid, id: i + 1, lvl: t.level, kind: if s.summary[i] { "summary" } else { "task" },
             ms: !s.summary[i] && (t.dur == 0 || matches!(t.act_type, ActType::StartMs | ActType::FinishMs)),
             crit: s.critical(p, i), late: self.val(i, "late").truth(), manual: t.manual, off: s.off[i], lp: s.lp[i],
-            kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, name: t.name.clone(), res: self.text(i, "res"), cells, icons, style: t.style.as_object().map(|m| m.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()).unwrap_or_default(), bar: self.bar(i, q.baseline),
+            kids: s.summary[i], open: !q.collapsed.contains(&t.uid), hl, name: t.name.clone(), res: self.text(i, "res"), cells, icons, style: t.style.as_object().map(|m| m.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()).unwrap_or_default(), bar: self.bar(i, q.baseline, &q.bls),
             ext: t.ext.iter().map(|x| crate::links::label(x, p.day_min)).collect(), ext_out: vec![], ext_moved: false, sub: String::new(), suid: 0,
         }
     }

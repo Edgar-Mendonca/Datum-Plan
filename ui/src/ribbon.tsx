@@ -2,7 +2,7 @@
 import { modules, openContract, openDocuments, openProcurement } from "./contract";
 import { linkSelected, linkedPlans, updateLinks, subplans, shareSetup } from "./plans";
 import { For, Show, JSX, createSignal, createMemo, createEffect, onMount, onCleanup } from "solid-js";
-import { setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
+import { setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, moreBls, setMoreBls, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import { aiOn, aiLink } from "./ai";
 import { pathOn, setPathOn } from "./path";
@@ -114,7 +114,13 @@ const copyGantt = async () => {
   if (cv) copyCanvas(cv, "The Gantt chart", cv.width / 2 / 96 * 2.54);
 };
 const exportMenu = (): Item[] => [["Workbook (.xlsx)", "xlsx"], ["OpenDocument spreadsheet (.ods)", "ods"], ["Project XML (.xml)", "xml"], ["XER (.xer)", "xer"], ["PMXML (.xml)", "pmxml"], ["MPX (.mpx)", "mpx"], ["CSV (.csv)", "csv"], ["Web page (.html)", "html"], ["iCalendar (.ics)", "ics"], ["JSON (.json)", "json"]].map(([l, k]) => ({ label: l, run: () => C.exportAs(k) }));
-const baselineMenu = (): Item[] => Array.from({ length: 11 }, (_, k) => ({ label: k ? `Baseline ${k}` : "Baseline", run: () => { setBaseline(k); setShowBase(true); }, on: baseline() === k && showBase() }));
+const baselineMenu = (): Item[] => [
+  ...Array.from({ length: 11 }, (_, k) => ({ label: k ? `Baseline ${k}` : "Baseline", run: () => { setBaseline(k); setShowBase(true); }, on: baseline() === k && showBase() })),
+  "-" as const,
+  // Multiple Baselines Gantt: up to three more under each bar, each in its own colour.
+  ...Array.from({ length: 11 }, (_, k) => k).filter(k => k !== baseline()).map(k => ({ label: `Also show ${k ? `Baseline ${k}` : "Baseline"}`, on: moreBls().includes(k),
+    run: () => { const m = moreBls().includes(k) ? moreBls().filter(x => x !== k) : [...moreBls(), k].slice(-3); setMoreBls(m); setShowBase(true); } })),
+];
 
 /** Tell Me / command search (Ctrl+K, Alt+Q). */
 export const palette = () => openDialog(() => {

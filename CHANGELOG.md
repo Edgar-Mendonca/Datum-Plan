@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.35 — 2026-11-20
+
+Milestones, and several baselines on the Gantt.
+
+- **Milestones** (sidebar): every milestone with its date in each baseline, its forecast or actual, the variance against the baseline you compare with, its deadline and contract date, the float left, how far it moved since the last period close, and a status: Late, Slipping, At risk, On track, Achieved or Achieved late. Filters for open, late or slipping, and the next six weeks; the trend chart one click away.
+- **A chart of baselines and forecast:** each milestone on one time axis, a diamond per baseline in its own colour, the forecast in red when late, a line from baseline to forecast, deadlines and the status date.
+- **Several baselines on the Gantt:** Format › Baseline › **Also show Baseline n** draws up to three more baselines under the bars, each a stripe in its own colour.
+- **AI tool:** `milestones`.
+
 ## 0.9.34 — 2026-11-20
 
 The Task Board.

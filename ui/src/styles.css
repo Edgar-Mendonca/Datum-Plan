@@ -1502,3 +1502,28 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 .kblock { margin-top: 4px; font-size: 11px; color: #8A5A00; }
 .kbempty { grid-column: 1 / -1; }
 .page:has(.kb) { overflow: hidden; }
+/* 0.9.35: Milestones. */
+.mstable { overflow-x: auto; }
+.mstable th.on, .mstable td.on { background: var(--pale); }
+.mstable tr.crit td:nth-child(2) { box-shadow: inset 3px 0 var(--crit); }
+.mstable td.late { color: var(--crit); font-weight: 600; }
+.mstable tbody tr { cursor: default; }
+.blkey { display: inline-block; width: 10px; height: 4px; margin-right: 5px; vertical-align: middle; }
+.mslegend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; }
+.msgrid { display: flex; flex-direction: column; font-size: 12px; }
+.msaxis { position: relative; height: 22px; margin-left: 220px; border-bottom: 1px solid var(--line); }
+.msaxis span { position: absolute; top: 3px; transform: translateX(-50%); font: 10.5px var(--mono); color: var(--muted); white-space: nowrap; }
+.msaxis .mstoday { color: var(--blue); top: -1px; }
+.msrow { display: flex; height: 24px; align-items: center; border-bottom: 1px solid var(--line2); }
+.msrow:hover { background: var(--pale); }
+.msname { width: 220px; flex: none; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mslane { position: relative; flex: 1; height: 100%; }
+.mslane i { position: absolute; display: block; }
+.msm { top: 0; bottom: 0; width: 1px; background: var(--line2); }
+.mstodayl { top: 0; bottom: 0; width: 1px; background: var(--blue); opacity: .6; }
+.msslip { top: 11px; height: 2px; background: #9DB4D3; } .msslip.late { background: #F0A1A1; }
+.msbl { top: 7px; width: 8px; height: 8px; margin-left: -4px; transform: rotate(45deg); border-radius: 1px; opacity: .85; }
+.msdl { top: 3px; bottom: 3px; width: 2px; margin-left: -1px; background: #C9851E; }
+.msdia { top: 5px; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg); background: var(--blue); border: 1px solid #fff; }
+.mslegend .msdia { position: static; display: inline-block; width: 9px; height: 9px; margin: 0 6px 0 2px; vertical-align: middle; }
+.msdia.done { background: var(--green, #1E7D46); } .msdia.late { background: var(--crit); }

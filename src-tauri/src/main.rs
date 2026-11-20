@@ -824,6 +824,13 @@ fn level_preview(st: State<St>, uids: Vec<u32>) -> R<datum_core::level::Preview>
 #[derive(serde::Serialize)]
 struct PlanContract { tab: usize, name: String, on: bool, out: datum_core::contract::Out }
 
+/// The milestones of the plan shown, against baseline `base`.
+#[tauri::command]
+fn milestones(st: State<St>, base: u8) -> datum_core::milestones::MsOut {
+    let a = st.lock();
+    datum_core::milestones::list(&calc(&a), base, 5)
+}
+
 /// The Task Board of the plan shown, as its settings say.
 #[tauri::command]
 fn board(st: State<St>) -> datum_core::board::BoardOut {
@@ -1983,7 +1990,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, export_scurve, scurve_sheet, spell_check, ai_info, ai_link, ai_setup_claude, ai_add_to_claude, task_path, ai_view_state, ai_pdf, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, scenarios, new_scenario, scenario_compare, scenario_merge, contract, board, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_charts, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, milestone_trend, export_changes, delay_analysis, delay_export, scenarios, new_scenario, scenario_compare, scenario_merge, contract, board, milestones, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_charts, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

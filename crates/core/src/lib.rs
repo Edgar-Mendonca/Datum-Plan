@@ -11,6 +11,7 @@ pub mod io;
 pub mod level;
 pub mod links;
 pub mod load;
+pub mod milestones;
 pub mod mcpfile;
 pub mod model;
 pub mod network;

@@ -2,13 +2,13 @@
 // to move, resize, change progress or link.
 import { createSignal, createEffect, createMemo, onMount, onCleanup, Show } from "solid-js";
 import { Row, fmtDay, iso, dateDay } from "./api";
-import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick, ghost, pane } from "./store";
+import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick, ghost, pane, moreBls, BL_COLOURS, showBase, setShowBase } from "./store";
 import { RH } from "./grid";
 import { C } from "./cmds";
 import { pathMap, pathColor } from "./path";
 
 export const [showCrit, setShowCrit] = pane("show-crit", true);
-export const [showBase, setShowBase] = pane("show-base", false);
+export { showBase, setShowBase } from "./store";
 export const [showSlack, setShowSlack] = pane("show-slack", false);
 export const [showLate, setShowLate] = pane("show-late", false);
 export const [showLabels, setShowLabels] = pane("show-labels", true);
@@ -192,11 +192,18 @@ export const Gantt = () => {
     for (let i = a; i < b; i++) {
       const r = rows[i], B = r.bar, y = i * RH - top, x1 = X(B.s), x2 = X(B.f);
       const isCrit = crit && r.crit, hasBase = base && B.bs !== null, by = hasBase ? y + 3 : y + 4, bh = hasBase ? 9 : 11;
+      const more = base ? (B.more ?? []).slice(0, 3) : [];
       if (hasBase && B.bf !== null) {
         ctx.fillStyle = K.base;
         if (B.bf === B.bs) { const bx = X(B.bs!); ctx.beginPath(); ctx.moveTo(bx, y + 12); ctx.lineTo(bx + 4, y + 16); ctx.lineTo(bx, y + 20); ctx.lineTo(bx - 4, y + 16); ctx.fill(); }
-        else ctx.fillRect(X(B.bs!), y + 14, Math.max(X(B.bf) - X(B.bs!), 2), 4);
+        else ctx.fillRect(X(B.bs!), y + 13, Math.max(X(B.bf) - X(B.bs!), 2), more.length ? 2 : 4);
       }
+      // More baselines: a thin stripe each, in its own colour, under the main baseline.
+      more.forEach(([n, s, f], j) => {
+        ctx.fillStyle = BL_COLOURS[n % BL_COLOURS.length];
+        const yy = y + 15 + j * 2;
+        if (f === s) { const bx = X(s); ctx.fillRect(bx - 2, yy - 1, 4, 3); } else ctx.fillRect(X(s), yy, Math.max(X(f) - X(s), 2), 2);
+      });
       // Ghost bar: where the compared version had this task, faint behind today's bar.
       const gb = gh?.get(r.uid);
       if (gb && r.kind !== "summary") {
@@ -347,7 +354,7 @@ export const Gantt = () => {
     ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up);
     document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-range", range); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
   });
-  createEffect(() => { themeTick(); out(); grid(); sel(); pathMap(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); ghost(); draw(); });
+  createEffect(() => { themeTick(); out(); grid(); sel(); pathMap(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); moreBls(); ghost(); draw(); });
 
   return (
     <div class="chart">

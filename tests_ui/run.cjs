@@ -334,6 +334,15 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   check("Font list on the Task tab", (await p.$$eval(".ffam option", o => o.map(x => x.textContent))).includes("Times New Roman"));
 
+  // 0.9.35: several baselines on the Gantt: Format › Baseline › Also show Baseline n asks the engine for them.
+  await p.click(".tabs button:text-is('Format') >> nth=0"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Baseline')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Also show Baseline 2')"); await p.waitForTimeout(400);
+  { const q = await p.evaluate(() => window.__calls.filter(c => c[0] === "query").pop()?.[1]?.q);
+    check("Also show Baseline 2 draws a second baseline under the bars: the grid asks for it (0.9.35)", JSON.stringify(q?.bls) === "[2]", JSON.stringify(q?.bls)); }
+  await p.click(".ribbon button:has-text('Baseline')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Also show Baseline 2')"); await p.waitForTimeout(300);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(150);
   // 0.3.7: Tracking Gantt is its own view (banner + Tracking table), network WBS bands.
   await p.click('.side button[title="Tracking"]'); await p.waitForTimeout(400);
   const trkCols = await p.evaluate(() => window.__calls.filter(c => c[0] === "query").map(c => c[1]?.q?.cols ?? []).filter(c => c.length > 2).pop() ?? []);

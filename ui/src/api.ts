@@ -89,7 +89,7 @@ export interface SubPlan { file: string; name: string; level?: number }
 export interface TabInfo { name: string; path: string | null; dirty: boolean; moved: number; role: "master" | "sub" | ""; group: number; level: number; project: string }
 export interface Out { tabs: TabInfo[]; tab: number; project: Project; summary: Summary; path: string | null; dirty: boolean; undo: boolean; redo: boolean; clip: number; rev: number }
 
-export interface Bar { s: number; f: number; ls: number; lf: number; bs: number | null; bf: number | null; dl: number | null; pct: number; segs: [number, number][]; links: [number, LinkType][] }
+export interface Bar { s: number; f: number; ls: number; lf: number; bs: number | null; bf: number | null; dl: number | null; pct: number; segs: [number, number][]; links: [number, LinkType][]; more?: [number, number, number][] }
 export interface Row {
   uid: number; id: number; lvl: number; kind: "task" | "summary" | "group" | "project" | "subplan"; ms: boolean; crit: boolean; late: boolean; manual: boolean; off: boolean; lp: boolean; ext?: string[]; ext_out?: string[]; ext_moved?: boolean; sub?: string; suid?: number;
   kids: boolean; open: boolean; hl: boolean; name: string; res: string; cells: string[]; icons?: [number, string][]; style?: Record<string, string>; bar: Bar;
@@ -100,7 +100,7 @@ export interface Rule { field: string; test: string; value: string; value2: stri
 export interface Filter { name: string; rules: Rule[]; summaries: boolean; highlight: boolean }
 export interface Query {
   cols: string[]; filter: Filter; group: string[]; sort: [string, boolean][]; flat: boolean; collapsed: number[]; level: number;
-  hide_summaries: boolean; project_summary: boolean; baseline: number;
+  hide_summaries: boolean; project_summary: boolean; baseline: number; bls: number[];
 }
 export interface FieldDef { key: string; name: string; kind: Kind; group: string; edit: boolean }
 export interface FieldList { task: FieldDef[]; resource: FieldDef[]; filters: Filter[] }

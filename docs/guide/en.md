@@ -224,6 +224,21 @@ Open **Update** in the sidebar. It lists the tasks due in the period, with:
 
 1. Each task has two bars: the grey bar underneath is the baseline, the coloured bar is the current plan, solid where the work is done. The label is % complete. A bar that has moved right of its grey bar is late against the baseline.
 
+### Several baselines on the Gantt
+
+A plan keeps up to eleven baselines (Baseline, Baseline 1 to 10: **Set Baseline** asks which). **Format › Baseline** chooses the one drawn under the bars; below it, **Also show Baseline n** adds up to three more, each a thin stripe in its own colour under the main one, so you see how the plan moved from one re-baseline to the next. Tick it again to take one away. The Tracking Gantt shows them too.
+
+### Milestones
+
+**Milestones** (sidebar) lists every milestone of the plan in one table: its date in each baseline (a column per baseline), its forecast (✓ and the date once achieved), the variance in days against the baseline you **Compare with**, its deadline and the contract date it meets (Contract Register), the float left in working days, the days it **moved** since the last period close, and a status:
+
+- **Late**: the forecast is after the baseline, the deadline or the contract date, or the float is negative.
+- **Slipping**: it moved later since the last period close (Progress › Close Period).
+- **At risk**: critical, with five days of float or less.
+- **On track**, **Achieved** or **Achieved late**.
+
+The figures at the top count them. **All**, **Open**, **Late or slipping** and **Next 6 weeks** choose which show. Below the table, a chart puts each milestone on one time axis: a small diamond per baseline (in that baseline's colour), the forecast as a larger diamond (red when late, green when achieved), a line from the baseline compared with to the forecast, the deadline or contract date as an amber mark and the status date as a blue line. **Trend chart…** shows each milestone's forecast at every period close. Double-click a milestone to show it in the Gantt chart.
+
 ### Rules of credit and installed quantities
 
 For work measured by steps or quantities, **Progress › Rules of Credit** gives tasks weighted steps, for example cable: pulled 60%, terminated 30%, tested 10%. There are built-in rules (concrete, steel, piping, cable, equipment, documents, software) and you can make your own. Tick the steps in the task's **Steps** tab and the task's physical % complete follows.

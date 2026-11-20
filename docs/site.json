@@ -28,7 +28,7 @@
     "AI Link: an AI assistant on your computer (Model Context Protocol) reads and changes the open plan while you watch: tasks, links, progress, resources, calendars, codes, custom fields, filters, checks, curves and sheets, every change one Undo step. Off until you turn it on.",
     "A task sheet that works like a spreadsheet, with formula columns and Sheets tabs.",
     "Critical path to the minute: calendars, constraints, all link types, levelling with a preview of what moves.",
-    "Resources, man-hours and costs with workload and manpower by trade; Tracking Gantt with 11 baselines; earned value, earned schedule and S-curves from each period's progress, drawn as in a progress report (bars per period and cumulative curves, styled in Format), and saved to a workbook with an editable spreadsheet chart.",
+    "Resources, man-hours and costs with workload and manpower by trade; Tracking Gantt with 11 baselines, several shown at once; a Milestones view against every baseline; earned value, earned schedule and S-curves from each period's progress, drawn as in a progress report (bars per period and cumulative curves, styled in Format), and saved to a workbook with an editable spreadsheet chart.",
     "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
     "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
     "A Task Board: drag a card to start or finish it; cards show the critical edge, float, steps, people and the vendor documents and orders a task waits for; swimlanes, WIP limits, look-ahead and A3 print, for documents and orders too.",
