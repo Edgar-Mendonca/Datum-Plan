@@ -48,84 +48,6 @@ fn rich() -> Project {
     doc.p
 }
 
-fn rich2() -> Project {
-    let mut p = templates::build(&templates::TEMPLATES[1], d(2026, 11, 2));
-    p.calendars[0].week = std::array::from_fn(|k| if k < 6 { vec![(420, 720), (750, 960)] } else { vec![] });
-    p.day_min = 510;
-    p.calendars[0].exceptions.push(Exception { name: "Half day".into(), from: d(2026, 12, 24), to: d(2026, 12, 24), hours: vec![(420, 660)] });
-    let ids: Vec<u32> = p.tasks.iter().map(|t| t.uid).collect();
-    p.tasks[2].constraint = Constraint::MSO; p.tasks[2].cdate = Some(d(2026, 11, 4));
-    p.tasks[9].constraint = Constraint::MFO; p.tasks[9].cdate = Some(d(2027, 6, 30));
-    p.tasks[3].preds.push(Link { pred: ids[1], kind: LinkType::SS, lag: 50, pct: true, elapsed: false });
-    p.tasks[12].preds.push(Link { pred: ids[8], kind: LinkType::FS, lag: 3 * 1440, pct: false, elapsed: true });
-    p.tasks[13].elapsed = true; p.tasks[13].dur = 10 * 1440;
-    let mut doc = doc::Doc::new(p);
-    doc.apply(doc::Op::Baseline { uids: vec![], clear: false, n: 0 }, FMT).unwrap();
-    doc.apply(doc::Op::UpdateProject { through: "2026-12-10".into(), reschedule: false }, FMT).unwrap();
-    doc.apply(doc::Op::ProjectSet { field: "status".into(), value: serde_json::json!("2026-12-10") }, FMT).unwrap();
-    doc.p
-}
-
-#[test]
-fn explore() {
-  for p in [rich(), rich2()] {
-    for ext in ["xml", "xer"] {
-        let q = rt(&p, ext);
-        let s1 = sched::schedule(&p).unwrap();
-        let s2 = sched::schedule(&q).unwrap();
-        println!("== {ext}: tasks {} vs {}", p.tasks.len(), q.tasks.len());
-        println!("status {:?} {:?} day_min {} {} cal {:?} vs {:?}", p.status, q.status, p.day_min, q.day_min, p.calendars, q.calendars);
-        let (_, txt) = out(&p, ext); let _ = txt;
-        for (i, t) in p.tasks.iter().enumerate() {
-            let Some(j) = q.tasks.iter().position(|x| x.name == t.name) else { println!("missing {}", t.name); continue };
-            let u = &q.tasks[j];
-            if (s1.es[i], s1.ef[i]) != (s2.es[j], s2.ef[j]) { println!("dates {}: {:?} vs {:?}", t.name, (s1.es[i], s1.ef[i]), (s2.es[j], s2.ef[j])) }
-            if t.dur != u.dur && !s1.summary[i] { println!("dur {}: {} vs {}", t.name, t.dur, u.dur) }
-            if t.res.len() != u.res.len() { println!("res {}: {:?} vs {:?}", t.name, t.res, u.res) }
-            if (t.pct, t.act_start, t.act_finish) != (u.pct, u.act_start, u.act_finish) { println!("progress {}: {:?} vs {:?}", t.name, (t.pct, t.act_start, t.act_finish), (u.pct, u.act_start, u.act_finish)) }
-            if (t.constraint, t.cdate, t.deadline) != (u.constraint, u.cdate, u.deadline) { println!("cons {}: {:?} vs {:?}", t.name, (t.constraint, t.cdate, t.deadline), (u.constraint, u.cdate, u.deadline)) }
-            if t.notes != u.notes { println!("notes {:?} vs {:?}", t.notes, u.notes) }
-            let lk = |x: &Task, pp: &Project| x.preds.iter().map(|l| (pp.tasks.iter().find(|y| y.uid == l.pred).map(|y| y.name.clone()), l.kind, l.lag, l.pct, l.elapsed)).collect::<Vec<_>>();
-            if !s1.summary[i] && lk(t, &p) != lk(u, &q) { println!("links {}: {:?} vs {:?}", t.name, lk(t, &p), lk(u, &q)) }
-            if t.bls != u.bls { println!("bl {}: {:?} vs {:?}", t.name, t.bls.get(&0), u.bls.get(&0)) }
-        }
-        for (a, b) in p.resources.iter().zip(&q.resources) {
-            if a.max != b.max || a.rate != b.rate { println!("resource {}: max {} {} rate {} {}", a.name, a.max, b.max, a.rate, b.rate) }
-        }
-    }
-  }
-}
-
-fn table_rt(p: &Project, ext: &str) -> Project {
-    let (f, _) = out(p, ext);
-    let Imported::Table(t) = import(&f).unwrap() else { panic!("not a table") };
-    println!("headers {:?} guess {:?}", t.headers, t.guess);
-    let (q, bad) = io::table::to_project(&t, &t.guess, "X", d(2026, 11, 1), FMT).unwrap();
-    println!("bad cells {bad}");
-    q
-}
-
-#[test]
-fn explore_tables() {
-    let p = rich();
-    for ext in ["csv", "xlsx"] {
-        let q = table_rt(&p, ext);
-        let s1 = sched::schedule(&p).unwrap();
-        let s2 = sched::schedule(&q).unwrap();
-        println!("== {ext}: tasks {} vs {}", p.tasks.len(), q.tasks.len());
-        for (i, t) in p.tasks.iter().enumerate() {
-            let Some(u) = q.tasks.get(i) else { continue };
-            if t.name != u.name { println!("name {:?} vs {:?}", t.name, u.name) }
-            if (s1.es[i], s1.ef[i]) != (s2.es[i], s2.ef[i]) { println!("dates {}: {:?} vs {:?}", t.name, (s1.es[i], s1.ef[i]), (s2.es[i], s2.ef[i])) }
-            if t.dur != u.dur && !s1.summary[i] { println!("dur {}: {} vs {}", t.name, t.dur, u.dur) }
-            if t.level != u.level { println!("level {}", t.name) }
-            if t.pct != u.pct { println!("pct {}: {} vs {}", t.name, t.pct, u.pct) }
-            if t.preds.len() != u.preds.len() || t.preds.iter().zip(&u.preds).any(|(a, b)| (a.kind, a.lag) != (b.kind, b.lag)) { println!("preds {}: {:?} vs {:?}", t.name, t.preds, u.preds) }
-            if t.res.len() != u.res.len() { println!("res {}: {:?} vs {:?}", t.name, t.res, u.res) }
-        }
-    }
-}
-
 // ------------------------------------------------------------------------------------------------
 // XER
 // ------------------------------------------------------------------------------------------------
@@ -415,28 +337,6 @@ fn xlsx_import_reads_percent_cells() {
     assert_eq!(q.tasks[0].pct, 50);
 }
 
-#[test]
-fn explore_plan_table() {
-    let p = rich();
-    let c = fields::Calc::new(&p, FMT, d(2026, 11, 1));
-    let cols = sheet::task_columns(&c);
-    let rows = [2usize, 3, 9, 10];
-    let items: Vec<(String, String)> = cols.iter().flat_map(|(_, n)| rows.iter().map(move |r| (format!("=INDEX(Tasks[{n}],{})", r + 1), String::new()))).collect();
-    let got = sheet::eval(&c, &items);
-    let mut k = 0;
-    for (key, n) in &cols {
-        for &r in &rows {
-            let g = &got[k][0][0];
-            println!("{n:22} row {r}: sheet {:?} / {:?}   task sheet {:?}", g.0, g.1, c.text(r, key));
-            k += 1;
-        }
-    }
-    let names = ["ProjectStart", "ProjectFinish", "StatusDate", "BaselineFinish", "FinishVariance", "PercentComplete", "PlannedPercent", "SPI", "TaskCount"];
-    let got = sheet::eval(&c, &names.iter().map(|n| (format!("={n}"), String::new())).collect::<Vec<_>>());
-    for (n, g) in names.iter().zip(&got) { println!("{n}: {:?}", g[0][0]) }
-    println!("summary {:?} {:?} {:?}", c.summary().start, c.summary().finish, c.summary().pct);
-}
-
 /// The task sheet's "WBS" column (key wbs) shows the outline number ("1.2"), and its "Activity ID"
 /// column (key code) shows "A1020". In the sheets, the Tasks table's column called "WBS" holds the
 /// Activity ID (PLAN_COLS maps key "code" to "WBS"), and since a column of that name exists,
@@ -476,4 +376,31 @@ fn sheet_typed_date_with_time_follows_the_plan_order() {
     let p = with_sheet(&[("A1", "02/11/2026"), ("B1", "=MONTH(A1)*100+DAY(A1)"), ("A2", "02/11/2026 13:30"), ("B2", "=MONTH(A2)*100+DAY(A2)"), ("C2", "=ROUND(MOD(A2,1)*24,2)")]);
     assert_eq!(shown(&p, "B1").1, Some(1102.0));
     assert_eq!((shown(&p, "B2").1, shown(&p, "C2").1), (Some(1102.0), Some(13.5)), "A2 shows {:?}", shown(&p, "A2"));
+}
+
+/// Same decoding for CSV: a CSV saved by a spreadsheet on Windows ("CSV (Comma delimited)") is in the
+/// ANSI code page, Windows-1252. "Béton" arrives as "B\u{FFFD}ton".
+#[test]
+fn csv_in_windows_1252_keeps_accents() {
+    let f = file("ansi.csv");
+    std::fs::write(&f, b"Task Name,Duration\r\nB\xE9ton coul\xE9,3\r\n").unwrap();
+    let Imported::Table(t) = import(&f).unwrap() else { panic!() };
+    assert_eq!(t.rows[0][0], "Béton coulé");
+}
+
+/// P6 has nine constraint types; CS_MANDSTART and CS_MANDFIN (mandatory start / finish) are not in the
+/// reader's table, so such an activity silently becomes As Soon As Possible (no note in the report),
+/// and the plan's dates move. They are the hard "must start / finish on" constraints (MSO / MFO).
+#[test]
+fn xer_mandatory_constraints_are_kept() {
+    let mut p = rich();
+    let i = p.tasks.iter().position(|t| t.name == "Design FMEA").unwrap();
+    p.tasks[i].constraint = Constraint::MSO;
+    p.tasks[i].cdate = Some(d(2027, 1, 4));
+    let (_, text) = out(&p, "xer");
+    let f = file("mand.xer");
+    std::fs::write(&f, text.replace("\tCS_MSO\t", "\tCS_MANDSTART\t")).unwrap();
+    let Imported::Plan(q, notes) = import(&f).unwrap() else { panic!() };
+    let t = q.tasks.iter().find(|t| t.name == "Design FMEA").unwrap();
+    assert_eq!((t.constraint, t.cdate), (Constraint::MSO, Some(d(2027, 1, 4))), "notes: {notes:?}");
 }

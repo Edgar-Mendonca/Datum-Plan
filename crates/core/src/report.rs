@@ -43,23 +43,25 @@ fn bucket_of(b: &[i64], d: i64) -> Option<usize> {
 /// Usage grid: `by` is "task" or "resource", `what` is "work" (hours) or "cost".
 pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
     let (p, s, l) = (c.p, &c.s, &c.l);
-    let b = buckets(s.start.div_euclid(DAY), (s.finish - 1).max(s.start).div_euclid(DAY), unit);
+    // The plan's dates, and any work booked outside them (actual dates before the start).
+    let days = l.task_daily.keys().map(|k| k.1);
+    let (lo, hi) = (days.clone().min().unwrap_or(i64::MAX), days.max().unwrap_or(i64::MIN));
+    let b = buckets(s.start.div_euclid(DAY).min(lo), (s.finish - 1).max(s.start).div_euclid(DAY).max(hi), unit);
     let cost = what == "cost";
     let empty = || vec![0.0; b.len()];
     let mut rows = vec![];
-    let rate = |k: usize, i: usize, d: i64| {
-        let a = p.tasks[i].res.iter().find(|a| p.res_idx(a.res) == Some(k)).map_or(0, |a| a.table);
-        p.resources[k].rate_on(a, date_of(d * DAY)).0
-    };
+    // Hours, or cost (work, per use, material and cost resources), of each assignment per day.
+    let amounts = if cost { &l.assign_cost } else { &l.assign_daily };
+    let val = |m: f64| if cost { m } else { m / 60.0 };
     let pc = &s.cals[p.calendars.iter().position(|c| c.name == p.calendar).unwrap_or(0)];
     let tail = b.last().map_or(0, |&x| buckets(x, x + 400, unit).get(1).copied().unwrap_or(x + 1));
     let days_of = |j: usize| b[j]..b.get(j + 1).copied().unwrap_or(tail);
     let person: Vec<f64> = (0..b.len()).map(|j| days_of(j).map(|d| pc.day_minutes(date_of(d * DAY)) as f64 / 60.0).sum()).collect();
     if by == "resource" || by == "group" {
         let mut per: BTreeMap<(usize, usize), Vec<f64>> = BTreeMap::new();
-        for (&(k, i, d), &m) in &l.assign_daily {
+        for (&(k, i, d), &m) in amounts {
             if let Some(j) = bucket_of(&b, d) {
-                per.entry((k, i)).or_insert_with(empty)[j] += if cost { m / 60.0 * rate(k, i, d) } else { m / 60.0 };
+                per.entry((k, i)).or_insert_with(empty)[j] += val(m);
             }
         }
         let mut res_rows = vec![];
@@ -67,9 +69,8 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
             let kids: Vec<(&(usize, usize), &Vec<f64>)> = per.range((k, 0)..(k + 1, 0)).collect();
             let mut vals = empty();
             kids.iter().for_each(|(_, v)| v.iter().enumerate().for_each(|(j, x)| vals[j] += x));
-            let over = b.iter().enumerate().map(|(j, &d0)| {
-                let end = b.get(j + 1).copied().unwrap_or(d0 + 1);
-                r.kind == ResKind::Work && (d0..end).any(|d| l.daily.get(&(k, d)).is_some_and(|&m| m > r.max_on(date_of(d * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(d * DAY)) as f64 + 0.5))
+            let over = (0..b.len()).map(|j| {
+                r.kind == ResKind::Work && days_of(j).any(|d| l.daily.get(&(k, d)).is_some_and(|&m| m > r.max_on(date_of(d * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(d * DAY)) as f64 + 0.5))
             }).collect();
             let cap = if r.kind == ResKind::Work { (0..b.len()).map(|j| days_of(j).map(|d| r.max_on(date_of(d * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(d * DAY)) as f64 / 60.0).sum()).collect() } else { vec![] };
             let kid_rows: Vec<UseRow> = kids.iter().map(|((_, i), v)| UseRow { uid: p.tasks[*i].uid, of: Some(r.uid), name: p.tasks[*i].name.clone(), lvl: 1, sum: false, total: v.iter().sum(), vals: (*v).clone(), over: vec![], cap: vec![] }).collect();
@@ -106,10 +107,11 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
                 per[i][j] += if cost { cst } else { m / 60.0 };
             }
         }
-        for i in (0..p.tasks.len()).rev().filter(|&i| s.summary[i]) {
-            for j in p.subtree(i).skip(1).filter(|&j| !s.summary[j]) {
-                let leaf = per[j].clone();
-                per[i].iter_mut().zip(leaf).for_each(|(a, x)| *a += x);
+        // Summaries add up their rows (a summary's own amounts are its fixed cost and expenses).
+        let own = per.clone();
+        for i in (0..p.tasks.len()).filter(|&i| s.summary[i]) {
+            for j in p.subtree(i).skip(1) {
+                per[i].iter_mut().zip(&own[j]).for_each(|(a, x)| *a += x);
             }
         }
         for (i, t) in p.tasks.iter().enumerate().filter(|&(i, _)| !s.off[i]) {
@@ -120,9 +122,9 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
             for a in &t.res {
                 let Some(k) = p.res_idx(a.res) else { continue };
                 let mut v = empty();
-                for (&(_, _, d), &m) in l.assign_daily.range((k, i, i64::MIN)..=(k, i, i64::MAX)) {
+                for (&(_, _, d), &m) in amounts.range((k, i, i64::MIN)..=(k, i, i64::MAX)) {
                     if let Some(j) = bucket_of(&b, d) {
-                        v[j] += if cost { m / 60.0 * rate(k, i, d) } else { m / 60.0 };
+                        v[j] += val(m);
                     }
                 }
                 rows.push(UseRow { uid: p.resources[k].uid, of: Some(t.uid), name: p.resources[k].name.clone(), lvl: t.level + 1, sum: false, total: v.iter().sum(), vals: v, over: vec![], cap: vec![] });
@@ -152,16 +154,19 @@ pub fn curve(c: &Calc, unit: &str) -> Curve {
         if let Some(bl) = t.bls.get(&0) {
             let tot = cal.between(bl.start, bl.finish).max(1) as f64;
             let mut d = bl.start.div_euclid(DAY);
-            let done = (if t.pct_type == crate::model::PctType::Physical { t.phys } else { t.pct }) as f64 / 100.0;
-            if bl.finish <= bl.start {
-                if let Some(j) = bucket_of(&b, d) {
-                    planned[j] += bl.cost;
+            let done = crate::fields::earned_share(t);
+            // Fixed cost, expenses and cost per use by their accrual; the rest with the work.
+            let (s0, e0) = c.lumps(i, bl.cost, bl.start);
+            let rest = bl.cost - s0 - e0;
+            for (x, day) in [(s0, d), (e0, (bl.finish - 1).max(bl.start).div_euclid(DAY)), (if bl.finish <= bl.start { rest } else { 0.0 }, d)] {
+                if let Some(j) = bucket_of(&b, day).filter(|_| x != 0.0) {
+                    planned[j] += x;
                 }
             }
             while d * DAY < bl.finish {
                 let share = cal.between(bl.start.max(d * DAY), bl.finish.min((d + 1) * DAY)) as f64 / tot;
                 if let Some(j) = bucket_of(&b, d) {
-                    planned[j] += bl.cost * share;
+                    planned[j] += rest * share;
                 }
                 d += 1;
             }
@@ -191,8 +196,14 @@ pub fn curve(c: &Calc, unit: &str) -> Curve {
                 }
             }
         }
-        // Actual cost is spread like the forecast up to the status date.
+        // Actual cost is spread like the forecast up to the status date; with no forecast cost
+        // before it (an expense paid ahead), it goes on the status day.
         let scale = if before > 0.0 { l.acost[i] / before } else { 0.0 };
+        if before <= 0.0 && l.acost[i] != 0.0 {
+            if let Some(j) = bucket_of(&b, dd - 1) {
+                actual[j] += l.acost[i];
+            }
+        }
         for (&(_, d), &(_, cost)) in l.task_daily.range((i, i64::MIN)..=(i, i64::MAX)) {
             if let Some(j) = bucket_of(&b, d).filter(|_| d < dd) {
                 actual[j] += cost * scale;

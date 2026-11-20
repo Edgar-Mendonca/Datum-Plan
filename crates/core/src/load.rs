@@ -21,20 +21,37 @@ pub struct Loads {
     pub daily: BTreeMap<(usize, i64), f64>,
     /// (resource, task, day) → working minutes of that assignment.
     pub assign_daily: BTreeMap<(usize, usize, i64), f64>,
+    /// (resource, task, day) → cost of that assignment (work, per use, material and cost resources).
+    pub assign_cost: BTreeMap<(usize, usize, i64), f64>,
     /// (task, day) → (work minutes, cost) for leaf tasks.
     pub task_daily: BTreeMap<(usize, i64), (f64, f64)>,
 }
 
-/// Spreads `amount` over the task's working days in proportion to working minutes.
-fn spread(c: &crate::cal::WorkCal, es: i64, ef: i64, mut f: impl FnMut(i64, f64)) {
-    let total = c.between(es, ef).max(1) as f64;
+/// The pauses of a split task as times, for work from `from` with `done` of its `dur` working minutes already done.
+pub fn pauses(c: &crate::cal::WorkCal, from: i64, splits: &[(i64, i64)], dur: i64, done: i64) -> Vec<(i64, i64)> {
+    let (mut pos, mut prev) = (from, done);
+    splits.iter().filter(|&&(a, g)| a > done && a < dur && g > 0).map(|&(a, g)| {
+        let p = c.add(pos, a - prev);
+        (pos, prev) = (c.add(p, g), a);
+        (p, pos)
+    }).collect()
+}
+
+/// Working minutes in [a, b) outside the pauses `gaps`.
+pub fn worked(c: &crate::cal::WorkCal, a: i64, b: i64, gaps: &[(i64, i64)]) -> i64 {
+    (c.between(a, b) - gaps.iter().map(|&(x, y)| c.between(a.max(x), b.min(y)).max(0)).sum::<i64>()).max(0)
+}
+
+/// Spreads `amount` over the task's working days in proportion to working minutes, leaving out its pauses.
+fn spread(c: &crate::cal::WorkCal, es: i64, ef: i64, gaps: &[(i64, i64)], mut f: impl FnMut(i64, f64)) {
+    let total = worked(c, es, ef, gaps).max(1) as f64;
     if ef <= es {
         f(es.div_euclid(DAY), 1.0);
         return;
     }
     let mut d = es.div_euclid(DAY);
     while d * DAY < ef {
-        let m = c.between(es.max(d * DAY), ef.min((d + 1) * DAY));
+        let m = worked(c, es.max(d * DAY), ef.min((d + 1) * DAY), gaps);
         if m > 0 {
             f(d, m as f64 / total);
         }
@@ -43,37 +60,49 @@ fn spread(c: &crate::cal::WorkCal, es: i64, ef: i64, mut f: impl FnMut(i64, f64)
 }
 
 /// Spreads a task's amounts like `spread`, split at the status date when work is under way (`cut`
-/// = the status date and where the remaining work starts): the share `done` over the actual start
-/// up to the status date, the rest from the resume point to the finish.
-fn phased(c: &crate::cal::WorkCal, es: i64, ef: i64, cut: Option<(i64, i64)>, done: f64, mut f: impl FnMut(i64, f64)) {
-    let Some((dd, rs)) = cut else { return spread(c, es, ef, f) };
+/// = the status date and where the remaining work starts): the share `pct` over the actual start
+/// up to the status date, the rest from the resume point to the finish. `sp` = (splits, duration).
+fn phased(c: &crate::cal::WorkCal, es: i64, ef: i64, cut: Option<(i64, i64)>, pct: u8, sp: (&[(i64, i64)], i64), mut f: impl FnMut(i64, f64)) {
+    let (done, dw) = (pct as f64 / 100.0, sp.1 * pct.min(100) as i64 / 100);
+    let Some((dd, rs)) = cut else { return spread(c, es, ef, &pauses(c, es, sp.0, sp.1, 0), f) };
     if done > 0.0 {
-        spread(c, es, dd.clamp(es, ef), |d, x| f(d, x * done));
+        spread(c, es, dd.clamp(es, ef), &pauses(c, es, sp.0, sp.1, 0), |d, x| f(d, x * done));
     }
-    spread(c, rs, ef, |d, x| f(d, x * (1.0 - done)));
+    spread(c, rs, ef, &pauses(c, rs, sp.0, sp.1, dw), |d, x| f(d, x * (1.0 - done)));
 }
 
 pub fn compute(p: &Project, s: &Sched) -> Loads {
     let (n, m) = (p.tasks.len(), p.resources.len());
     let mut l = Loads { work: vec![0.0; n], cost: vec![0.0; n], awork: vec![0.0; n], acost: vec![0.0; n], res_work: vec![0.0; m], res_cost: vec![0.0; m], over: vec![false; m], ..Default::default() };
-    for (i, t) in p.tasks.iter().enumerate().filter(|&(i, _)| !s.summary[i] && !s.off[i]) {
+    // A summary's % complete: its rows' weighted by duration (as the Calc shows it).
+    let rolled = |i: usize| {
+        let kids: Vec<_> = p.subtree(i).skip(1).filter(|&j| !s.summary[j] && !s.off[j]).map(|j| &p.tasks[j]).collect();
+        let w: i64 = kids.iter().map(|k| k.dur).sum();
+        (if w > 0 { kids.iter().map(|k| k.pct as f64 * k.dur as f64).sum::<f64>() / w as f64 } else { kids.iter().map(|k| k.pct as f64).sum::<f64>() / kids.len().max(1) as f64 }).round() as u8
+    };
+    // Leaves, and summaries for their own fixed cost and expenses.
+    for (i, t) in p.tasks.iter().enumerate().filter(|&(i, _)| !s.off[i]) {
         let (c, es, ef) = (&s.cals[s.ci[i]], s.es[i], s.ef[i]);
-        let done = t.pct as f64 / 100.0;
+        let pct = if s.summary[i] { rolled(i) } else { t.pct };
+        let done = pct as f64 / 100.0;
         let first = date_of(es);
         // Under way at the status date: work done before it, the rest after it.
         let dd = p.status.map(|d| crate::cal::at(d) + DAY);
         let cut = dd.filter(|_| t.act_start.is_some() && t.act_finish.is_none() && t.pct < 100).map(|dd| (dd, s.rs[i]));
-        for a in &t.res {
+        // Level of effort and mirrored tasks last as long as their span; their work follows it.
+        let span = s.loe[i] || s.mirror[i];
+        let (dur, sp) = if span { (c.between(es, ef), (&[][..], 0)) } else { (t.dur, (&t.splits[..], t.dur)) };
+        for a in t.res.iter().filter(|_| !s.summary[i]) {
             let Some(k) = p.res_idx(a.res) else { continue };
             let r = &p.resources[k];
             let (rate, per_use) = r.rate_on(a.table, first);
             let (w, cost) = match r.kind {
-                ResKind::Work => (t.dur as f64 * a.units, 0.0),
+                ResKind::Work => (dur as f64 * a.units, 0.0),
                 ResKind::Material => (0.0, a.units * rate),
                 ResKind::Cost => (0.0, a.units),
             };
             let mut wcost = 0.0;
-            phased(c, es, ef, cut, done, |d, share| {
+            phased(c, es, ef, cut, pct, sp, |d, share| {
                 let mins = w * share;
                 let day_cost = if r.kind == ResKind::Work { mins / 60.0 * r.rate_on(a.table, date_of(d * DAY)).0 } else { cost * share };
                 wcost += day_cost;
@@ -84,13 +113,20 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
                     *l.daily.entry((k, d)).or_default() += mins;
                     *l.assign_daily.entry((k, i, d)).or_default() += mins;
                 }
+                if day_cost != 0.0 {
+                    *l.assign_cost.entry((k, i, d)).or_default() += day_cost;
+                }
             });
             l.task_daily.entry((i, es.div_euclid(DAY))).or_default().1 += per_use;
+            if per_use != 0.0 {
+                *l.assign_cost.entry((k, i, es.div_euclid(DAY))).or_default() += per_use;
+            }
             let total = wcost + per_use;
             l.work[i] += w;
             l.cost[i] += total;
             l.awork[i] += w * done;
-            l.acost[i] += total * done;
+            // Cost per use is spent once the task starts.
+            l.acost[i] += wcost * done + if pct > 0 { per_use } else { 0.0 };
             l.res_work[k] += w;
             l.res_cost[k] += total;
         }
@@ -102,12 +138,12 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
             match accrual {
                 Accrual::Start => l.task_daily.entry((i, es.div_euclid(DAY))).or_default().1 += amount,
                 Accrual::End => l.task_daily.entry((i, (ef - 1).max(es).div_euclid(DAY))).or_default().1 += amount,
-                Accrual::Prorated => phased(c, es, ef, cut, done, |d, share| l.task_daily.entry((i, d)).or_default().1 += amount * share),
+                Accrual::Prorated => phased(c, es, ef, cut, pct, sp, |d, share| l.task_daily.entry((i, d)).or_default().1 += amount * share),
             }
             l.cost[i] += amount;
             l.acost[i] += actual;
         };
-        let fixed_actual = match t.accrual { Accrual::Start if t.pct > 0 => t.fixed_cost, Accrual::End if t.pct == 100 => t.fixed_cost, Accrual::Prorated => t.fixed_cost * done, _ => 0.0 };
+        let fixed_actual = match t.accrual { Accrual::Start if pct > 0 => t.fixed_cost, Accrual::End if pct == 100 => t.fixed_cost, Accrual::Prorated => t.fixed_cost * done, _ => 0.0 };
         charge(t.fixed_cost, t.accrual, fixed_actual);
         for e in &t.expenses {
             charge(e.planned.max(e.actual), e.accrual, e.actual);
@@ -128,12 +164,14 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
         (l.cost[i], l.acost[i]) = (minor(l.cost[i]), minor(l.acost[i]));
     }
     l.res_cost.iter_mut().for_each(|v| *v = minor(*v));
+    // Summaries add up their rows (a summary's own amounts are only its fixed cost and expenses).
+    let own = (l.work.clone(), l.cost.clone(), l.awork.clone(), l.acost.clone());
     for i in (0..n).filter(|&i| s.summary[i]) {
-        for j in p.subtree(i).skip(1).filter(|&j| !s.summary[j]) {
-            l.work[i] += l.work[j];
-            l.cost[i] += l.cost[j];
-            l.awork[i] += l.awork[j];
-            l.acost[i] += l.acost[j];
+        for j in p.subtree(i).skip(1).filter(|&j| !s.off[j]) {
+            l.work[i] += own.0[j];
+            l.cost[i] += own.1[j];
+            l.awork[i] += own.2[j];
+            l.acost[i] += own.3[j];
         }
         (l.cost[i], l.acost[i]) = (minor(l.cost[i]), minor(l.acost[i]));
     }

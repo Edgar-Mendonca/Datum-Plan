@@ -83,16 +83,17 @@ pub fn update_all(plans: &mut [(String, Project)]) -> Result<(usize, Vec<String>
     // at most once, so more passes than links means the dates loop.
     let links: usize = plans.iter().map(|(_, p)| p.tasks.iter().map(|t| t.ext.len()).sum::<usize>()).sum();
     for pass in 1..=links + 2 {
-        let found: Vec<(String, String, Vec<Seen>)> = plans.iter().map(|(f, p)| {
+        // A plan that cannot be scheduled gives no dates: its links keep their last ones and are reported.
+        let found: Vec<(String, String, Option<Vec<Seen>>)> = plans.iter().map(|(f, p)| {
             let s = crate::sched::schedule(p).ok();
-            (key(f), p.name.clone(), p.tasks.iter().enumerate().map(|(i, t)| (t.uid, t.code.clone(), t.name.clone(), s.as_ref().map_or(0, |s| s.es[i]), s.as_ref().map_or(0, |s| s.ef[i]))).collect())
+            (key(f), p.name.clone(), s.map(|s| p.tasks.iter().enumerate().map(|(i, t)| (t.uid, t.code.clone(), t.name.clone(), s.es[i], s.ef[i])).collect()))
         }).collect();
         let (mut moved, mut missing) = (0, vec![]);
         for (_, p) in plans.iter_mut() {
             let (m, miss) = refresh(p, &mut |x| {
                 let (_, plan, tasks) = found.iter().find(|(f, _, _)| *f == key(&x.file))
                     .or_else(|| found.iter().find(|(f, _, _)| file_name(f) == file_name(&x.file).to_lowercase())).ok_or("the plan is not open")?;
-                let (_, code, name, s, f) = tasks.iter().find(|t| t.0 == x.uid).ok_or("the task is no longer in that plan")?;
+                let (_, code, name, s, f) = tasks.as_ref().ok_or("that plan cannot be scheduled")?.iter().find(|t| t.0 == x.uid).ok_or("the task is no longer in that plan")?;
                 Ok(Found { plan: plan.clone(), code: code.clone(), name: name.clone(), start: *s, finish: *f })
             });
             moved += m;

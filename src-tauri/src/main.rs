@@ -997,6 +997,12 @@ fn scenario_base(a: &App) -> R<PathBuf> {
     Ok(if a.doc.p.scenario_of.is_empty() { here } else { here.with_file_name(&a.doc.p.scenario_of) })
 }
 
+/// A plan file as it is now: the open tab's plan (with its unsaved edits) when it is open, else as saved.
+fn plan_now(a: &App, path: &Path) -> R<Project> {
+    if let Some(d) = docs(a).into_iter().find(|d| d.path.as_deref() == Some(path)) { return Ok(d.p.clone()) }
+    match io::import(path)? { io::Imported::Plan(p, _) => Ok(*p), _ => Err("Not a plan.".into()) }
+}
+
 /// The scenarios of the shown plan (or of the plan the shown scenario belongs to), beside it in its folder.
 #[tauri::command]
 fn scenarios(st: State<St>) -> R<(String, String, Vec<ScenarioCard>)> { scenarios_in(&st.lock()) }
@@ -1004,7 +1010,7 @@ fn scenarios_in(a: &App) -> R<(String, String, Vec<ScenarioCard>)> {
     let base = scenario_base(a)?;
     let file = links::file_name(&base.display().to_string()).to_string();
     let open: Vec<PathBuf> = docs(a).iter().filter_map(|d| d.path.clone()).collect();
-    let bp = if a.doc.path.as_ref() == Some(&base) { a.doc.p.clone() } else { match io::import(&base)? { io::Imported::Plan(p, _) => *p, _ => return Err("The plan was not found.".into()) } };
+    let bp = plan_now(a, &base)?;
     let bc = Calc::new(&bp, &a.opts.date_fmt, today());
     let pc = &bc.s.cals[bp.calendars.iter().position(|c| c.name == bp.calendar).unwrap_or(0)];
     let wd = |x: i64, y: i64| { let m = if y >= x { pc.between(x, y) } else { -pc.between(y, x) }; (m as f64 / bp.day_min.max(1) as f64 * 10.0).round() / 10.0 };
@@ -1012,7 +1018,7 @@ fn scenarios_in(a: &App) -> R<(String, String, Vec<ScenarioCard>)> {
     for e in std::fs::read_dir(base.parent().ok_or("The plan's folder was not found.")?).map_err(|e| e.to_string())?.flatten() {
         let path = e.path();
         if path.extension().and_then(|x| x.to_str()) != Some("dplan") || path == base { continue }
-        let Ok(io::Imported::Plan(p, _)) = io::import(&path) else { continue };
+        let Ok(p) = plan_now(a, &path) else { continue };
         if p.scenario_of != file { continue }
         let c = Calc::new(&p, &a.opts.date_fmt, today());
         cards.push(ScenarioCard { path: path.display().to_string(), name: p.name.clone(), finish: datum_core::cal::date_of(c.s.finish - 1).to_string(), var: wd(bc.s.finish, c.s.finish), health: check::health(&c).score, tasks: p.tasks.len(), open: open.contains(&path) });
@@ -1047,8 +1053,7 @@ fn new_scenario_in(app: &AppHandle, a: &mut App, name: String) -> R<Out> {
 fn scenario_compare(st: State<St>, path: String) -> R<report::Changes> { scenario_compare_in(&st.lock(), path) }
 fn scenario_compare_in(a: &App, path: String) -> R<report::Changes> {
     let base = scenario_base(a)?;
-    let load = |p: &Path| -> R<Project> { if a.doc.path.as_deref() == Some(p) { Ok(a.doc.p.clone()) } else { match io::import(p)? { io::Imported::Plan(x, _) => Ok(*x), _ => Err("Not a plan.".into()) } } };
-    let (bp, sp) = (load(&base)?, load(Path::new(&path))?);
+    let (bp, sp) = (plan_now(a, &base)?, plan_now(a, Path::new(&path))?);
     Ok(report::changes(&Calc::new(&bp, &a.opts.date_fmt, today()), &Calc::new(&sp, &a.opts.date_fmt, today())))
 }
 
@@ -1057,7 +1062,7 @@ fn scenario_compare_in(a: &App, path: String) -> R<report::Changes> {
 fn scenario_merge(st: State<St>, path: String, kinds: Vec<String>) -> R<Out> { scenario_merge_in(&mut st.lock(), path, kinds) }
 fn scenario_merge_in(a: &mut App, path: String, kinds: Vec<String>) -> R<Out> {
     if !a.doc.p.scenario_of.is_empty() { return Err("Open the plan (not the scenario) to merge into it.".into()) }
-    let sp = match io::import(Path::new(&path))? { io::Imported::Plan(p, _) => *p, _ => return Err("Not a plan.".into()) };
+    let sp = plan_now(a, Path::new(&path))?;
     let k = a.cur;
     apply_at(a, k, Op::Merge { from: Box::new(sp), kinds })?;
     Ok(out(a))
@@ -1294,16 +1299,19 @@ fn tab_of(a: &App, file: &str) -> Option<usize> {
     docs(a).iter().position(|d| file_key(d).as_deref() == Some(name.as_str()))
 }
 
-/// A plan file another plan names: where it was saved, or next to the master when the folder moved.
-/// A network path (\\server\share) is only tried on the master's own server: a plan from someone
+/// A plan file another plan names: next to the master first (a copied project folder opens its own
+/// files, in the same subfolders), else where it was saved. A network path (\\server\share) is only tried on the master's own server: a plan from someone
 /// else must not make Windows connect, and sign in, to a server it names.
 fn sub_path(master: Option<&Path>, file: &str) -> Option<PathBuf> {
     use std::path::{Component, Prefix};
     let server = |p: &Path| match p.components().next() { Some(Component::Prefix(x)) => match x.kind() { Prefix::UNC(s, _) | Prefix::VerbatimUNC(s, _) => Some(s.to_ascii_lowercase()), Prefix::Disk(_) | Prefix::VerbatimDisk(_) => None, _ => Some(Default::default()) }, _ => None };
     let saved = PathBuf::from(file);
     let saved = (server(&saved).is_none() || server(&saved) == master.and_then(server)).then_some(saved);
-    let near = master.and_then(Path::parent).map(|d| d.join(links::file_name(file)));
-    [saved, near].into_iter().flatten().find(|p| p.is_file())
+    // The saved path's last folders under the master's folder, the longest first: subs/X.dplan, then X.dplan.
+    let parts: Vec<&str> = file.split(['/', '\\']).filter(|s| !s.is_empty() && !s.ends_with(':') && !matches!(*s, "." | "..")).collect();
+    let parts = &parts;
+    let near = master.and_then(Path::parent).into_iter().flat_map(|d| (0..parts.len()).map(move |k| d.join(parts[k..].iter().collect::<PathBuf>())));
+    near.chain(saved).find(|p| p.is_file())
 }
 
 /// Project › Subplans › New Subplan: a new plan saved next to the master (same calendars and
@@ -1311,6 +1319,7 @@ fn sub_path(master: Option<&Path>, file: &str) -> Option<PathBuf> {
 #[tauri::command]
 fn new_subplan(app: AppHandle, st: State<St>, name: String, level: u8, at: usize) -> R<Out> { new_subplan_in(&app, &mut st.lock(), name, level, at) }
 fn new_subplan_in(app: &AppHandle, a: &mut App, name: String, level: u8, at: usize) -> R<Out> {
+    if !a.doc.p.master.is_empty() { return Err(format!("“{}” is a subplan: show its master to add subplans.", a.doc.p.name)) }
     let here = a.doc.path.clone().ok_or("Save the master plan first, so its subplans can be saved next to it.")?;
     let clean = !a.doc.dirty;
     let folder = here.parent().ok_or("The master plan's folder was not found.")?.to_path_buf();
@@ -1348,6 +1357,7 @@ async fn add_subplan(app: AppHandle, st: State<'_, St>) -> R<Option<Out>> {
 /// A saved plan becomes a subplan of the shown master (the window's picker or the AI Link).
 fn add_subplan_in(app: &AppHandle, a: &mut App, path: PathBuf) -> R<Out> {
     let here = a.doc.path.clone().ok_or("Save the master plan first.")?;
+    if !a.doc.p.master.is_empty() { return Err(format!("“{}” is a subplan: show its master to add subplans.", a.doc.p.name)) }
     if path == here { return Err("A plan cannot be its own subplan.".into()) }
     let master = links::file_name(&here.display().to_string()).to_string();
     let k = match tab_of(a, &path.display().to_string()) {
@@ -1362,6 +1372,8 @@ fn add_subplan_in(app: &AppHandle, a: &mut App, path: PathBuf) -> R<Out> {
     };
     let sub = docs(a)[k];
     if !sub.p.subplans.is_empty() { return Err(format!("“{}” is a master plan itself; a project has one master.", sub.p.name)) }
+    // One master per subplan: take it out of its own master's project first.
+    if !sub.p.master.is_empty() && !sub.p.master.eq_ignore_ascii_case(&master) { return Err(format!("“{}” is already a subplan of {}; remove it from that project first.", sub.p.name, sub.p.master)) }
     let item = datum_core::SubPlan { file: path.display().to_string(), name: sub.p.name.clone(), level: 0 };
     let sub_clean = !sub.dirty;
     apply_at(a, k, Op::Master { file: master })?;
@@ -1440,12 +1452,12 @@ fn subplan_rows_in(a: &App) -> Vec<SubRow> {
         let mut row = SubRow { file: sp.file.clone(), name: sp.name.clone(), level: sp.level, found: p.is_some(), open: tab.is_some(), tab: tab.map_or(-1, |k| k as i64), start: 0, finish: 0, pct: 0.0, tasks: 0 };
         if let Some(p) = p {
             row.name = p.name.clone();
-            if let Ok(s) = datum_core::sched::schedule(&p) {
-                let leaf: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
-                let w = |i: usize| (s.ef[i] - s.es[i]).max(1) as f64;
-                let total: f64 = leaf.iter().map(|&i| w(i)).sum();
-                (row.start, row.finish, row.tasks) = (s.start, s.finish, leaf.len());
-                row.pct = if total > 0.0 { leaf.iter().map(|&i| w(i) * p.tasks[i].pct as f64).sum::<f64>() / total } else { 0.0 };
+            // The subplan's own project figure (as its project row and the combined view show it).
+            let c = Calc::new(&p, &a.opts.date_fmt, today());
+            if c.error.is_none() {
+                let s = &c.s;
+                (row.start, row.finish, row.tasks) = (s.start, s.finish, (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).count());
+                row.pct = c.summary().pct;
             }
         }
         row

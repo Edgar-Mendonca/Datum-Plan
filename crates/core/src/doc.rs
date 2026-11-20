@@ -271,8 +271,16 @@ pub fn copy(p: &Project, uids: &[u32]) -> Vec<Task> {
     let mut v: Vec<Task> = p.tasks.iter().zip(&keep).filter(|(_, k)| **k).map(|(t, _)| t.clone()).collect();
     let min = v.iter().map(|t| t.level).min().unwrap_or(0);
     v.iter_mut().for_each(|t| t.level -= min);
+    // Resources travel by name: in another plan the same unique ID may be someone else.
+    for t in v.iter_mut().filter(|t| !t.res.is_empty()) {
+        let names: Vec<serde_json::Value> = t.res.iter().map(|a| p.res_idx(a.res).map_or(serde_json::Value::Null, |r| p.resources[r].name.clone().into())).collect();
+        t.custom.insert(CLIP_RES.into(), names.into());
+    }
     v
 }
+
+/// The key `copy` keeps the assigned resources' names under (taken off again by `Op::Paste`).
+const CLIP_RES: &str = "@res";
 
 fn idxs(p: &Project, uids: &[u32]) -> Vec<usize> {
     let mut v: Vec<usize> = uids.iter().filter_map(|&u| p.idx(u)).collect();
@@ -669,15 +677,22 @@ fn res_set(p: &mut Project, uid: u32, field: &str, v: &str) -> Result<(), String
         "kind" => r.kind = match v.to_lowercase().chars().next() { Some('m') => ResKind::Material, Some('c') => ResKind::Cost, _ => ResKind::Work },
         "group" => r.group = v.into(),
         "max" => r.max = num(v)? / if v.ends_with('%') || num(v)? > 10.0 { 100.0 } else { 1.0 },
-        "rate" => r.rate = num(v)?,
-        "per_use" => r.per_use = num(v)?,
+        "rate" | "per_use" | "ovt" => {
+            let x = num(v)?;
+            // Table A's undated (else earliest) row prices the work: keep it in step.
+            let a = r.tables.first_mut().and_then(|t| t.iter_mut().min_by_key(|x| x.from));
+            match field {
+                "rate" => { r.rate = x; if let Some(a) = a { a.std = x } }
+                "per_use" => { r.per_use = x; if let Some(a) = a { a.per_use = x } }
+                _ => { r.ovt = x; if let Some(a) = a { a.ovt = x } }
+            }
+        }
         "label" => r.label = v.into(),
         "initials" => r.initials = v.into(),
         "email" => r.email = v.into(),
         "country" => r.country = v.chars().take(60).collect(),
         "code" => r.code = v.into(),
         "notes" => r.notes = v.into(),
-        "ovt" => r.ovt = num(v)?,
         f => return Err(format!("{f} cannot be edited.")),
     }
     let name = p.resources[i].name.clone();
@@ -711,6 +726,11 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 t.uid = map[&t.uid];
                 t.level += base;
                 t.preds.retain_mut(|l| map.get(&l.pred).map(|&u| l.pred = u).is_some());
+                // Assignments go to this plan's resource of the same name, or are dropped.
+                if let Some(serde_json::Value::Array(names)) = t.custom.remove(CLIP_RES) {
+                    let key = |n: &str| n.trim().to_lowercase();
+                    t.res = t.res.iter().zip(&names).filter_map(|(a, n)| { let n = key(n.as_str()?); Some(Assign { res: p.resources.iter().find(|r| key(&r.name) == n)?.uid, ..a.clone() }) }).collect();
+                }
             }
             // Pasted copies get fresh Activity IDs.
             let mut taken: HashSet<String> = p.tasks.iter().map(|t| t.code.clone()).collect();
@@ -803,7 +823,9 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                     continue;
                 }
                 let c = &s.cals[s.ci[i]];
-                let done = if dd <= s.es[i] { 0 } else if dd >= s.ef[i] { 100 } else { c.between(s.es[i], dd) * 100 / c.between(s.es[i], s.ef[i]).max(1) };
+                // Work done by then, leaving out the pauses of a split task.
+                let gaps = load::pauses(c, s.es[i], &p.tasks[i].splits, p.tasks[i].dur, 0);
+                let done = if dd <= s.es[i] { 0 } else if dd >= s.ef[i] { 100 } else { load::worked(c, s.es[i], dd, &gaps) * 100 / load::worked(c, s.es[i], s.ef[i], &gaps).max(1) };
                 if done as u8 > p.tasks[i].pct {
                     set_pct_by(p, i, done as u8, Some(&s))?;
                 }

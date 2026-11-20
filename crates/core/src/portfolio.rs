@@ -2,8 +2,8 @@
 //! shared resource pool: each resource's work across all plans against its capacity, taken from
 //! a pool plan when one is chosen (else the most any plan gives it). A plan can take its
 //! resources' rates, units, availability and calendars from the pool.
-use crate::{cal::{date_of, DAY}, fields::Calc, load::buckets, model::*};
-use chrono::NaiveDate;
+use crate::{cal::{at, date_of, DAY}, fields::Calc, load::buckets, model::*};
+use chrono::{Months, NaiveDate};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -83,7 +83,12 @@ pub fn pool(plans: &[(String, &Project)], pool: Option<&Project>, fmt: &str, tod
     let (Some(first), Some(last)) = (calcs.iter().map(|c| c.s.start.div_euclid(DAY)).min(), calcs.iter().map(|c| (c.s.finish - 1).div_euclid(DAY)).max()) else { return Pool::default() };
     let b = buckets(first, last, unit);
     let n = b.len();
-    let end = |j: usize| b.get(j + 1).copied().unwrap_or(b[j] + match unit { "day" => 1, "week" => 7, _ => 31 });
+    // The last bucket ends where the next would start (a month counts its own days only).
+    let end = |j: usize| b.get(j + 1).copied().unwrap_or_else(|| match unit {
+        "day" => b[j] + 1,
+        "week" => b[j] + 7,
+        _ => date_of(b[j] * DAY).checked_add_months(Months::new(if unit == "quarter" { 3 } else { 1 })).map_or(b[j] + 31, |m| at(m) / DAY),
+    });
     let mut rows: Vec<PoolRow> = vec![];
     let mut at: HashMap<String, usize> = HashMap::new();
     let cap_of = |c: &Calc, k: usize, r: &Resource| -> Vec<f64> {

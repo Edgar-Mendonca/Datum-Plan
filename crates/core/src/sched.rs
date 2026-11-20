@@ -123,6 +123,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
 
     let mut edges: Vec<Edge> = vec![];
     let (mut inc, mut out) = (vec![vec![]; n], vec![vec![]; n]);
+    // Edges with a % lag from a summary: (summary, %). Its span is known in the forward pass.
+    let mut sum_lag: HashMap<usize, (usize, i64)> = HashMap::new();
     for (s, t) in p.tasks.iter().enumerate().filter(|&(s, _)| !off[s]) {
         for l in &t.preds {
             let Some(&q) = ix.get(&l.pred) else { continue };
@@ -142,7 +144,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             }
             for &a in &from {
                 for &b in &leaves_of(s) {
-                    let lag = if l.pct { dur[a] * l.lag / 100 } else { l.lag };
+                    if l.pct && summary[q] { sum_lag.insert(edges.len(), (q, l.lag)); }
+                    let lag = if !l.pct { l.lag } else if summary[q] { 0 } else { dur[a] * l.lag / 100 };
                     inc[b].push(edges.len());
                     out[a].push(edges.len());
                     edges.push(Edge { p: a, s: b, kind: l.kind, lag, el: l.elapsed && !l.pct });
@@ -201,6 +204,17 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     };
     for &i in &order {
         let (t, d, sp) = (&p.tasks[i], dur[i], span[i]);
+        // A % lag from a summary: a share of the working time from its first start to its last finish.
+        let mut last = (usize::MAX, 0);
+        for &e in inc[i].iter().filter(|_| !sum_lag.is_empty()) {
+            let Some(&(q, pct)) = sum_lag.get(&e) else { continue };
+            if last.0 != q {
+                let k = leaves_of(q);
+                let (a, b) = (k.iter().map(|&j| es[j]).min().unwrap_or(start), k.iter().map(|&j| ef[j]).max().unwrap_or(start));
+                last = (q, cals[ci[q].get()].between(a, b) * pct / 100);
+            }
+            edges[e].lag = last.1;
+        }
         if let Some(a) = t.act_start { pick(i, at(a), sp) }
         let c = &cals[ci[i].get()];
         if let Some(a) = t.act_start {
@@ -210,11 +224,19 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             ef[i] = match (t.act_finish, data) {
                 (Some(f), _) => {
                     fixed[i] = true;
-                    (if c.is_work_day(f) { c.end_of(f) } else { at(f) + usual(f).1 }).max(es[i])
+                    if d == 0 {
+                        // A milestone takes no time: it sits on its day where its links put it.
+                        let x = inc[i].iter().filter(|&&e| !loe[edges[e].p]).map(|&e| need(&edges[e], &es, &ef)).max().unwrap_or(es[i]);
+                        es[i] = x.clamp(es[i], c.end_of(f).max(es[i]));
+                        es[i]
+                    } else {
+                        (if c.is_work_day(f) { c.end_of(f) } else { at(f) + usual(f).1 }).max(es[i])
+                    }
                 }
                 (None, Some(dd)) if t.pct < 100 => {
                     let rem = rest(i, t.pct);
-                    let mut from = dd.max(es[i]);
+                    // Not before the work already done (an actual start after the status date).
+                    let mut from = dd.max(c.add(es[i], sp - rem));
                     // Retained logic: unfinished predecessors still hold back the remaining work.
                     if o.retained {
                         for &e in inc[i].iter().filter(|&&e| !fixed[edges[e].p] && !loe[edges[e].p]) {
@@ -335,7 +357,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                 _ => {}
             }
         }
-        if let Some(dl) = t.deadline {
+        // A deadline on the task or on any summary above it.
+        if let Some(dl) = std::iter::successors(Some(i), |&j| parent[j]).filter_map(|j| p.tasks[j].deadline).min() {
             v = v.min(c.end_of(dl));
         }
         if fixed[i] {
@@ -347,13 +370,13 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         }
         // A started task's late start is that of its remaining work, which is what its predecessors must meet.
         let rest = if t.act_start.is_some() { rest(i, t.pct) } else { sp };
-        lf[i] = if sp > 0 { c.prev_end(v) } else { v };
+        // A milestone at the end of working time (as after a finish) keeps its late dates there too.
+        lf[i] = if sp > 0 || c.next_start(ef[i]) > ef[i] { c.prev_end(v) } else { v };
         ls[i] = c.sub(lf[i], rest);
         ff[i] = free.max(0);
         let backward = o.from_finish && o.finish_date.is_some() && !t.manual && t.act_start.is_none();
         if backward {
-            (es[i], ef[i]) = (ls[i], lf[i]);
-            ff[i] = 0;
+            // Placed at its late dates below, once floats are known.
         } else if t.constraint == C::ALAP && t.act_start.is_none() && ff[i] > 0 {
             // As late as possible without delaying any successor: the largest shift (at most its free
             // float) that every link still allows, by the same rule as the forward pass.
@@ -381,9 +404,17 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     let mut tf: Vec<i64> = (0..n).map(|i| if leaf(i) && !fixed[i] && !loe[i] { cals[ci[i].get()].between(ef[i], lf[i]) } else { 0 }).collect();
     let mut start = start;
     if o.from_finish && o.finish_date.is_some() {
+        // Tasks sit at their late dates; float still counts from early dates, as forward from the
+        // calculated start (the forward pass moved by the gap between its finish and the finish date).
+        for &i in order.iter().filter(|&&i| !fixed[i] && !loe[i] && !p.tasks[i].manual && p.tasks[i].act_start.is_none()) {
+            tf[i] -= cals[ci[i].get()].between(finish, back_from);
+            (es[i], ef[i]) = (ls[i], lf[i]);
+        }
         start = order.iter().map(|&i| es[i]).min().unwrap_or(start);
         finish = back_from;
     }
+    // Free float never exceeds total float (deadlines and constraints limit only the late dates).
+    for &i in &order { ff[i] = ff[i].min(tf[i].max(0)) }
 
     // Longest path: back from the tasks that finish last, through driving links.
     let mut lp = vec![false; n];

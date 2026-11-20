@@ -132,6 +132,13 @@ pub struct Calc<'a> {
     memo: RefCell<HashMap<(String, usize), Option<F>>>,
 }
 
+/// The share of a task earned (0–1): its physical % (exact from installed quantities) or its % complete.
+pub fn earned_share(t: &Task) -> f64 {
+    if t.pct_type != PctType::Physical { return t.pct as f64 / 100.0 }
+    let q = (t.qty_done / t.qty).clamp(0.0, 1.0);
+    if t.qty > 0.0 && (q * 100.0).round() as u8 == t.phys { q } else { t.phys as f64 / 100.0 }
+}
+
 pub fn money(v: f64, c: &Currency) -> String {
     // Halves round away from zero, as spreadsheets show money (1,234.5 → 1,235; 1.005 → 1.01), not to even.
     let k = 10f64.powi(c.decimals.min(10) as i32);
@@ -225,9 +232,29 @@ impl<'a> Calc<'a> {
     /// date, 0–100, unrounded (the project's figure and the S-curve sum these).
     pub fn planned_share(&self, i: usize) -> f64 {
         let (t, s) = (&self.p.tasks[i], &self.s);
+        if s.summary[i] {
+            // Weighted by duration like its % complete.
+            let kids: Vec<usize> = self.p.subtree(i).skip(1).filter(|&j| !s.summary[j] && !s.off[j]).collect();
+            let w: f64 = kids.iter().map(|&j| self.p.tasks[j].dur as f64).sum();
+            let wt = |j: usize| if w > 0.0 { self.p.tasks[j].dur as f64 / w } else { 1.0 / kids.len() as f64 };
+            return kids.iter().map(|&j| wt(j) * self.planned_share(j)).sum();
+        }
         let (a, b) = t.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
         let (dd, c) = (self.progress_at(), &s.cals[s.ci[i]]);
         if dd <= a { 0.0 } else if dd >= b { 100.0 } else { c.between(a, dd) as f64 / c.between(a, b).max(1) as f64 * 100.0 }
+    }
+
+    /// The parts of task `i`'s baseline `cost` spent at its start and at its finish: fixed cost and
+    /// planned expenses by their accrual, cost per use at the start. The rest goes with the work.
+    pub fn lumps(&self, i: usize, cost: f64, start: i64) -> (f64, f64) {
+        let (p, t) = (self.p, &self.p.tasks[i]);
+        let mut x = [0.0; 2];
+        for (v, a) in std::iter::once((t.fixed_cost, t.accrual)).chain(t.expenses.iter().map(|e| (e.planned, e.accrual))) {
+            match a { Accrual::Start => x[0] += v, Accrual::End => x[1] += v, Accrual::Prorated => {} }
+        }
+        x[0] += t.res.iter().filter_map(|a| p.res_idx(a.res).map(|k| p.resources[k].rate_on(a.table, date_of(start)).1)).sum::<f64>();
+        let s0 = x[0].clamp(0.0, cost.max(0.0));
+        (s0, x[1].clamp(0.0, (cost - s0).max(0.0)))
     }
 
     pub fn status_at(&self) -> i64 {
@@ -263,9 +290,10 @@ impl<'a> Calc<'a> {
             let Some(b) = t.bls.get(&0) else { continue };
             let c = &s.cals[s.ci[i]];
             let frac = if dd <= b.start { 0.0 } else if dd >= b.finish { 1.0 } else { c.between(b.start, dd) as f64 / c.between(b.start, b.finish).max(1) as f64 };
-            let done = if t.pct_type == PctType::Physical { t.phys } else { t.pct } as f64 / 100.0;
+            let done = earned_share(t);
+            let (s0, e0) = self.lumps(i, b.cost, b.start);
             e.bac[i] = b.cost;
-            e.pv[i] = b.cost * frac;
+            e.pv[i] = if dd > b.start { s0 } else { 0.0 } + if dd >= b.finish { e0 } else { 0.0 } + (b.cost - s0 - e0) * frac;
             e.ev[i] = b.cost * done;
             e.ac[i] = self.l.acost[i];
         }

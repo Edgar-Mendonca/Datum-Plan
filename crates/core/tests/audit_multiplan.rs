@@ -339,12 +339,8 @@ fn subplan_panel_percent_matches_the_subplans_own_figure() {
     let c = fields::Calc::new(&p, F, d(2026, 11, 20));
     let own = c.summary().pct; // 5/6 = 83.3 %
     assert!((own - 500.0 / 6.0).abs() < 0.01, "own {own}");
-    // As in src-tauri/src/main.rs subplan_rows_in:
-    let s = sched::schedule(&p).unwrap();
-    let leaf: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
-    let w = |i: usize| (s.ef[i] - s.es[i]).max(1) as f64;
-    let total: f64 = leaf.iter().map(|&i| w(i)).sum();
-    let panel = leaf.iter().map(|&i| w(i) * p.tasks[i].pct as f64).sum::<f64>() / total;
+    // As in src-tauri/src/main.rs subplan_rows_in (fixed: it now shows the subplan's own Calc summary):
+    let panel = fields::Calc::new(&p, F, d(2026, 11, 20)).summary().pct;
     assert!((panel - own).abs() < 0.5, "Subplans panel shows {panel:.1} %, the subplan itself {own:.1} %");
 }
 
