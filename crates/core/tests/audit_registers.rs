@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default)] // test setups read best one field at a time
 //! Audit of the register modules (docreg, procure, contract, regtable, board, assist register tools).
 //! Each test hand-works the expected value; a failing test is a confirmed bug.
 use chrono::NaiveDate;

@@ -88,7 +88,7 @@ fn xer_finish_constraint_is_written_at_end_of_day() {
     p.tasks[i].cdate = Some(d(2027, 3, 31));
     let (_, text) = out(&p, "xer");
     let fields: Vec<&str> = text.lines().skip_while(|l| *l != "%T\tTASK").nth(1).unwrap().split('\t').skip(1).collect();
-    let row: Vec<&str> = text.lines().filter(|l| l.starts_with("%R\t") && l.contains("Design FMEA")).next().unwrap().split('\t').skip(1).collect();
+    let row: Vec<&str> = text.lines().find(|l| l.starts_with("%R\t") && l.contains("Design FMEA")).unwrap().split('\t').skip(1).collect();
     let get = |k: &str| row[fields.iter().position(|f| *f == k).unwrap()];
     assert_eq!(get("cstr_type"), "CS_MEOB");
     assert_eq!(get("cstr_date"), "2027-03-31 17:00", "a finish constraint at 00:00 is a day early in P6");

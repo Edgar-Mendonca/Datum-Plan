@@ -635,7 +635,7 @@ fn remaining_duration_of_an_elapsed_task() {
     let i = (0..d.p.tasks.len()).find(|&i| !d.p.is_summary(i)).unwrap();
     let uid = d.p.tasks[i].uid;
     d.apply(Op::Set { uid, field: "dur".into(), value: "3ed".into() }, "%d-%b-%y").unwrap();
-    for (f, v, pct) in [("rem", "1d", 67), ("rem", "1 edays", 67), ("adur", "2ed", 66), ("adur", "1.5d", 50)] {
+    for (f, v, pct) in [("rem", "1d", 67), ("rem", "1 edays", 67), ("adur", "2ed", 67), ("adur", "1.5d", 50)] {
         d.apply(Op::Set { uid, field: f.into(), value: v.into() }, "%d-%b-%y").unwrap();
         assert_eq!(d.p.tasks[i].pct, pct, "{f} = {v}");
     }

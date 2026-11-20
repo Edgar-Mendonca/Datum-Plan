@@ -495,7 +495,7 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
             // More actual work than planned: the task took that long.
             if m > p.tasks[i].dur && p.tasks[i].dur > 0 { p.tasks[i].dur = m }
             let d = p.tasks[i].dur.max(1);
-            set_pct(p, i, (m.min(d) * 100 / d) as u8)?;
+            set_pct(p, i, if m >= d { 100 } else { ((m * 100 + d / 2) / d).min(99) as u8 })?;
         }
         "rem" => {
             // Within the duration it sets the progress; more remaining work than that never undoes the
@@ -503,14 +503,14 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
             let m = parse::dur_for(v, day, p.tasks[i].elapsed)?;
             let t = &p.tasks[i];
             let d = t.dur.max(1);
-            let pct = (100 - (m.min(d) * 100 / d)) as u8;
+            let pct = if m <= 0 { 100 } else { (100 - (m.min(d) * 100 + d / 2) / d).clamp(0, 99) as u8 };
             if m <= d && (pct >= t.pct || t.act_start.is_none()) {
                 return set_pct(p, i, pct);
             }
             let done = if t.act_start.is_some() { t.dur * t.pct as i64 / 100 } else { 0 };
             let t = &mut p.tasks[i];
             t.dur = done + m;
-            if t.act_start.is_some() { (t.pct, t.act_finish) = ((done * 100 / (done + m)).min(99) as u8, None) }
+            if t.act_start.is_some() { (t.pct, t.act_finish) = (((done * 100 + (done + m) / 2) / (done + m)).min(99) as u8, None) }
         }
         "start" => {
             let d = date(v)?;

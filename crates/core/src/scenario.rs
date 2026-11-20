@@ -66,7 +66,8 @@ pub fn merge(base: &Project, scen: &Project, kinds: &[String]) -> Project {
     if on("tasks") || on("resources") { q.resources.extend(fresh) }
     let uids: HashSet<u32> = q.tasks.iter().map(|t| t.uid).collect();
     for t in q.tasks.iter_mut() {
-        let Some(s) = from.get(&t.uid) else { continue };
+        // Tasks from after the copy are the plan's own (or came in whole above).
+        let Some(s) = from.get(&t.uid).filter(|_| t.uid < mark) else { continue };
         if on("names") { t.name = s.name.clone() }
         if on("dur") { (t.dur, t.unit, t.elapsed) = (s.dur, s.unit, s.elapsed) }
         if on("links") { t.preds = s.preds.iter().filter(|l| uids.contains(&l.pred)).cloned().collect() }
