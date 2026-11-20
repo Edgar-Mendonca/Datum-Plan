@@ -35,8 +35,13 @@ pub fn cell_value(c: &Calc, i: usize, key: &str) -> Value {
             let ms = !c.s.summary[i] && c.p.tasks[i].dur == 0 && matches!(key, "finish" | "ef");
             day(if kind == Kind::Fin && !ms && m.rem_euclid(DAY) == 0 { m - 1 } else { m })
         }
-        v => to_value(&v, kind, c.p.day_min),
+        v => to_value(&v, kind, day_len(c, i, key)),
     }
+}
+
+/// Minutes in one of a task's duration days: an elapsed task's durations are clock days.
+pub fn day_len(c: &Calc, i: usize, key: &str) -> i64 {
+    if matches!(key, "dur" | "rem" | "adur") && c.p.tasks.get(i).is_some_and(|t| t.elapsed) { DAY } else { c.p.day_min }
 }
 
 /// The day of an instant as a spreadsheet date serial.
@@ -179,6 +184,13 @@ fn names_in(f: &str) -> Vec<String> {
     out
 }
 
+/// Whether a formula column reads the plan as a workbook holds it: its names (TotalCost), the
+/// plan's defined names, or the Tasks and Resources tables.
+pub fn reads_plan(p: &Project, src: &str) -> bool {
+    let up = src.to_uppercase();
+    up.contains("TASKS[") || up.contains("RESOURCES[") || translate(src, |_| Some("A1".into())).is_ok_and(|t| names_in(&t).iter().any(|n| crate::sheetx::PLAN_NAMES.iter().chain(p.names.iter().map(|d| &d.name).collect::<Vec<_>>().iter().map(|s| s.as_str()).collect::<Vec<_>>().iter()).any(|x| x.eq_ignore_ascii_case(n))))
+}
+
 /// A name's value as a workbook name's formula (a number, or quoted text).
 fn value_formula(v: &Value) -> String {
     match v { Value::Number(x) => format!("{x}"), Value::Empty => "\"\"".into(), v => format!("\"{}\"", v.display().replace('"', "\"\"")) }
@@ -246,14 +258,14 @@ fn column_names(c: &Calc, wb: &mut Workbook, used: &std::collections::HashSet<St
 }
 
 /// Columns of the "Plan" sheet and the `Tasks` table: field key and column name. The first 18
-/// keep their letters (A–R) so older `Plan!M:M` references still work.
-pub const PLAN_COLS: [(&str, &str); 30] = [
-    ("id", "ID"), ("code", "WBS"), ("name", "Name"), ("level", "Level"), ("summary", "Summary"), ("dur", "Duration"),
+/// keep their letters (A–R) so older `Plan!M:M` references still work; new columns go at the end.
+pub const PLAN_COLS: [(&str, &str); 31] = [
+    ("id", "ID"), ("code", "Activity ID"), ("name", "Name"), ("level", "Level"), ("summary", "Summary"), ("dur", "Duration"),
     ("start", "Start"), ("finish", "Finish"), ("pct", "% Complete"), ("b0start", "Baseline Start"), ("b0finish", "Baseline Finish"),
     ("b0dur", "Baseline Duration"), ("cost", "Cost"), ("b0cost", "Baseline Cost"), ("work", "Work"), ("tf", "Total Float"),
     ("critical", "Critical"), ("res", "Resources"), ("milestone", "Milestone"), ("astart", "Actual Start"), ("afinish", "Actual Finish"),
     ("rem", "Remaining Duration"), ("ff", "Free Float"), ("status", "Status"), ("late", "Late"), ("plannedpct", "Planned % Complete"),
-    ("bcws", "Planned Value"), ("bcwp", "Earned Value"), ("acwp", "Actual Cost"), ("uid", "Unique ID"),
+    ("bcws", "Planned Value"), ("bcwp", "Earned Value"), ("acwp", "Actual Cost"), ("uid", "Unique ID"), ("wbs", "WBS"),
 ];
 /// Columns of the "Resources" sheet and table: field key and column name.
 pub const RES_COLS: [(&str, &str); 10] = [
@@ -578,7 +590,13 @@ fn day_first(fmt: &str) -> bool { !fmt.starts_with("%m") }
 fn typed_date(input: &str, fmt: &str) -> Option<f64> {
     let t = input.trim();
     if !t.starts_with(|ch: char| ch.is_ascii_digit()) || !t.contains(['/', '-', '.']) { return None }
-    let serial = |d: chrono::NaiveDate| (d - chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap_or_default()).num_days() as f64 + EPOCH;
+    // A time of day after the date ("02/11/2026 13:30") adds its share of the day.
+    if let Some((a, b)) = t.rsplit_once(' ').filter(|x| x.1.contains(':')) {
+        let tm = chrono::NaiveTime::parse_from_str(b, "%H:%M").or_else(|_| chrono::NaiveTime::parse_from_str(b, "%H:%M:%S"));
+        if let (Some(d), Ok(tm)) = (typed_date(a, fmt), tm) { use chrono::Timelike; return Some(d + tm.num_seconds_from_midnight() as f64 / 86400.0) }
+    }
+    // The 1900 date system counts a 29 Feb 1900 that never was: days before March are one less.
+    let serial = |d: chrono::NaiveDate| { let n = (d - chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap_or_default()).num_days() as f64 + EPOCH; if n < 61.0 { n - 1.0 } else { n } };
     let sep = t.chars().find(|ch| "/-.".contains(*ch))?;
     let n: Vec<&str> = t.split(sep).collect();
     if n.iter().all(|x| (1..=4).contains(&x.len()) && x.bytes().all(|b| b.is_ascii_digit())) {

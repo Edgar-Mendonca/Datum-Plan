@@ -80,12 +80,17 @@ pub fn mpx(c: &Calc) -> String {
     let (p, s) = (c.p, &c.s);
     let q = |x: &str| if x.contains([',', '"']) { format!("\"{}\"", x.replace('"', "\"\"")) } else { x.to_string() };
     let mut o = String::from("MPX,Datum Plan,4.0,ANSI\r\n");
-    let _ = writeln!(o, "10,$,0,2,0,0,0,0,0,0\r\n11,0,0,1,0,0,0,0,0\r\n12,0,0,{},{},20,0,0\r", p.day_min / 60, p.day_min * 5 / 60);
+    // 10 currency: symbol, position, digits, thousands and decimal separators; 11 defaults: duration
+    // units (2 = days), fixed, work units (1 = hours), hours per day and week; 12 date and time:
+    // month first, 24-hour, default start 480 min, separators, am/pm, date format 20 (4-digit year).
+    let h = p.day_min as f64 / 60.0;
+    let _ = writeln!(o, "10,$,0,2,\",\",.\r\n11,2,0,1,{h},{}\r\n12,0,1,480,/,:,am,pm,20,20\r", h * 5.0);
     for cal in &p.calendars {
         let days: Vec<&str> = (0..7).map(|k| if cal.week[(k + 6) % 7].is_empty() { "0" } else { "1" }).collect();
         let _ = writeln!(o, "20,{},{}\r", q(&cal.name), days.join(","));
     }
-    let _ = writeln!(o, "30,{},,,{},{}\r", q(&p.name), mpx_date(s.start), mpx_date(s.finish));
+    // 30 project header: title, company, manager, calendar, start, finish.
+    let _ = writeln!(o, "30,{},,,{},{},{}\r", q(&p.name), q(&p.calendar), mpx_date(s.start), mpx_date(s.finish));
     // Field numbers as MPX defines them: 40 ID, 49 Unique ID, 1 Name, 42 Standard Rate, 44 Cost Per Use.
     o.push_str("40,ID,Unique ID,Name,Standard Rate,Cost Per Use\r\n41,40,49,1,42,44\r\n");
     for (k, r) in p.resources.iter().enumerate() {
@@ -145,12 +150,13 @@ pub fn pmxml(c: &Calc) -> String {
     }
     for (i, t) in p.tasks.iter().enumerate().filter(|&(i, _)| !s.summary[i]) {
         let ty = match t.act_type { ActType::Loe => "Level of Effort", ActType::StartMs => "Start Milestone", ActType::FinishMs => "Finish Milestone", ActType::ResourceDep => "Resource Dependent", ActType::WbsSummary => "WBS Summary", ActType::Task if t.dur == 0 => "Finish Milestone", ActType::Task => "Task Dependent" };
+        // PMXML holds percentages as fractions (0.5 = 50 %).
         let status = if c.pct[i] == 100 { "Completed" } else if c.pct[i] > 0 { "In Progress" } else { "Not Started" };
         let _ = writeln!(o, "<Activity><ObjectId>{}</ObjectId><Id>{}</Id><Name>{}</Name><Type>{ty}</Type><Status>{status}</Status><WBSObjectId>{}</WBSObjectId><PlannedDuration>{}</PlannedDuration>\
 <RemainingDuration>{}</RemainingDuration><StartDate>{}</StartDate><FinishDate>{}</FinishDate><PhysicalPercentComplete>{}</PhysicalPercentComplete><PercentCompleteType>Physical</PercentCompleteType>\
 <CalendarObjectId>{}</CalendarObjectId></Activity>",
             t.uid, esc(if t.code.is_empty() { &t.name } else { &t.code }), esc(&t.name), parent[i].map_or(String::new(), |j| (100000 + p.tasks[j].uid).to_string()),
-            t.dur as f64 / 60.0, t.dur as f64 * (100 - c.pct[i] as i64) as f64 / 6000.0, pdt(s.es[i]), pdt(s.ef[i]), c.pct[i], s.ci[i].min(p.calendars.len() - 1) + 1);
+            t.dur as f64 / 60.0, t.dur as f64 * (100 - c.pct[i] as i64) as f64 / 6000.0, pdt(s.es[i]), pdt(s.ef[i]), c.pct[i] as f64 / 100.0, s.ci[i].min(p.calendars.len() - 1) + 1);
     }
     // As in XER: a link to or from a summary applies to every activity under it; a percent lag becomes hours.
     let under = |i: usize| -> Vec<usize> { if s.summary[i] { p.subtree(i).filter(|&j| !s.summary[j]).collect() } else { vec![i] } };

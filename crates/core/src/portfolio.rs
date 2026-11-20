@@ -23,6 +23,8 @@ pub struct Card {
     pub bf: Option<f64>,
     pub var_finish: String,
     pub pct: f64,
+    /// What `pct` counts for in a rollup of plans: the working days of the leaf tasks it weighs.
+    pub weight: f64,
     pub cost: String,
     pub spi: Option<f64>,
     pub cpi: Option<f64>,
@@ -46,7 +48,7 @@ pub fn card(p: &Project, fmt: &str, today: NaiveDate, path: String, folder: Stri
     let bf = p.tasks.iter().filter_map(|t| t.bls.get(&0).map(|b| b.finish)).max().map(|f| (f - 1).div_euclid(DAY) as f64 + 1.0);
     Card {
         path, folder, name: p.name.clone(), manager: p.manager.clone(), client: p.client.clone(), start: s.start, finish: s.finish, s: s.s, f: s.f, bf, var_finish: s.var_finish,
-        pct: s.pct, cost: s.cost, spi: s.spi, cpi: s.cpi, tasks: s.tasks, late: s.late, critical: s.critical, error: s.error, modules: p.modules.clone(),
+        pct: s.pct, weight: (0..p.tasks.len()).filter(|&i| !c.s.summary[i] && !c.s.off[i]).map(|i| p.tasks[i].dur as f64).sum::<f64>() / p.day_min.max(1) as f64, cost: s.cost, spi: s.spi, cpi: s.cpi, tasks: s.tasks, late: s.late, critical: s.critical, error: s.error, modules: p.modules.clone(),
         contract: has("contract").then(|| { let o = crate::contract::status(&c); (o.late, o.at_risk, o.ld) }),
         documents: has("documents").then(|| { let o = crate::docreg::status(&c); (o.earned, o.planned, o.docs.len()) }),
         procurement: has("procurement").then(|| { let o = crate::procure::status(&c); (o.earned, o.planned, o.items.iter().filter(|x| x.rag == "red").count(), o.items.len()) }),

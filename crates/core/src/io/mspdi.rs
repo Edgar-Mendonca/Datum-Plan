@@ -112,7 +112,9 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
             t.uid, i + 1, esc(&t.name), !t.inactive as u8, t.manual as u8, lv + 1, dt(s.es[i]), dt(s.ef[i]), dur(d), unit_code(t.unit) + t.elapsed as u8, (!sum && d == 0) as u8, sum as u8,
             (s.tf[i] <= 0) as u8, t.pct, t.phys, (t.pct_type == PctType::Physical) as u8, t.fixed_cost, match t.accrual { Accrual::Start => 1, Accrual::Prorated => 2, Accrual::End => 3 }, CONS.iter().position(|c| *c == cons).unwrap_or(0), t.cal.as_deref().map_or(-1, |c| cal_uid(c) as i64), cost[i]);
         if let Some(c) = cdate {
-            let _ = write!(o, "<ConstraintDate>{}T08:00:00</ConstraintDate>", c);
+            // A finish constraint holds the end of the day, as the deadline does.
+            let h = if matches!(cons, Constraint::MFO | Constraint::FNET | Constraint::FNLT) { 17 } else { 8 };
+            let _ = write!(o, "<ConstraintDate>{c}T{h:02}:00:00</ConstraintDate>");
         }
         if t.ignore_rc {
             o.push_str("<IgnoreResourceCalendar>1</IgnoreResourceCalendar>");
@@ -144,9 +146,9 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
     o.push_str("</Tasks>\n<Resources>");
     for (k, r) in p.resources.iter().enumerate() {
         let ty = match r.kind { ResKind::Work => 1, ResKind::Material => 0, ResKind::Cost => 2 };
-        let _ = write!(o, "<Resource><UID>{}</UID><ID>{}</ID><Name>{}</Name><Type>{ty}</Type><IsNull>0</IsNull><Group>{}</Group><MaterialLabel>{}</MaterialLabel>\
-<MaxUnits>{:.2}</MaxUnits><StandardRate>{}</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>{}</CostPerUse>{}</Resource>",
-            r.uid, k + 1, esc(&r.name), esc(&r.group), esc(&r.label), r.max, r.rate, r.per_use, if r.kind == ResKind::Work { format!("<CalendarUID>{}</CalendarUID>", 1000 + k) } else { String::new() });
+        let _ = write!(o, "<Resource><UID>{}</UID><ID>{}</ID><Name>{}</Name><Type>{ty}</Type><IsNull>0</IsNull><Initials>{}</Initials><Group>{}</Group><MaterialLabel>{}</MaterialLabel>\
+<EmailAddress>{}</EmailAddress><MaxUnits>{:.2}</MaxUnits><StandardRate>{}</StandardRate><StandardRateFormat>2</StandardRateFormat><OvertimeRate>{}</OvertimeRate><OvertimeRateFormat>2</OvertimeRateFormat><CostPerUse>{}</CostPerUse>{}</Resource>",
+            r.uid, k + 1, esc(&r.name), esc(&r.initials), esc(&r.group), esc(&r.label), esc(&r.email), r.max, r.rate, r.ovt, r.per_use, if r.kind == ResKind::Work { format!("<CalendarUID>{}</CalendarUID>", 1000 + k) } else { String::new() });
     }
     o.push_str("</Resources>\n<Assignments>");
     let mut n = 1;
@@ -271,6 +273,10 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         };
         if k.manual {
             k.mstart = date(t.val("Start"));
+        }
+        // A finish constraint at 00:00 is the end of the day before.
+        if matches!(k.constraint, Constraint::MFO | Constraint::FNET | Constraint::FNLT) && t.val("ConstraintDate").get(11..16) == Some("00:00") {
+            k.cdate = k.cdate.and_then(|d| d.pred_opt());
         }
         if matches!(k.constraint, Constraint::ASAP | Constraint::ALAP) {
             k.cdate = None;

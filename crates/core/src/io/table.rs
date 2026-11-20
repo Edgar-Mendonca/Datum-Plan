@@ -190,8 +190,7 @@ pub fn read_sheet(path: &Path, sheet: Option<&str>) -> Result<(Vec<String>, Vec<
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     let mut names = vec![];
     let mut rows = if ext == "csv" || ext == "txt" {
-        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-        csv_rows(&String::from_utf8_lossy(&bytes))
+        csv_rows(&crate::doc::decode_text(std::fs::read(path).map_err(|e| e.to_string())?))
     } else if ext == "xlsx" || ext == "xlsm" {
         // Cell by cell: a range is the box around every cell, so two far-apart cells in a tiny
         // file would ask for hundreds of gigabytes (an abort, not an error).
@@ -382,7 +381,7 @@ pub fn write_ods(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
         rows.push(keys.iter().map(|key| match (c.val(i, key), c.kind(key)) {
             (F::Null, _) => Cell::Empty,
             (F::Date(_), _) => crate::sheet::cell_value(c, i, key).as_f64().and_then(|n| base.checked_add_days(chrono::Days::new(n.max(0.0) as u64))).map_or(Cell::Empty, Cell::Date),
-            (F::Num(n), Kind::Dur) => Cell::Num(n / c.p.day_min as f64),
+            (F::Num(n), Kind::Dur) => Cell::Num(n / crate::sheet::day_len(c, i, key) as f64),
             (F::Num(n), _) => Cell::Num(n),
             _ if key == "name" => Cell::Text(format!("{}{}", "    ".repeat(c.p.tasks[i].level as usize), c.text(i, key))),
             _ => Cell::from(c.text(i, key)),
@@ -431,7 +430,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             (F::Null, _) => Ok(()),
             // The day the task sheet shows, as the sheets read it (no time of day).
             (F::Date(_), _) => ws.write_number_with_format(r, k, crate::sheet::cell_value(c, i, key).as_f64().unwrap_or_default(), &fx(&date_fmt)).map(|_| ()).map_err(e),
-            (F::Num(n), Kind::Dur) => ws.write_number_with_format(r, k, n / c.p.day_min as f64, &fx(&days_fmt)).map(|_| ()).map_err(e),
+            (F::Num(n), Kind::Dur) => ws.write_number_with_format(r, k, n / crate::sheet::day_len(c, i, key) as f64, &fx(&days_fmt)).map(|_| ()).map_err(e),
             (F::Num(n), Kind::Cost) => ws.write_number_with_format(r, k, *n, &fx(&money_fmt)).map(|_| ()).map_err(e),
             (F::Num(n), _) => ws.write_number_with_format(r, k, *n, &fx(&Format::new())).map(|_| ()).map_err(e),
             (F::Bool(b), _) => ws.write_boolean(r, k, *b).map(|_| ()).map_err(e),

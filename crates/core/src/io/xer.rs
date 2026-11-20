@@ -18,10 +18,14 @@ fn clean(s: &str) -> String {
 /// Elapsed durations run on this round-the-clock calendar in the file (XER has no elapsed durations).
 const ELAPSED: &str = "Elapsed (24 hours)";
 
-const CS: [(Constraint, &str); 7] = [
+// Mandatory start / finish come last: they are read as must start / finish on, never written.
+const CS: [(Constraint, &str); 9] = [
     (Constraint::MSO, "CS_MSO"), (Constraint::MFO, "CS_MEO"), (Constraint::SNET, "CS_MSOA"), (Constraint::SNLT, "CS_MSOB"),
-    (Constraint::FNET, "CS_MEOA"), (Constraint::FNLT, "CS_MEOB"), (Constraint::ALAP, "CS_ALAP"),
+    (Constraint::FNET, "CS_MEOA"), (Constraint::FNLT, "CS_MEOB"), (Constraint::ALAP, "CS_ALAP"), (Constraint::MSO, "CS_MANDSTART"), (Constraint::MFO, "CS_MANDFIN"),
 ];
+
+/// Finish constraints hold the moment to finish by: the end of the working day, not its start.
+fn finish_type(c: Constraint) -> bool { matches!(c, Constraint::MFO | Constraint::FNET | Constraint::FNLT) }
 
 fn excel_day(d: NaiveDate) -> i64 {
     (d - NaiveDate::from_ymd_opt(1899, 12, 30).unwrap()).num_days()
@@ -281,6 +285,10 @@ pub fn write_report(p: &Project, s: &Sched, today: NaiveDate, version: &str) -> 
         let status = if t.act_finish.is_some() { "TK_Complete" } else if t.act_start.is_some() { "TK_Active" } else { "TK_NotStart" };
         let (cd, ct) = match (cdate, CS.iter().find(|(c, _)| *c == cons)) {
             (_, Some((Constraint::ALAP, n))) => (String::new(), n.to_string()),
+            (Some(d), Some((c, n))) if finish_type(*c) => {
+                let e = s.cals[s.ci[i]].day(d).last().map_or(17 * 60, |x| x.1).min(DAY - 1);
+                (format!("{d} {:02}:{:02}", e / 60, e % 60), n.to_string())
+            }
             (Some(d), Some((_, n))) => (format!("{d} 00:00"), n.to_string()),
             _ => (String::new(), String::new()),
         };
@@ -528,7 +536,8 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         Task {
             uid: g(t, "task_id").parse().unwrap_or(0), name: g(t, "task_name"), level, dur, code: g(t, "task_code"), act_type, ignore_rc: ty == "TT_Task",
             pct, phys: if phys { pc } else { 0 }, pct_type: if phys { PctType::Physical } else { PctType::Duration },
-            constraint: ct, cdate: if matches!(ct, Constraint::ASAP | Constraint::ALAP) { None } else { date(g(t, "cstr_date")) },
+            // A finish constraint at 00:00 is the end of the day before.
+            constraint: ct, cdate: if matches!(ct, Constraint::ASAP | Constraint::ALAP) { None } else { date(g(t, "cstr_date")).map(|d| if finish_type(ct) && g(t, "cstr_date").get(11..16) == Some("00:00") { d.pred_opt().unwrap_or(d) } else { d }) },
             cal: cal_names.get(&g(t, "clndr_id")).cloned(),
             act_start: date(g(t, "act_start_date")), act_finish: date(g(t, "act_end_date")),
             deadline: if g(t, "cstr_type2") == "CS_MEOB" { date(g(t, "cstr_date2")) } else { None },
@@ -574,7 +583,9 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let cal = cal_names.get(&g(r, "clndr_id")).cloned().filter(|c| *c != p.calendar);
         let uid = g(r, "rsrc_id");
         let rate = rows("RSRCRATE").iter().find(|x| g(x, "rsrc_id") == uid).and_then(|x| g(x, "cost_per_qty").parse().ok()).unwrap_or(0.0);
-        p.resources.push(Resource { uid: uid.parse().unwrap_or(0), name: g(r, "rsrc_name"), kind, cal, rate, ..Default::default() });
+        let max = g(r, "def_qty_per_hr").parse::<f64>().ok().filter(|m| *m > 0.0).unwrap_or(1.0);
+        p.resources.push(Resource { uid: uid.parse().unwrap_or(0), name: g(r, "rsrc_name"), kind, cal, rate, max, group: g(r, "rsrc_title_name"),
+            initials: g(r, "rsrc_short_name"), email: g(r, "email_addr"), ..Default::default() });
     }
     for a in rows("TASKRSRC").iter().filter(mine) {
         let (tu, ru): (u32, u32) = (g(a, "task_id").parse().unwrap_or(0), g(a, "rsrc_id").parse().unwrap_or(0));

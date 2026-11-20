@@ -322,7 +322,7 @@ fn card_finish_and_baseline_on_the_same_scale() {
     p.tasks[0].bls.insert(0, Baseline { start: s.es[0], finish: s.ef[0], dur: 5 * D, cost: 0.0, work: None });
     let c = portfolio::card(&p, F, d(2026, 11, 1), "x".into(), String::new());
     // On time: the window flags late when f > bf + 0.5.
-    assert!(!(c.f > c.bf.unwrap() + 0.5), "f {} bf {:?}", c.f, c.bf);
+    assert!(c.f <= c.bf.unwrap() + 0.5, "f {} bf {:?}", c.f, c.bf);
     p.tasks[0].dur = 6 * D;
     let c = portfolio::card(&p, F, d(2026, 11, 1), "x".into(), String::new());
     assert!(c.f > c.bf.unwrap() + 0.5, "one day late is flagged: f {} bf {:?}", c.f, c.bf);

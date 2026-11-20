@@ -235,8 +235,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                 }
                 (None, Some(dd)) if t.pct < 100 => {
                     let rem = rest(i, t.pct);
-                    // Not before the work already done (an actual start after the status date).
-                    let mut from = dd.max(c.add(es[i], sp - rem));
+                    // After the status date, or after the work done when it started later than that.
+                    let mut from = if es[i] < dd { dd } else { c.add(es[i], sp - rem) };
                     // Retained logic: unfinished predecessors still hold back the remaining work.
                     if o.retained {
                         for &e in inc[i].iter().filter(|&&e| !fixed[edges[e].p] && !loe[edges[e].p]) {
@@ -374,10 +374,9 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         lf[i] = if sp > 0 || c.next_start(ef[i]) > ef[i] { c.prev_end(v) } else { v };
         ls[i] = c.sub(lf[i], rest);
         ff[i] = free.max(0);
+        // From the finish, tasks move to their late dates below, once floats are known.
         let backward = o.from_finish && o.finish_date.is_some() && !t.manual && t.act_start.is_none();
-        if backward {
-            // Placed at its late dates below, once floats are known.
-        } else if t.constraint == C::ALAP && t.act_start.is_none() && ff[i] > 0 {
+        if !backward && t.constraint == C::ALAP && t.act_start.is_none() && ff[i] > 0 {
             // As late as possible without delaying any successor: the largest shift (at most its free
             // float) that every link still allows, by the same rule as the forward pass.
             let fits = |sh: i64| {

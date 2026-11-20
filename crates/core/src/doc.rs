@@ -244,7 +244,13 @@ pub fn read_limited(path: &Path) -> Result<String, String> {
     if len > MAX_FILE {
         return Err(format!("{} is {} MB; Datum Plan opens files up to {} MB.", path.display(), len / 1_048_576, MAX_FILE / 1_048_576));
     }
-    std::fs::read(path).map(|b| String::from_utf8_lossy(&b).into_owned()).map_err(|e| format!("Could not open {}: {e}", path.display()))
+    std::fs::read(path).map(decode_text).map_err(|e| format!("Could not open {}: {e}", path.display()))
+}
+
+/// Text bytes as UTF-8, or else as Windows-1252 (the ANSI code page P6 and spreadsheets write on Windows).
+pub fn decode_text(b: Vec<u8>) -> String {
+    const HI: &str = "€\u{81}‚ƒ„…†‡ˆ‰Š‹Œ\u{8d}Ž\u{8f}\u{90}‘’“”•–—˜™š›œ\u{9d}žŸ";
+    String::from_utf8(b).unwrap_or_else(|e| e.into_bytes().iter().map(|&c| if (0x80..0xa0).contains(&c) { HI.chars().nth(c as usize - 0x80).unwrap_or('?') } else { c as char }).collect())
 }
 
 /// Writes a file so that a crash or a full disk never leaves it half-written: the new content
@@ -346,6 +352,15 @@ fn yes(v: &str) -> bool {
 fn set_pct(p: &mut Project, i: usize, n: u8) -> Result<(), String> { set_pct_by(p, i, n, None) }
 
 /// Like `set_pct`, with the actual dates from schedule `s` (one schedule for many tasks, not one each).
+/// Task `i`'s % complete by time `dd` as scheduled in `s`: its work done by then (leaving out the
+/// pauses of a split task), to the nearest % so the remaining work keeps the planned finish; under
+/// 100 % until it is finished.
+fn planned_pct(p: &Project, s: &sched::Sched, i: usize, dd: i64) -> u8 {
+    let c = &s.cals[s.ci[i]];
+    let gaps = load::pauses(c, s.es[i], &p.tasks[i].splits, p.tasks[i].dur, 0);
+    if dd <= s.es[i] { 0 } else if dd >= s.ef[i] { 100 } else { (load::worked(c, s.es[i], dd, &gaps) as f64 * 100.0 / load::worked(c, s.es[i], s.ef[i], &gaps).max(1) as f64).round().min(99.0) as u8 }
+}
+
 fn set_pct_by(p: &mut Project, i: usize, n: u8, s: Option<&sched::Sched>) -> Result<(), String> {
     let needs = (n > 0 && p.tasks[i].act_start.is_none()) || (n == 100 && p.tasks[i].act_finish.is_none());
     let (es, ef) = match (needs, s) { (false, _) => (0, 0), (true, Some(s)) => (s.es[i], s.ef[i]), (true, None) => { let s = sched::schedule(p)?; (s.es[i], s.ef[i]) } };
@@ -416,6 +431,9 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         "code" => p.tasks[i].code = v.into(),
         "dur" => {
             let (m, u, e) = parse::dur_any(v, day)?;
+            // Fixed work: the work stays, so the units follow the new duration.
+            let old = p.tasks[i].dur;
+            if p.tasks[i].task_type == TaskType::FixedWork && old > 0 && m > 0 { scale_work_units(p, i, old as f64 / m as f64) }
             let t = &mut p.tasks[i];
             (t.dur, t.unit, t.elapsed) = (m, u, e);
         }
@@ -543,6 +561,9 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
             let t = &mut p.tasks[i];
             if before > 0.0 && after > 0.0 && (t.task_type == TaskType::FixedWork || (t.effort && t.task_type == TaskType::FixedUnits)) {
                 t.dur = (t.dur as f64 * before / after).round() as i64;
+            } else if before > 0.0 && after > 0.0 && t.effort && t.task_type == TaskType::FixedDuration {
+                // Effort-driven fixed duration: the work stays, shared out by lower units.
+                scale_work_units(p, i, before / after);
             }
         }
         "ctype" => {
@@ -610,6 +631,12 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
 /// Total units of work resources on task `i`.
 fn work_units(p: &Project, i: usize) -> f64 {
     p.tasks[i].res.iter().filter(|a| p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work)).map(|a| a.units).sum()
+}
+
+/// Multiplies the units of task `i`'s work resources by `f`.
+fn scale_work_units(p: &mut Project, i: usize, f: f64) {
+    let work: Vec<bool> = p.tasks[i].res.iter().map(|a| p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work)).collect();
+    for (a, w) in p.tasks[i].res.iter_mut().zip(work) { if w { a.units *= f } }
 }
 
 fn money(v: &str) -> Result<f64, String> {
@@ -822,12 +849,9 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                     }
                     continue;
                 }
-                let c = &s.cals[s.ci[i]];
-                // Work done by then, leaving out the pauses of a split task.
-                let gaps = load::pauses(c, s.es[i], &p.tasks[i].splits, p.tasks[i].dur, 0);
-                let done = if dd <= s.es[i] { 0 } else if dd >= s.ef[i] { 100 } else { load::worked(c, s.es[i], dd, &gaps) * 100 / load::worked(c, s.es[i], s.ef[i], &gaps).max(1) };
-                if done as u8 > p.tasks[i].pct {
-                    set_pct_by(p, i, done as u8, Some(&s))?;
+                let done = planned_pct(p, &s, i, dd);
+                if done > p.tasks[i].pct {
+                    set_pct_by(p, i, done, Some(&s))?;
                 }
             }
             p.status = Some(d);
@@ -1018,9 +1042,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             // On track means as planned: the dates before the status date holds unstarted work back.
             let s = sched::schedule(&Project { status: None, ..p.clone() })?;
             for i in idxs(p, &uids).into_iter().filter(|&i| !s.summary[i]) {
-                let c = &s.cals[s.ci[i]];
-                let n = if dd <= s.es[i] { 0 } else if dd >= s.ef[i] { 100 } else { c.between(s.es[i], dd) * 100 / c.between(s.es[i], s.ef[i]).max(1) };
-                set_pct_by(p, i, n as u8, Some(&s))?;
+                set_pct_by(p, i, planned_pct(p, &s, i, dd), Some(&s))?;
             }
         }
         Op::BaselineLock { unlocked } => p.baseline_unlocked = unlocked,
