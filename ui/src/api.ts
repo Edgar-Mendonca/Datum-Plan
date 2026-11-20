@@ -34,6 +34,7 @@ export interface Guarantee { id: number; name: string; basis: string; amount: nu
 export interface Invoice { id: number; no: string; payment: number; amount: number; invoiced: string | null; terms: number; certified: number; retention: number; paid: string | null; remarks: string }
 export interface Obligation { id: number; clause: string; what: string; party: string; owner: string; due: string | null; every: string; done: string | null; remarks: string }
 export interface Contract { number: string; value: number; warn_days: number; dates: ContractDate[]; payments: Payment[]; variations?: Variation[]; notices?: Notice[]; guarantees?: Guarantee[]; invoices?: Invoice[]; obligations?: Obligation[]; notice_kinds?: { name: string; days: number }[]; expiry_warn?: number; invoice_terms?: number }
+export interface Board { kind: string; by: string; lanes: string; weeks: number; wip: Record<string, number>; blocked: Record<string, string> }
 export interface CRow { id: number; due: string | null; left: number | null; status: string; key: string }
 export interface ContractOut {
   value: number; status_day: string | null; late: number; at_risk: number; ld: number; ld_max: number; pay_pct: number; received: number;
@@ -76,7 +77,7 @@ export interface Project {
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   health?: Health; delays?: any[]; fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
-  subplans?: SubPlan[]; master?: string; scenario_of?: string; modules?: string[]; contract?: Contract; documents?: DocRegister; procurement?: ProcRegister;
+  subplans?: SubPlan[]; master?: string; scenario_of?: string; modules?: string[]; board?: Board; contract?: Contract; documents?: DocRegister; procurement?: ProcRegister;
   titles: Record<string, string>; sheets: SheetData[]; names?: DefName[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {

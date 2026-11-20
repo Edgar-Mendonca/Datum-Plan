@@ -62,6 +62,9 @@ const load = () => {
   if (saved.legendText === "&[Project]\nStatus date: &[Status]") delete saved.legendText;
   setPs({ ...defaults(), ...saved });
 };
+/** Print on a given paper (the Task Board's Print A3): the plan's setup with that paper, until it is saved or changed. */
+let restore: { paper: string; landscape: boolean } | null = null;
+export const printPaper = (paper: string, landscape: boolean) => { load(); restore = { paper: ps.paper, landscape: ps.landscape }; setPs({ paper, landscape }); };
 const save = async () => { if (JSON.stringify(P().ui?.page ?? {}) !== JSON.stringify(ps)) await act({ Ui: { key: "page", value: JSON.parse(JSON.stringify(ps)) } }); };
 
 const codes = (t: string, page: number, pages: number) => {
@@ -381,7 +384,7 @@ const Sheet = (p: { pg: Page; pages: number }) => {
 /** gantt: table + chart strip · net: diagram tiles · cal: a month per page · table: rows down, columns across · flow: the page as on screen. */
 export type PKind = "gantt" | "net" | "cal" | "table" | "flow";
 export const pkind = (): PKind => { const v = view(); return ["gantt", "tracking", "timeline"].includes(v) ? "gantt" : v === "network" ? "net" : v === "calendar" ? "cal" : ["ressheet", "taskusage", "resusage", "team", "sheets"].includes(v) ? "table" : "flow"; };
-const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet", simrisk: "Schedule Risk", lookahead: "Look-ahead", manpower: "Manpower", dashboard: "Dashboard", scurve: "S-Curves", progress: "Progress Report" };
+const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet", simrisk: "Schedule Risk", lookahead: "Look-ahead", board: "Task Board", manpower: "Manpower", dashboard: "Dashboard", scurve: "S-Curves", progress: "Progress Report" };
 type PT = { rowAt?: number[]; colAt?: number[]; nrows?: number; titlesOut?: boolean; cbreaks?: number[]; bars?: Map<string, [number, string]>; flags?: Set<string>; r0?: number; c0?: number; head: string[]; w: number[]; right: boolean[]; h?: number[]; bare?: boolean; grid?: boolean; center?: boolean; titles?: [number, number]; breaks?: number[]; font?: number; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number; dx?: number; dy?: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
 const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
@@ -614,7 +617,7 @@ const FLOWS: Record<string, () => Promise<{ default: () => JSX.Element }>> = {
   reports: () => import("./reports").then(m => ({ default: m.Reports })), builder: () => import("./tools").then(m => ({ default: m.ReportBuilder })), update: () => import("./tools").then(m => ({ default: m.UpdateProgress })),
   relations: () => import("./tools").then(m => ({ default: m.Relationships })), checks: () => import("./views").then(m => ({ default: m.Checks })), risks: () => import("./views").then(m => ({ default: m.Risks })),
   portfolio: () => import("./views").then(m => ({ default: m.Portfolio })), resgraph: () => import("./views").then(m => ({ default: m.ResourceGraph })), setup: () => import("./setup").then(m => ({ default: m.Setup })),
-  contract: () => import("./contract").then(m => ({ default: m.ContractView })), documents: () => import("./docreg").then(m => ({ default: m.DocumentsView })), procurement: () => import("./procure").then(m => ({ default: m.ProcurementView })), simrisk: () => import("./risk").then(m => ({ default: m.ScheduleRisk })), lookahead: () => import("./progress").then(m => ({ default: m.Lookahead })), manpower: () => import("./progress").then(m => ({ default: m.Manpower })),
+  board: () => import("./board").then(m => ({ default: m.BoardView })), contract: () => import("./contract").then(m => ({ default: m.ContractView })), documents: () => import("./docreg").then(m => ({ default: m.DocumentsView })), procurement: () => import("./procure").then(m => ({ default: m.ProcurementView })), simrisk: () => import("./risk").then(m => ({ default: m.ScheduleRisk })), lookahead: () => import("./progress").then(m => ({ default: m.Lookahead })), manpower: () => import("./progress").then(m => ({ default: m.Manpower })),
 };
 const Flow = () => { const C2 = lazy(FLOWS[view()] ?? FLOWS.dashboard); return <C2 />; };
 const FlowDoc = (p: { preview?: boolean }) => {
@@ -747,6 +750,9 @@ export const PrintPage = () => {
   const [tab, setTab] = createSignal("page"), [zoomP, setZoomP] = createSignal(0.55);
   const tableKeys = () => grid().cols.map(c => c.key).filter(k => k !== "mode");
   onCleanup(save);
+  // A paper chosen for one print (the Task Board's A3) goes back to the plan's when File › Print closes,
+  // before the setup is saved (cleanups run last first).
+  onCleanup(() => { if (restore) { setPs(restore); restore = null; } });
   const pickClient = async () => { const l = await call<string | null>("pick_logo"); if (l) setPs("clientLogo", l); };
   const L = layout;
   return (

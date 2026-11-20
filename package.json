@@ -13,6 +13,7 @@
     "test:docs": "npm run build:ui && cargo build -q -p datum-core --example sheetbridge && node tests_ui/docs_live.cjs",
     "test:proc": "npm run build:ui && cargo build -q -p datum-core --example sheetbridge && node tests_ui/proc_live.cjs",
     "test:contract": "npm run build:ui && cargo build -q -p datum-core --example sheetbridge && node tests_ui/contract_live.cjs",
+    "test:board": "npm run build:ui && cargo build -q -p datum-core --example sheetbridge && node tests_ui/board_live.cjs",
     "perf:ui": "node tests_ui/perf.cjs 100000",
     "bench": "cargo run -q --release -p datum-core --example bench -- 100000"
   },

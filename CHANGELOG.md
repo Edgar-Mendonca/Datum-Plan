@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.34 — 2026-11-20
+
+The Task Board.
+
+- **Board** (sidebar): the plan's tasks as cards in Not started, In progress, Blocked and Done. A card shows the critical edge, total float in days, progress, steps done, the people on it, its finish (red when late) and the vendor documents and orders it waits for.
+- **Drag a card** to start it (actual start on the status date), finish it (actual finish, 100 %), take it back, or block it with a reason. One Undo step each.
+- **Blocked by what it waits for:** a task waiting for a document or an order that is late for it shows as blocked, with what it waits for.
+- **Columns by any field** (people, responsible, priority, activity codes, your own fields): dropping a card gives the task that value. **Swimlanes** by a field or by phase.
+- **Look-ahead** of 1 to 12 weeks, **WIP limits** per column (red when over), **Print A3**.
+- **Documents and orders on the same board:** drag a document to With the client to log its next submission, to Final or To resubmit to log the return; drag an order on to record its milestones.
+- **AI tools:** `task_board`, `move_card` and `set_board`.
+
 ## 0.9.33 — 2026-11-20
 
 The Contract Register: the whole contract as a workbook.

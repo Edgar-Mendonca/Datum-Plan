@@ -31,6 +31,7 @@
     "Resources, man-hours and costs with workload and manpower by trade; Tracking Gantt with 11 baselines; earned value, earned schedule and S-curves from each period's progress, drawn as in a progress report (bars per period and cumulative curves, styled in Format), and saved to a workbook with an editable spreadsheet chart.",
     "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
     "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
+    "A Task Board: drag a card to start or finish it; cards show the critical edge, float, steps, people and the vendor documents and orders a task waits for; swimlanes, WIP limits, look-ahead and A3 print, for documents and orders too.",
     "Dashboard, progress reports and a report builder; print to PDF from every view; printed Gantt text sized in points, by row type or row by row, with columns that fit their text.",
     "Network Diagram on a whiteboard canvas; timeline with a zoom box; workbook (.xlsx) export with formulas.",
     "A command line and an MCP server, so scripts and AI assistants can build and update plans with the same operations as the window.",

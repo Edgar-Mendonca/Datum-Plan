@@ -1469,3 +1469,36 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 .regtabs .tbadge { display: inline-block; min-width: 16px; margin-left: 6px; padding: 0 4px; border-radius: 8px; background: #C9851E; color: #fff; font: 600 9.5px var(--mono); line-height: 15px; text-align: center; }
 .rgtot { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nkinds input { width: 100%; }
+/* 0.9.34: the Task Board. */
+.kb { display: grid; gap: 8px; align-items: start; grid-auto-rows: max-content; align-content: start; overflow: auto; flex: 1; min-height: 0; }
+.kbhead { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: baseline; padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line); border-top: 3px solid var(--blue); font-size: 12px; }
+.kbhead span { font: 500 11px var(--mono); color: var(--muted); }
+.kbhead.over { border-top-color: var(--crit); } .kbhead.over span { color: var(--crit); font-weight: 700; }
+.kbhead.blocked { border-top-color: #C9851E; }
+.kbcorner { position: sticky; top: 0; z-index: 2; }
+.kblane { position: sticky; left: 0; z-index: 1; align-self: stretch; padding: 8px; background: var(--panel2); border: 1px solid var(--line); font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+.kblane span { font: 11px var(--mono); color: var(--muted); }
+.kbcol { min-height: 80px; padding: 6px; background: var(--bg); border: 1px dashed transparent; display: flex; flex-direction: column; gap: 6px; align-self: stretch; }
+.kbcol.drop { border-color: var(--blue); background: var(--pale); }
+.kbcol.blocked { background: #FFF8EC; } .kbcol.over { background: #FDF1F1; }
+.kc { flex-shrink: 0; background: var(--bg2); border: 1px solid var(--line); border-left: 4px solid var(--line3); padding: 6px 8px; cursor: grab; font-size: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.kc:hover { border-color: var(--blue); }
+.kc.crit { border-left-color: var(--crit); }
+.kc.done { opacity: .75; }
+.kct { display: flex; align-items: center; gap: 6px; }
+.kcode { font: 600 10.5px var(--mono); color: var(--muted); }
+.kfloat { font: 600 10.5px var(--mono); padding: 0 4px; background: #DDF2E5; color: #1E6B3C; }
+.kfloat.zero { background: #FDF0D2; color: #8A5A00; } .kfloat.neg { background: #F8D4D4; color: #9B1C1C; }
+.kcn { font-weight: 600; margin: 2px 0; line-height: 1.3; }
+.kcnote { font-size: 11px; }
+.kbar { height: 4px; background: var(--panel2); margin: 4px 0; } .kbar i { display: block; height: 100%; background: var(--blue); }
+.kc.done .kbar i { background: var(--green, #1E7D46); }
+.kcm { display: flex; gap: 8px; font-size: 11px; color: var(--text2); flex-wrap: wrap; }
+.kcm .late { color: var(--crit); font-weight: 600; }
+.kpeople { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kwaits { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.kw { font-size: 10.5px; padding: 0 4px; background: var(--panel2); border: 1px solid var(--line); white-space: nowrap; }
+.kw.late { background: #F8D4D4; color: #9B1C1C; border-color: #F0B5B5; }
+.kblock { margin-top: 4px; font-size: 11px; color: #8A5A00; }
+.kbempty { grid-column: 1 / -1; }
+.page:has(.kb) { overflow: hidden; }

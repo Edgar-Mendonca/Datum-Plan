@@ -41,6 +41,11 @@ pub enum Op {
     Documents { r: Box<DocRegister> },
     /// Replaces the Procurement Register.
     Procurement { r: Box<ProcRegister> },
+    /// The Task Board's settings (what it shows, columns, lanes, look-ahead, WIP limits, blocks).
+    Board { b: Board },
+    /// Moves a card on the Task Board (see `board::move_card`): a task's actual dates or field, a
+    /// document's next submission or return, an order's milestones, or a block with its reason.
+    BoardMove { kind: String, id: u32, to: String, date: String, reason: String },
     /// Takes the pool's resources (same names): rates, units, availability, calendars; `add` brings the others too.
     PoolTake { from: Vec<Resource>, cals: Vec<Calendar>, add: bool },
     /// Replaces a custom field definition (empty alias and formula with no values removes it).
@@ -826,6 +831,13 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         Op::Modules { on } => {
             if let Some(x) = on.iter().find(|x| !crate::contract::MODULES.iter().any(|m| m.0 == x.as_str())) { return Err(format!("Unknown module: {x}.")) }
             p.modules = crate::contract::MODULES.iter().map(|m| m.0.to_string()).filter(|k| on.contains(k)).collect();
+        }
+        // Blocks change only by moving cards (BoardMove), so settings sent from a stale copy cannot bring one back.
+        Op::Board { b } => { let mut b = b; b.blocked = std::mem::take(&mut p.board.blocked); crate::board::clean(&mut b); p.board = b; }
+        Op::BoardMove { kind, id, to, date, reason } => {
+            let (ops, blocked) = crate::board::move_ops(p, &kind, id, &to, &date, &reason, fmt)?;
+            for o in ops { exec(p, o, fmt)?; }
+            p.board.blocked = blocked;
         }
         Op::Contract { c } => { let mut c = *c; crate::contract::clean(&mut c); p.contract = c; }
         Op::Documents { r } => { let mut r = *r; crate::docreg::clean(&mut r); p.documents = r; }

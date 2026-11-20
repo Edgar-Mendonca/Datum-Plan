@@ -377,6 +377,21 @@ Each method says which plan it ran on. Effects are measured with the earlier eve
 
 Go through the look-ahead with your team every week: clear what is open, chase what is overdue.
 
+### The Task Board
+
+**Board** (sidebar) shows the plan's tasks as cards in four columns: **Not started**, **In progress**, **Blocked** and **Done**. Each card has the task's ID and name, a red edge when it is critical, its total float in days (green, amber at zero, red when negative), a progress bar, its steps done (☑ 2/5), the people on it, its finish (red when late) and the vendor documents and orders it waits for (red when they are late for it).
+
+1. **Drag a card** to another column. To **In progress**: its actual start is the status date (or today). To **Done**: its actual finish, and 100 %. Back to **Not started**: its actuals are cleared. To **Blocked**: say why; the reason shows on the card until it moves on. Every move is one Undo step ([[Ctrl+Z]]).
+2. A task waiting for a vendor document or an order that is late for it is **blocked by itself**, with what it waits for ("Waits for V-001 (Under review)"): link the documents and orders to the task that needs them in their registers.
+3. **Columns** by status, or by any field: the people, the person responsible, priority, an activity code or a field of your own. Dropping a card in a column gives the task that value (assigns the person, sets the code).
+4. **Lanes** split the board into swimlanes by a field or by **Phase** (the top-level summary).
+5. **Look-ahead** keeps the work starting in the next 1 to 12 weeks, what is under way and what finished in the last two weeks: the board for the weekly meeting.
+6. **WIP limits…** sets the most cards a column should hold; a column over its limit turns red with its count (15 / 12).
+7. **Documents** and **Orders** (with those modules on) put the Document Register and the Procurement Register on the same board. A document dragged to **With the client** logs its next submission (the next revision, its purpose, the next transmittal number); to **Final** or **To resubmit**, its return with the register's code. An order dragged to a later column records the milestones up to it on the day.
+8. **Print A3…** opens File › Print on A3 landscape with the plan's header and footer; the plan's own paper comes back when you close Print.
+
+Double-click a card to select the task in the Gantt chart (or open the register for a document or an order).
+
 ### Manpower
 
 ![Manpower by trade.](img/manpower.png)

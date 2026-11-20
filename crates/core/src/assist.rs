@@ -125,6 +125,9 @@ pub fn tools() -> Value {
         { "name": "record_milestone", "description": "Record a procurement milestone for several orders at once: milestone 0 RFQ, 1 PO, 2 manufacturing start, 3 inspection release, 4 delivery (default each order's next one), on a date (default today).", "inputSchema": obj(json!({ "orders": { "type": "array", "items": {}, "description": "Order ids or item numbers" }, "milestone": { "type": "integer" }, "date": { "type": "string" } }), &["orders"]) },
         { "name": "register_card", "description": "One document's or order's card: its fields, where it stands and its whole history (submissions, or expediting notes).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement"] }, "key": { "description": "Its id, document number or item number" } }), &["register", "key"]) },
         { "name": "set_register_settings", "description": "A register's lists (vendors, disciplines, states, your own…), own columns (text, number, date, list, or a formula per row such as =[Review due]-TODAY()) and status words (the client's word for each status key). Only the keys given change; renames do not reach the rows (use set_vendor_document or set_order for that).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement"] }, "lists": { "type": "array", "items": { "type": "object" }, "description": "[{key, name, items:[{value, label, off}]}]" }, "columns": { "type": "array", "items": { "type": "object" }, "description": "[{name, kind, formula}]" }, "words": { "type": "object", "description": "{status key: word}" } }), &["register"]) },
+        { "name": "task_board", "description": "The Task Board: cards in columns with their lane, the critical edge, float in days, progress, steps, people, dates, late, blocked (and why) and what each task waits for (vendor documents, orders). kind: tasks (default), documents or orders; by: status (default) or a field key (res, responsible, a code…); lanes: a field key or phase; weeks: a look-ahead (0 = all). Only the keys given change what is shown, not the plan.", "inputSchema": obj(json!({ "kind": { "type": "string", "enum": ["tasks", "documents", "orders"] }, "by": { "type": "string" }, "lanes": { "type": "string" }, "weeks": { "type": "integer" } }), &[]) },
+        { "name": "move_card", "description": "Move a card on the Task Board, as dragging it does. Tasks by status: todo (clears the actuals), doing (actual start on the date), done (actual finish), blocked (needs reason). Tasks by a field: the column's value. Documents: review (logs the next submission), resubmit or done (logs the return with the register's code), blocked. Orders: m1–m5 records the milestones up to that column on the date, blocked. One Undo step.", "inputSchema": obj(json!({ "kind": { "type": "string", "enum": ["tasks", "documents", "orders"] }, "id": { "type": "integer", "description": "Task uid, document id or order id (see task_board)" }, "to": { "type": "string", "description": "Column key" }, "date": { "type": "string" }, "reason": { "type": "string" } }), &["id", "to"]) },
+        { "name": "set_board", "description": "The Task Board's settings saved with the plan: kind, by, lanes, weeks, and WIP limits per column key ({\"doing\": 5}).", "inputSchema": obj(json!({ "kind": { "type": "string" }, "by": { "type": "string" }, "lanes": { "type": "string" }, "weeks": { "type": "integer" }, "wip": { "type": "object" } }), &[]) },
         { "name": "log_expediting", "description": "Add a note to an order's expediting log.", "inputSchema": obj(json!({ "id": { "type": "integer" }, "note": { "type": "string" }, "date": { "type": "string" }, "by": { "type": "string" } }), &["id", "note"]) },
         { "name": "list_baselines", "description": "Which baselines (0–10) are set: how many tasks, and the project finish in each.", "inputSchema": none() },
         { "name": "baseline_variance", "description": "Tasks against a baseline (default 0): start and finish variance in days, slipped most first.", "inputSchema": obj(json!({ "n": { "type": "integer" }, "limit": { "type": "integer" } }), &[]) },
@@ -414,7 +417,7 @@ pub fn changes(name: &str) -> bool {
         | "hide_rows_columns" | "set_sheet_tab" | "set_row_heights" | "sort_range" | "remove_duplicates" | "place_picture"
         | "set_page_setup" | "set_report" | "delete_report" | "set_chart" | "delete_chart"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
-        | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" | "log_submissions" | "log_returns" | "record_milestone" | "set_register_settings"
+        | "move_card" | "set_board" | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" | "log_submissions" | "log_returns" | "record_milestone" | "set_register_settings"
         | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
         | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
 }
@@ -1643,6 +1646,34 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             apply(doc, Op::Procurement { r: Box::new(r) })?;
             Ok(json!({ "recorded": done }))
         }
+        "task_board" => {
+            let mut p = doc.p.clone();
+            let f = json!({ "kind": a.get("kind"), "by": a.get("by"), "lanes": a.get("lanes"), "weeks": a.get("weeks") });
+            let f = Value::Object(f.as_object().cloned().unwrap_or_default().into_iter().filter(|(_, v)| !v.is_null()).collect());
+            p.board = patch(&p.board, &f, &["wip", "blocked"])?;
+            let c = Calc::new(&p, fmt, today);
+            if let Some(e) = &c.error { return Err(e.clone()) }
+            Ok(json!(crate::board::board(&c)))
+        }
+        "set_board" => {
+            let f = json!({ "kind": a.get("kind"), "by": a.get("by"), "lanes": a.get("lanes"), "weeks": a.get("weeks"), "wip": a.get("wip") });
+            let f = Value::Object(f.as_object().cloned().unwrap_or_default().into_iter().filter(|(_, v)| !v.is_null()).collect());
+            if f.as_object().is_none_or(|m| m.is_empty()) { return Err("Give kind, by, lanes, weeks or wip.".into()) }
+            let b = patch(&doc.p.board, &f, &["blocked"])?;
+            apply(doc, Op::Board { b })?;
+            Ok(json!(doc.p.board))
+        }
+        "move_card" => {
+            let id = a["id"].as_u64().ok_or("id is needed (from task_board).")? as u32;
+            let to = s(a, "to").ok_or("to is needed: a column key from task_board.")?;
+            let kind = s(a, "kind").unwrap_or(if doc.p.board.kind.is_empty() { "tasks" } else { doc.p.board.kind.as_str() }).to_string();
+            let date = match s(a, "date") { Some(x) => parse::date_in(x, fmt)?, None => today };
+            apply(doc, Op::BoardMove { kind: kind.clone(), id, to: to.into(), date: date.format("%Y-%m-%d").to_string(), reason: s(a, "reason").unwrap_or("").into() })?;
+            let mut p2 = doc.p.clone();
+            p2.board.kind = kind;
+            let o = crate::board::board(&Calc::new(&p2, fmt, today));
+            Ok(json!({ "card": o.cards.iter().find(|k| k.id == id) }))
+        }
         "register_card" => {
             let c = Calc::new(&doc.p, fmt, today);
             if let Some(e) = &c.error { return Err(e.clone()) }
@@ -1920,6 +1951,18 @@ mod tests {
         assert_eq!(r["recorded"][0]["milestone"], "Delivery");
         assert_eq!(doc.p.procurement.items.iter().map(|x| x.actual.iter().filter(|d| d.is_some()).count()).collect::<Vec<_>>(), [2, 1]);
         assert_eq!(doc.p.procurement.items[0].mfg_pct, 100.0);
+        // The Task Board: read it, move a card, set a WIP limit.
+        let b = run(&mut doc, "task_board", json!({ "lanes": "phase" })).unwrap();
+        let card = b["cards"].as_array().unwrap().iter().find(|k| k["col"] == "todo").unwrap().clone();
+        assert!(doc.p.board.lanes.is_empty(), "task_board shows, it does not change the plan's board");
+        let m = run(&mut doc, "move_card", json!({ "id": card["id"], "to": "doing" })).unwrap();
+        assert_eq!(m["card"]["col"], "doing");
+        assert!(run(&mut doc, "move_card", json!({ "id": card["id"], "to": "blocked" })).unwrap_err().contains("why"));
+        run(&mut doc, "set_board", json!({ "wip": { "doing": 3 } })).unwrap();
+        assert_eq!(doc.p.board.wip.get("doing"), Some(&3));
+        let oid = doc.p.procurement.items[1].id;
+        let o = run(&mut doc, "move_card", json!({ "kind": "orders", "id": oid, "to": "m2" })).unwrap();
+        assert_eq!(o["card"]["col"], "m2");
     }
 
     #[test]
