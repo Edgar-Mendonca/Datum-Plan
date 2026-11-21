@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.41 — 2026-11-21
+
+Expected Finish, and constraints on days off.
+
+- **Expected Finish** (task form and column): a task under way finishes at the end of that day; its remaining work stretches or shrinks to fit (never ending before it resumes after the status date). Successors follow; the total work stays. Ignored before the task starts and once it is finished. XER files read and write it.
+- **Finish No Earlier Than a day off** now finishes at the end of the next working day, as Start No Earlier Than a day off starts on the next one (it used to finish on the working day before).
+
 ## 0.9.40 — 2026-11-21
 
 Roles.
