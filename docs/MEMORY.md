@@ -467,11 +467,11 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 | 0.8.3 | Delay analysis 2 | Time impact analysis (fragnet on a copy), impacted as-planned, collapsed as-built; method chosen by the data available. Delay events register (extensions, holds, fragnets; Add to plan), each method with its basis and fidelity, export | ✅ |
 | 0.8.4 | What-if scenarios | Project › Scenarios: copies saved beside the plan (scenario_of), finish and health against the plan, Compare (change log, ghost bars), Merge… by kind (undoable) | ✅ |
 | 0.12.x | Later (agreed) | Budget and budget-change log, funding; issues raised by thresholds; saved views library (my tables, filters, groups for every plan); resource-constrained optimisation; quality benchmarking; 4D model link once Datum Layout exists | ⬜ |
-| 0.11.2 | Time-location (linear) view | Chainage against time for pipelines, roads, piping runs: each task a line from its start km to its end km | ⬜ |
-| 0.11.1 | Time-scaled logic diagram | Network drawn on the timescale (bars on dates, links as lines), printable | ⬜ |
-| 0.10.3 | Risk: weather | Weather calendars and weather risk (seasonal working-day loss by month) in the Monte Carlo run | ⬜ |
-| 0.10.2 | Risk: probabilistic branching | A risk event with a chance adds its fragnet in some runs only; results show its effect | ⬜ |
-| 0.10.1 | Parity with the user's desktop scheduler | User exports 5–10 plans as Project XML from the desktop scheduler they use at work; dates, float and critical compared task by task; differences fixed and kept as tests (the enterprise scheduler later: no access) | ⬜ |
+| 0.11.2 | Parity with the user's desktop scheduler | User exports 5–10 plans as Project XML from the desktop scheduler they use at work; dates, float and critical compared task by task; differences fixed and kept as tests (the enterprise scheduler later: no access) | ⬜ |
+| 0.11.1 | Time-location (linear) view | Chainage against time for pipelines, roads, piping runs: each task a line from its start km to its end km | ⬜ (then the closing audit of the new features, agreed) |
+| 0.11.0 | Time-scaled logic diagram | Network drawn on the timescale (bars on dates, links as lines), printable | ⬜ |
+| 0.10.1 | Risk: weather | Weather calendars and weather risk (seasonal working-day loss by month) in the Monte Carlo run | ⬜ |
+| 0.10.0 | Risk: probabilistic branching | A risk event with a chance adds its fragnet in some runs only; results show its effect | ⬜ |
 | 0.9.41 | Expected finish, scheduling options | Expected Finish per task; more out-of-sequence and lag options | ⬜ |
 | 0.9.40 | Roles | Generic resources (Mechanical Engineer × 2), then Assign a person to a role | ⬜ |
 | 0.9.39 | Detailed work editing | Type hours per day per assignment in Task and Resource Usage (advanced) | ⬜ |
@@ -815,6 +815,11 @@ Multi-user, EPS/OBS server and user rights (Datum Plan stays local, private, one
 - Next (from the agreed list): all done. Then schedule quality (health trend, ghost bars, logic change log, milestone trend), a shared resource pool, a portfolio dashboard.
 
 ## 5. Known limits and next steps
+
+### Plan agreed 2026-11-21 (the user travels; work goes on unattended)
+
+The user is away and cannot reach Claude. Agreed: carry the roadmap to **0.11.1**, each version released on its own once every check passes, in this order: 0.9.38 work contours, 0.9.39 detailed work editing, 0.9.40 roles, 0.9.41 expected finish and scheduling options (also settle the ignored audit case "FNET on a day off", `audit_sched.rs`), 0.10.0 risk branching, 0.10.1 weather risk, 0.11.0 time-scaled logic diagram, 0.11.1 time-location view. Before the 0.11.1 release, repeat the calculation audit (failing test first, then the fix) on everything new since 0.9.37. Parity with the user's desktop scheduler (0.11.2) waits for their exported plans. A failed release or CI run is fixed and released again (never skip or disable a test). Every release: guide en/zh + PDFs, CHANGELOG, MEMORY, site.json, hub. Privacy rules unchanged.
+
 
 ### Hardening plan (from the review of another Rust scheduler, 2026-10-27; not started)
 
