@@ -126,8 +126,6 @@ pub fn tools() -> Value {
         { "name": "register_card", "description": "One document's or order's card: its fields, where it stands and its whole history (submissions, or expediting notes).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement"] }, "key": { "description": "Its id, document number or item number" } }), &["register", "key"]) },
         { "name": "set_register_settings", "description": "A register's lists (vendors, disciplines, states, your own…), own columns (text, number, date, list, or a formula per row such as =[Review due]-TODAY()) and status words (the client's word for each status key). Only the keys given change; renames do not reach the rows (use set_vendor_document or set_order for that).", "inputSchema": obj(json!({ "register": { "type": "string", "enum": ["documents", "procurement"] }, "lists": { "type": "array", "items": { "type": "object" }, "description": "[{key, name, items:[{value, label, off}]}]" }, "columns": { "type": "array", "items": { "type": "object" }, "description": "[{name, kind, formula}]" }, "words": { "type": "object", "description": "{status key: word}" } }), &["register"]) },
         { "name": "workload", "description": "People against weeks (or months), by trade: hours booked and capacity per period, where each person is over capacity, their highest share of capacity, and the tasks that make up their hours.", "inputSchema": obj(json!({ "unit": { "type": "string", "enum": ["week", "month"] } }), &[]) },
-        { "name": "role_candidates", "description": "A role's (generic resource's) tasks and hours, and the people who could take them: free hours on the role's days, their trade first.", "inputSchema": obj(json!({ "role": ruid(), "uids": uids() }), &["role"]) },
-        { "name": "assign_role", "description": "Give a role's work on some tasks (uids; all its tasks when empty) to a named person, keeping units, rate table, contour and typed hours. One Undo step.", "inputSchema": obj(json!({ "role": ruid(), "person": ruid(), "uids": uids() }), &["role", "person"]) },
         { "name": "move_work", "description": "Move a task's work from one person to another (to: resource uid, keeping the units), and/or make it start no earlier than a date (start). One Undo step.", "inputSchema": obj(json!({ "uid": uid(), "from": { "type": "integer", "description": "Resource uid on the task" }, "to": { "type": "integer" }, "start": { "type": "string" } }), &["uid"]) },
         { "name": "milestones", "description": "Every milestone: forecast (or actual) against a baseline (default 0) and every saved baseline, the deadline and contract date it meets, float in working days, days moved since the last period close, the forecast at each period close, and a status (Achieved, Achieved late, Late, Slipping, At risk, On track, No baseline).", "inputSchema": obj(json!({ "baseline": { "type": "integer" } }), &[]) },
         { "name": "task_board", "description": "The Task Board: cards in columns with their lane, the critical edge, float in days, progress, steps, people, dates, late, blocked (and why) and what each task waits for (vendor documents, orders). kind: tasks (default), documents or orders; by: status (default) or a field key (res, responsible, a code…); lanes: a field key or phase; weeks: a look-ahead (0 = all). Only the keys given change what is shown, not the plan.", "inputSchema": obj(json!({ "kind": { "type": "string", "enum": ["tasks", "documents", "orders"] }, "by": { "type": "string" }, "lanes": { "type": "string" }, "weeks": { "type": "integer" } }), &[]) },
@@ -422,7 +420,7 @@ pub fn changes(name: &str) -> bool {
         | "hide_rows_columns" | "set_sheet_tab" | "set_row_heights" | "sort_range" | "remove_duplicates" | "place_picture"
         | "set_page_setup" | "set_report" | "delete_report" | "set_chart" | "delete_chart"
         | "set_contract" | "set_contract_date" | "set_payment" | "set_vendor_document" | "log_submission" | "set_order" | "log_expediting" | "clear_baseline"
-        | "move_card" | "set_board" | "move_work" | "assign_role" | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" | "log_submissions" | "log_returns" | "record_milestone" | "set_register_settings"
+        | "move_card" | "set_board" | "move_work" | "set_variation" | "set_notice" | "set_guarantee" | "set_invoice" | "set_obligation" | "log_submissions" | "log_returns" | "record_milestone" | "set_register_settings"
         | "add_sheet" | "rename_sheet" | "delete_sheet" | "format_sheet_cells" | "set_number_format" | "define_name" | "format_tasks" | "add_dashboard" | "delete_dashboard"
         | "set_project_info" | "add_recurring_task" | "apply_credit_rule" | "set_task_steps" | "mark_step_done" | "undo" | "redo")
 }
@@ -1655,16 +1653,6 @@ pub fn call(doc: &mut Doc, fmt: &str, today: NaiveDate, name: &str, a: &Value) -
             let c = Calc::new(&doc.p, fmt, today);
             if let Some(e) = &c.error { return Err(e.clone()) }
             Ok(json!(crate::workload::workload(&c, if s(a, "unit") == Some("month") { "month" } else { "week" })))
-        }
-        "role_candidates" | "assign_role" => {
-            let ids: Vec<u32> = a["uids"].as_array().map(|v| v.iter().filter_map(|x| x.as_u64().map(|x| x as u32)).collect()).unwrap_or_default();
-            let role = a["role"].as_u64().ok_or("role (a resource uid) is needed.")? as u32;
-            if name == "assign_role" {
-                apply(doc, Op::RoleAssign { role, person: a["person"].as_u64().ok_or("person (a resource uid) is needed.")? as u32, uids: ids.clone() })?;
-            }
-            let c = Calc::new(&doc.p, fmt, today);
-            if let Some(e) = &c.error { return Err(e.clone()) }
-            Ok(json!(crate::roles::candidates(&c, role, if name == "assign_role" { &[] } else { &ids })?))
         }
         "move_work" => {
             let uid = a["uid"].as_u64().ok_or("uid is needed.")? as u32;

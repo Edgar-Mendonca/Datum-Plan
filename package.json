@@ -17,7 +17,6 @@
     "test:milestones": "npm run build:ui && cargo build -q -p datum-core --example sheetbridge && node tests_ui/milestones_live.cjs",
     "test:workload": "npm run build:ui && cargo build -q -p datum-core --example sheetbridge && node tests_ui/workload_live.cjs",
     "test:usage": "npm run build:ui && cargo build -q -p datum-core --example sheetbridge && node tests_ui/usage_live.cjs",
-    "test:roles": "npm run build:ui && cargo build -q -p datum-core --example sheetbridge && node tests_ui/roles_live.cjs",
     "perf:ui": "node tests_ui/perf.cjs 100000",
     "bench": "cargo run -q --release -p datum-core --example bench -- 100000"
   },
