@@ -60,7 +60,7 @@ export const HELP: Record<string, Topic> = {
   progressReports: { t: "Progress reports", what: "Ready-made reports of the progress: the period report, the S-curves and the dashboard. Each prints or saves as HTML." },
   // Resource tab
   resviews: { t: "Resource views", what: "The people, crews and materials the plan uses, and how loaded they are.",
-    how: ["Resource Sheet lists them with rates and availability.", "Resource Usage and Resource Graph show their hours per period; red means overallocated. By Days, type a person’s hours on a day of a task.", "Resource Graph › Trades adds up everyone with the same Group (their trade or role) against the trade's capacity, in hours or people.", "Team Planner shows each person's tasks in a lane."] },
+    how: ["Resource Sheet lists them with rates and availability.", "Resource Usage and Resource Graph show their hours per period; red means overallocated. By Days, type a person’s hours on a day of a task.", "Resource Graph › Trades adds up everyone with the same Group (their trade or role) against the trade's capacity, in hours or people.", "Team Planner shows each person's tasks in a lane.", "Roles: set Role to Yes for a generic resource (Mechanical Engineer, Max 200% for two); Assign people… hands its tasks to named people."] },
   assignments: { t: "Assignments", what: "Who does each task. Hours and costs come from the assignments.",
     how: ["Select a task and click Assign Resources, or type names in the Resource Names column, e.g. “Engineer[200%]”.", "Add Resource adds a new row to the Resource Sheet."] },
   // Report tab

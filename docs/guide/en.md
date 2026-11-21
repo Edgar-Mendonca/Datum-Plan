@@ -176,6 +176,12 @@ Open **Resources** in the sidebar. Each row is a person, a crew, a material or a
 
 Type in the **Resource Names** column of the task sheet, for example `Design Engineer` or `Design Engineer[50%], Analysis Engineer`. A new name creates the resource. The work (man-hours) and the cost follow from the duration, the units and the rates. You can also use **Resource › Assign Resources**.
 
+### Roles: plan before you know the names
+
+Early on you may know the work needs two mechanical engineers but not who they will be. Add a resource such as `Mechanical Engineer` on the **Resource Sheet**, set **Role** to *Yes* and **Max** to the number of people (200 % for two), and assign it to tasks as usual. Workload, histograms and costs count it like any resource.
+
+When the people are known, click **Assign people…** on the role's row. The dialog lists the role's tasks (untick those to keep on the role) and the people who could take them: the role's trade first (people whose **Group** matches the role's group or its name), then those who have enough free hours on the role's days, with the hours each can take. **Give to** hands the ticked tasks to that person, keeping the units, rate table, work contour and typed hours; if the person is on a task already, the units are added. One Undo step.
+
 ### Work contours
 
 By default a person's hours are spread evenly over the task. Add the **Work Contour** column (right-click a column heading › Insert Column) to shape them:

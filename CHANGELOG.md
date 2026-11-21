@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.40 — 2026-11-21
+
+Roles.
+
+- **Roles** (generic resources): set **Role** to Yes on the Resource Sheet for a resource such as Mechanical Engineer, with Max as how many; plan with it before the names are known.
+- **Assign people…** on a role: its tasks, and the people who could take them, the role's trade first, with the free hours each has on the role's days. **Give to** hands the ticked tasks to a person, keeping units, rate table, contour and typed hours (added to their units when they are on the task already). One Undo step.
+- **AI tools:** `role_candidates` and `assign_role`.
+
 ## 0.9.39 — 2026-11-21
 
 Type the hours per day.
