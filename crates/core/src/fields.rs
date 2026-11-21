@@ -46,7 +46,7 @@ pub fn task_fields() -> &'static [FieldDef] {
         ] { add(k, n, kd, "General", e) }
         for (k, n, kd, e) in [
             ("dur", "Duration", Dur, true), ("start", "Start", Date, true), ("finish", "Finish", Fin, true), ("preds", "Predecessors", Text, true),
-            ("succs", "Successors", Text, false), ("ctype", "Constraint Type", Text, true), ("cdate", "Constraint Date", Date, true), ("deadline", "Deadline", Fin, true), ("expfinish", "Expected Finish", Fin, true),
+            ("succs", "Successors", Text, false), ("ctype", "Constraint Type", Text, true), ("cdate", "Constraint Date", Date, true), ("deadline", "Deadline", Fin, true), ("expfinish", "Expected Finish", Fin, true), ("locfrom", "Chainage From", Num, true), ("locto", "Chainage To", Num, true),
             ("cal", "Task Calendar", Text, true), ("type", "Type", Text, true), ("contour", "Work Contour", Text, true), ("effort", "Effort Driven", Flag, true), ("priority", "Priority", Int, true),
             ("es", "Early Start", Date, false), ("ef", "Early Finish", Fin, false), ("ls", "Late Start", Date, false), ("lf", "Late Finish", Fin, false),
             ("tf", "Total Slack", Dur, false), ("ff", "Free Slack", Dur, false), ("leveldelay", "Leveling Delay", Dur, true), ("acttype", "Activity Type", Text, true),
@@ -397,6 +397,8 @@ impl<'a> Calc<'a> {
             "cdate" => opt(t.cdate),
             "deadline" => optf(t.deadline),
             "expfinish" => optf(t.exp_finish),
+            "locfrom" => t.loc_from.map_or(F::Null, F::Num),
+            "locto" => t.loc_to.map_or(F::Null, F::Num),
             "cal" => txt(t.cal.as_deref().unwrap_or("")),
             "type" => txt(match t.task_type { TaskType::FixedDuration => "Fixed Duration", TaskType::FixedUnits => "Fixed Units", TaskType::FixedWork => "Fixed Work" }),
             "effort" => F::Bool(t.effort),

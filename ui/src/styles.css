@@ -1573,3 +1573,8 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 .tskey.crit { background: var(--crit); } .tskey.link { height: 0; border-top: 1px solid var(--text2); background: none; } .tskey.link.loose { border-top-style: dashed; }
 /* The logic diagram prints at the paper width (its drawing scales with its viewBox). */
 .pflowbody .tsldwrap { overflow: visible; border: 0; } .pflowbody .tsld { width: 100%; height: auto; }
+
+/* Time-location view */
+.linear { display: block; font: 11px var(--sans); }
+.linline { stroke: var(--bar); stroke-width: 3; stroke-linecap: round; } .linline.crit { stroke: var(--crit); }
+.pflowbody .linear { width: 100%; height: auto; }

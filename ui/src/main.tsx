@@ -25,6 +25,7 @@ import { Dashboard, Reports, SCurves, Progress } from "./reports";
 import { BoardView } from "./board";
 import { MilestonesView } from "./milestones";
 import { LogicView } from "./logic";
+import { LinearView } from "./linear";
 import { WorkloadView } from "./workload";
 import { Sheets } from "./sheets";
 import { UpdateProgress, Relationships, ReportBuilder } from "./tools";
@@ -43,7 +44,7 @@ import { DocumentsView } from "./docreg";
 import { ProcurementView } from "./procure";
 
 const SIDE: ([View, string, string] | "-")[] = [
-  ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["logic", "net", "Logic"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
+  ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["logic", "net", "Logic"], ["linear", "track", "Location"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
   ["ressheet", "res", "Resources"], ["resusage", "load", "Res. Usage"], ["workload", "load", "Workload"], ["manpower", "team", "Manpower"], ["team", "team", "Team"], "-",
   ["sheets", "table", "Sheets"], "-",
   ["update", "update", "Update"], ["board", "board", "Board"], ["milestones", "ms", "Milestones"], ["lookahead", "cal", "Look-ahead"], ["dashboard", "dash", "Dashboard"], ["progress", "track", "Progress"], ["scurve", "ev", "S-Curves"], ["reports", "report", "Reports"], ["builder", "builder", "Builder"], ["checks", "check", "Checks"], ["delay", "track", "Delay"], ["risks", "risk", "Risks"], ["simrisk", "ev", "Sched. Risk"], ["portfolio", "folder", "Portfolio"],
@@ -202,6 +203,7 @@ const App = () => {
               <Match when={view() === "board"}><BoardView /></Match>
               <Match when={view() === "milestones"}><MilestonesView /></Match>
               <Match when={view() === "logic"}><LogicView /></Match>
+              <Match when={view() === "linear"}><LinearView /></Match>
               <Match when={view() === "workload"}><WorkloadView /></Match>
               <Match when={view() === "contract"}><ContractView /></Match>
               <Match when={view() === "documents"}><DocumentsView /></Match>

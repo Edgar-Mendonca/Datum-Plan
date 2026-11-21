@@ -193,6 +193,11 @@ pub struct Task {
     /// stretches or shrinks to fit (ignored before it starts and once it is finished).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exp_finish: Option<NaiveDate>,
+    /// Where the work is along a route (time-location view): chainage at its start and at its finish.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loc_from: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loc_to: Option<f64>,
     #[serde(skip_serializing_if = "is_false")]
     pub manual: bool,
     /// Start of a manually scheduled task.

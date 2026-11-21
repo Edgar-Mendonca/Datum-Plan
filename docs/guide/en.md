@@ -380,6 +380,10 @@ Removing a picture from the plan also takes it off the sheets that use it.
 
 **Logic** (beside Network in the sidebar, or **View › Time-scaled Logic**) draws the network on the timescale: each task is a bar at its dates with its ID and name above it, and the links run between the bars. Tasks share a line when their dates allow, and a task stays on the line of the task that drives it, so each chain of work reads from left to right. Critical work and its links are red; links that do not drive their successor are dashed. **Bands by phase** gives each top-level phase its own band (or choose **One band**); **Months**, **Weeks** and **Days** set the scale, and the lines are packed again so names never run into each other. The green line is the status date. Double-click a bar to show the task in the Gantt chart. **File › Print** prints it at the paper width.
 
+### The time-location view
+
+For work along a route (a pipeline, a road, a piping run), **Location** in the sidebar (or **View › Time-Location**) puts the chainage across and time down. Add the **Chainage From** and **Chainage To** columns and type where each task starts and ends along the route, as a number (12.5) or in station form (12+500, read as 12.5). A crew moving along the route (clearing, stringing, welding, lowering-in) is a sloped line from where it starts at its start to where it ends at its finish; work in one place (a crossing, a station) has only Chainage From and is a vertical bar. Lines that come close show crews running into each other. Critical work is red and the green line is the status date. Type the unit (km, m, mi) beside the scale; tasks without a chainage are left out and counted below the drawing. Double-click a line to show the task in the Gantt chart; **File › Print** prints it at the paper width.
+
 ## Risk and the weeks ahead
 
 ### The Risk Register

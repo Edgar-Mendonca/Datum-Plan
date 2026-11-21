@@ -9,6 +9,7 @@ pub mod fields;
 pub mod formula;
 pub mod io;
 pub mod level;
+pub mod linear;
 pub mod links;
 pub mod load;
 pub mod milestones;

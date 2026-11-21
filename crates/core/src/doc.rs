@@ -613,6 +613,15 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         }
         "deadline" => p.tasks[i].deadline = date(v)?,
         "expfinish" => p.tasks[i].exp_finish = date(v)?,
+        // A chainage: a number (km, m or any unit), "12+500" read as 12.5, or empty for none.
+        "locfrom" | "locto" => {
+            let v = v.trim();
+            let x = if v.is_empty() { None } else {
+                let n = match v.split_once('+') { Some((a, b)) if !a.is_empty() && !b.is_empty() && b.chars().all(|c| c.is_ascii_digit()) => format!("{a}.{b}"), _ => v.replace(',', "") };
+                Some(n.parse::<f64>().ok().filter(|x| x.is_finite() && x.abs() < 1e9).ok_or("Type a chainage as a number, such as 12.5 or 12+500.")?)
+            };
+            if field == "locfrom" { p.tasks[i].loc_from = x } else { p.tasks[i].loc_to = x }
+        }
         "cal" => {
             if !v.is_empty() && !p.calendars.iter().any(|c| c.name == v) {
                 return Err(format!("There is no calendar called \"{v}\". Add it in Project › Change Working Time."));
