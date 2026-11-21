@@ -65,6 +65,13 @@ mod tests {
             if info.name == "ResSet" { let _ = d.apply(Op::ResInsert { name: "Electrician".into() }, "%Y-%m-%d"); }
             let uid1 = d.p.resources.last().map_or(1, |r| r.uid);
             let op = if let Op::ResSet { field, value, .. } = op { Op::ResSet { uid: uid1, field, value } } else { op };
+            // A role needs a resource marked as one, on a task, and a person to take it.
+            let op = if let Op::RoleAssign { uids, .. } = op {
+                let role = d.p.tasks.iter().find_map(|t| t.res.first()).map(|a| a.res).unwrap_or(1);
+                let person = d.p.resources.iter().find(|r| r.uid != role && r.kind == crate::model::ResKind::Work).map_or(1, |r| r.uid);
+                if let Some(k) = d.p.res_idx(role) { d.p.resources[k].role = true }
+                Op::RoleAssign { role, person, uids }
+            } else { op };
             d.apply(op, "%Y-%m-%d").unwrap_or_else(|e| panic!("{}: {e}", info.name));
         }
     }

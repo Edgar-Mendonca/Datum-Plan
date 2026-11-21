@@ -30,7 +30,7 @@ fn answer(doc: &mut Doc, c: &str, a: &Value) -> Result<Value, String> {
         "board" => json!(board::board(&Calc::new(&doc.p, FMT, today))),
         "milestones" => json!(milestones::list(&Calc::new(&doc.p, FMT, today), a["base"].as_u64().unwrap_or(0) as u8, 5)),
         "workload" => json!(workload::workload(&Calc::new(&doc.p, FMT, today), a["unit"].as_str().unwrap_or("week"))),
-        "role_candidates" => match roles::candidates(&Calc::new(&doc.p, FMT, today), a["role"].as_u64().unwrap_or(0) as u32, &a["uids"].as_array().map(|v| v.iter().filter_map(|x| x.as_u64().map(|x| x as u32)).collect::<Vec<_>>()).unwrap_or_default()) { Ok(o) => json!(o), Err(e) => return Err(e) },
+        "role_candidates" => json!(roles::candidates(&Calc::new(&doc.p, FMT, today), a["role"].as_u64().unwrap_or(0) as u32, &a["uids"].as_array().map(|v| v.iter().filter_map(|x| x.as_u64().map(|x| x as u32)).collect::<Vec<_>>()).unwrap_or_default())?),
         "usage" => json!(report::usage(&Calc::new(&doc.p, FMT, today), a["by"].as_str().unwrap_or("task"), a["what"].as_str().unwrap_or("work"), a["unit"].as_str().unwrap_or("week"))),
         "sheet_view" => json!(sheet::sheet_view(&Calc::new(&doc.p, FMT, today), a["k"].as_u64().unwrap_or(0) as usize)),
         "sheet_check" => json!(sheet::check_input(&Calc::new(&doc.p, FMT, today), a["k"].as_u64().unwrap_or(0) as usize, a["cell"].as_str().unwrap_or(""), a["input"].as_str().unwrap_or(""))),
