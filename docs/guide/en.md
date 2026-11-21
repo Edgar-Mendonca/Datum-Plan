@@ -404,6 +404,8 @@ Give tasks their own range with the **Optimistic Duration** and **Pessimistic Du
 
 In the **Risk Register**, link each risk to the tasks it would delay with **Link tasks…** (or from a task's details pane, Risks tab); the probability × impact matrix shows each open risk in its cell. A risk can have its own **Chance %** (instead of the 1–5 score) and a **Range** for its delay (least and most days): Schedule Risk draws the delay from that range, most likely the Delay.
 
+**Branches.** Some risks bring work of their own: a failed weld test means repair and a re-test. Click **Branch…** on the risk and list those activities (each with its days, an optional least–most range and a cost), the task they follow, and the task they hold up (or every task that follows it). In the runs where the risk happens, Schedule Risk puts the activities in, one after another; in the others they are left out. **Risks in the analysis** then shows how often each risk happened and how many calendar days later its runs finished on average than the runs without it.
+
 ### Delay analysis
 
 **Report › Delay Analysis** measures delay on the data the plan holds. The top lists what the plan has (tasks with a baseline, tasks started, snapshots) and each method with what it needs: a method runs when the data is there. The figures measure what moved; they do not say who is responsible.

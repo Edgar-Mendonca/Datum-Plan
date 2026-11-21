@@ -1,7 +1,7 @@
 // Views other than the Gantt chart.
 import { CountryList, Flag, countryCode, countryName } from "./flags";
 import { For, Index, Show, createSignal, createResource, createMemo, createEffect, JSX } from "solid-js";
-import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money, Limits, Health, CheckOut, iso } from "./api";
+import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money, Limits, Health, CheckOut, iso, Risk, BranchStep } from "./api";
 import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut, setOut, opts, setOpts, openDialog , kept, pane } from "./store";
 import { ChartBox, bar, line } from "./charts";
 import { C, selectUid } from "./cmds";
@@ -347,6 +347,40 @@ const linkRiskTasks = async (r: { id: number; name: string; tasks: number[] }) =
     </Dialog>;
   });
 };
+/** A risk's branch: activities in a row after one task, holding up the next tasks (or one chosen task). */
+const editBranch = async (r: Risk) => {
+  const g = await call<{ rows: Row[] }>("query", { q: { cols: ["code", "name"], filter: { name: "", rules: [{ field: "summary", test: "equals", value: "No", value2: "", or: false }], summaries: false, highlight: false }, group: [], sort: [], flat: true, collapsed: [], level: 0, hide_summaries: false, project_summary: false, baseline: 0 } });
+  if (!g) return;
+  const tasks = g.rows.filter(x => x.uid > 0 && x.kind === "task");
+  openDialog(() => {
+    const [steps, setSteps] = createSignal<BranchStep[]>(JSON.parse(JSON.stringify(r.branch ?? [])));
+    const [after, setAfter] = createSignal(r.after ?? 0), [before, setBefore] = createSignal(r.before ?? 0);
+    const upd = (k: number, f: Partial<BranchStep>) => setSteps(steps().map((s, j) => j === k ? { ...s, ...f } : s));
+    const num = (v: string) => Math.max(0, +v || 0);
+    const pick = (v: number, set: (n: number) => void, none: string) => <select value={String(v)} onChange={e => set(+e.currentTarget.value)}><option value="0">{none}</option><For each={tasks}>{x => <option value={String(x.uid)}>{x.cells[0] ? `${x.cells[0]} ` : ""}{x.name}</option>}</For></select>;
+    return <Dialog title={`Branch of R${r.id}: ${r.name}`} wide okText="Save" ok={() => {
+      const list = steps().filter(s => s.name.trim());
+      if (list.length && !after()) { toast("Choose the task the branch follows."); return false; }
+      const risk = P().risks.find(x => x.id === r.id);
+      if (risk) act({ Risk: { id: r.id, risk: { ...risk, branch: list, after: list.length ? after() : 0, before: list.length ? before() : 0 } } });
+    }}>
+      <p class="muted">When the risk happens (its Chance %, or its probability score), Schedule Risk adds these activities one after another after the task below, before the task they hold up. Runs without the risk leave them out. Each step can have a range of days and a cost.</p>
+      <div class="form">
+        <label>After {pick(after(), setAfter, "(choose a task)")}</label>
+        <label>Holds up {pick(before(), setBefore, "every task that follows it")}</label>
+      </div>
+      <table class="tbl"><thead><tr><th>Activity</th><th class="r">Days</th><th class="r">Least</th><th class="r">Most</th><th class="r">Cost</th><th /></tr></thead><tbody>
+        <For each={steps()}>{(s, k) => <tr>
+          <td><input value={s.name} onChange={e => upd(k(), { name: e.currentTarget.value })} /></td>
+          <td><input type="number" min="0" step="0.5" style={{ width: "64px" }} value={s.days} onChange={e => upd(k(), { days: num(e.currentTarget.value) })} /></td>
+          <td><input type="number" min="0" step="0.5" style={{ width: "64px" }} placeholder="—" value={s.days_min || ""} onChange={e => upd(k(), { days_min: num(e.currentTarget.value) })} /></td>
+          <td><input type="number" min="0" step="0.5" style={{ width: "64px" }} placeholder="—" value={s.days_max || ""} onChange={e => upd(k(), { days_max: num(e.currentTarget.value) })} /></td>
+          <td><input type="number" min="0" step="100" style={{ width: "90px" }} placeholder="—" value={s.cost || ""} onChange={e => upd(k(), { cost: num(e.currentTarget.value) })} /></td>
+          <td><button class="x" onClick={() => setSteps(steps().filter((_, j) => j !== k()))}>×</button></td></tr>}</For></tbody></table>
+      <p><button class="btn sm" onClick={() => setSteps([...steps(), { name: `Activity ${steps().length + 1}`, days: 1 }])}>+ Add activity</button></p>
+    </Dialog>;
+  });
+};
 export const Risks = () => {
   const blank = () => ({ id: Math.max(0, ...P().risks.map(r => r.id)) + 1, name: "New risk", cause: "", prob: 3, impact: 3, owner: "", response: "", status: "Open", tasks: [], kind: "Threat", days: 0 });
   const put = (r: any) => act({ Risk: { id: r.id, risk: r } });
@@ -370,7 +404,8 @@ export const Risks = () => {
                 <td><input value={r.owner} onChange={e => put({ ...r, owner: e.currentTarget.value })} /></td>
                 <td><input value={r.response} onChange={e => put({ ...r, response: e.currentTarget.value })} /></td>
                 <td><select value={r.status} onChange={e => put({ ...r, status: e.currentTarget.value })}><option>Open</option><option>Mitigating</option><option>Closed</option></select></td>
-                <td><button class="btn sm" title={r.tasks.length ? "Change the linked tasks" : "Link the tasks this risk would delay"} onClick={() => linkRiskTasks(r)}>{r.tasks.length ? `${r.tasks.length} linked` : "Link tasks…"}</button></td><td><button class="x" onClick={() => act({ Risk: { id: r.id, risk: null } })}>×</button></td>
+                <td class="nowrap"><button class="btn sm" title={r.tasks.length ? "Change the linked tasks" : "Link the tasks this risk would delay"} onClick={() => linkRiskTasks(r)}>{r.tasks.length ? `${r.tasks.length} linked` : "Link tasks…"}</button>
+                  <button class="btn sm" title="Activities that happen only when this risk does (a branch): Schedule Risk adds them in those runs" onClick={() => editBranch(r)}>{r.branch?.length ? `Branch: ${r.branch.length}` : "Branch…"}</button></td><td><button class="x" onClick={() => act({ Risk: { id: r.id, risk: null } })}>×</button></td>
               </tr>
             )}</For></tbody></table>
           <Show when={!P().risks.length}><p class="empty">No risks recorded. Add threats and opportunities, score them, and link each to the tasks it would delay (Link tasks…).</p></Show>

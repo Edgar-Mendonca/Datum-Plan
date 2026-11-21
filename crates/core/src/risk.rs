@@ -26,7 +26,14 @@ impl Default for SimOpts {
 }
 
 #[derive(Serialize, Default, Debug)]
-pub struct TaskRisk { pub uid: u32, pub name: String, pub value: f64 }
+pub struct TaskRisk {
+    pub uid: u32,
+    pub name: String,
+    pub value: f64,
+    /// For a risk: calendar days its runs finish later on average than the runs without it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effect: Option<f64>,
+}
 
 #[derive(Serialize, Default, Debug)]
 pub struct SimResult {
@@ -112,7 +119,13 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
         let hi = if t.dmax > 0 { (t.dmax as f64).max(d) } else { d * (1.0 + o.high.max(0.0) / 100.0) };
         (lo, d, hi)
     };
-    let risks: Vec<&Risk> = p.risks.iter().filter(|r| r.status != "Closed" && (r.days != 0.0 || r.days_max != 0.0) && !r.tasks.is_empty()).collect();
+    let branched = |r: &Risk| !r.branch.is_empty() && p.idx(r.after).is_some();
+    let risks: Vec<&Risk> = p.risks.iter().filter(|r| r.status != "Closed" && (((r.days != 0.0 || r.days_max != 0.0) && !r.tasks.is_empty()) || branched(r))).collect();
+    // The tasks a branch holds up: the one named, or every successor of the task it follows.
+    let held: Vec<Vec<usize>> = risks.iter().map(|r| match p.idx(r.before) {
+        Some(b) => vec![b],
+        None => (0..n).filter(|&j| p.tasks[j].preds.iter().any(|l| l.pred == r.after)).collect(),
+    }).collect();
     // Correlation groups: tasks in one group share part of their draw.
     let rho = o.corr.clamp(0.0, 0.99);
     let mut names: Vec<String> = vec![];
@@ -128,6 +141,8 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     let (mut fin, mut costs) = (Vec::with_capacity(runs), Vec::with_capacity(runs));
     let mut durs = vec![Vec::with_capacity(runs); leaves.len()];
     let (mut crit, mut hits) = (vec![0usize; n], vec![0usize; risks.len()]);
+    // Which risks happened in each kept run (for each risk's effect on the finish).
+    let mut hit_runs: Vec<Vec<usize>> = Vec::with_capacity(runs);
     let mut failed = 0;
     for _ in 0..runs {
         let (mut add, mut hit) = (vec![0i64; n], vec![]);
@@ -159,9 +174,27 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
             // materials, lump sums and per-use costs stay as they are.
             cost += (cost0[i] - vary[i]) + vary[i] * if m > 0.0 { d as f64 / m } else { 1.0 };
         }
-        let Ok(s) = schedule(&q) else { failed += 1; continue };
+        // Branches that happened: their activities go in, one after another, after the task they follow.
+        let mut branch_cost = 0.0;
+        let mut extra: Option<Project> = None;
+        for &k in hit.iter().filter(|&&k| branched(risks[k])) {
+            let (r, qq) = (risks[k], extra.get_or_insert_with(|| q.clone()));
+            let mut prev = r.after;
+            for st in &r.branch {
+                let days = if st.days_max > 0.0 { let lo = st.days_min.min(st.days.abs()); tri(rng.f(), lo, st.days.abs().max(lo), st.days_max.max(st.days.abs())) } else { st.days.abs() };
+                let mut t = qq.new_task(&st.name, 0, (days * p.day_min as f64).round() as i64);
+                t.preds = vec![Link { pred: prev, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }];
+                prev = t.uid;
+                branch_cost += st.cost;
+                qq.tasks.push(t);
+            }
+            for &j in &held[k] { qq.tasks[j].preds.push(Link { pred: prev, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }) }
+        }
+        let Ok(s) = schedule(extra.as_ref().unwrap_or(&q)) else { failed += 1; continue };
+        cost += branch_cost;
         // Only runs kept count, so a risk's rate shares the runs the other results use.
-        hit.into_iter().for_each(|k| hits[k] += 1);
+        hit.iter().for_each(|&k| hits[k] += 1);
+        hit_runs.push(hit);
         durs.iter_mut().zip(drawn).for_each(|(v, d)| v.push(d));
         fin.push(s.finish);
         costs.push(cost + (0..n).filter(|i| !leaves.contains(i) && !base.summary[*i]).map(|i| cost0[i]).sum::<f64>());
@@ -198,14 +231,20 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
         for (x, y) in v.iter().zip(&fx) { sxy += (x - mx) * (y - my); sxx += (x - mx).powi(2); syy += (y - my).powi(2) }
         if sxx > 0.0 && syy > 0.0 { sxy / (sxx * syy).sqrt() } else { 0.0 }
     };
-    res.drivers = leaves.iter().zip(&durs).map(|(&i, v)| TaskRisk { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), value: corr(v) }).filter(|t| t.value.abs() > 0.05).collect();
+    res.drivers = leaves.iter().zip(&durs).map(|(&i, v)| TaskRisk { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), value: corr(v), effect: None }).filter(|t| t.value.abs() > 0.05).collect();
     res.drivers.sort_by(|a, b| b.value.abs().total_cmp(&a.value.abs()));
     res.drivers.truncate(10);
     let runs_f = res.runs as f64;
-    res.criticality = (0..n).filter(|&i| crit[i] > 0).map(|i| TaskRisk { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), value: crit[i] as f64 / runs_f }).collect();
+    res.criticality = (0..n).filter(|&i| crit[i] > 0).map(|i| TaskRisk { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), value: crit[i] as f64 / runs_f, effect: None }).collect();
     res.criticality.sort_by(|a, b| b.value.total_cmp(&a.value));
     res.criticality.truncate(15);
-    res.risks = risks.iter().zip(&hits).map(|(r, &h)| TaskRisk { uid: r.id, name: r.name.clone(), value: h as f64 / runs_f }).collect();
+    // A risk's effect: how much later its runs finish than the others, in calendar days.
+    let effect = |k: usize| {
+        let (mut a, mut na, mut b, mut nb) = (0.0, 0usize, 0.0, 0usize);
+        for (f, h) in fin.iter().zip(&hit_runs) { if h.contains(&k) { a += *f as f64; na += 1 } else { b += *f as f64; nb += 1 } }
+        (na > 0 && nb > 0).then(|| ((a / na as f64 - b / nb as f64) / DAY as f64 * 10.0).round() / 10.0)
+    };
+    res.risks = risks.iter().zip(&hits).enumerate().map(|(k, (r, &h))| TaskRisk { uid: r.id, name: r.name.clone(), value: h as f64 / runs_f, effect: effect(k) }).collect();
     res.planned_chance = fin.iter().filter(|&&f| f <= base.finish).count() as f64 / runs_f;
     fin.sort_unstable();
     (res.p10, res.p50, res.p80, res.p90) = (pct(&fin, 0.1), pct(&fin, 0.5), pct(&fin, 0.8), pct(&fin, 0.9));

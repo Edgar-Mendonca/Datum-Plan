@@ -59,7 +59,7 @@ export const ScheduleRisk = () => {
     </>}>
       <Show when={!res() && saved()}><p class="muted">Results of the run on {saved()!.at} ({saved()!.opts.iterations.toLocaleString()} runs, −{saved()!.opts.low}% to +{saved()!.opts.high}%). Run again after changing the plan.</p></Show>
       <Show when={shown()} fallback={
-        <div class="panel"><p>Schedule Risk runs the plan {opts().iterations.toLocaleString()} times. In each run every unfinished task takes a duration between its <b>optimistic</b> and <b>pessimistic</b> duration (most often its planned one), and each open risk in the <a class="link" onClick={() => setView("risks")}>Risk Register</a> with a <b>Delay (days)</b> happens with its probability (1 = 10 %, 2 = 30 %, 3 = 50 %, 4 = 70 %, 5 = 90 %).</p>
+        <div class="panel"><p>Schedule Risk runs the plan {opts().iterations.toLocaleString()} times. In each run every unfinished task takes a duration between its <b>optimistic</b> and <b>pessimistic</b> duration (most often its planned one), and each open risk in the <a class="link" onClick={() => setView("risks")}>Risk Register</a> with a <b>Delay (days)</b> or a <b>Branch</b> (activities that happen only with it) happens with its probability (1 = 10 %, 2 = 30 %, 3 = 50 %, 4 = 70 %, 5 = 90 %).</p>
           <p class="muted">Add the Optimistic Duration and Pessimistic Duration columns to the task sheet (right-click a column heading › Insert Column) to give tasks their own range. Tasks without one use the default range above.</p>
           <p><button class="btn pri" disabled={busy()} onClick={runRisk}>{busy() ? "Running…" : "Run analysis"}</button></p></div>
       }>{r => {
@@ -100,7 +100,7 @@ export const ScheduleRisk = () => {
               <table class="tbl"><tbody><For each={r().criticality}>{t => <tr class="click" onClick={() => { setView("gantt"); selectUid(t.uid); }}><td>{t.name}</td><td class="r"><span class="meter"><i style={{ width: pct(t.value) }} /></span> {pct(t.value)}</td></tr>}</For></tbody></table>
             </div>
             <Show when={r().risks.length}><div class="panel"><h2>Risks in the analysis</h2>
-              <table class="tbl"><tbody><For each={r().risks}>{t => <tr><td>R{t.uid} {t.name}</td><td class="r">happened in {pct(t.value)} of runs</td></tr>}</For></tbody></table>
+              <table class="tbl"><tbody><For each={r().risks}>{t => <tr><td>R{t.uid} {t.name}</td><td class="r">happened in {pct(t.value)} of runs</td><td class="r" title="How much later (calendar days) the runs with this risk finish, on average, than the runs without it">{t.effect == null ? "" : t.effect > 0 ? `+${t.effect} days to the finish` : `${t.effect} days`}</td></tr>}</For></tbody></table>
             </div></Show>
             <div class="panel"><h2>About this run</h2><ul class="muted"><li>{r().runs.toLocaleString()} runs; the same settings give the same answer.</li><For each={r().notes}>{n => <li>{n}</li>}</For></ul></div>
           </div>

@@ -516,6 +516,22 @@ pub struct Risk {
     /// A range for the delay: least and most working days (0: always `days`).
     #[serde(skip_serializing_if = "is_zero_f64")] pub days_min: f64,
     #[serde(skip_serializing_if = "is_zero_f64")] pub days_max: f64,
+    /// A branch (probabilistic fragnet): activities that happen only when the risk does, one after
+    /// another after task `after`, holding up task `before` (0: every successor of `after`).
+    #[serde(skip_serializing_if = "Vec::is_empty")] pub branch: Vec<BranchStep>,
+    #[serde(skip_serializing_if = "is_zero_u32")] pub after: u32,
+    #[serde(skip_serializing_if = "is_zero_u32")] pub before: u32,
+}
+
+/// One activity of a risk's branch: its working days (most likely, and a range) and its cost.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BranchStep {
+    pub name: String,
+    pub days: f64,
+    #[serde(skip_serializing_if = "is_zero_f64")] pub days_min: f64,
+    #[serde(skip_serializing_if = "is_zero_f64")] pub days_max: f64,
+    #[serde(skip_serializing_if = "is_zero_f64")] pub cost: f64,
 }
 
 /// A delay event for delay analysis: what happened and what it added to the plan (a fragnet):
@@ -1352,6 +1368,7 @@ fn is_zero(v: &i64) -> bool { *v == 0 }
 fn is_zero_u8(v: &u8) -> bool { *v == 0 }
 fn is_zero_i64(v: &i64) -> bool { *v == 0 }
 fn is_zero_f64(v: &f64) -> bool { *v == 0.0 }
+fn is_zero_u32(v: &u32) -> bool { *v == 0 }
 fn is_false(v: &bool) -> bool { !*v }
 fn is_day(u: &Unit) -> bool { *u == Unit::D }
 fn is_asap(c: &Constraint) -> bool { *c == Constraint::ASAP }
