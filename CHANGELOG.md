@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0 — 2026-11-21
+
+Risk branching.
+
+- **Branch…** on a risk in the Risk Register: activities that happen only when the risk does (a failed test means repair, then a re-test), each with its days, an optional least–most range and a cost, after a chosen task and before the task they hold up (or every task that follows it).
+- **Schedule Risk** puts the branch in, one activity after another, in the runs where the risk happens and leaves it out in the others; its cost counts in those runs.
+- **Risks in the analysis** shows, for each risk, how many calendar days later its runs finish on average than the runs without it.
+
 ## 0.9.41 — 2026-11-21
 
 Expected Finish, and constraints on days off.
