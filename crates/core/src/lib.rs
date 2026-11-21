@@ -35,6 +35,7 @@ pub mod sheetmove;
 pub mod sheetx;
 pub mod spell;
 pub mod templates;
+pub mod tsld;
 pub mod tutorial;
 pub mod workload;
 

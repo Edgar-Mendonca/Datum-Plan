@@ -80,7 +80,7 @@ const G = (p: { l: string; h?: string; children: JSX.Element }) => {
 const S = (p: { children: JSX.Element }) => <div class="stack">{p.children}</div>;
 
 const views: [string, string, Parameters<typeof C.view>[0]][] = [
-  ["Gantt Chart", "gantt", "gantt"], ["Tracking Gantt", "base", "tracking"], ["Network Diagram", "net", "network"], ["Calendar", "cal", "calendar"], ["Task Usage", "table", "taskusage"],
+  ["Gantt Chart", "gantt", "gantt"], ["Tracking Gantt", "base", "tracking"], ["Network Diagram", "net", "network"], ["Time-scaled Logic", "net", "logic"], ["Calendar", "cal", "calendar"], ["Task Usage", "table", "taskusage"],
   ["Timeline", "tl", "timeline"], ["Resource Sheet", "res", "ressheet"], ["Resource Usage", "load", "resusage"], ["Resource Graph", "load", "resgraph"], ["Team Planner", "team", "team"],
 ];
 const viewMenu = (): Item[] => views.map(([l, , v]) => ({ label: l, run: () => C.view(v), on: view() === v }));

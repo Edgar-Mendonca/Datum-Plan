@@ -376,6 +376,10 @@ Removing a picture from the plan also takes it off the sheets that use it.
 
 **Network** shows each task as a box joined to the next by its links, with a legend, zoom, a mini-map and options for the boxes (compact, standard, detailed), summaries and WBS bands. Critical tasks are red. It prints across as many pages as needed.
 
+### The time-scaled logic diagram
+
+**Logic** (beside Network in the sidebar, or **View › Time-scaled Logic**) draws the network on the timescale: each task is a bar at its dates with its ID and name above it, and the links run between the bars. Tasks share a line when their dates allow, and a task stays on the line of the task that drives it, so each chain of work reads from left to right. Critical work and its links are red; links that do not drive their successor are dashed. **Bands by phase** gives each top-level phase its own band (or choose **One band**); **Months**, **Weeks** and **Days** set the scale, and the lines are packed again so names never run into each other. The green line is the status date. Double-click a bar to show the task in the Gantt chart. **File › Print** prints it at the paper width.
+
 ## Risk and the weeks ahead
 
 ### The Risk Register

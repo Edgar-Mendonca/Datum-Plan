@@ -1553,3 +1553,23 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 .wlin { width: 100%; min-width: 44px; border: 0; background: transparent; text-align: right; font: inherit; padding: 2px 6px; color: inherit }
 .wlin:focus { outline: 2px solid var(--blue); background: var(--bg2) }
 .wlhint { margin: 6px 2px }
+
+/* Time-scaled logic diagram */
+.tsldwrap { overflow: auto; flex: 1; background: var(--bg2); border: 1px solid var(--line); }
+.tsld { display: block; font: 11px var(--sans); }
+.tsband { fill: var(--bg2); } .tsband.alt { fill: var(--panel); }
+.tsbandname { fill: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.tstick { stroke: var(--line2); } .tstick.major { stroke: var(--line3); }
+.tsticklabel { fill: var(--muted); font-size: 10px; }
+.tsstatus { stroke: var(--green); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.tslink { fill: none; stroke: var(--text2); stroke-width: 1; } .tslink.crit { stroke: var(--crit); } .tslink.loose { stroke-dasharray: 3 3; opacity: .7; }
+.tsarrow { fill: var(--text2); } .tsarrow.crit { fill: var(--crit); }
+.tsrect { fill: var(--bar); } .tsrect.crit { fill: var(--crit); }
+.tsdone { fill: var(--navy); opacity: .55; }
+.tsms { fill: var(--text); } .tsms.crit { fill: var(--crit); }
+.tsname { fill: var(--text); } .tsname.crit { fill: var(--crit); }
+.tsbar { cursor: default; } .tsbar:hover .tsname { font-weight: 600; }
+.tslegend { margin: 6px 2px; } .tskey { display: inline-block; width: 18px; height: 6px; background: var(--bar); margin: 0 4px 1px 10px; border-radius: 2px; }
+.tskey.crit { background: var(--crit); } .tskey.link { height: 0; border-top: 1px solid var(--text2); background: none; } .tskey.link.loose { border-top-style: dashed; }
+/* The logic diagram prints at the paper width (its drawing scales with its viewBox). */
+.pflowbody .tsldwrap { overflow: visible; border: 0; } .pflowbody .tsld { width: 100%; height: auto; }
