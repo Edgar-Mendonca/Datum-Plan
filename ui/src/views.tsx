@@ -1,7 +1,7 @@
 // Views other than the Gantt chart.
 import { CountryList, Flag, countryCode, countryName } from "./flags";
 import { For, Index, Show, createSignal, createResource, createMemo, createEffect, JSX } from "solid-js";
-import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money, Limits, Health, CheckOut } from "./api";
+import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money, Limits, Health, CheckOut, iso } from "./api";
 import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut, setOut, opts, setOpts, openDialog , kept, pane } from "./store";
 import { ChartBox, bar, line } from "./charts";
 import { C, selectUid } from "./cmds";
@@ -189,6 +189,12 @@ export const UsageView = (p: { by: "task" | "resource" }) => {
   const [what, setWhat] = createSignal("work");
   const [u] = createResource(() => [tick(), unit(), what()], () => call<Usage>("usage", { by: p.by, what: what(), unit: unit() }));
   const fmt = (v: number) => (v === 0 ? "" : what() === "cost" ? money(v, P().currency) : `${Math.round(v * 10) / 10}h`);
+  // By day, a person's hours on a task can be typed (the engine refuses days the task does not work).
+  const typeable = (r: Usage["rows"][number]) => unit() === "day" && what() === "work" && r.of !== null && !r.sum;
+  const typeHours = (r: Usage["rows"][number], b: number, v: string) => {
+    const [task, res] = p.by === "task" ? [r.of!, r.uid] : [r.uid, r.of!];
+    act({ DayWork: { uid: task, res, day: iso(b), hours: v.trim() || "0" } });
+  };
   return (
     <Page title={p.by === "task" ? "Task Usage" : "Resource Usage"} help={p.by === "task" ? "taskviews" : "resviews"} tools={<>
       <Seg options={[["work", "Work"], ["cost", "Cost"]]} value={what()} set={setWhat} />
@@ -201,11 +207,14 @@ export const UsageView = (p: { by: "task" | "resource" }) => {
             <tbody><For each={x().rows}>{r => (
               <tr classList={{ sub: r.of !== null, sumr: r.sum }}>
                 <td class="nm" style={{ "padding-left": `${6 + r.lvl * 14}px` }}>{r.name}</td><td class="r">{fmt(r.total)}</td>
-                <For each={r.vals}>{(v, k) => <td class="r wl" classList={{ over: r.over[k()] }}>{fmt(v)}</td>}</For>
+                <For each={r.vals}>{(v, k) => <td class="r wl" classList={{ over: r.over[k()], edit: typeable(r) }}>{typeable(r)
+                  ? <input class="wlin" value={v ? String(Math.round(v * 100) / 100) : ""} title="Hours on this day: type to change them" onChange={e => typeHours(r, x().buckets[k()], e.currentTarget.value)} onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur() }} />
+                  : fmt(v)}</td>}</For>
               </tr>
             )}</For></tbody>
           </table>
         )}</Show>
+        <Show when={unit() !== "day" && what() === "work"}><p class="muted wlhint">Show <b>Days</b> to type a person's hours on each day of a task.</p></Show>
       </div>
     </Page>
   );

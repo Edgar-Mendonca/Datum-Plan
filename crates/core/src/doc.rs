@@ -21,6 +21,8 @@ pub enum Op {
     Level { uids: Vec<u32>, clear: bool },
     /// Splits a task: a pause of `gap` working minutes after `after` working minutes of work.
     Split { uid: u32, after: i64, gap: i64 },
+    /// Hours typed for one person on one working day of a task (Task or Resource Usage by day).
+    DayWork { uid: u32, res: u32, day: String, hours: String },
     /// Saves current start/finish into interim plan n (custom start/finish n).
     Interim { n: u8 },
     /// Marks work complete through a date (Update Project).
@@ -471,7 +473,7 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
                 w
             } else { vec![] };
             if p.tasks[i].res.is_empty() { return Err("Assign people to the task before choosing a work contour.".into()) }
-            for a in &mut p.tasks[i].res { (a.contour, a.curve) = (c, curve.clone()) }
+            for a in &mut p.tasks[i].res { (a.contour, a.curve, a.daily) = (c, curve.clone(), vec![]) }
         }
         "ignore_rc" => p.tasks[i].ignore_rc = yes(v),
         "acttype" => {
@@ -574,7 +576,7 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
             let mut res = parse::res(v, p)?;
             // People already on the task keep their rate table and work contour.
             for a in &mut res {
-                if let Some(o) = p.tasks[i].res.iter().find(|o| o.res == a.res) { (a.table, a.contour, a.curve) = (o.table, o.contour, o.curve.clone()) }
+                if let Some(o) = p.tasks[i].res.iter().find(|o| o.res == a.res) { (a.table, a.contour, a.curve, a.daily) = (o.table, o.contour, o.curve.clone(), o.daily.clone()) }
             }
             p.tasks[i].res = res;
             let after = work_units(p, i);
@@ -850,6 +852,27 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             t.splits.retain(|(a, _)| *a != after);
             t.splits.push((after, gap));
             t.splits.sort_unstable();
+        }
+        Op::DayWork { uid, res, day, hours } => {
+            let i = p.idx(uid).ok_or("That task no longer exists.")?;
+            let k = p.res_idx(res).ok_or("That resource no longer exists.")?;
+            if p.resources[k].kind != ResKind::Work { return Err("Hours per day are for people and equipment (work resources).".into()) }
+            let ai = p.tasks[i].res.iter().position(|a| a.res == res).ok_or("That person is not on the task.")?;
+            let h: f64 = hours.trim().trim_end_matches(['h', 'H']).trim().replace(',', ".").parse().ok().filter(|h: &f64| h.is_finite() && *h >= 0.0 && *h <= 24.0)
+                .ok_or("Type the hours for that day, 0 to 24.")?;
+            let day = NaiveDate::parse_from_str(day.trim(), "%Y-%m-%d").map_err(|_| "That is not a date.")?;
+            let s = sched::schedule(p)?;
+            if s.summary[i] { return Err("Type hours on the tasks under a summary.".into()) }
+            // The task's working days, and each one's minutes for this person as the plan has them now.
+            let (c, t) = (&s.cals[s.ci[i]], &p.tasks[i]);
+            let gaps = crate::load::pauses(c, s.es[i], &t.splits, t.dur, 0);
+            let days = crate::load::working_days(c, s.es[i], s.ef[i], &gaps);
+            let at = days.iter().position(|&d| d == crate::cal::at(day).div_euclid(DAY)).ok_or("That day is not a working day of the task.")?;
+            let l = crate::load::compute(p, &s);
+            let mut v: Vec<f64> = days.iter().map(|&d| l.assign_daily.get(&(k, i, d)).copied().unwrap_or(0.0)).collect();
+            v[at] = (h * 60.0).round();
+            if v.iter().sum::<f64>() <= 0.0 { return Err("At least one day needs hours; to take the person off, remove them from Resource Names.".into()) }
+            p.tasks[i].res[ai].daily = v;
         }
         Op::Interim { n } => {
             let s = sched::schedule(p)?;

@@ -752,6 +752,7 @@ pub fn pct_text(x: f64, d: u8) -> String {
 /// none); a custom curve lists its parts, "Custom: 10, 40, 100, 40, 10".
 pub fn contour_text(t: &Task) -> String {
     let Some(a) = t.res.first() else { return String::new() };
+    if t.res.iter().any(|b| !b.daily.is_empty()) { return if t.res.iter().all(|b| !b.daily.is_empty()) { "Edited".into() } else { "Mixed".into() } }
     if t.res.iter().any(|b| b.contour != a.contour || b.curve != a.curve) { return "Mixed".into() }
     if a.contour == Contour::Custom {
         let parts: Vec<String> = a.curve.iter().map(|x| crate::parse::num(*x)).collect();

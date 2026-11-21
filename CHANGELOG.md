@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.39 — 2026-11-21
+
+Type the hours per day.
+
+- **Task Usage** and **Res. Usage** by **Days**: each person's cells on a task take typing. Type a day's hours (0 to 24); the person's work on the task becomes the sum of their days and the cost follows, while the dates stay.
+- Days the task does not work (weekends, holidays, after its finish) are refused.
+- The Work Contour column shows **Edited**; choosing a contour clears the typed hours. Typing the names again keeps them; a longer or shorter task stretches the pattern with the same total.
+- Progress, the S-curves, Workload and Manpower use the typed hours.
+- **AI tools:** the operation `DayWork` (task, person, day, hours) through `apply_operation`.
+
 ## 0.9.38 — 2026-11-21
 
 Work contours.

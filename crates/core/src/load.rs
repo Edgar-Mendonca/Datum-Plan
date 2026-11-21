@@ -71,6 +71,12 @@ fn phased(c: &crate::cal::WorkCal, es: i64, ef: i64, cut: Option<(i64, i64)>, pc
     spread(c, rs, ef, &pauses(c, rs, sp.0, sp.1, dw), |d, x| f(d, x * (1.0 - done)));
 }
 
+/// The days with work on them between `es` and `ef`, leaving out the pauses `gaps`.
+pub fn working_days(c: &crate::cal::WorkCal, es: i64, ef: i64, gaps: &[(i64, i64)]) -> Vec<i64> {
+    if ef <= es { return vec![] }
+    (es.div_euclid(DAY)..=(ef - 1).div_euclid(DAY)).filter(|&d| worked(c, es.max(d * DAY), ef.min((d + 1) * DAY), gaps) > 0).collect()
+}
+
 /// The share of a contour's effort done by position `x` of the task (0 at its start, 1 at its end).
 pub fn cum(w: &[f64], x: f64) -> f64 {
     let (n, tot) = (w.len(), w.iter().sum::<f64>());
@@ -151,15 +157,17 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
             let Some(k) = p.res_idx(a.res) else { continue };
             let r = &p.resources[k];
             let (rate, per_use) = r.rate_on(a.table, first);
+            let typed = r.kind == ResKind::Work && !a.daily.is_empty();
             let (w, cost) = match r.kind {
+                ResKind::Work if typed => (a.daily.iter().sum::<f64>(), 0.0),
                 ResKind::Work => (dur as f64 * a.units, 0.0),
                 ResKind::Material => (0.0, a.units * rate),
                 ResKind::Cost => (0.0, a.units),
             };
             let mut wcost = 0.0;
             // A work contour shapes the work and material over the task (cost resources stay even).
-            let curve = (!a.contour.is_flat() && r.kind != ResKind::Cost).then(|| a.contour.weights(&a.curve));
-            phased_w(c, es, ef, (cut, pct), sp, curve.as_deref(), |d, share| {
+            let curve = if typed { Some(a.daily.clone()) } else { (!a.contour.is_flat() && r.kind != ResKind::Cost).then(|| a.contour.weights(&a.curve)) };
+            let mut book = |d: i64, share: f64| {
                 let mins = w * share;
                 let day_cost = if r.kind == ResKind::Work { mins / 60.0 * r.rate_on(a.table, date_of(d * DAY)).0 } else { cost * share };
                 wcost += day_cost;
@@ -173,7 +181,15 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
                 if day_cost != 0.0 {
                     *l.assign_cost.entry((k, i, d)).or_default() += day_cost;
                 }
-            });
+            };
+            // Hours typed per day land on their days, as typed, while the task has as many working
+            // days as were typed and nothing is under way; otherwise they shape the work like a curve.
+            let days = if typed && cut.is_none() { working_days(c, es, ef, &pauses(c, es, sp.0, sp.1, 0)) } else { vec![] };
+            if typed && days.len() == a.daily.len() {
+                days.iter().zip(&a.daily).filter(|x| *x.1 > 0.0).for_each(|(&d, &m)| book(d, m / w));
+            } else {
+                phased_w(c, es, ef, (cut, pct), sp, curve.as_deref(), book);
+            }
             l.task_daily.entry((i, es.div_euclid(DAY))).or_default().1 += per_use;
             if per_use != 0.0 {
                 *l.assign_cost.entry((k, i, es.div_euclid(DAY))).or_default() += per_use;

@@ -192,6 +192,15 @@ By default a person's hours are spread evenly over the task. Add the **Work Cont
 
 The total work, the cost and the dates stay the same; only how the hours fall over the days changes. Resource Usage, the Resource Graph, Workload, Manpower and the cost and earned-value S-curves follow the curve. The column sets the contour for everyone on the task; typing the names again keeps it. Progress takes the work done from the start of the curve. Levelling still counts each person's average units. Project XML files keep the contour both ways (a custom curve is written as flat).
 
+### Type the hours per day
+
+In **Task Usage** or **Res. Usage**, choose **Days**: each person's cells on a task become boxes. Type the hours for a day (0 to 24) and press Enter. The person's work on that task becomes the sum of their days, and the cost follows; the task's dates do not move. The **Work Contour** column then shows *Edited*.
+
+- A day the task does not work (a weekend, a holiday, after its finish) is refused.
+- Typing the names again keeps the hours. Choosing a work contour clears them and spreads the work evenly again.
+- If the task becomes longer or shorter, your pattern is stretched over its new days with the same total.
+- Hours are for work resources (people and equipment); materials and costs keep their amounts.
+
 ### Workload, trades and levelling
 
 **Res. Usage** shows each person's hours per day, week or month; red means more hours than the person has. **Resource › Resource Graph** shows the same as bars against the capacity line, per person or per trade, in hours or in people.

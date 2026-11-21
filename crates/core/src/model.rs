@@ -122,6 +122,11 @@ pub struct Assign {
     /// The custom curve: relative effort in equal parts of the task (Contour::Custom).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub curve: Vec<f64>,
+    /// Hours typed per day (Task or Resource Usage): working minutes on each working day of the
+    /// task, in order. When set, the work is their sum and the days take them (a longer or shorter
+    /// task stretches the pattern); a work contour chosen later clears them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub daily: Vec<f64>,
 }
 
 /// A work contour: the shape of an assignment's work over the task's duration.
