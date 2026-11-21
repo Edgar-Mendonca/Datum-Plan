@@ -71,6 +71,61 @@ fn phased(c: &crate::cal::WorkCal, es: i64, ef: i64, cut: Option<(i64, i64)>, pc
     spread(c, rs, ef, &pauses(c, rs, sp.0, sp.1, dw), |d, x| f(d, x * (1.0 - done)));
 }
 
+/// The share of a contour's effort done by position `x` of the task (0 at its start, 1 at its end).
+pub fn cum(w: &[f64], x: f64) -> f64 {
+    let (n, tot) = (w.len(), w.iter().sum::<f64>());
+    if n == 0 || tot <= 0.0 { return x.clamp(0.0, 1.0) }
+    let x = x.clamp(0.0, 1.0) * n as f64;
+    let k = (x.floor() as usize).min(n - 1);
+    (w[..k].iter().sum::<f64>() + w[k] * (x - k as f64)) / tot
+}
+
+/// The position of the task by which `share` of a contour's effort is done (the inverse of `cum`).
+pub fn at_share(w: &[f64], share: f64) -> f64 {
+    let (n, tot) = (w.len(), w.iter().sum::<f64>());
+    if n == 0 || tot <= 0.0 { return share.clamp(0.0, 1.0) }
+    let mut left = share.clamp(0.0, 1.0) * tot;
+    for (k, &x) in w.iter().enumerate() {
+        if left <= x && x > 0.0 { return (k as f64 + left / x) / n as f64 }
+        left -= x;
+    }
+    1.0
+}
+
+/// Spreads like `spread`, shaped by the contour `w`: the span covers positions `x0`..`x1` of the
+/// contour, and each day takes its part of the effort there (the shares add up to 1).
+fn spread_curve(c: &crate::cal::WorkCal, es: i64, ef: i64, gaps: &[(i64, i64)], w: &[f64], (x0, x1): (f64, f64), mut f: impl FnMut(i64, f64)) {
+    let total = worked(c, es, ef, gaps).max(1) as f64;
+    if ef <= es {
+        f(es.div_euclid(DAY), 1.0);
+        return;
+    }
+    let whole = cum(w, x1) - cum(w, x0);
+    let (mut d, mut done) = (es.div_euclid(DAY), 0.0);
+    while d * DAY < ef {
+        let m = worked(c, es.max(d * DAY), ef.min((d + 1) * DAY), gaps) as f64;
+        if m > 0.0 {
+            let at = |u: f64| x0 + (x1 - x0) * (u / total).min(1.0);
+            f(d, if whole > 1e-12 { (cum(w, at(done + m)) - cum(w, at(done))) / whole } else { m / total });
+            done += m;
+        }
+        d += 1;
+    }
+}
+
+/// `phased` for an assignment with a work contour `w` (None: flat). The work done (`pct`) is the
+/// contour's effort up to the matching position; the rest follows the contour from there.
+fn phased_w(c: &crate::cal::WorkCal, es: i64, ef: i64, (cut, pct): (Option<(i64, i64)>, u8), sp: (&[(i64, i64)], i64), w: Option<&[f64]>, mut f: impl FnMut(i64, f64)) {
+    let Some(w) = w else { return phased(c, es, ef, cut, pct, sp, f) };
+    let (done, dw) = (pct.min(100) as f64 / 100.0, sp.1 * pct.min(100) as i64 / 100);
+    let Some((dd, rs)) = cut else { return spread_curve(c, es, ef, &pauses(c, es, sp.0, sp.1, 0), w, (0.0, 1.0), f) };
+    let t = at_share(w, done);
+    if done > 0.0 {
+        spread_curve(c, es, dd.clamp(es, ef), &pauses(c, es, sp.0, sp.1, 0), w, (0.0, t), |d, x| f(d, x * done));
+    }
+    spread_curve(c, rs, ef, &pauses(c, rs, sp.0, sp.1, dw), w, (t, 1.0), |d, x| f(d, x * (1.0 - done)));
+}
+
 pub fn compute(p: &Project, s: &Sched) -> Loads {
     let (n, m) = (p.tasks.len(), p.resources.len());
     let mut l = Loads { work: vec![0.0; n], cost: vec![0.0; n], awork: vec![0.0; n], acost: vec![0.0; n], res_work: vec![0.0; m], res_cost: vec![0.0; m], over: vec![false; m], ..Default::default() };
@@ -102,7 +157,9 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
                 ResKind::Cost => (0.0, a.units),
             };
             let mut wcost = 0.0;
-            phased(c, es, ef, cut, pct, sp, |d, share| {
+            // A work contour shapes the work and material over the task (cost resources stay even).
+            let curve = (!a.contour.is_flat() && r.kind != ResKind::Cost).then(|| a.contour.weights(&a.curve));
+            phased_w(c, es, ef, (cut, pct), sp, curve.as_deref(), |d, share| {
                 let mins = w * share;
                 let day_cost = if r.kind == ResKind::Work { mins / 60.0 * r.rate_on(a.table, date_of(d * DAY)).0 } else { cost * share };
                 wcost += day_cost;

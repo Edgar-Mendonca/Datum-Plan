@@ -109,13 +109,53 @@ pub struct Link {
 }
 
 /// Work resources: units 1.0 = 100%. Material: quantity. Cost: amount.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Assign {
     pub res: u32,
     pub units: f64,
     /// Cost rate table A–E (0–4).
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub table: u8,
+    /// How the work is spread over the task (flat: evenly).
+    #[serde(default, skip_serializing_if = "Contour::is_flat")]
+    pub contour: Contour,
+    /// The custom curve: relative effort in equal parts of the task (Contour::Custom).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub curve: Vec<f64>,
+}
+
+/// A work contour: the shape of an assignment's work over the task's duration.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Contour { #[default] Flat, BackLoaded, FrontLoaded, DoublePeak, EarlyPeak, LatePeak, Bell, Turtle, Custom }
+
+impl Contour {
+    pub const ALL: [Contour; 9] = [Contour::Flat, Contour::BackLoaded, Contour::FrontLoaded, Contour::DoublePeak, Contour::EarlyPeak, Contour::LatePeak, Contour::Bell, Contour::Turtle, Contour::Custom];
+    pub fn is_flat(&self) -> bool { *self == Contour::Flat }
+    pub fn name(self) -> &'static str {
+        match self { Contour::Flat => "Flat", Contour::BackLoaded => "Back Loaded", Contour::FrontLoaded => "Front Loaded", Contour::DoublePeak => "Double Peak", Contour::EarlyPeak => "Early Peak", Contour::LatePeak => "Late Peak", Contour::Bell => "Bell", Contour::Turtle => "Turtle", Contour::Custom => "Custom" }
+    }
+    /// The contour named `s` (case and spaces ignored).
+    pub fn parse(s: &str) -> Option<Contour> {
+        let k = |x: &str| x.to_lowercase().replace([' ', '-', '_'], "");
+        Contour::ALL.into_iter().find(|c| k(c.name()) == k(s))
+    }
+    /// Relative effort in ten equal parts of the task; for Custom, `curve` (any number of parts).
+    pub fn weights(self, curve: &[f64]) -> Vec<f64> {
+        let w: &[f64] = match self {
+            Contour::Flat => &[1.0; 10],
+            Contour::BackLoaded => &[10.0, 15.0, 25.0, 50.0, 50.0, 75.0, 75.0, 100.0, 100.0, 100.0],
+            Contour::FrontLoaded => &[100.0, 100.0, 100.0, 75.0, 75.0, 50.0, 50.0, 25.0, 15.0, 10.0],
+            Contour::DoublePeak => &[25.0, 50.0, 100.0, 50.0, 25.0, 25.0, 50.0, 100.0, 50.0, 25.0],
+            Contour::EarlyPeak => &[25.0, 50.0, 100.0, 100.0, 75.0, 50.0, 50.0, 25.0, 15.0, 10.0],
+            Contour::LatePeak => &[10.0, 15.0, 25.0, 50.0, 50.0, 75.0, 100.0, 100.0, 50.0, 25.0],
+            Contour::Bell => &[10.0, 20.0, 40.0, 80.0, 100.0, 100.0, 80.0, 40.0, 20.0, 10.0],
+            Contour::Turtle => &[25.0, 50.0, 75.0, 100.0, 100.0, 100.0, 100.0, 75.0, 50.0, 25.0],
+            Contour::Custom => curve,
+        };
+        let w: Vec<f64> = w.iter().map(|x| if x.is_finite() { x.max(0.0) } else { 0.0 }).collect();
+        if w.iter().sum::<f64>() > 0.0 { w } else { vec![1.0; 10] }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]

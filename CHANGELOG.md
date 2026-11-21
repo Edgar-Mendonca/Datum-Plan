@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.38 — 2026-11-21
+
+Work contours.
+
+- **Work Contour** column: how the people's hours spread over a task. Flat (as before), Back Loaded, Front Loaded, Double Peak, Early Peak, Late Peak, Bell, Turtle, or your own curve (`Custom: 10, 40, 100, 40, 10`, the effort in equal parts of the task).
+- The total work, cost and dates stay the same; Resource Usage, the Resource Graph, Workload, Manpower and the cost and earned-value S-curves follow the curve.
+- Progress takes the work done from the start of the curve, and the rest follows it from there.
+- Typing a task's people again keeps each person's contour and cost rate table (the rate table used to fall back to A).
+- Project XML files read and write the contour (a custom curve is written as flat).
+
 ## 0.9.37 — 2026-11-20
 
 Hardening: a full audit of the calculations, with a test for every fault found (118 new tests). What was wrong, and is now right:

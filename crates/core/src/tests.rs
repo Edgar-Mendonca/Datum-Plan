@@ -775,9 +775,9 @@ fn workload_by_trade_with_capacity() {
     for (uid, name, group) in [(1, "Alice", "Electrical"), (2, "Bob", "Electrical"), (3, "Carl", "Civil"), (4, "Dan", "")] {
         p.resources.push(Resource { uid, name: name.into(), group: group.into(), max: 1.0, ..Default::default() });
     }
-    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0 }, Assign { res: 2, units: 1.0, table: 0 }];
-    p.tasks[1].res = vec![Assign { res: 2, units: 1.0, table: 0 }];
-    p.tasks[2].res = vec![Assign { res: 3, units: 0.5, table: 0 }];
+    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }, Assign { res: 2, units: 1.0, table: 0, ..Default::default() }];
+    p.tasks[1].res = vec![Assign { res: 2, units: 1.0, table: 0, ..Default::default() }];
+    p.tasks[2].res = vec![Assign { res: 3, units: 0.5, table: 0, ..Default::default() }];
     let c = Calc::new(&p, "%d-%b-%y", d(2026, 11, 1));
     let u = report::usage(&c, "group", "work", "week");
     let row = |n: &str| u.rows.iter().find(|r| r.name == n && r.of.is_none()).unwrap_or_else(|| panic!("{n}"));
@@ -799,8 +799,8 @@ fn workload_by_trade_with_capacity() {
 fn levelling_preview_changes_nothing() {
     let mut p = plan(&[(5, ""), (5, ""), (2, "2")]);
     p.resources.push(Resource { uid: 1, name: "Alice".into(), max: 1.0, ..Default::default() });
-    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
-    p.tasks[1].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }];
+    p.tasks[1].res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }];
     let before = p.clone();
     let v = crate::level::preview(&p, &[]).unwrap_or_default();
     assert_eq!(p, before);
@@ -873,8 +873,8 @@ fn manpower_by_trade_planned_done_and_forecast() {
     for (uid, name, group) in [(1, "Ann", "Civil"), (2, "Ben", "Electrical")] {
         p.resources.push(Resource { uid, name: name.into(), group: group.into(), max: 1.0, ..Default::default() });
     }
-    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
-    p.tasks[1].res = vec![Assign { res: 2, units: 2.0, table: 0 }];
+    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }];
+    p.tasks[1].res = vec![Assign { res: 2, units: 2.0, table: 0, ..Default::default() }];
     let mut doc = Doc::new(p);
     op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 }).unwrap();
     doc.p.tasks[0].act_start = Some(d(2026, 11, 2));
@@ -978,7 +978,7 @@ fn money_is_exact_to_the_cent() {
     // 3 tasks at $33.333/h for 3 h: each costs $99.999 → $100.00, and the project $300.00, not $299.997.
     let mut p = plan(&[(0, ""), (0, ""), (0, "")]);
     p.resources.push(Resource { uid: 1, name: "Tech".into(), rate: 33.333, max: 1.0, ..Default::default() });
-    for t in &mut p.tasks { t.dur = 180; t.res = vec![Assign { res: 1, units: 1.0, table: 0 }] }
+    for t in &mut p.tasks { t.dur = 180; t.res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }] }
     let all = p.new_task("All", 0, 0);
     p.tasks.insert(0, all);
     for t in &mut p.tasks[1..] { t.level = 1 }

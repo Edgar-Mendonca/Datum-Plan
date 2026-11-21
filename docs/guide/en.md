@@ -176,6 +176,22 @@ Open **Resources** in the sidebar. Each row is a person, a crew, a material or a
 
 Type in the **Resource Names** column of the task sheet, for example `Design Engineer` or `Design Engineer[50%], Analysis Engineer`. A new name creates the resource. The work (man-hours) and the cost follow from the duration, the units and the rates. You can also use **Resource › Assign Resources**.
 
+### Work contours
+
+By default a person's hours are spread evenly over the task. Add the **Work Contour** column (right-click a column heading › Insert Column) to shape them:
+
+| Contour | The hours |
+|---|---|
+| Flat | Even from start to finish (the default). |
+| Back Loaded / Front Loaded | Few at the start and most at the end, or the other way round. |
+| Early Peak / Late Peak | Rising to a peak in the first or the second half. |
+| Double Peak | Two peaks, a third and two thirds of the way through. |
+| Bell | Low at both ends, highest in the middle. |
+| Turtle | Like a bell, with a long flat top. |
+| Custom | Your own curve: type `Custom: 10, 40, 100, 40, 10`, the effort in equal parts of the task (2 to 100 parts). |
+
+The total work, the cost and the dates stay the same; only how the hours fall over the days changes. Resource Usage, the Resource Graph, Workload, Manpower and the cost and earned-value S-curves follow the curve. The column sets the contour for everyone on the task; typing the names again keeps it. Progress takes the work done from the start of the curve. Levelling still counts each person's average units. Project XML files keep the contour both ways (a custom curve is written as flat).
+
 ### Workload, trades and levelling
 
 **Res. Usage** shows each person's hours per day, week or month; red means more hours than the person has. **Resource › Resource Graph** shows the same as bars against the capacity line, per person or per trade, in hours or in people.

@@ -57,7 +57,7 @@ pub fn dur(s: &str, day: i64) -> Result<(i64, Unit), String> {
     Ok((m as i64, u))
 }
 
-fn num(v: f64) -> String {
+pub fn num(v: f64) -> String {
     let s = format!("{:.2}", v);
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
@@ -178,7 +178,7 @@ pub fn res(s: &str, p: &mut Project) -> Result<Vec<Assign>, String> {
             }
         };
         out.retain(|a| a.res != uid);
-        out.push(Assign { res: uid, units, table: 0 });
+        out.push(Assign { res: uid, units, table: 0, ..Default::default() });
     }
     Ok(out)
 }

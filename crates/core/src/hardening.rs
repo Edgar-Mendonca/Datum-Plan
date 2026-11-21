@@ -492,7 +492,7 @@ fn no_number_makes_an_unopenable_file() {
     // A huge rate in a file: the baseline cost overflows, and the plan still saves and opens.
     let k = doc.p.res_idx(r).unwrap();
     doc.p.resources[k].rate = f64::MAX;
-    doc.p.tasks[1].res = vec![Assign { res: r, units: 1.0, table: 0 }];
+    doc.p.tasks[1].res = vec![Assign { res: r, units: 1.0, table: 0, ..Default::default() }];
     doc.apply(Op::Baseline { uids: vec![], clear: false, n: 0 }, "%d-%b-%y").unwrap();
     doc.apply(Op::Snapshot { label: "x".into(), comment: String::new() }, "%d-%b-%y").unwrap();
     assert!(Project::from_json(&doc.json()).is_ok(), "the saved plan does not open");
@@ -544,7 +544,7 @@ fn progress_and_levelling_scale() {
         for k in 0..5 { p.resource(&format!("R{k}")); }
         for i in 0..n {
             let mut t = p.new_task(&format!("T{i}"), 0, 960);
-            t.res = vec![Assign { res: 1 + i as u32 % 5, units: 1.0, table: 0 }];
+            t.res = vec![Assign { res: 1 + i as u32 % 5, units: 1.0, table: 0, ..Default::default() }];
             p.tasks.push(t);
         }
         Doc::new(p)

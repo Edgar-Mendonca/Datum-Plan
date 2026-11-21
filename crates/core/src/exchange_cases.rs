@@ -128,7 +128,7 @@ fn risk_on_summary_moves_the_finish() {
 fn xer_keeps_cost_resources() {
     let mut doc = Doc::new(plan(&[(2, "")]));
     doc.p.resources.push(Resource { uid: 1, name: "Permit fee".into(), kind: ResKind::Cost, ..Default::default() });
-    doc.p.tasks[0].res = vec![Assign { res: 1, units: 5000.0, table: 0 }];
+    doc.p.tasks[0].res = vec![Assign { res: 1, units: 5000.0, table: 0, ..Default::default() }];
     let q = round_trip(&doc.p, "xer");
     assert_eq!(q.resources[0].kind, ResKind::Cost, "cost resource came back as {:?} with units {}", q.resources[0].kind, q.tasks[0].res[0].units);
 }
@@ -137,7 +137,7 @@ fn xer_keeps_cost_resources() {
 fn xer_keeps_rates_and_cost() {
     let mut p = plan(&[(2, "")]);
     p.resources.push(Resource { uid: 1, name: "Fitter".into(), rate: 50.0, max: 1.0, ..Default::default() });
-    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+    p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }];
     let q = round_trip(&p, "xer");
     assert_eq!(q.resources[0].rate, 50.0, "rate lost");
 }
@@ -259,7 +259,7 @@ fn mpx_writes_lags_and_assignments_by_resource_id() {
     p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 2 * D, pct: false, elapsed: false }];
     p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true, elapsed: false }];
     p.resources.push(Resource { uid: 7, name: "Fitter".into(), rate: 50.0, ..Default::default() });
-    p.tasks[1].res = vec![Assign { res: 7, units: 1.0, table: 0 }];
+    p.tasks[1].res = vec![Assign { res: 7, units: 1.0, table: 0, ..Default::default() }];
     let x = crate::io::formats::mpx(&Calc::new(&p, "%d-%b-%y", d(2026, 11, 1)));
     assert!(x.contains(",1FS+2d,") && x.contains(",1SS+5d,"), "lags lost:\n{x}");
     // Resources carry ID and Unique ID; an assignment names both (ID 1, units 1 = 100 %, Unique ID 7).
@@ -382,7 +382,7 @@ fn earned_schedule_matches_plan_when_on_time() {
 fn a_cost_amount_above_1000_survives_loading() {
     let mut p = plan(&[(2, "")]);
     p.resources.push(Resource { uid: 1, name: "Permit fee".into(), kind: ResKind::Cost, max: 1.0, ..Default::default() });
-    p.tasks[0].res = vec![Assign { res: 1, units: 1500.0, table: 0 }];
+    p.tasks[0].res = vec![Assign { res: 1, units: 1500.0, table: 0, ..Default::default() }];
     let q = Project::from_json(&serde_json::to_string(&p).unwrap()).unwrap();
     assert_eq!(q.tasks[0].res[0].units, 1500.0);
 }
@@ -528,7 +528,7 @@ fn exchange_time_grows_with_the_plan() {
         for i in 0..n {
             let mut t = p.new_task(&format!("T{i}"), (i % 50 != 0) as u8, if i % 50 == 0 { 0 } else { 480 });
             if i % 50 > 1 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }) }
-            t.res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+            t.res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }];
             p.tasks.push(t);
         }
         let s = schedule(&p).unwrap();
@@ -582,7 +582,7 @@ fn xer_carries_codes_fields_notes_and_steps() {
     let mut p = plan(&[(5, ""), (2, "1"), (3, "2"), (0, "3")]);
     (p.name, p.code) = ("Pump package".into(), "PKG-01".into());
     p.resource("Crew");
-    p.tasks[1].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+    p.tasks[1].res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }];
     for (k, c) in ["E-10", "E-20", "M-10", "M-10"].iter().enumerate() { p.tasks[k].code = c.to_string() }
     p.codes.push(CodeDef { name: "Discipline".into(), scope: "Project".into(), values: vec![
         CodeValue { value: "MEC".into(), desc: "Mechanical".into(), color: "#C00000".into() }, CodeValue { value: "ELE".into(), desc: "Electrical".into(), color: String::new() }] });

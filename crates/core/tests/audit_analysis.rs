@@ -156,7 +156,7 @@ fn time_impact_of_a_hold() {
 fn risk_lump_sum_cost_does_not_scale_with_duration() {
     let mut p = plan(&[("A", 10, "")]);
     p.resources.push(Resource { uid: 1, name: "Permit fee".into(), kind: ResKind::Cost, ..Default::default() });
-    p.tasks[0].res = vec![Assign { res: 1, units: 10_000.0, table: 0 }];
+    p.tasks[0].res = vec![Assign { res: 1, units: 10_000.0, table: 0, ..Default::default() }];
     let r = risk::simulate(&p, &opts(500)).unwrap();
     assert_eq!(r.cost, 10_000.0);
     assert_eq!((r.cost_p50, r.cost_p80, r.cost_chance), (10_000.0, 10_000.0, 1.0), "a fee is the same however long the task takes");
@@ -167,7 +167,7 @@ fn risk_lump_sum_cost_does_not_scale_with_duration() {
 fn risk_material_cost_does_not_scale_with_duration() {
     let mut p = plan(&[("A", 10, "")]);
     p.resources.push(Resource { uid: 1, name: "Steel".into(), kind: ResKind::Material, rate: 100.0, ..Default::default() });
-    p.tasks[0].res = vec![Assign { res: 1, units: 50.0, table: 0 }];
+    p.tasks[0].res = vec![Assign { res: 1, units: 50.0, table: 0, ..Default::default() }];
     let r = risk::simulate(&p, &opts(500)).unwrap();
     assert_eq!(r.cost, 5_000.0);
     assert_eq!((r.cost_p50, r.cost_p80), (5_000.0, 5_000.0));
@@ -232,7 +232,7 @@ fn risk_event_percentiles() {
 fn level_preview_two_tasks_one_person() {
     let mut p = plan(&[("A", 5, ""), ("B", 5, "")]);
     p.resources.push(Resource { uid: 1, name: "Fitter".into(), max: 1.0, ..Default::default() });
-    for t in &mut p.tasks { t.res = vec![Assign { res: 1, units: 1.0, table: 0 }] }
+    for t in &mut p.tasks { t.res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }] }
     let pv = level::preview(&p, &[]).unwrap();
     assert_eq!(pv.moved.len(), 1);
     assert_eq!(pv.moved[0].name, "B");

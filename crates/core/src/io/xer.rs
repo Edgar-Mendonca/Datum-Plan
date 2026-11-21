@@ -598,7 +598,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let work = p.resources.iter().any(|r| r.uid == ru && r.kind == ResKind::Work);
         if let Some(t) = idx.get(&tu).map(|&i| &mut p.tasks[i]) {
             let units = if money { cost } else if work { per_hr.unwrap_or(if t.dur > 0 { qty * 60.0 / t.dur as f64 } else { 1.0 }) } else { qty };
-            t.res.push(Assign { res: ru, units, table: 0 });
+            t.res.push(Assign { res: ru, units, table: 0, ..Default::default() });
         }
     }
     extras(&rows, &g, &date, &wbs_uid, &mut p, &mut notes);

@@ -25,6 +25,7 @@ export const [agg, setAgg] = createSignal("");
 const CHOICES: Record<string, string[]> = {
   ctype: ["As Soon As Possible", "As Late As Possible", "Start No Earlier Than", "Start No Later Than", "Finish No Earlier Than", "Finish No Later Than", "Must Start On", "Must Finish On"],
   mode: ["Auto Scheduled", "Manually Scheduled"],
+  contour: ["Flat", "Back Loaded", "Front Loaded", "Double Peak", "Early Peak", "Late Peak", "Bell", "Turtle", "Custom: 10, 40, 100, 40, 10"],
   type: ["Fixed Duration", "Fixed Units", "Fixed Work"],
   acttype: ["Task Dependent", "Resource Dependent", "Level of Effort", "Start Milestone", "Finish Milestone", "WBS Summary"],
   pcttype: ["Duration", "Units", "Physical"],

@@ -287,7 +287,7 @@ mod tests {
     fn cost_moves_with_duration() {
         let mut p = plan(&[(5, "")]);
         p.resources.push(Resource { uid: 1, name: "Fitter".into(), rate: 50.0, max: 1.0, ..Default::default() });
-        p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+        p.tasks[0].res = vec![Assign { res: 1, units: 1.0, table: 0, ..Default::default() }];
         p.tasks[0].fixed_cost = 1000.0;
         let r = simulate(&p, &SimOpts { iterations: 300, ..SimOpts::default() }).unwrap_or_default();
         assert_eq!(r.cost, 1000.0 + 40.0 * 50.0);

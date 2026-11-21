@@ -456,6 +456,23 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
             _ => return Err("Task type is Fixed Duration, Fixed Units or Fixed Work.".into()),
         },
         "effort" => p.tasks[i].effort = yes(v),
+        // The work contour of every person on the task: a name, or "Custom: 10, 40, 100, 40, 10".
+        "contour" => {
+            let (name, parts) = v.split_once(':').unwrap_or((v, ""));
+            let c = if v.trim().is_empty() { Contour::Flat } else {
+                Contour::parse(name.trim()).ok_or("Work contour is Flat, Back Loaded, Front Loaded, Double Peak, Early Peak, Late Peak, Bell, Turtle or Custom: 10, 40, 100 …")?
+            };
+            let curve: Vec<f64> = if c == Contour::Custom {
+                let w: Result<Vec<f64>, _> = parts.split([',', ';', ' ']).map(str::trim).filter(|x| !x.is_empty()).map(|x| x.trim_end_matches('%').parse::<f64>()).collect();
+                let w = w.map_err(|_| "Write a custom contour as Custom: 10, 40, 100, 40, 10 (the effort in equal parts of the task).")?;
+                if w.len() < 2 || w.len() > 100 || w.iter().any(|x| !x.is_finite() || *x < 0.0) || w.iter().sum::<f64>() <= 0.0 {
+                    return Err("A custom contour needs 2 to 100 parts, none negative and not all zero.".into());
+                }
+                w
+            } else { vec![] };
+            if p.tasks[i].res.is_empty() { return Err("Assign people to the task before choosing a work contour.".into()) }
+            for a in &mut p.tasks[i].res { (a.contour, a.curve) = (c, curve.clone()) }
+        }
         "ignore_rc" => p.tasks[i].ignore_rc = yes(v),
         "acttype" => {
             let t = &mut p.tasks[i];
@@ -554,7 +571,11 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         }
         "res" => {
             let before = work_units(p, i);
-            let res = parse::res(v, p)?;
+            let mut res = parse::res(v, p)?;
+            // People already on the task keep their rate table and work contour.
+            for a in &mut res {
+                if let Some(o) = p.tasks[i].res.iter().find(|o| o.res == a.res) { (a.table, a.contour, a.curve) = (o.table, o.contour, o.curve.clone()) }
+            }
             p.tasks[i].res = res;
             let after = work_units(p, i);
             // Fixed work, or effort-driven fixed units: the work stays and the duration changes.

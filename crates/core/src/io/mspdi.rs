@@ -154,7 +154,9 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
     let mut n = 1;
     for t in &p.tasks {
         for a in &t.res {
-            let _ = write!(o, "<Assignment><UID>{n}</UID><TaskUID>{}</TaskUID><ResourceUID>{}</ResourceUID><Units>{}</Units><Work>{}</Work></Assignment>",
+            // A custom curve has no code of its own in the format: it goes out as flat.
+            let wc = Contour::ALL[..8].iter().position(|c| *c == a.contour).unwrap_or(0);
+            let _ = write!(o, "<Assignment><UID>{n}</UID><TaskUID>{}</TaskUID><ResourceUID>{}</ResourceUID><Units>{}</Units><Work>{}</Work><WorkContour>{wc}</WorkContour></Assignment>",
                 t.uid, a.res, a.units, dur((t.dur as f64 * a.units) as i64));
             n += 1;
         }
@@ -325,7 +327,8 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     for a in root.get("Assignments").into_iter().flat_map(|x| x.all("Assignment")) {
         let (tu, ru): (u32, u32) = (a.val("TaskUID").parse().unwrap_or(0), a.val("ResourceUID").parse().unwrap_or(0));
         if let Some(t) = idx.get(&tu).map(|&i| &mut p.tasks[i]) {
-            t.res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0), table: 0 });
+            let contour = a.val("WorkContour").parse::<usize>().ok().filter(|&k| k < 8).map_or(Contour::Flat, |k| Contour::ALL[k]);
+            t.res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0), table: 0, contour, ..Default::default() });
         }
     }
     let uids: std::collections::HashSet<u32> = p.tasks.iter().map(|t| t.uid).collect();

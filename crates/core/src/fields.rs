@@ -47,7 +47,7 @@ pub fn task_fields() -> &'static [FieldDef] {
         for (k, n, kd, e) in [
             ("dur", "Duration", Dur, true), ("start", "Start", Date, true), ("finish", "Finish", Fin, true), ("preds", "Predecessors", Text, true),
             ("succs", "Successors", Text, false), ("ctype", "Constraint Type", Text, true), ("cdate", "Constraint Date", Date, true), ("deadline", "Deadline", Fin, true),
-            ("cal", "Task Calendar", Text, true), ("type", "Type", Text, true), ("effort", "Effort Driven", Flag, true), ("priority", "Priority", Int, true),
+            ("cal", "Task Calendar", Text, true), ("type", "Type", Text, true), ("contour", "Work Contour", Text, true), ("effort", "Effort Driven", Flag, true), ("priority", "Priority", Int, true),
             ("es", "Early Start", Date, false), ("ef", "Early Finish", Fin, false), ("ls", "Late Start", Date, false), ("lf", "Late Finish", Fin, false),
             ("tf", "Total Slack", Dur, false), ("ff", "Free Slack", Dur, false), ("leveldelay", "Leveling Delay", Dur, true), ("acttype", "Activity Type", Text, true),
             ("pcttype", "% Complete Type", Text, true), ("lp", "Longest Path", Flag, false), ("fpath", "Float Path", Int, false), ("elapsed", "Elapsed Duration", Flag, false), ("ignore_rc", "Ignore Resource Calendar", Flag, true), ("ext", "External Predecessors", Text, false),
@@ -399,6 +399,7 @@ impl<'a> Calc<'a> {
             "cal" => txt(t.cal.as_deref().unwrap_or("")),
             "type" => txt(match t.task_type { TaskType::FixedDuration => "Fixed Duration", TaskType::FixedUnits => "Fixed Units", TaskType::FixedWork => "Fixed Work" }),
             "effort" => F::Bool(t.effort),
+            "contour" => txt(&contour_text(t)),
             "priority" => F::Num(p.priority(i) as f64),
             "tf" => F::Num(s.tf[i] as f64),
             "ff" => F::Num(s.ff[i] as f64),
@@ -745,4 +746,16 @@ pub fn pct_text(x: f64, d: u8) -> String {
     let d = d.min(2) as usize;
     let k = 10f64.powi(d as i32);
     format!("{:.*}%", d, (x * k).round() / k + 0.0)
+}
+
+/// A task's work contour as shown: the contour of its people ("Mixed" when they differ, "" with
+/// none); a custom curve lists its parts, "Custom: 10, 40, 100, 40, 10".
+pub fn contour_text(t: &Task) -> String {
+    let Some(a) = t.res.first() else { return String::new() };
+    if t.res.iter().any(|b| b.contour != a.contour || b.curve != a.curve) { return "Mixed".into() }
+    if a.contour == Contour::Custom {
+        let parts: Vec<String> = a.curve.iter().map(|x| crate::parse::num(*x)).collect();
+        return format!("Custom: {}", parts.join(", "));
+    }
+    a.contour.name().into()
 }
