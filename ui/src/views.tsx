@@ -222,7 +222,7 @@ export const UsageView = (p: { by: "task" | "resource" }) => {
 
 // ---------- Resource Sheet ----------
 const RES_COLS: [string, string, number][] = [["name", "Resource Name", 180], ["kind", "Type", 90], ["label", "Material", 70], ["initials", "Initials", 60], ["group", "Group", 100], ["max", "Max", 60],
-  ["rate", "Std. Rate", 90], ["ovt", "Ovt. Rate", 90], ["per_use", "Cost/Use", 80], ["cal", "Base Calendar", 110], ["code", "Code", 70], ["country", "Country", 150], ["email", "Email", 150], ["work", "Work", 80], ["cost", "Cost", 100]];
+  ["rate", "Std. Rate", 90], ["ovt", "Ovt. Rate", 90], ["per_use", "Cost/Use", 80], ["cal", "Base Calendar", 110], ["role", "Role", 60], ["code", "Code", 70], ["country", "Country", 150], ["email", "Email", 150], ["work", "Work", 80], ["cost", "Cost", 100]];
 export const ResourceSheet = () => {
   const [rows] = createResource(() => tick(), () => call<[number, boolean, string[]][]>("resources", { cols: RES_COLS.map(c => c[0]) }));
   const raw = (r: Resource, k: string): string => k === "max" ? `${Math.round(r.max * 100)}%` : k === "kind" ? r.kind : k === "cal" ? r.cal ?? "" : String((r as any)[k] ?? "");
@@ -247,10 +247,12 @@ export const ResourceSheet = () => {
                   key === "work" || key === "cost" ? <span class="ro">{calc()?.[2][j()]}</span>
                     : key === "kind" ? <select value={r.kind} onChange={e => act({ ResSet: { uid: r.uid, field: "kind", value: e.currentTarget.value } })}><option>Work</option><option>Material</option><option>Cost</option></select>
                     : key === "country" ? <span class="country"><Flag country={r.country ?? ""} /><input list="countries" value={countryCode(r.country ?? "") ? countryName(r.country ?? "") : r.country ?? ""} placeholder="Code or name" onChange={e => act({ ResSet: { uid: r.uid, field: key, value: e.currentTarget.value } })} /></span>
+                    : key === "role" ? <select value={r.role ? "Yes" : "No"} title="A role (generic resource) such as Mechanical Engineer, planned before the names are known; Max is how many" onChange={e => act({ ResSet: { uid: r.uid, field: "role", value: e.currentTarget.value } })}><option>No</option><option>Yes</option></select>
                     : key === "cal" ? <select value={r.cal ?? ""} onChange={e => act({ ResJson: { uid: r.uid, field: "cal", value: e.currentTarget.value || null } })}><option value="">(project)</option><For each={P().calendars}>{c => <option>{c.name}</option>}</For></select>
                     : <input value={raw(r, key)} onChange={e => act({ ResSet: { uid: r.uid, field: key, value: e.currentTarget.value } })} />
                 }</td>}</For>
-                <td><button class="btn sm" onClick={() => import("./dialogs").then(d => d.resourceInfo(r.uid))}>Info…</button></td>
+                <td class="nowrap"><button class="btn sm" onClick={() => import("./dialogs").then(d => d.resourceInfo(r.uid))}>Info…</button>
+                  <Show when={r.role}><button class="btn sm" title="Give this role's work to named people" onClick={() => import("./dialogs").then(d => d.assignRole(r.uid))}>Assign people…</button></Show></td>
               </tr>
             );
           }}</For></tbody>

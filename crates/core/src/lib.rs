@@ -21,6 +21,7 @@ pub mod progress;
 pub mod query;
 pub mod report;
 pub mod risk;
+pub mod roles;
 pub mod scenario;
 pub mod sched;
 pub mod sheet;

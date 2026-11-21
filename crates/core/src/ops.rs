@@ -25,6 +25,7 @@ pub fn catalog() -> Vec<OpInfo> {
         o("ExtSet", "Set a task's links to tasks in other plans (the whole list): file, uid, kind and lag in minutes; elapsed: true counts the lag on the clock, weekends included (10080 = +7ed). Update Links fills in their dates.", json!({"ExtSet": {"uid": 2, "links": [{"file": "Engineering.dplan", "uid": 7, "kind": "FS", "lag": 10080, "elapsed": true}]}})),
         o("Unlink", "Remove all links of tasks.", json!({"Unlink": {"uids": [3]}})),
         o("Split", "Pause a task: after this many working minutes of work, a gap of this many.", json!({"Split": {"uid": 2, "after": 480, "gap": 960}})),
+        o("RoleAssign", "Give a role's work (a generic resource such as Mechanical Engineer) on some tasks, or all its tasks with uids [], to a named person.", json!({"RoleAssign": {"role": 5, "person": 2, "uids": []}})),
         o("DayWork", "Hours for one person on one working day of a task (as typed in Task or Resource Usage by day); the person's work becomes the sum of their days.", json!({"DayWork": {"uid": 2, "res": 1, "day": "2026-11-03", "hours": "6"}})),
         o("Level", "Level resources (all tasks with uids [], or some), or clear levelling.", json!({"Level": {"uids": [], "clear": false}})),
         o("Baseline", "Save baseline n (0–10) for all tasks (uids []) or some; clear: true removes it.", json!({"Baseline": {"uids": [], "clear": false, "n": 0}})),

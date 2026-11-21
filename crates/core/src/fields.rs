@@ -94,7 +94,7 @@ pub fn resource_fields() -> &'static [FieldDef] {
             ("id", "ID", Int, false), ("name", "Resource Name", Text, true), ("kind", "Type", Text, true), ("initials", "Initials", Text, true),
             ("group", "Group", Text, true), ("max", "Max Units", Pct, true), ("rate", "Std. Rate", Cost, true), ("ovt", "Ovt. Rate", Cost, true),
             ("per_use", "Cost/Use", Cost, true), ("label", "Material Label", Text, true), ("code", "Code", Text, true), ("email", "Email Address", Text, true), ("country", "Country", Text, true),
-            ("cal", "Base Calendar", Text, true), ("work", "Work", Work, false), ("cost", "Cost", Cost, false), ("over", "Overallocated", Flag, false),
+            ("cal", "Base Calendar", Text, true), ("role", "Role", Flag, true), ("work", "Work", Work, false), ("cost", "Cost", Cost, false), ("over", "Overallocated", Flag, false),
             ("notes", "Notes", Text, true),
         ].into_iter().map(|(k, n, kd, e)| FieldDef { key: k.into(), name: n.into(), kind: kd, group: "Resource", edit: e }).collect();
         for (pre, nm, kd, count) in CUSTOM {
@@ -669,6 +669,7 @@ pub fn res_text(c: &Calc, k: usize, key: &str) -> String {
         "work" => format!("{} hrs", num(c.l.res_work[k] / 60.0)),
         "cost" => money(c.l.res_cost[k], cur),
         "over" => if c.l.over[k] { "Yes".into() } else { "No".into() },
+        "role" => if r.role { "Yes".into() } else { "No".into() },
         "notes" => r.notes.clone(),
         f if f.starts_with("c:") && c.defs.get(&f[2..]).is_some_and(|(_, ex)| ex.is_some()) => {
             let kind = resource_fields().iter().find(|d| d.key == f).map_or(Kind::Text, |d| d.kind);

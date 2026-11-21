@@ -885,3 +885,43 @@ export const levelPreview = async (uids: number[]) => {
     </Dialog>
   ));
 };
+
+// ---------- Assign people to a role ----------
+type RoleOut = { uid: number; name: string; group: string; needed: number; tasks: { uid: number; id: number; name: string; hours: number; start: string | null; finish: string | null }[]; people: { uid: number; name: string; group: string; same_trade: boolean; cover: number; fits: boolean }[] };
+/** A role's tasks and the people who could take them (free hours on the role's days); one click hands the chosen tasks to a person. */
+export const assignRole = (role: number) => openDialog(() => {
+  const [pick, setPick] = createSignal<number[] | null>(null);
+  const [o, setO] = createSignal<RoleOut | null>(null);
+  const [err, setErr] = createSignal("");
+  const load = () => call<RoleOut>("role_candidates", { role, uids: pick() ?? [] }).then(x => { setO(x ?? null); setErr(""); }, e => setErr(String(e)));
+  load();
+  const chosen = () => pick() ?? o()?.tasks.map(t => t.uid) ?? [];
+  const toggle = (uid: number, on: boolean) => { const all = o()?.tasks.map(t => t.uid) ?? []; const cur = chosen(); setPick(on ? [...new Set([...cur, uid])] : cur.filter(x => x !== uid)); if (pick()!.length === all.length) setPick(null); load(); };
+  const give = async (person: number, name: string) => {
+    if (!chosen().length) return toast("Choose at least one task.");
+    await act({ RoleAssign: { role, person, uids: pick() ?? [] } });
+    toast(`${name} takes the role's work on ${chosen().length} task${chosen().length === 1 ? "" : "s"}.`, true);
+    closeDialog();
+  };
+  const h = (x: number) => `${Math.round(x * 10) / 10} h`;
+  return (
+    <Dialog title={`Assign People: ${o()?.name ?? ""}`} wide okText="Close">
+      <div class="dbody">
+        <Show when={err()}><p class="dwarn">{err()}</p></Show>
+        <Show when={o()}>{x => <>
+          <p class="muted">The role's tasks: tick those to hand over ({h(x().needed)} of work). People who can take it all on the role's days come first.</p>
+          <table class="tbl"><thead><tr><th /><th>ID</th><th>Task</th><th class="r">Hours</th><th>Start</th><th>Finish</th></tr></thead><tbody>
+            <For each={x().tasks} fallback={<tr><td colspan="6" class="muted">The role is on no tasks.</td></tr>}>{t => <tr>
+              <td><input type="checkbox" checked={chosen().includes(t.uid)} onChange={e => toggle(t.uid, e.currentTarget.checked)} /></td>
+              <td class="muted">{t.id}</td><td>{t.name}</td><td class="r">{h(t.hours)}</td><td>{t.start ?? ""}</td><td>{t.finish ?? ""}</td></tr>}</For></tbody></table>
+          <h3>People</h3>
+          <table class="tbl"><thead><tr><th>Name</th><th>Group</th><th class="r">Can take</th><th /></tr></thead><tbody>
+            <For each={x().people} fallback={<tr><td colspan="4" class="muted">No people yet: add work resources on the Resource Sheet.</td></tr>}>{c => <tr classList={{ muted: !c.same_trade }}>
+              <td><b>{c.name}</b></td><td>{c.group}{c.same_trade ? "" : " (other trade)"}</td>
+              <td class="r" classList={{ late: !c.fits }} title="Free hours on the role's days, up to what the role needs each day">{h(c.cover)} of {h(x().needed)}</td>
+              <td><button class="btn sm" classList={{ pri: c.fits && c.same_trade }} onClick={() => give(c.uid, c.name)}>Give to {c.name}</button></td></tr>}</For></tbody></table>
+        </>}</Show>
+      </div>
+    </Dialog>
+  );
+});
