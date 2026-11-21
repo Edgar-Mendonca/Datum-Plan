@@ -1,6 +1,7 @@
 //! Schedule risk analysis (Monte Carlo): each run draws every task's duration from its range and
 //! lets each open risk happen with its probability, then reschedules the plan with the full engine.
 use crate::{cal::DAY, load, model::*, sched::schedule};
+use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize)]
@@ -66,6 +67,8 @@ pub struct SimResult {
     pub joint: f64,
     /// Finish day and cost of up to 500 runs, for the scatter chart.
     pub scatter: Vec<(i64, f64)>,
+    /// Weather: working days lost per run on average, over the plan's span (all weather calendars).
+    pub weather_days: f64,
 }
 
 struct Rng(u64);
@@ -143,6 +146,12 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     let (mut crit, mut hits) = (vec![0usize; n], vec![0usize; risks.len()]);
     // Which risks happened in each kept run (for each risk's effect on the finish).
     let mut hit_runs: Vec<Vec<usize>> = Vec::with_capacity(runs);
+    // Weather calendars, and the days they can lose: from the start to well past the planned finish.
+    let weathered = p.calendars.iter().any(|c| c.weather.iter().any(|w| *w > 0.0));
+    let from = crate::cal::date_of(base.start);
+    let base_end = crate::cal::date_of(base.finish);
+    let until = base_end + chrono::Duration::days(((base.finish - base.start) / DAY).clamp(60, 1500) * 2);
+    let mut weather_lost = 0usize;
     let mut failed = 0;
     for _ in 0..runs {
         let (mut add, mut hit) = (vec![0i64; n], vec![]);
@@ -190,7 +199,26 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
             }
             for &j in &held[k] { qq.tasks[j].preds.push(Link { pred: prev, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }) }
         }
+        // Weather: each working day of a weather calendar is lost with its month's chance (as a day off).
+        let mut lost = 0usize;
+        if weathered {
+            let qq = extra.get_or_insert_with(|| q.clone());
+            for c in qq.calendars.iter_mut().filter(|c| c.weather.iter().any(|w| *w > 0.0)) {
+                let (mut d, own) = (from, c.exceptions.len());
+                while d <= until {
+                    let w = c.weather.get(d.month0() as usize).copied().unwrap_or(0.0);
+                    let works = !c.week[d.weekday().num_days_from_monday() as usize].is_empty() && !c.exceptions[..own].iter().any(|e| e.from <= d && d <= e.to);
+                    if works && w > 0.0 && rng.f() * 100.0 < w {
+                        c.exceptions.push(Exception { name: "Weather".into(), from: d, to: d, hours: Default::default() });
+                        if d <= base_end { lost += 1 }
+                    }
+                    d = d.succ_opt().unwrap_or(until);
+                    if d == until { break }
+                }
+            }
+        }
         let Ok(s) = schedule(extra.as_ref().unwrap_or(&q)) else { failed += 1; continue };
+        weather_lost += lost;
         cost += branch_cost;
         // Only runs kept count, so a risk's rate shares the runs the other results use.
         hit.iter().for_each(|&k| hits[k] += 1);
@@ -220,6 +248,10 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     let step = (fin.len() / 500).max(1);
     res.scatter = fin.iter().zip(&costs).step_by(step).map(|(&f, &c)| ((f - 1).div_euclid(DAY), (c * 100.0).round() / 100.0)).collect();
     if failed > 0 { res.notes.push(format!("{failed} runs could not be scheduled and were left out.")) }
+    if weathered {
+        res.weather_days = (weather_lost as f64 / kept * 10.0).round() / 10.0;
+        res.notes.push(format!("Weather: about {} working days lost per run up to the planned finish, on the calendars with weather.", res.weather_days));
+    }
     if leaves.iter().all(|&i| p.tasks[i].dur == 0) { res.notes.push("No unfinished tasks with a duration: nothing to vary.".into()) }
     let ranged = leaves.iter().filter(|&&i| p.tasks[i].dmin > 0 || p.tasks[i].dmax > 0).count();
     res.notes.push(format!("{ranged} of {} tasks have their own optimistic and pessimistic durations; the rest use −{}% to +{}%.", leaves.len(), o.low, o.high));

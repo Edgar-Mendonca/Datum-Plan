@@ -307,6 +307,10 @@ pub struct Calendar {
     pub week: [Hours; 7],
     #[serde(default)]
     pub exceptions: Vec<Exception>,
+    /// Weather (schedule risk only): the share in percent of working days lost in each month,
+    /// January first; empty for none. Each Schedule Risk run loses each working day with its month's chance.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub weather: Vec<f64>,
 }
 
 /// The longest span (duration, lag, delay) a plan may hold: about 80 years of 8-hour days.
@@ -319,11 +323,11 @@ pub const STD_HOURS: [(u16, u16); 2] = [(480, 720), (780, 1020)];
 impl Calendar {
     pub fn standard(name: &str) -> Self {
         let d = STD_HOURS.to_vec();
-        Self { name: name.into(), week: [d.clone(), d.clone(), d.clone(), d.clone(), d, vec![], vec![]], exceptions: vec![] }
+        Self { name: name.into(), week: [d.clone(), d.clone(), d.clone(), d.clone(), d, vec![], vec![]], exceptions: vec![], weather: vec![] }
     }
     pub fn full(name: &str) -> Self {
         let d = vec![(0, 1440)];
-        Self { name: name.into(), week: std::array::from_fn(|_| d.clone()), exceptions: vec![] }
+        Self { name: name.into(), week: std::array::from_fn(|_| d.clone()), exceptions: vec![], weather: vec![] }
     }
 }
 

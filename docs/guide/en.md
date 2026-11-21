@@ -406,6 +406,8 @@ In the **Risk Register**, link each risk to the tasks it would delay with **Link
 
 **Branches.** Some risks bring work of their own: a failed weld test means repair and a re-test. Click **Branch…** on the risk and list those activities (each with its days, an optional least–most range and a cost), the task they follow, and the task they hold up (or every task that follows it). In the runs where the risk happens, Schedule Risk puts the activities in, one after another; in the others they are left out. **Risks in the analysis** then shows how often each risk happened and how many calendar days later its runs finished on average than the runs without it.
 
+**Weather.** Outdoor work loses days to rain, wind or cold, more in some months than others. In **Project › Change Working Time**, give the calendar of that work (an *Outdoor* calendar, say) a **Weather** row: the share of its working days lost in each month, such as 20 % in January and 5 % in July. The plan's dates stay as they are; in each Schedule Risk run every working day on that calendar is lost with its month's chance, so the tasks on it slip by season. The notes under the results give the working days lost per run on average.
+
 ### Delay analysis
 
 **Report › Delay Analysis** measures delay on the data the plan holds. The top lists what the plan has (tasks with a baseline, tasks started, snapshots) and each method with what it needs: a method runs when the data is there. The figures measure what moved; they do not say who is responsible.

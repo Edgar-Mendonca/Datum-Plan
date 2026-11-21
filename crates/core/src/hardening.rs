@@ -140,7 +140,7 @@ fn rescheduling_stays_fast() {
 /// Adds random constraints, task calendars, splits and progress to a random plan.
 fn decorate(r: &mut Rng, p: &mut Project) {
     let ten = vec![(420, 720), (750, 1050)];
-    p.calendars.push(Calendar { name: "Four tens".into(), week: [ten.clone(), ten.clone(), ten.clone(), ten, vec![], vec![], vec![]], exceptions: vec![] });
+    p.calendars.push(Calendar { name: "Four tens".into(), week: [ten.clone(), ten.clone(), ten.clone(), ten, vec![], vec![], vec![]], exceptions: vec![], weather: vec![] });
     p.calendars[0].exceptions.push(Exception { name: "Holiday".into(), from: start() + chrono::Days::new(9), to: start() + chrono::Days::new(10), hours: vec![] });
     let day = |r: &mut Rng| start() + chrono::Days::new(r.below(40));
     for i in 0..p.tasks.len() {

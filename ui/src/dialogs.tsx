@@ -177,6 +177,12 @@ export const calendars = (start?: string) => openDialog(() => {
           <tr class="add"><td colspan="5"><button class="btn sm" onClick={() => { const d = iso(dateDay(new Date())); setDraft("exceptions", v => [...v, { name: "Holiday", from: d, to: d, hours: [] }]); }}>+ Exception</button></td></tr>
         </tbody></table></div>
       </div>
+      <h4>Weather (Schedule Risk)</h4>
+      <p class="muted">The share of working days lost to weather in each month. The plan's dates do not change; in each Schedule Risk run every working day on this calendar is lost with its month's chance.</p>
+      <table class="tbl weather"><thead><tr><For each={["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]}>{m => <th class="r">{m}</th>}</For></tr></thead><tbody><tr>
+        <For each={Array.from({ length: 12 }, (_, k) => k)}>{k => <td><input type="number" min="0" max="100" step="5" style={{ width: "52px" }} placeholder="0" value={draft.weather?.[k] || ""}
+          onChange={e => { const w = [...(draft.weather?.length === 12 ? draft.weather : Array(12).fill(0))]; w[k] = Math.min(100, Math.max(0, +e.currentTarget.value || 0)); setDraft("weather", w.some(x => x > 0) ? w : []); }} />%</td>}</For>
+      </tr></tbody></table>
     </Dialog>
   );
 });

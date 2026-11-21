@@ -113,7 +113,7 @@ fn calendars() {
     // A task on a Mon–Thu 10-hour calendar: 2 days of work (960 min) take 1.6 of its days.
     let four = |p: &mut Project| {
         let ten = vec![(420, 720), (750, 1050)];
-        p.calendars.push(Calendar { name: "Four tens".into(), week: [ten.clone(), ten.clone(), ten.clone(), ten, vec![], vec![], vec![]], exceptions: vec![] });
+        p.calendars.push(Calendar { name: "Four tens".into(), week: [ten.clone(), ten.clone(), ten.clone(), ten, vec![], vec![], vec![]], exceptions: vec![], weather: vec![] });
     };
     check("task calendar", &["5d||", "2d|1|cal=Four tens"], four, &["Nov02 08:00 Nov06 17:00 0", "Nov09 07:00 Nov10 13:30 0"]);
     // Elapsed durations run round the clock, weekends included.

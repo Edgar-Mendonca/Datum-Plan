@@ -11,7 +11,7 @@ export type Kind = "Text" | "Num" | "Int" | "Dur" | "Date" | "Fin" | "Cost" | "F
 export type LinkType = "FS" | "SS" | "FF" | "SF";
 
 export interface Currency { code: string; symbol: string; decimals: number; after: boolean }
-export interface Calendar { name: string; week: [number, number][][]; exceptions: { name: string; from: string; to: string; hours: [number, number][] }[] }
+export interface Calendar { name: string; week: [number, number][][]; exceptions: { name: string; from: string; to: string; hours: [number, number][] }[]; weather?: number[] }
 export interface Rate { from: string | null; std: number; ovt: number; per_use: number }
 export interface Resource {
   uid: number; name: string; kind: "Work" | "Material" | "Cost"; group: string; max: number; rate: number; per_use: number; label: string;
