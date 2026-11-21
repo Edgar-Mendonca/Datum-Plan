@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1 — 2026-11-21
+
+Weather in schedule risk.
+
+- **Weather** row in Change Working Time: the share of a calendar's working days lost in each month (for example 20 % in January, 5 % in July).
+- The plan's dates do not change. In each Schedule Risk run, every working day on that calendar is lost with its month's chance, so tasks on it slip by season; the notes give the working days lost per run on average.
+
 ## 0.10.0 — 2026-11-21
 
 Risk branching.
