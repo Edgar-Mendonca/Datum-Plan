@@ -197,6 +197,13 @@ impl WorkCal {
         self.prev_end(at(d) + DAY)
     }
 
+    /// End of the working day `d`, or of the next working day when `d` is a day off (a finish no
+    /// earlier than a Saturday is a finish on Monday, as a start no earlier than it starts Monday).
+    pub fn end_on_or_after(&self, d: NaiveDate) -> i64 {
+        let next = d.iter_days().take(400).find(|&x| self.day_minutes(x) > 0).unwrap_or(d);
+        self.end_of(next)
+    }
+
     /// Working minutes on day `d`.
     pub fn day_minutes(&self, d: NaiveDate) -> i64 {
         self.day(d).iter().map(|(s, e)| e - s).sum()

@@ -612,6 +612,7 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
             }
         }
         "deadline" => p.tasks[i].deadline = date(v)?,
+        "expfinish" => p.tasks[i].exp_finish = date(v)?,
         "cal" => {
             if !v.is_empty() && !p.calendars.iter().any(|c| c.name == v) {
                 return Err(format!("There is no calendar called \"{v}\". Add it in Project › Change Working Time."));

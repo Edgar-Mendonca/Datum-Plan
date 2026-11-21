@@ -141,10 +141,9 @@ fn bug_percent_lag_from_summary_uses_leaf_durations() {
 /// (Fri 6 Nov 17:00), so the task finishes on Friday, earlier than the constraint allows.
 /// (SNET on a day off rolls forward to Monday, sched.rs:245, so the two are inconsistent.)
 /// 1d task FNET Sat 7 Nov -> expected Mon09 08:00 .. Mon09 17:00.
-/// NOTE: in working-time terms Fri 17:00 and Sat 00:00 are the same instant (no work between them),
-/// so this is a convention/display question (Finish shows 06-Nov under a 07-Nov FNET), not a CPM error.
+/// Settled in 0.9.41: a finish no earlier than a day off finishes at the end of the next working day,
+/// as a start no earlier than a day off starts on the next one.
 #[test]
-#[ignore = "divergence, not a confirmed bug: FNET on a day off rolls back"]
 fn div_fnet_on_a_day_off_finishes_before_the_constraint() {
     let p = build(&["1d||ctype=Finish No Earlier Than; cdate=07-Nov-26"], plain);
     assert_eq!(p.tasks[0].cdate, Some(d(2026, 11, 7)));

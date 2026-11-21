@@ -246,8 +246,10 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                         from = from.max(ext_need(i, c, rem).unwrap_or(from));
                     }
                     rs[i] = c.next_start(from);
-                    c.add(rs[i], rem)
+                    // An expected finish sets the end of the remaining work (never before it resumes).
+                    match t.exp_finish { Some(x) => c.end_on_or_after(x).max(rs[i]), None => c.add(rs[i], rem) }
                 }
+                (None, None) if t.pct < 100 => match t.exp_finish { Some(x) => c.end_on_or_after(x).max(es[i]), None => c.add(es[i], sp) },
                 _ => c.add(es[i], sp),
             };
             continue;
@@ -265,7 +267,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             if let Some(cd) = t.cdate {
                 match t.constraint {
                     C::SNET => v = v.max(at(cd)),
-                    C::FNET => v = v.max(c.sub(c.end_of(cd), sp)),
+                    C::FNET => v = v.max(c.sub(c.end_on_or_after(cd), sp)),
                     // A milestone may sit anywhere on its day (at the end of it after a finish).
                     C::MSO if sp == 0 => v = v.clamp(at(cd), c.end_of(cd).max(at(cd))),
                     C::MSO => v = at(cd),

@@ -310,10 +310,11 @@ pub fn write_report(p: &Project, s: &Sched, today: NaiveDate, version: &str) -> 
             t.act_start.map(|d| format!("{d} 08:00")).unwrap_or_default(), t.act_finish.map(|d| format!("{d} 17:00")).unwrap_or_default(),
             dt(s.es[i]), dt(s.ef[i]), dt(s.ls[i]), dt(s.lf[i]), dt(s.es[i]), dt(s.ef[i]), rs, re,
             work.to_string(), (work * left).to_string(), (work * (1.0 - left)).to_string(), cd, ct, cd2, ct2.into(), "PT_Normal".into(),
-            (if s.lp[i] { "Y" } else { "N" }).into(), if s.fpath[i] > 0 { s.fpath[i].to_string() } else { String::new() }, "N".into(), "N".into(), "N".into()].join("\t")
+            (if s.lp[i] { "Y" } else { "N" }).into(), if s.fpath[i] > 0 { s.fpath[i].to_string() } else { String::new() }, "N".into(), "N".into(), "N".into(),
+            t.exp_finish.filter(|_| !done).map(|d| { let e = s.cals[s.ci[i]].day(d).last().map_or(17 * 60, |x| x.1).min(DAY - 1); format!("{d} {:02}:{:02}", e / 60, e % 60) }).unwrap_or_default()].join("\t")
     }).collect();
     if twice > 0 { notes.push(format!("{twice} activity IDs appear more than once; the repeats get \"-2\" (and so on), since each must be unique in the project.")) }
-    table("TASK", "task_id proj_id wbs_id clndr_id phys_complete_pct complete_pct_type task_type duration_type status_code task_code task_name target_drtn_hr_cnt remain_drtn_hr_cnt total_float_hr_cnt free_float_hr_cnt act_start_date act_end_date early_start_date early_end_date late_start_date late_end_date target_start_date target_end_date restart_date reend_date target_work_qty remain_work_qty act_work_qty cstr_date cstr_type cstr_date2 cstr_type2 priority_type driving_path_flag float_path rev_fdbk_flag lock_plan_flag auto_compute_act_flag",
+    table("TASK", "task_id proj_id wbs_id clndr_id phys_complete_pct complete_pct_type task_type duration_type status_code task_code task_name target_drtn_hr_cnt remain_drtn_hr_cnt total_float_hr_cnt free_float_hr_cnt act_start_date act_end_date early_start_date early_end_date late_start_date late_end_date target_start_date target_end_date restart_date reend_date target_work_qty remain_work_qty act_work_qty cstr_date cstr_type cstr_date2 cstr_type2 priority_type driving_path_flag float_path rev_fdbk_flag lock_plan_flag auto_compute_act_flag expect_end_date",
         act_rows);
     // A link to or from a summary applies to every activity under it; a percent lag becomes hours.
     let under = |i: usize| -> Vec<usize> { if s.summary[i] { p.subtree(i).filter(|&j| !s.summary[j]).collect() } else { vec![i] } };
@@ -541,6 +542,8 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             cal: cal_names.get(&g(t, "clndr_id")).cloned(),
             act_start: date(g(t, "act_start_date")), act_finish: date(g(t, "act_end_date")),
             deadline: if g(t, "cstr_type2") == "CS_MEOB" { date(g(t, "cstr_date2")) } else { None },
+            // An expected finish at 00:00 is the end of the day before.
+            exp_finish: date(g(t, "expect_end_date")).map(|d| if g(t, "expect_end_date").get(11..16) == Some("00:00") { d.pred_opt().unwrap_or(d) } else { d }),
             ..Default::default()
         }
     };

@@ -126,6 +126,10 @@ A **lag** adds waiting time (`4FS+2d`: two days after task 4 finishes); a negati
 
 By default a task starts **As Soon As Possible**. In the details pane (**General** tab) you can give it a **Constraint Type** and **Constraint Date**: Start No Earlier Than, Finish No Later Than, Must Start On and the others. A **Deadline** does not move the task; it marks a date it should meet and shows a warning when it is late.
 
+A constraint date on a day off counts from the next working day: **Start No Earlier Than** or **Finish No Earlier Than** a Saturday starts or finishes on Monday.
+
+**Expected Finish** (General tab, or the column of that name) is for a task under way whose crew tells you when it will really end: it finishes at the end of that day and its remaining work stretches or shrinks to fit, never ending before it resumes after the status date. The total work stays the same. It is ignored before the task starts and once it is finished, and XER files carry it both ways.
+
 > **Tip.** Use constraints sparingly. A plan driven by links shows the real effect of a delay; a plan held by constraints hides it (negative float appears instead).
 
 ### Calendars

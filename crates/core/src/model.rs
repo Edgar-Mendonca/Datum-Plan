@@ -189,6 +189,10 @@ pub struct Task {
     pub cdate: Option<NaiveDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deadline: Option<NaiveDate>,
+    /// Expected Finish: a task under way finishes at the end of this day; its remaining work
+    /// stretches or shrinks to fit (ignored before it starts and once it is finished).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exp_finish: Option<NaiveDate>,
     #[serde(skip_serializing_if = "is_false")]
     pub manual: bool,
     /// Start of a manually scheduled task.
