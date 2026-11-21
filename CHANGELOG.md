@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.0 — 2026-11-21
+
+The time-scaled logic diagram.
+
+- **Logic** (sidebar, beside Network; also View › Time-scaled Logic): the network on the timescale. Each task is a bar at its dates with its ID and name; links run between the bars.
+- Tasks share a line when their dates allow, and a task stays on the line of the task that drives it, so each chain reads left to right. Names are measured, so they never run into each other at any scale.
+- Critical work and its links in red, links that do not drive their successor dashed, the status date in green; a band per top-level phase or one band; Months, Weeks or Days.
+- Double-click a bar to show the task in the Gantt chart. **File › Print** prints it at the paper width.
+
 ## 0.10.1 — 2026-11-21
 
 Weather in schedule risk.
