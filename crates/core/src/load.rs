@@ -66,7 +66,9 @@ fn phased(c: &crate::cal::WorkCal, es: i64, ef: i64, cut: Option<(i64, i64)>, pc
     let (done, dw) = (pct as f64 / 100.0, sp.1 * pct.min(100) as i64 / 100);
     let Some((dd, rs)) = cut else { return spread(c, es, ef, &pauses(c, es, sp.0, sp.1, 0), f) };
     if done > 0.0 {
-        spread(c, es, dd.clamp(es, ef), &pauses(c, es, sp.0, sp.1, 0), |d, x| f(d, x * done));
+        // Started after the status date: the work done takes its own days from the start (as the schedule puts it).
+        let end = if dd > es { dd.clamp(es, ef) } else { c.add(es, dw).min(ef) };
+        spread(c, es, end, &pauses(c, es, sp.0, sp.1, 0), |d, x| f(d, x * done));
     }
     spread(c, rs, ef, &pauses(c, rs, sp.0, sp.1, dw), |d, x| f(d, x * (1.0 - done)));
 }
@@ -127,7 +129,8 @@ fn phased_w(c: &crate::cal::WorkCal, es: i64, ef: i64, (cut, pct): (Option<(i64,
     let Some((dd, rs)) = cut else { return spread_curve(c, es, ef, &pauses(c, es, sp.0, sp.1, 0), w, (0.0, 1.0), f) };
     let t = at_share(w, done);
     if done > 0.0 {
-        spread_curve(c, es, dd.clamp(es, ef), &pauses(c, es, sp.0, sp.1, 0), w, (0.0, t), |d, x| f(d, x * done));
+        let end = if dd > es { dd.clamp(es, ef) } else { c.add(es, dw).min(ef) };
+        spread_curve(c, es, end, &pauses(c, es, sp.0, sp.1, 0), w, (0.0, t), |d, x| f(d, x * done));
     }
     spread_curve(c, rs, ef, &pauses(c, rs, sp.0, sp.1, dw), w, (t, 1.0), |d, x| f(d, x * (1.0 - done)));
 }

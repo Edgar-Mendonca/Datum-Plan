@@ -157,7 +157,7 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
             // A custom curve has no code of its own in the format: it goes out as flat.
             let wc = Contour::ALL[..8].iter().position(|c| *c == a.contour).unwrap_or(0);
             let _ = write!(o, "<Assignment><UID>{n}</UID><TaskUID>{}</TaskUID><ResourceUID>{}</ResourceUID><Units>{}</Units><Work>{}</Work><WorkContour>{wc}</WorkContour></Assignment>",
-                t.uid, a.res, a.units, dur((t.dur as f64 * a.units) as i64));
+                t.uid, a.res, a.units, dur(if a.daily.is_empty() { (t.dur as f64 * a.units) as i64 } else { a.daily.iter().sum::<f64>().round() as i64 }));
             n += 1;
         }
     }

@@ -247,9 +247,9 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                     }
                     rs[i] = c.next_start(from);
                     // An expected finish sets the end of the remaining work (never before it resumes).
-                    match t.exp_finish { Some(x) => c.end_on_or_after(x).max(rs[i]), None => c.add(rs[i], rem) }
+                    match t.exp_finish.filter(|_| d > 0) { Some(x) => c.end_on_or_after(x).max(rs[i]), None => c.add(rs[i], rem) }
                 }
-                (None, None) if t.pct < 100 => match t.exp_finish { Some(x) => c.end_on_or_after(x).max(es[i]), None => c.add(es[i], sp) },
+                (None, None) if t.pct < 100 => match t.exp_finish.filter(|_| d > 0) { Some(x) => c.end_on_or_after(x).max(es[i]), None => c.add(es[i], sp) },
                 _ => c.add(es[i], sp),
             };
             continue;

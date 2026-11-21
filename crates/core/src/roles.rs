@@ -65,12 +65,24 @@ pub fn assign(p: &mut Project, role: u32, person: u32, uids: &[u32]) -> Result<u
     let pk = p.res_idx(person).ok_or("That person no longer exists.")?;
     let x = &p.resources[pk];
     if x.kind != ResKind::Work || x.role { return Err(format!("{} cannot take a role's work: choose a person or crew (a work resource that is not a role).", x.name)) }
+    let picked = |t: &Task| (uids.is_empty() || uids.contains(&t.uid)) && t.res.iter().any(|a| a.res == role);
+    // Where the person is on the task already and either has hours typed per day, the two are
+    // added day by day (each day as the plan has it now), so the work stays the same.
+    let typed = p.tasks.iter().any(|t| picked(t) && t.res.iter().any(|a| a.res == person) && t.res.iter().any(|a| (a.res == role || a.res == person) && !a.daily.is_empty()));
+    let now = if typed { let s = crate::sched::schedule(p)?; let l = crate::load::compute(p, &s); Some((s, l)) } else { None };
     let mut n = 0;
-    for t in p.tasks.iter_mut().filter(|t| (uids.is_empty() || uids.contains(&t.uid)) && t.res.iter().any(|a| a.res == role)) {
+    for i in 0..p.tasks.len() {
+        if !picked(&p.tasks[i]) { continue }
+        let merged = now.as_ref().filter(|_| p.tasks[i].res.iter().any(|a| a.res == person) && p.tasks[i].res.iter().any(|a| (a.res == role || a.res == person) && !a.daily.is_empty())).map(|(s, l)| {
+            let (c, t) = (&s.cals[s.ci[i]], &p.tasks[i]);
+            let days = crate::load::working_days(c, s.es[i], s.ef[i], &crate::load::pauses(c, s.es[i], &t.splits, t.dur, 0));
+            days.iter().map(|&d| l.assign_daily.get(&(rk, i, d)).copied().unwrap_or(0.0) + l.assign_daily.get(&(pk, i, d)).copied().unwrap_or(0.0)).collect::<Vec<f64>>()
+        });
+        let t = &mut p.tasks[i];
         let at = t.res.iter().position(|a| a.res == role).unwrap_or(0);
         let a = t.res.remove(at);
         match t.res.iter_mut().find(|b| b.res == person) {
-            Some(b) => { b.units += a.units; if !a.daily.is_empty() || !b.daily.is_empty() { b.daily.clear() } }
+            Some(b) => { b.units += a.units; if let Some(m) = merged { b.daily = m } }
             None => t.res.insert(at, Assign { res: person, ..a }),
         }
         n += 1;

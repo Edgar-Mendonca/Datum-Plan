@@ -448,6 +448,8 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
                 return Err("Assign a work resource before entering work.".into());
             }
             let t = &mut p.tasks[i];
+            // Work typed for the task replaces hours typed per day (they would otherwise keep setting it).
+            for a in &mut t.res { a.daily.clear() }
             if t.task_type == TaskType::FixedDuration && t.dur > 0 {
                 let f = m as f64 / (t.dur as f64 * units);
                 for a in &mut t.res { a.units *= f; }
@@ -617,8 +619,12 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         "locfrom" | "locto" => {
             let v = v.trim();
             let x = if v.is_empty() { None } else {
-                let n = match v.split_once('+') { Some((a, b)) if !a.is_empty() && !b.is_empty() && b.chars().all(|c| c.is_ascii_digit()) => format!("{a}.{b}"), _ => v.replace(',', "") };
-                Some(n.parse::<f64>().ok().filter(|x| x.is_finite() && x.abs() < 1e9).ok_or("Type a chainage as a number, such as 12.5 or 12+500.")?)
+                // Station form: kilometres + metres (12+500 is 12.5, 12+50 is 12.05).
+                let n = match v.split_once('+') {
+                    Some((a, b)) if !a.is_empty() && !b.is_empty() && b.chars().all(|c| c.is_ascii_digit() || c == '.') => a.trim().parse::<f64>().ok().zip(b.parse::<f64>().ok()).map(|(k, m)| k + m.copysign(if a.trim().starts_with('-') { -1.0 } else { 1.0 }) / 1000.0),
+                    _ => v.replace(',', "").parse::<f64>().ok(),
+                };
+                Some(n.filter(|x| x.is_finite() && x.abs() < 1e9).ok_or("Type a chainage as a number, such as 12.5 or 12+500.")?)
             };
             if field == "locfrom" { p.tasks[i].loc_from = x } else { p.tasks[i].loc_to = x }
         }

@@ -148,7 +148,8 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     let mut hit_runs: Vec<Vec<usize>> = Vec::with_capacity(runs);
     // Weather calendars, and the days they can lose: from the start to well past the planned finish.
     let weathered = p.calendars.iter().any(|c| c.weather.iter().any(|w| *w > 0.0));
-    let from = crate::cal::date_of(base.start);
+    // Weather can only take days still ahead: from the day after the status date (or the start).
+    let from = crate::cal::date_of(base.start).max(p.status.and_then(|d| d.succ_opt()).unwrap_or(crate::cal::date_of(base.start)));
     let base_end = crate::cal::date_of(base.finish);
     let until = base_end + chrono::Duration::days(((base.finish - base.start) / DAY).clamp(60, 1500) * 2);
     let mut weather_lost = 0usize;
@@ -204,10 +205,11 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
         if weathered {
             let qq = extra.get_or_insert_with(|| q.clone());
             for c in qq.calendars.iter_mut().filter(|c| c.weather.iter().any(|w| *w > 0.0)) {
-                let (mut d, own) = (from, c.exceptions.len());
+                // Working days as the calendar has them (its exceptions, short days), before any weather.
+                let (mut d, wc) = (from, crate::cal::WorkCal::new(c));
                 while d <= until {
                     let w = c.weather.get(d.month0() as usize).copied().unwrap_or(0.0);
-                    let works = !c.week[d.weekday().num_days_from_monday() as usize].is_empty() && !c.exceptions[..own].iter().any(|e| e.from <= d && d <= e.to);
+                    let works = wc.day_minutes(d) > 0;
                     if works && w > 0.0 && rng.f() * 100.0 < w {
                         c.exceptions.push(Exception { name: "Weather".into(), from: d, to: d, hours: Default::default() });
                         if d <= base_end { lost += 1 }

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.11.1 — 2026-11-21
+
+The time-location view, and an audit of the calculations added since 0.9.37.
+
+- **Location** (sidebar; also View › Time-Location): chainage across, time down. Each task with a **Chainage From** / **Chainage To** is a line from where it starts at its start to where it ends at its finish: a crew moving along a pipeline or road is a sloped line, work in one place a vertical bar. Critical work in red, the status date, your unit, Months/Weeks/Days, double-click to the Gantt chart, and it prints.
+- Chainages read as numbers or in station form: 12+500 is 12.5 and 12+50 is 12.05 (kilometres + metres).
+
+**Audit.** Every calculation added since 0.9.37 was checked against hand figures (16 new tests). What was wrong, and is now right:
+- A task that started after the status date put all its work done on its first day (it showed a person as overloaded); the work done now takes its own days.
+- Typing Work for a task with hours typed per day was ignored; it now replaces them.
+- Giving a role's work to someone already on the task, where either had typed hours, added units and lost the typed days; the days are now added together, so the work stays the same.
+- Project XML wrote the planned work instead of the typed hours.
+- Weather: days made working by an exception (a worked Saturday) and short days were never lost, and days before the status date were counted as lost.
+- An Expected Finish stretched a milestone; milestones now ignore it.
+- 12+50 was read as 12.5.
+
 ## 0.11.0 — 2026-11-21
 
 The time-scaled logic diagram.
