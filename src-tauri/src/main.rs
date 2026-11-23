@@ -840,9 +840,9 @@ fn linear_view(st: State<St>) -> datum_core::linear::Linear {
 
 /// The time-scaled logic diagram of the plan shown.
 #[tauri::command]
-fn logic_diagram(st: State<St>, by_phase: bool, gap: i64, char_min: i64) -> datum_core::tsld::Tsld {
+fn logic_diagram(st: State<St>, phase: bool, gap: i64, per: i64) -> datum_core::tsld::Tsld {
     let a = st.lock();
-    datum_core::tsld::diagram(&calc(&a), by_phase, gap.clamp(0, 10 * 1440), char_min.clamp(0, 10 * 1440))
+    datum_core::tsld::diagram(&calc(&a), phase, gap.clamp(0, 10 * 1440), per.clamp(0, 10 * 1440))
 }
 
 /// A role's tasks and the people who could take them (Resource Sheet › Assign people).
@@ -2098,5 +2098,34 @@ mod tests {
         for bad in ["https://github.com/Edgar-Mendonca/Datum-PlanX", "https://evil.com/Edgar-Mendonca/Datum-Plan", "https://github.com/Edgar-Mendonca/Datum-Plan/\"&calc.exe", "https://github.com/Edgar-Mendonca/Datum-Plan/ x", "file:///C:/Windows", "javascript:alert(1)"] {
             assert!(!super::allowed_url(bad), "{bad}");
         }
+    }
+
+    /// The window must send each command's arguments under their names in camelCase (as_new as
+    /// asNew): sent as written in Rust (by_phase), the call fails with "invalid args".
+    #[test]
+    fn the_window_names_command_arguments_in_camel_case() {
+        let src = include_str!("main.rs");
+        let mut snake = vec![];
+        let mut lines = src.lines();
+        while let Some(l) = lines.next() {
+            if !l.trim_start().starts_with("#[tauri::command") { continue }
+            let Some(sig) = lines.next() else { break };
+            let Some(args) = sig.split_once('(').map(|x| x.1) else { continue };
+            for part in args.split(", ") {
+                let Some((n, _)) = part.split_once(": ") else { continue };
+                let n = n.trim();
+                if n.contains('_') && !n.starts_with('_') && n.chars().all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit()) { snake.push(n.to_string()) }
+            }
+        }
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/src");
+        let mut bad = vec![];
+        for e in std::fs::read_dir(&dir).expect("ui/src").flatten() {
+            let text = std::fs::read_to_string(e.path()).unwrap_or_default();
+            for n in &snake {
+                for pre in ["{ ", ", ", "{"] { if text.contains(&format!("{pre}{n}: ")) { bad.push(format!("{}: {n}", e.path().display())) } }
+            }
+        }
+        assert!(!snake.is_empty(), "some commands do take two-word arguments");
+        assert!(bad.is_empty(), "the window sends these command arguments with underscores: {bad:#?}");
     }
 }

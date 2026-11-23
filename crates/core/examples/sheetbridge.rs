@@ -32,7 +32,7 @@ fn answer(doc: &mut Doc, c: &str, a: &Value) -> Result<Value, String> {
         "workload" => json!(workload::workload(&Calc::new(&doc.p, FMT, today), a["unit"].as_str().unwrap_or("week"))),
         "role_candidates" => json!(roles::candidates(&Calc::new(&doc.p, FMT, today), a["role"].as_u64().unwrap_or(0) as u32, &a["uids"].as_array().map(|v| v.iter().filter_map(|x| x.as_u64().map(|x| x as u32)).collect::<Vec<_>>()).unwrap_or_default())?),
         "linear_view" => json!(linear::linear(&Calc::new(&doc.p, FMT, today))),
-        "logic_diagram" => json!(tsld::diagram(&Calc::new(&doc.p, FMT, today), a["by_phase"].as_bool().unwrap_or(true), a["gap"].as_i64().unwrap_or(0), a["char_min"].as_i64().unwrap_or(0))),
+        "logic_diagram" => json!(tsld::diagram(&Calc::new(&doc.p, FMT, today), a["phase"].as_bool().unwrap_or(true), a["gap"].as_i64().unwrap_or(0), a["per"].as_i64().unwrap_or(0))),
         "usage" => json!(report::usage(&Calc::new(&doc.p, FMT, today), a["by"].as_str().unwrap_or("task"), a["what"].as_str().unwrap_or("work"), a["unit"].as_str().unwrap_or("week"))),
         "sheet_view" => json!(sheet::sheet_view(&Calc::new(&doc.p, FMT, today), a["k"].as_u64().unwrap_or(0) as usize)),
         "sheet_check" => json!(sheet::check_input(&Calc::new(&doc.p, FMT, today), a["k"].as_u64().unwrap_or(0) as usize, a["cell"].as_str().unwrap_or(""), a["input"].as_str().unwrap_or(""))),

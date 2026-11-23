@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.2 — 2026-11-23
+
+- **Fixed: the Logic view (time-scaled logic diagram) did not open** in the app ("invalid args"). The window sent two of its settings under names the app did not accept. A new test checks every command's settings so this cannot happen again. (Issue #3)
+
 ## 0.11.1 — 2026-11-21
 
 The time-location view, and an audit of the calculations added since 0.9.37.

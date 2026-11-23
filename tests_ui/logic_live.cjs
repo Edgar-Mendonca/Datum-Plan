@@ -44,7 +44,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const T = async (name, fn) => { try { await fn(); } catch (e) { check(name, false, `threw: ${e.message ?? e}`); } };
   await p.click('.side button[title="Logic"]'); await W(1200);
   await T("the diagram", async () => {
-    const d = await call("logic_diagram", { by_phase: true, gap: Math.round(1440 * 8 / 12), char_min: Math.round(1440 * 6.2 / 12) });
+    const d = await call("logic_diagram", { phase: true, gap: Math.round(1440 * 8 / 12), per: Math.round(1440 * 6.2 / 12) });
     check("a bar per task", (await p.$$(".tsbar")).length === d.bars.length && d.bars.length > 0, `${d.bars.length}`);
     check("a line per link", (await p.$$(".tslink")).length === d.links.length, `${d.links.length}`);
     check("a band per phase", (await p.$$(".tsband")).length === d.bands.length && d.bands.length > 1, `${d.bands.length}`);

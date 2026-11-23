@@ -17,7 +17,7 @@ const [zoom, setZoom] = kept("tsld-zoom", "12");
 export const LogicView = () => {
   const ppd = () => +zoom();
   // Names are measured on the timescale (about 6 px a character), so a lane never runs one into the next.
-  const [data] = createResource(() => [tick(), out()?.tab, phase(), zoom()] as const, () => call<Tsld>("logic_diagram", { by_phase: phase() === "yes", gap: Math.round(1440 * 8 / ppd()), char_min: Math.round(1440 * 6.2 / ppd()) }));
+  const [data] = createResource(() => [tick(), out()?.tab, phase(), zoom()] as const, () => call<Tsld>("logic_diagram", { phase: phase() === "yes", gap: Math.round(1440 * 8 / ppd()), per: Math.round(1440 * 6.2 / ppd()) }));
   const geo = createMemo(() => {
     const d = data(); if (!d) return null;
     const a = Math.floor(d.start / 1440) - 3, b = Math.ceil(d.finish / 1440) + 7;
