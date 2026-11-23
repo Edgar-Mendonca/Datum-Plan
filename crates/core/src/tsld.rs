@@ -39,12 +39,11 @@ pub fn diagram(c: &Calc, by_phase: bool, gap: i64, char_min: i64) -> Tsld {
     let n = p.tasks.len();
     let leaf = |i: usize| !s.summary[i] && !s.off[i];
     // The phase of each task: its top-level summary (or "" for top-level tasks).
-    let mut phase = vec![usize::MAX; n];
     let mut cur = usize::MAX;
-    for i in 0..n {
-        if p.tasks[i].level == 0 { cur = if s.summary[i] { i } else { usize::MAX } }
-        phase[i] = if p.tasks[i].level == 0 && !s.summary[i] { usize::MAX } else { cur };
-    }
+    let phase: Vec<usize> = p.tasks.iter().enumerate().map(|(i, t)| {
+        if t.level == 0 { cur = if s.summary[i] { i } else { usize::MAX } }
+        if t.level == 0 && !s.summary[i] { usize::MAX } else { cur }
+    }).collect();
     let mut groups: Vec<(String, Vec<usize>)> = vec![];
     for i in (0..n).filter(|&i| leaf(i)) {
         let key = if by_phase && phase[i] != usize::MAX { p.tasks[phase[i]].name.clone() } else { String::new() };
