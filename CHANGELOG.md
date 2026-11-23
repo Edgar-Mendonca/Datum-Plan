@@ -3,6 +3,7 @@
 ## 0.11.2 — 2026-11-23
 
 - **Fixed: the Logic view (time-scaled logic diagram) did not open** in the app ("invalid args"). The window sent two of its settings under names the app did not accept. A new test checks every command's settings so this cannot happen again. (Issue #3)
+- A library the app uses to read web addresses is updated (url 2.5.9) for a newly published security advisory.
 
 ## 0.11.1 — 2026-11-21
 
