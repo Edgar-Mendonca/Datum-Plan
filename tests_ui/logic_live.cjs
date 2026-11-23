@@ -48,6 +48,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("a bar per task", (await p.$$(".tsbar")).length === d.bars.length && d.bars.length > 0, `${d.bars.length}`);
     check("a line per link", (await p.$$(".tslink")).length === d.links.length, `${d.links.length}`);
     check("a band per phase", (await p.$$(".tsband")).length === d.bands.length && d.bands.length > 1, `${d.bands.length}`);
+    check("the legend is above the diagram, as in the Network Diagram (issue #5)", await p.evaluate(() => { const l = document.querySelector(".tslegend"), w = document.querySelector(".tsldwrap"); return !!l && !!w && l.getBoundingClientRect().bottom <= w.getBoundingClientRect().top; }));
     check("critical work in red", (await p.$$(".tsrect.crit, .tsms.crit")).length === d.bars.filter(b => b.critical).length);
     check("fewer lanes than tasks", d.lanes < d.bars.length, `${d.lanes} lanes for ${d.bars.length} tasks`);
   });

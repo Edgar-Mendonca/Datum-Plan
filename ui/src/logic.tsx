@@ -38,7 +38,8 @@ export const LogicView = () => {
       <Seg value={phase()} set={setPhase} options={[["yes", "Bands by phase"], ["no", "One band"]]} />
       <Seg value={zoom()} set={setZoom} options={[["4", "Months"], ["12", "Weeks"], ["30", "Days"]]} />
     </>}>
-      <Show when={geo()} keyed fallback={<p class="muted">Working out the diagram…</p>}>{g => { const d = data()!; return (
+      <Show when={geo()} keyed fallback={<p class="muted">Working out the diagram…</p>}>{g => { const d = data()!; return (<>
+        <div class="netleg tslegend"><b>Legend</b><span><span class="tskey crit" /> Critical <span class="tskey" /> Other work <span class="tskey link" /> Driving link <span class="tskey link loose" /> Other link</span><span class="muted">Double-click a bar to show it in the Gantt chart.</span></div>
         <div class="tsldwrap">
           <svg class="tsld" width={g.w} height={g.h} viewBox={`0 0 ${g.w} ${g.h}`}>
             <defs><marker id="tsa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" class="tsarrow" /></marker>
@@ -61,8 +62,7 @@ export const LogicView = () => {
                 <text x={x1} y={yy - 8} class="tsname" classList={{ crit: b.critical }}>{b.code ? `${b.code} ` : ""}{b.name}</text>
               </g>); }}</For>
           </svg>
-          <p class="muted tslegend"><span class="tskey crit" /> critical <span class="tskey" /> other work <span class="tskey link" /> driving link <span class="tskey link loose" /> other link — double-click a bar to show it in the Gantt chart.</p>
-        </div>); }}</Show>
+        </div></>); }}</Show>
     </Page>
   );
 };

@@ -1569,7 +1569,7 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 .tsms { fill: var(--text); } .tsms.crit { fill: var(--crit); }
 .tsname { fill: var(--text); } .tsname.crit { fill: var(--crit); }
 .tsbar { cursor: default; } .tsbar:hover .tsname { font-weight: 600; }
-.tslegend { margin: 6px 2px; } .tskey { display: inline-block; width: 18px; height: 6px; background: var(--bar); margin: 0 4px 1px 10px; border-radius: 2px; }
+.tslegend .tskey:first-child { margin-left: 0; } .tskey { display: inline-block; width: 18px; height: 6px; background: var(--bar); margin: 0 4px 1px 10px; border-radius: 2px; }
 .tskey.crit { background: var(--crit); } .tskey.link { height: 0; border-top: 1px solid var(--text2); background: none; } .tskey.link.loose { border-top-style: dashed; }
 /* The logic diagram prints at the paper width (its drawing scales with its viewBox). */
 .pflowbody .tsldwrap { overflow: visible; border: 0; } .pflowbody .tsld { width: 100%; height: auto; }

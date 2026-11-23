@@ -52,6 +52,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     check("four tasks with a chainage", d.items.length === 4 && d.lo === 0 && d.hi === 12.5, JSON.stringify([d.items.length, d.lo, d.hi]));
     check("three moving lines and one bar in one place", (await p.$$("line.linline")).length === 3 && (await p.$$(".linear rect.tsrect")).length === 1);
     check("the rest are counted as not shown", (await p.textContent(".tslegend")).includes(`${d.missing} tasks without a chainage`) && d.missing > 0);
+    check("the legend is above the diagram", await p.evaluate(() => { const l = document.querySelector(".tslegend"), w = document.querySelector(".tsldwrap"); return !!l && !!w && l.getBoundingClientRect().bottom <= w.getBoundingClientRect().top; }));
     check("the chainage unit shows", (await p.textContent("svg.linear")).includes("Chainage (km)"));
   });
   await T("scale", async () => {

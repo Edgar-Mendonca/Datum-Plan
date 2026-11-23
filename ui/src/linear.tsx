@@ -39,7 +39,8 @@ export const LinearView = () => {
       <label class="muted">Unit <input value={unit()} style={{ width: "48px" }} onChange={e => setUnit(e.currentTarget.value.trim() || "km")} /></label>
       <Seg value={scale()} set={setScale} options={[["3", "Months"], ["8", "Weeks"], ["24", "Days"]]} />
     </>}>
-      <Show when={data()}>{d => <Show when={geo()} keyed fallback={<p class="empty">No task has a chainage yet. Add the <b>Chainage From</b> and <b>Chainage To</b> columns (right-click a column heading › Insert Column) and type where each task starts and ends along the route, such as 12.5 or 12+500.</p>}>{g => (
+      <Show when={data()}>{d => <Show when={geo()} keyed fallback={<p class="empty">No task has a chainage yet. Add the <b>Chainage From</b> and <b>Chainage To</b> columns (right-click a column heading › Insert Column) and type where each task starts and ends along the route, such as 12.5 or 12+500.</p>}>{g => (<>
+        <div class="netleg tslegend"><b>Legend</b><span><span class="tskey crit" /> Critical <span class="tskey" /> Other work</span><span class="muted">A sloped line moves along the route, a bar stays in one place.{d().missing ? ` ${d().missing} tasks without a chainage are not shown.` : ""} Double-click to show a task in the Gantt chart.</span></div>
         <div class="tsldwrap">
           <svg class="linear" width={W} height={g.h} viewBox={`0 0 ${W} ${g.h}`}>
             <For each={g.cticks}>{c => <g><line x1={g.x(c)} x2={g.x(c)} y1={TOP - 4} y2={g.h} class="tstick" /><text x={g.x(c)} y={TOP - 10} class="tsticklabel" text-anchor="middle">{c}</text></g>}</For>
@@ -53,8 +54,7 @@ export const LinearView = () => {
                 <text x={Math.min(x1, x2) + (place ? 8 : 4)} y={(y1 + y2) / 2} class="tsname" classList={{ crit: it.critical }}>{it.code ? `${it.code} ` : ""}{it.name}</text>
               </g>); }}</For>
           </svg>
-          <p class="muted tslegend"><span class="tskey crit" /> critical <span class="tskey" /> other work — a sloped line moves along the route, a bar stays in one place.{d().missing ? ` ${d().missing} tasks without a chainage are not shown.` : ""} Double-click to show a task in the Gantt chart.</p>
-        </div>)}</Show>}</Show>
+        </div></>)}</Show>}</Show>
     </Page>
   );
 };

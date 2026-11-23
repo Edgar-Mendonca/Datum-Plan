@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.3 — 2026-11-23
+
+- **The Logic and Location views show their legend at the top**, in a box like the Network Diagram's, instead of under the diagram where it scrolled out of sight. (Issue #5)
+
 ## 0.11.2 — 2026-11-23
 
 - **Fixed: the Logic view (time-scaled logic diagram) did not open** in the app ("invalid args"). The window sent two of its settings under names the app did not accept. A new test checks every command's settings so this cannot happen again. (Issue #3)
