@@ -696,7 +696,7 @@ export const glossary = () => openDialog(() => {
 export const shortcuts = () => openDialog(() => (
   <Dialog title="Keyboard Shortcuts">
     <table class="keys"><tbody><For each={[["Insert", "New task"], ["Delete", "Delete tasks"], ["Alt+Shift+→ / ←", "Indent / outdent"], ["Ctrl+F2", "Link selected tasks"], ["Shift+F2", "Task information"], ["F2 / Enter", "Edit cell"],
-      ["Ctrl+C / X / V", "Copy, cut, paste tasks"], ["Ctrl+Z / Y", "Undo, redo"], ["Ctrl+S", "Save"], ["Ctrl+O", "Open"], ["Ctrl+P", "Print"], ["Ctrl+K or Alt+Q", "Tell me what you want to do"],
+      ["Ctrl+C / X / V", "Copy, cut, paste tasks"], ["Ctrl+Z / Y", "Undo, redo"], ["Ctrl+S", "Save"], ["Ctrl+O", "Open"], ["Ctrl+P", "Print"], ["Ctrl+K or Alt+Q", "Tell me what you want to do"], ["Ctrl+F1", "Collapse or pin the ribbon (more room for the view)"],
       ["Ctrl+wheel", "Zoom the timescale"], ["Ctrl+A", "Select all"], ["Esc", "Cancel"]]}>{([k, v]) => <tr><td>{k}</td><td>{v}</td></tr>}</For></tbody></table>
   </Dialog>
 ));

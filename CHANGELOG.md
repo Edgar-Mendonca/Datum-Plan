@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.4 — 2026-11-26
+
+Room to see large plans on a laptop screen, and the S-curve page scrolls again.
+
+- **Fixed: the S-Curves page did not scroll**, so the charts and the data table below the first screen could not be reached. (Issue #8)
+- **Collapse the ribbon** to its tab names for more room in every view: Ctrl+F1, a double-click on a tab, or **⌃** at the end of the tabs. A tab you click then shows its ribbon over the view until you click a command or elsewhere; the same keys pin it again, and the choice is remembered. (Issue #7)
+- **Logic view for large plans:** **Fit** shows the whole plan across the window, **−**/**+** and Ctrl + mouse wheel zoom about the pointer, dragging the background moves the view, and the date ruler stays at the top as you scroll down. Zoomed far out, names are left off so the plan's shape fits (point at a bar for its name), and month labels thin out so they never overlap. (Issue #7)
+- A library the app's window uses for cookies is updated (cookie 0.18.3) for a newly published security advisory.
+
 ## 0.11.3 — 2026-11-23
 
 - **The Logic and Location views show their legend at the top**, in a box like the Network Diagram's, instead of under the diagram where it scrolled out of sight. (Issue #5)

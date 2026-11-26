@@ -469,6 +469,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => c === "earned_schedule" ? { es: 8, at: 10, pd: 40, spi_t: 0.8, sv_t: -2, ieac: 50, planned_finish: 30010000, forecast_finish: 30024400 } : inv(c, a); });
   await p.click('.side button[title="S-Curves"]'); await p.waitForTimeout(400);
   check("S-Curves show earned schedule: SPI(t) and the finish at this pace", (await p.textContent(".page .kpis")).includes("SPI(t)") && (await p.textContent(".page .kpis")).includes("0.80"));
+  // Issue #8: the S-curve page scrolls (its data table once borrowed the workload grid's wrapper, which stopped the page scrolling).
+  { const s = await p.evaluate(() => { const e = document.querySelector("section.page"); e.scrollTop = 300; return [getComputedStyle(e).overflowY, e.scrollTop, e.scrollHeight - e.clientHeight]; });
+    check("the S-curve page scrolls to its charts and data table (issue #8)", s[0] === "auto" && s[2] > 0 && s[1] > 0, JSON.stringify(s));
+    await p.evaluate(() => { document.querySelector("section.page").scrollTop = 0; }); }
   // 0.8.12: S-curves as in a report: period bars and cumulative curves on two axes, data date under the title, Format to change them.
   { const hd = await p.$eval(".chartbox header.center", h => h.textContent).catch(() => "");
     check("an S-curve shows bars per period and cumulative curves, the data date and progress under a centred title", /Data date: .+Planned .+Actual/.test(hd), hd);
@@ -1891,6 +1895,22 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("deleting a dashboard goes back to the project dashboard", (await ep.textContent(".dashtabs .on")) === "Project" && !(await ep.textContent(".dashtabs")).includes("Board two") && !!(await ep.$(".kpis")));
   check("no errors on the empty plan's dashboards", qerr.length === 0, qerr.join(" | "));
   await ep.close();
+
+  // Issue #7: the ribbon collapses to its tab names for more room (Ctrl+F1, double-click a tab or ⌃), a tab then shows it over the view.
+  { const h0 = await p.$eval("main.work", e => e.clientHeight);
+    await p.keyboard.press("Control+F1"); await p.waitForTimeout(200);
+    const h1 = await p.$eval("main.work", e => e.clientHeight);
+    check("Ctrl+F1 collapses the ribbon and the view gets its room (issue #7)", !(await p.isVisible(".ribbon")) && h1 > h0 + 60, `${h0} ${h1}`);
+    await p.click(".tabs button:has-text('Schedule')"); await p.waitForTimeout(150);
+    const peek = await p.isVisible(".ribbon");
+    await p.mouse.click(700, 600); await p.waitForTimeout(150);
+    check("a tab shows the collapsed ribbon over the view until you click elsewhere", peek && !(await p.isVisible(".ribbon")) && (await p.$eval("main.work", e => e.clientHeight)) === h1);
+    await p.dblclick(".tabs button:has-text('Home')"); await p.waitForTimeout(200);
+    check("double-clicking a tab pins the ribbon again, and it is kept", (await p.isVisible(".ribbon")) && (await p.$eval("main.work", e => e.clientHeight)) === h0 && (await p.evaluate(() => localStorage.getItem("ribbon-min"))) === "false");
+    await p.click(".tabs .ribmin"); await p.waitForTimeout(150);
+    const m = !(await p.isVisible(".ribbon"));
+    await p.click(".tabs .ribmin"); await p.waitForTimeout(150);
+    check("the ⌃ button at the end of the tabs collapses and pins it", m && (await p.isVisible(".ribbon"))); }
 
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {

@@ -271,7 +271,7 @@ export const SCurves = () => {
         <For each={each() ?? []}>{(c, i) => <Show when={c}><SCurveChart c={c!} unit={unit()} size="short" scope={phases()?.rows[i()]?.uid} /></Show>}</For>
       </div>
       <Show when={main()}>{c => (
-        <div class="panel"><h2>Data</h2><div class="wlwrap"><table class="tbl"><thead><tr><th>Period end</th><th class="r">Planned</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Variance</th></tr></thead>
+        <div class="panel"><h2>Data</h2><div class="dscroll"><table class="tbl"><thead><tr><th>Period end</th><th class="r">Planned</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Variance</th></tr></thead>
           <tbody><For each={c().days.slice(1)}>{(d, i) => { const k = i() + 1, a = c().actual[k]; return <tr classList={{ hl: k === c().status_at }}><td>{fmtDay(d, "long")}{k === c().status_at ? " (status date)" : ""}</td><td class="r">{pct(c().planned[k])}</td><td class="r">{a === null ? "" : pct(a)}</td><td class="r">{pct(c().forecast[k])}</td><td class="r" classList={{ late: a !== null && a < c().planned[k] - 0.05 }}>{a === null ? "" : pct(a - c().planned[k])}</td></tr>; }}</For></tbody></table></div></div>
       )}</Show>
     </section>

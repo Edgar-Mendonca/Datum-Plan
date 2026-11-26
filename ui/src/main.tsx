@@ -16,7 +16,7 @@ import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, d
 import { ChartFormat } from "./charts";
 import { C } from "./cmds";
 import { sheetZoom, setSheetZoom } from "./sheetlayout";
-import { TitleBar, Ribbon, palette } from "./ribbon";
+import { TitleBar, Ribbon, palette, toggleRibbon } from "./ribbon";
 import { Grid, FormulaBar } from "./grid";
 import { Gantt, Timeline } from "./gantt";
 import { Details } from "./details";
@@ -163,6 +163,7 @@ const App = () => {
     else if (ctrl && k === "p") { e.preventDefault(); C.print(); }
     else if (ctrl && k === "z" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) { e.preventDefault(); C.undo(); }
     else if (ctrl && k === "y" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) { e.preventDefault(); C.redo(); }
+    else if (e.key === "F1" && ctrl) { e.preventDefault(); toggleRibbon(); }
     else if (e.key === "F1") { e.preventDefault(); D.shortcuts(); }
     else if (e.key === "F7" && out()) { e.preventDefault(); import("./spell").then(m => m.spelling()); }
     else if (e.key === "Escape" && backstage() && out()) setBackstage(null);

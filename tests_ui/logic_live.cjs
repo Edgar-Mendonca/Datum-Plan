@@ -64,6 +64,25 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.locator('.seg button:visible', { hasText: "Weeks" }).click(); await W(500);
     await p.locator('.seg button:visible', { hasText: "Bands by phase" }).click(); await W(800);
   });
+  // Issue #7: large plans on a laptop screen: Fit, a ruler that stays at the top, drag to move, Ctrl+wheel to zoom.
+  await T("large plans", async () => {
+    await p.setViewportSize({ width: 1366, height: 600 }); await W(300);
+    const wrap = () => p.$eval(".tsldwrap", e => ({ w: e.clientWidth, sl: e.scrollLeft, st: e.scrollTop, top: e.getBoundingClientRect().top }));
+    await p.locator(".page .btn", { hasText: "Fit" }).click(); await W(900);
+    check("Fit puts the whole plan across the window", +(await p.getAttribute("svg.tsld", "width")) <= (await wrap()).w + 1, `${await p.getAttribute("svg.tsld", "width")} ${(await wrap()).w}`);
+    await p.$eval(".tsldwrap", e => { e.scrollTop = 150; }); await W(150);
+    const hd = await p.$eval("svg.tsldhead", e => e.getBoundingClientRect().top), wr = await wrap();
+    check("the date ruler stays at the top while scrolling down", wr.st > 0 && Math.abs(hd - wr.top - 1) <= 1, `${hd} ${wr.top} ${wr.st}`);
+    await p.locator('.seg button:visible', { hasText: "Days" }).click(); await W(900);
+    const b = await p.$eval(".tsldwrap", e => e.getBoundingClientRect());
+    await p.mouse.move(b.x + b.width - 40, b.y + 60); await p.mouse.down(); await p.mouse.move(b.x + b.width - 340, b.y + 60, { steps: 5 }); await p.mouse.up(); await W(100);
+    check("dragging the background moves the view", (await wrap()).sl >= 250, `${(await wrap()).sl}`);
+    const w0 = +(await p.getAttribute("svg.tsld", "width"));
+    await p.mouse.move(b.x + 900, b.y + 100); await p.keyboard.down("Control"); await p.mouse.wheel(0, 120); await p.keyboard.up("Control"); await W(900);
+    check("Ctrl+wheel zooms out", +(await p.getAttribute("svg.tsld", "width")) < w0 * 0.9, `${w0} ${await p.getAttribute("svg.tsld", "width")} ${await p.evaluate(() => localStorage.getItem("tsld-zoom"))} ${JSON.stringify(b)}`);
+    await p.locator('.seg button:visible', { hasText: "Weeks" }).click(); await W(700);
+    await p.setViewportSize({ width: 1500, height: 950 }); await W(200);
+  });
   if (process.env.SHOT) { await p.screenshot({ path: process.env.SHOT }); }
   await T("double-click", async () => {
     await p.locator(".tsbar rect, .tsbar path").first().dblclick({ force: true }); await W(800);

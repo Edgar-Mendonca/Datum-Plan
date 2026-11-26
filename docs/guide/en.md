@@ -81,7 +81,7 @@ When you start a new plan, **Project Setup** walks you through the basics. You c
 
 The status bar at the bottom shows the number of tasks, the start and finish, the duration, % complete and the cost.
 
-On a small screen, ribbon groups that do not fit fold into one button with the group's name (**EDITING ▾**): click it for the group's commands. The details pane and the timeline open as you last left them; **View › Split View** shows or hides them (on a short window the timeline starts closed). Dialogs can be moved by dragging their title bar.
+On a small screen, ribbon groups that do not fit fold into one button with the group's name (**EDITING ▾**): click it for the group's commands. For more room, collapse the ribbon to its tab names with [[Ctrl+F1]], a double-click on a tab or **⌃** at the end of the tabs: a tab you click then shows its ribbon over the view until you click a command or elsewhere, and the same keys pin it again. Datum Plan remembers your choice. The details pane and the timeline open as you last left them; **View › Split View** shows or hides them (on a short window the timeline starts closed). Dialogs can be moved by dragging their title bar.
 
 ## Build your plan
 
@@ -378,7 +378,7 @@ Removing a picture from the plan also takes it off the sheets that use it.
 
 ### The time-scaled logic diagram
 
-**Logic** (beside Network in the sidebar, or **View › Time-scaled Logic**) draws the network on the timescale: each task is a bar at its dates with its ID and name above it, and the links run between the bars. Tasks share a line when their dates allow, and a task stays on the line of the task that drives it, so each chain of work reads from left to right. Critical work and its links are red; links that do not drive their successor are dashed. **Bands by phase** gives each top-level phase its own band (or choose **One band**); **Months**, **Weeks** and **Days** set the scale, and the lines are packed again so names never run into each other. The green line is the status date. Double-click a bar to show the task in the Gantt chart. **File › Print** prints it at the paper width.
+**Logic** (beside Network in the sidebar, or **View › Time-scaled Logic**) draws the network on the timescale: each task is a bar at its dates with its ID and name above it, and the links run between the bars. Tasks share a line when their dates allow, and a task stays on the line of the task that drives it, so each chain of work reads from left to right. Critical work and its links are red; links that do not drive their successor are dashed. **Bands by phase** gives each top-level phase its own band (or choose **One band**); **Months**, **Weeks** and **Days** set the scale, and the lines are packed again so names never run into each other. The green line is the status date. Double-click a bar to show the task in the Gantt chart. For a large plan: **Fit** shows the whole plan across the window, **−** and **+** (or [[Ctrl]] + mouse wheel, about the pointer) zoom in and out, dragging the background moves the view, and the date ruler stays at the top as you scroll down. Zoomed far out, names are left off so the shape of the plan fits; point at a bar for its name and dates. **File › Print** prints it at the paper width.
 
 ### The time-location view
 

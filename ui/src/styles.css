@@ -53,6 +53,9 @@ kbd { font: 10.5px "Segoe UI", sans-serif; color: var(--muted); border: 1px soli
 .tabs .ctx small { color: var(--blue); font-size: 10px; margin-right: 4px; }
 
 /* Ribbon */
+.ribbon.min { display: none; }
+.ribbon.min.peek { display: flex; position: fixed; left: 0; right: 0; z-index: 40; box-shadow: 0 8px 18px rgba(16, 32, 56, .18); }
+.tabs .ribmin { margin-left: auto; align-self: center; padding: 2px 8px; color: var(--muted); border: 0; }
 .ribbon { display: flex; min-height: 92px; background: var(--panel); border-bottom: 1px solid var(--line); padding: 3px 4px 0; flex: none; overflow: hidden; }
 .grp { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 0 5px; flex: none; }
 .grp .items { flex: 1; display: flex; align-items: flex-start; gap: 2px; }
@@ -1557,6 +1560,8 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 /* Time-scaled logic diagram */
 .tsldwrap { overflow: auto; flex: 1; background: var(--bg2); border: 1px solid var(--line); }
 .tsld { display: block; font: 11px var(--sans); }
+.tsldhead { display: block; position: sticky; top: 0; z-index: 1; background: var(--bg2); border-bottom: 1px solid var(--line); font: 11px var(--sans); }
+.tsldwrap:has(.tsldhead) { cursor: grab; } .tsldwrap .tsbar { cursor: default; }
 .tsband { fill: var(--bg2); } .tsband.alt { fill: var(--panel); }
 .tsbandname { fill: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
 .tstick { stroke: var(--line2); } .tstick.major { stroke: var(--line3); }
@@ -1572,7 +1577,7 @@ html.printing #printroot.trprint { display: block; padding: 0; }
 .tslegend .tskey:first-child { margin-left: 0; } .tskey { display: inline-block; width: 18px; height: 6px; background: var(--bar); margin: 0 4px 1px 10px; border-radius: 2px; }
 .tskey.crit { background: var(--crit); } .tskey.link { height: 0; border-top: 1px solid var(--text2); background: none; } .tskey.link.loose { border-top-style: dashed; }
 /* The logic diagram prints at the paper width (its drawing scales with its viewBox). */
-.pflowbody .tsldwrap { overflow: visible; border: 0; } .pflowbody .tsld { width: 100%; height: auto; }
+.pflowbody .tsldwrap { overflow: visible; border: 0; } .pflowbody .tsld, .pflowbody .tsldhead { width: 100%; height: auto; } .pflowbody .tsldhead { position: static; }
 
 /* Time-location view */
 .linear { display: block; font: 11px var(--sans); }

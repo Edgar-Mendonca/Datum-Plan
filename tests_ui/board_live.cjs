@@ -44,6 +44,9 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
       return null;
     } }, event: { listen: async () => () => {} } };
   }, [fix, port]);
+  // The bridge works out every date at 10 Nov 2026 (sheetbridge.rs); the window keeps the same day, so what it stamps "today"
+  // agrees with the engine whatever the real date is.
+  await p.clock.setFixedTime(new Date(2026, 10, 10, 12));
   await p.goto(`http://localhost:${srv.address().port}/`); await p.waitForTimeout(700);
   await p.click(".bs aside .back"); await p.waitForTimeout(200);
   await p.click('.side button[title="Board"]'); await p.waitForTimeout(900);

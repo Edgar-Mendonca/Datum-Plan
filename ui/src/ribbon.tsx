@@ -2,7 +2,7 @@
 import { modules, openContract, openDocuments, openProcurement } from "./contract";
 import { linkSelected, linkedPlans, updateLinks, subplans, shareSetup } from "./plans";
 import { For, Show, JSX, createSignal, createMemo, createEffect, onMount, onCleanup } from "solid-js";
-import { setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, moreBls, setMoreBls, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
+import { kept, setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, moreBls, setMoreBls, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import { aiOn, aiLink } from "./ai";
 import { pathOn, setPathOn } from "./path";
@@ -145,6 +145,13 @@ let lastView = "";
 const followView = () => { if (tab() === "chart" && !chartCtl()) setTab(view() === "sheets" ? "sheet" : "task"); const v = view(); if (v === lastView) return; const was = lastView; lastView = v; if (v === "sheets" && tab() === "format") setTab("sheet"); else if (was === "sheets" && tab() === "sheet") setTab("task"); };
 /** The contextual tabs are always there; opening one takes you to the view it works on. */
 const openCtx = (k: "format" | "sheet") => { if (k === "sheet" && view() !== "sheets") { C.view("sheets"); toast("Sheet Tools work on the Sheets: opened Sheets.", true); } else if (k === "format" && view() === "sheets") { C.view("gantt"); toast("Gantt Chart Tools work on the Gantt chart: opened the Gantt.", true); } setTab(k); };
+/** The ribbon can be collapsed to its tab names (Ctrl+F1, double-click a tab, or ⌃ at the right) to give the
+ *  views more room on a small screen; a tab clicked then shows the ribbon over the view until you click
+ *  a command or elsewhere. Kept between sessions. */
+export const [ribbonMin, setRibbonMin] = kept("ribbon-min", false);
+const [peek, setPeek] = createSignal(false);
+export const toggleRibbon = () => { setPeek(false); setRibbonMin(!ribbonMin()); };
+const tabBtn = (e: Event) => !!(e.target as Element).closest("button:not(.file):not(.ribmin)");
 export const TitleBar = (p: { update: string | null }) => (void createEffect(followView),
   <header class="top">
     <div class="bar">
@@ -160,13 +167,14 @@ export const TitleBar = (p: { update: string | null }) => (void createEffect(fol
       <Show when={p.update}><button class="upd" onClick={() => setBackstage("about")}>Update {p.update} available</button></Show>
       <button class="theme" title="Theme: Auto follows Windows" onClick={() => setTheme(theme() === "auto" ? "light" : theme() === "light" ? "dark" : "auto")}>Theme · {theme()}</button>
     </div>
-    <nav class="tabs">
+    <nav class="tabs" onClick={e => { if (ribbonMin() && tabBtn(e)) setPeek(true); }} onDblClick={e => { if (tabBtn(e)) toggleRibbon(); }}>
       <button class="file" onClick={() => setBackstage("home")}>File</button>
       <For each={[["task", "Home"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["sheet", "Format"], ["chart", "Chart Design"], ["help", "Help"]]}>{([k, l]) =>
         k === "chart" ? <Show when={chartCtl() && view() === "sheets"}><div class="ctxgrp chartctx"><small>Chart Tools</small><button classList={{ on: tab() === "chart" }} title="Elements, layouts, colours, styles, data and type of the selected chart" onClick={() => setTab("chart")}>{l}</button></div></Show>
         : k === "sheet" ? <div class="ctxgrp sheetctx"><small>Sheet Tools</small><button classList={{ on: tab() === "sheet" }} title="Formatting, page setup and printing of the sheets (opens Sheets)" onClick={() => openCtx("sheet")}>{l}</button></div>
           : k === "format" ? <div class="ctxgrp"><small>Gantt Chart Tools</small><button classList={{ on: tab() === k }} title="Bar styles, columns and the look of the Gantt chart (opens the Gantt)" onClick={() => openCtx("format")}>{l}</button></div>
           : <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For>
+      <button class="ribmin" title={ribbonMin() ? "Pin the ribbon (Ctrl+F1)" : "Collapse the ribbon to its tab names, for more room (Ctrl+F1)"} onClick={toggleRibbon}>{ribbonMin() ? "⌄" : "⌃"}</button>
     </nav>
   </header>
 );
@@ -301,8 +309,13 @@ const SheetPageTab = () => {
     <G l="Print" h="report"><S><B i="grid" l="Print Options" title="What goes on the paper: header and footer, gridlines, row and column labels, centring" dd={e => openMenu(e, [{ label: "Header & Footer", on: !pg().no_hf, run: () => set({ no_hf: !pg().no_hf }) }, { label: "Gridlines", on: !pg().no_grid, run: () => set({ no_grid: !pg().no_grid }) }, { label: "Row & Column Labels", on: !!pg().headings, run: () => set({ headings: !pg().headings }) }, { label: "Centre on Page", on: !!pg().center, run: () => set({ center: !pg().center }) }])} /><B i="print" l="Print Preview" run={C.print} /><B i="export" l="Save as Workbook" title="Save the sheets as a workbook (.xlsx) to share; formulas, formats, styles, merged cells, pictures and page setup go with them" run={exportSheets} /></S></G>
   </>;
 };
+const ribbonRef = (el: HTMLElement) => {
+  fitRibbon(el);
+  createEffect(() => { if (peek()) el.style.top = `${document.querySelector(".tabs")?.getBoundingClientRect().bottom ?? 0}px`; });
+  document.addEventListener("mousedown", e => { if (peek() && !(e.target as Element).closest(".ribbon, .tabs, .menu, .cpov")) setPeek(false); }, true);
+};
 export const Ribbon = () => (
-  <section class="ribbon" ref={fitRibbon}>
+  <section class="ribbon" classList={{ min: ribbonMin(), peek: ribbonMin() && peek() }} ref={ribbonRef} onClick={e => { if (peek() && (e.target as Element).closest("button")) setPeek(false); }}>
     <Show when={tab() === "task"}><Home /></Show>
     <Show when={tab() === "schedule"}>
       <G l="Insert" h="insert"><B big i="task" l="Task" run={() => C.newTask()} dd={e => openMenu(e, [{ label: "Task", run: () => C.newTask() }, { label: "Blank Row", run: () => C.newTask() }, { label: "Summary Task", run: C.summary }, { label: "Milestone", run: () => C.newTask(true) }, { label: "Recurring Task…", icon: "repeat", run: C.recurring }])} />
