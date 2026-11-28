@@ -1912,6 +1912,70 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.click(".tabs .ribmin"); await p.waitForTimeout(150);
     check("the ⌃ button at the end of the tabs collapses and pins it", m && (await p.isVisible(".ribbon"))); }
 
+  // 0.11.5 quality of life: wrap text, find and go to, tooltips, shortcuts, confirmations, status chips.
+  { await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300); await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
+    await p.evaluate(() => { document.querySelector(".gscroll").scrollTop = 0; }); await p.waitForTimeout(150);
+    const rz = await p.$eval(".ghead .hc:nth-child(3) .rz", e => { const b = e.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+    await p.mouse.move(rz.x, rz.y); await p.mouse.down(); await p.mouse.move(rz.x - 170, rz.y, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(150);
+    const heights = () => p.$$eval(".gbody .row:not(.blank)", rs => rs.map(r => [r.getBoundingClientRect().top, r.getBoundingClientRect().height, r.textContent]));
+    const h0 = await heights();
+    await p.click(".ghead .hc:nth-child(3)", { button: "right" }); await p.waitForTimeout(150); await p.click(".menu button:has-text('Wrap Text')"); await p.waitForTimeout(300);
+    const h1 = await heights(), tall = h1.filter(x => x[1] > 21);
+    if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT, clip: { x: 0, y: 120, width: 1100, height: 420 } });
+    const ui = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Ui?.key === "wrap").pop()?.[1].op.Ui.value);
+    check("Wrap Text on the Task Name column is kept with the plan", JSON.stringify(ui) === '{"Entry":["name"]}', JSON.stringify(ui));
+    check("a wrapped name makes its row taller, short ones stay one line", h0.every(x => x[1] < 21) && tall.length > 0 && tall.some(x => x[2].includes("Architecture")) && h1.some(x => x[1] < 21), JSON.stringify(h1.map(x => x[1])));
+    check("wrapped rows sit one under the other (no gaps, no overlaps)", h1.slice(1).every((x, i) => Math.abs(x[0] - (h1[i][0] + h1[i][1])) < 1.5), JSON.stringify(h1.map(x => x[0])));
+    const g = await p.evaluate(() => [document.querySelector(".gsheet").offsetHeight - 40, document.querySelector(".cbody > div").offsetHeight]);
+    check("the Gantt chart is as tall as the wrapped task sheet (bars stay on their rows)", Math.abs(g[0] - g[1]) < 2, JSON.stringify(g));
+    await p.click(".ghead .hc:nth-child(3)", { button: "right" }); await p.waitForTimeout(150); await p.click(".menu button:has-text('Wrap Text')"); await p.waitForTimeout(300);
+    check("Wrap Text again puts every row back to one line", (await heights()).every(x => x[1] < 21));
+    // a cut-off name shows whole in a tooltip
+    const tip = await p.$$eval(".gbody .c.nm[title]", cs => cs.map(c => c.title));
+    check("a name that does not fit shows whole as a tooltip", tip.some(t => t.includes("Architecture")), JSON.stringify(tip));
+    // find and go to
+    const c1 = await p.$eval(".gbody .row:nth-child(1) .c:nth-child(3)", e => { const b = e.getBoundingClientRect(); return { x: b.left + 8, y: b.top + 8 }; });
+    await p.mouse.click(c1.x, c1.y); await p.keyboard.press("Control+f"); await p.waitForTimeout(150);
+    await p.keyboard.type("design"); await p.waitForTimeout(150); await p.keyboard.press("Enter"); await p.waitForTimeout(150);
+    const found = await p.evaluate(() => [document.querySelector(".gfind .muted")?.textContent, document.querySelector(".gbody .c.at")?.textContent, document.querySelectorAll(".gbody .c.hit").length]);
+    check("Ctrl+F finds text in the task sheet and goes to it", /^1 of \d+$/.test(found[0] ?? "") && /design/i.test(found[1] ?? "") && found[2] > 1, JSON.stringify(found));
+    await p.keyboard.press("Enter"); await p.waitForTimeout(100);
+    check("Enter goes to the next match", (await p.textContent(".gfind .muted")).startsWith("2 of"));
+    await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+    check("Esc closes the find bar", !(await p.$(".gfind")));
+    await p.keyboard.press("Control+g"); await p.waitForTimeout(200);
+    await p.fill(".dlg input", "7"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+    check("Ctrl+G goes to a task ID", (await p.$eval(".gbody .c.at", e => e.closest(".row").querySelector(".idc").textContent)).startsWith("7"));
+    // tooltips name the shortcut; the shortcut list has the new keys
+    check("ribbon tooltips name the shortcut", (await p.getAttribute(".ribbon .rb[title^='Cut']", "title")) === "Cut (Ctrl+X)");
+    await p.keyboard.press("F1"); await p.waitForTimeout(200);
+    const keys = await p.textContent(".dlg");
+    check("the shortcut list has find, go to, fill down and the Gantt keys", ["Ctrl+G", "Ctrl+D", "Ctrl+Enter", "Shift: start-to-start"].every(k => keys.includes(k)), keys.slice(0, 200));
+    await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+    // the right-click menu pastes and inserts below
+    const r2 = await p.$eval(".gbody .row:nth-child(2) .c:nth-child(3)", e => { const b = e.getBoundingClientRect(); return { x: b.left + 8, y: b.top + 8 }; });
+    await p.mouse.click(r2.x, r2.y, { button: "right" }); await p.waitForTimeout(150);
+    check("the task menu has Insert Task Below", await p.isVisible(".menu button:has-text('Insert Task Below')"));
+    await p.click(".menu button:has-text('Insert Task Below')"); await p.waitForTimeout(200);
+    const ins = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Insert).pop()?.[1].op.Insert);
+    check("Insert Task Below inserts after the row", ins?.at === 2, JSON.stringify(ins));
+    // deleting a summary asks first
+    const s1 = await p.$eval(".gbody .row.sum .c:nth-child(3)", e => { const b = e.getBoundingClientRect(); return { x: b.left + 30, y: b.top + 8 }; });
+    await p.mouse.click(s1.x, s1.y); await p.evaluate(() => { window.__calls.length = 0; }); await p.keyboard.press("Control+-"); await p.waitForTimeout(200);
+    const asked = await p.isVisible(".dlg:has-text('summary task')");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+    check("deleting a summary task asks first, and Cancel keeps it", asked && !(await p.evaluate(() => window.__calls.some(c => c[0] === "apply" && c[1].op.Delete))));
+    // status bar: the sort, and unsaved changes
+    await p.click(".ghead .hc:nth-child(3)", { button: "right" }); await p.waitForTimeout(150); await p.click(".menu button:has-text('Sort A to Z')"); await p.waitForTimeout(250);
+    const st = await p.textContent(".status");
+    await p.click(".status button:has-text('Sorted by')"); await p.waitForTimeout(250);
+    check("the status bar shows the sort and clears it", st.includes("Sorted by Task Name ↑") && !(await p.textContent(".status")).includes("Sorted by"), st);
+    await p.click(".side button[title='Gantt']"); await p.waitForTimeout(150);
+    const z0 = await p.evaluate(() => document.querySelector(".cbody > div").offsetWidth);
+    await p.click(".cbody", { position: { x: 300, y: 10 } }); await p.keyboard.press("Control+="); await p.waitForTimeout(200);
+    check("Ctrl++ on the chart zooms in", (await p.evaluate(() => document.querySelector(".cbody > div").offsetWidth)) > z0 * 1.3);
+    await p.keyboard.press("Control+-"); await p.waitForTimeout(200); }
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

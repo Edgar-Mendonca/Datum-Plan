@@ -1,6 +1,6 @@
 // Calls into the Rust shell and the shapes it returns.
 declare global {
-  interface Window { __TAURI__?: { core: { invoke: (cmd: string, args?: object) => Promise<any> }; event: { listen: (e: string, f: (x: { payload: any }) => void) => Promise<() => void> } } }
+  interface Window { __TAURI__?: { core: { invoke: (cmd: string, args?: object) => Promise<any> }; event: { listen: (e: string, f: (x: { payload: any }) => void) => Promise<() => void> }; window?: { getCurrentWindow: () => { setTitle: (t: string) => Promise<void> } } } }
 }
 
 export const invoke = <T = any>(cmd: string, args?: object): Promise<T> =>

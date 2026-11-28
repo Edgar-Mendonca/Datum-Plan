@@ -3,7 +3,7 @@
 import { createSignal, createEffect, createMemo, onMount, onCleanup, Show } from "solid-js";
 import { Row, fmtDay, iso, dateDay } from "./api";
 import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick, ghost, pane, moreBls, BL_COLOURS, showBase, setShowBase } from "./store";
-import { RH } from "./grid";
+import { RH, rowTop, rowHt, rowIdx, tops } from "./grid";
 import { C } from "./cmds";
 import { pathMap, pathColor } from "./path";
 
@@ -155,14 +155,16 @@ export const Gantt = () => {
     const { w, h } = size(), top = body.scrollTop, pd = zoom(), rows = grid().rows, trk = view() === "tracking", crit = showCrit() || trk, base = showBase() || trk;
     const ctx = fit(barsCv, w, h);
     if (pd >= 6) { ctx.fillStyle = K.off; for (let d = d0() + Math.floor(body.scrollLeft / pd); X(d) < w; d++) if (off(d)) ctx.fillRect(X(d), 0, pd, h); }
-    const a = Math.floor(top / RH), b = Math.min(rows.length, a + Math.ceil(h / RH) + 1);
-    if (K.grid) { ctx.fillStyle = K.grid; for (let i = a; i <= b; i++) ctx.fillRect(0, (i + 1) * RH - top - 1, w, 1); }
+    const a = rowIdx(top), b = Math.min(rows.length, rowIdx(top + h) + 1);
+    // Bars sit in the middle of their row (rows grow when the sheet wraps text).
+    const Y = (i: number) => rowTop(i) - top + (rowHt(i) - RH) / 2, Ym = (i: number) => rowTop(i) - top + rowHt(i) / 2;
+    if (K.grid) { ctx.fillStyle = K.grid; for (let i = a; i <= b; i++) ctx.fillRect(0, rowTop(i + 1) - top - 1, w, 1); }
     const ss = new Set(sel()), tp = pathMap();
     for (let i = a; i < b; i++) {
       const r = rows[i];
-      if (ss.has(r.uid)) { ctx.fillStyle = "rgba(47,111,207,.09)"; ctx.fillRect(0, i * RH - top, w, RH); }
-      else if (pathColor(tp.get(r.uid))) { ctx.fillStyle = pathColor(tp.get(r.uid))!; ctx.fillRect(0, i * RH - top, w, RH); }
-      else if (r.hl) { ctx.fillStyle = "rgba(242,178,51,.14)"; ctx.fillRect(0, i * RH - top, w, RH); }
+      if (ss.has(r.uid)) { ctx.fillStyle = "rgba(47,111,207,.09)"; ctx.fillRect(0, rowTop(i) - top, w, rowHt(i)); }
+      else if (pathColor(tp.get(r.uid))) { ctx.fillStyle = pathColor(tp.get(r.uid))!; ctx.fillRect(0, rowTop(i) - top, w, rowHt(i)); }
+      else if (r.hl) { ctx.fillStyle = "rgba(242,178,51,.14)"; ctx.fillRect(0, rowTop(i) - top, w, rowHt(i)); }
     }
     const line = (d: number, color: string, dash: number[]) => { ctx.strokeStyle = color; ctx.setLineDash(dash); ctx.beginPath(); ctx.moveTo(Math.round(X(d)) + 0.5, 0); ctx.lineTo(Math.round(X(d)) + 0.5, h); ctx.stroke(); ctx.setLineDash([]); };
     line(today(), "#F2B233", [4, 3]);
@@ -177,7 +179,7 @@ export const Gantt = () => {
       if (pi === undefined || Math.max(i, pi) < a || Math.min(i, pi) > b) return;
       const p = rows[pi], [p1, p2] = ends(p), [s1, s2] = ends(r);
       const fx = k[0] === "F" ? p2 : p1, tx = k[1] === "S" ? s1 : s2, outD = k[0] === "F" ? 1 : -1, inn = k[1] === "S" ? 1 : -1;
-      const y1 = pi * RH - top + RH / 2, y2 = i * RH - top + RH / 2, ax = fx + outD * 6;
+      const y1 = Ym(pi), y2 = Ym(i), ax = fx + outD * 6;
       const pts: [number, number][] = (inn === 1 ? tx >= ax : tx <= ax) ? [[fx, y1], [ax, y1], [ax, y2], [tx, y2]]
         : (() => { const ym = y2 + (y2 > y1 ? -RH / 2 : RH / 2), bx = tx - inn * 6; return [[fx, y1], [ax, y1], [ax, ym], [bx, ym], [bx, y2], [tx, y2]] as [number, number][]; })();
       const col = crit && r.crit && p.crit ? K.crit : K.link;
@@ -190,7 +192,7 @@ export const Gantt = () => {
     ctx.font = "11px 'Segoe UI', sans-serif"; ctx.textBaseline = "middle";
     const gh = ghost()?.bars;
     for (let i = a; i < b; i++) {
-      const r = rows[i], B = r.bar, y = i * RH - top, x1 = X(B.s), x2 = X(B.f);
+      const r = rows[i], B = r.bar, y = Y(i), x1 = X(B.s), x2 = X(B.f);
       const isCrit = crit && r.crit, hasBase = base && B.bs !== null, by = hasBase ? y + 3 : y + 4, bh = hasBase ? 9 : 11;
       const more = base ? (B.more ?? []).slice(0, 3) : [];
       if (hasBase && B.bf !== null) {
@@ -267,7 +269,7 @@ export const Gantt = () => {
       ctx.globalAlpha = 1;
     }
     if (drag) {
-      const r = drag.r, y = drag.i * RH - top;
+      const r = drag.r, y = rowTop(drag.i) - top + (rowHt(drag.i) - RH) / 2;
       ctx.setLineDash([4, 3]); ctx.strokeStyle = K.blue; ctx.lineWidth = 1.5;
       if (drag.mode === "link") { ctx.beginPath(); ctx.moveTo(X(r.bar.f), y + RH / 2); ctx.lineTo(drag.mx - body.scrollLeft, drag.my - top); ctx.stroke(); }
       else if (drag.mode === "pct") { ctx.fillStyle = "rgba(46,157,87,.55)"; ctx.fillRect(X(r.bar.s), y + 8, (X(r.bar.f) - X(r.bar.s)) * drag.pct / 100, 4); }
@@ -278,10 +280,10 @@ export const Gantt = () => {
 
   const pos = (e: MouseEvent) => { const b = body.getBoundingClientRect(); return [e.clientX - b.left + body.scrollLeft, e.clientY - b.top + body.scrollTop]; };
   const hit = (e: MouseEvent) => {
-    const [x, y] = pos(e), i = Math.floor(y / RH), r = grid().rows[i], pd = zoom();
+    const [x, y] = pos(e), i = rowIdx(y), r = grid().rows[i], pd = zoom();
     let part = "";
     if (r && r.kind === "task" && r.uid > 0) {
-      const x1 = (r.bar.s - d0()) * pd, x2 = (r.bar.f - d0()) * pd, xp = x1 + (x2 - x1) * r.bar.pct / 100, low = y - i * RH > 10;
+      const x1 = (r.bar.s - d0()) * pd, x2 = (r.bar.f - d0()) * pd, xp = x1 + (x2 - x1) * r.bar.pct / 100, low = y - rowTop(i) - (rowHt(i) - RH) / 2 > 10;
       part = r.ms ? (Math.abs(x - x1) <= 8 ? "move" : "") : x >= x2 - 5 && x <= x2 + 3 ? "size" : low && x >= x1 - 2 && Math.abs(x - xp) <= 4 ? "pct" : x >= x1 - 2 && x < x2 - 5 ? "move" : "";
     }
     return { i, x, y, r, part };
@@ -303,7 +305,7 @@ export const Gantt = () => {
       if (!body.contains(e.target as Node)) return setTip(null);
       const h = hit(e), r = h.r;
       body.style.cursor = h.part === "size" ? "ew-resize" : h.part === "pct" ? "col-resize" : h.part ? "grab" : "default";
-      if (r && (h.part || r.kind === "summary")) tipAt(e, `<b>${esc(r.name)}</b><br>${fmtDay(r.bar.s, "long")} → ${fmtDay(endDay(r), "long")}<br>${r.bar.pct}% complete${r.res ? "<br>" + esc(r.res) : ""}${r.bar.bs !== null ? `<br>Baseline ${fmtDay(r.bar.bs)} → ${fmtDay(r.bar.bf! - 0.01)}` : ""}`
+      if (r && r.uid !== 0 && (h.part || r.kind === "summary" || (h.x >= (r.bar.s - d0()) * zoom() - 8 && h.x <= (r.bar.f - d0()) * zoom() + 8))) tipAt(e, `<b>${esc(r.name)}</b><br>${fmtDay(r.bar.s, "long")} → ${fmtDay(endDay(r), "long")}<br>${r.bar.pct}% complete${r.res ? "<br>" + esc(r.res) : ""}${r.bar.bs !== null ? `<br>Baseline ${fmtDay(r.bar.bs)} → ${fmtDay(r.bar.bf! - 0.01)}` : ""}`
         + (r.kind === "task" ? '<br><span class="muted">Drag to move · drag the end to resize · drag the progress · drag down to link</span>' : ""));
       else setTip(null);
       return;
@@ -312,20 +314,29 @@ export const Gantt = () => {
     d.mx = x; d.my = y; d.dd = Math.round((x - d.x) / pd);
     if (d.mode === "move" && Math.abs(y - d.y) > RH) d.mode = "link";
     if (d.mode === "pct") { const x1 = (d.r.bar.s - d0()) * pd, x2 = (d.r.bar.f - d0()) * pd; d.pct = Math.max(0, Math.min(100, Math.round((x - x1) / Math.max(1, x2 - x1) * 20) * 5)); }
-    const t = grid().rows[Math.floor(y / RH)];
-    tipAt(e, d.mode === "link" ? `Link <b>${d.r.id}</b> → <b>${t && t !== d.r && t.uid > 0 ? t.id + " " + esc(t.name) : "…"}</b>` : d.mode === "pct" ? `Progress <b>${d.pct}%</b>`
+    const t = grid().rows[rowIdx(y)];
+    tipAt(e, d.mode === "link" ? `Link <b>${d.r.id}</b> → <b>${t && t !== d.r && t.uid > 0 ? t.id + " " + esc(t.name) : "…"}</b> ${linkKind(e)}<br><span class="muted">Shift: start-to-start · Ctrl: finish-to-finish · Esc: cancel</span>` : d.mode === "pct" ? `Progress <b>${d.pct}%</b>`
       : d.mode === "move" ? `Start <b>${fmtDay(d.r.bar.s + d.dd, "long")}</b>` : `Finish <b>${fmtDay(Math.max(Math.floor(d.r.bar.s), endDay(d.r) + d.dd), "long")}</b>`);
     draw();
   };
-  const up = async () => {
+  const up = async (e?: MouseEvent) => {
     const d = drag;
     if (!d) return;
     drag = null; setTip(null); draw();
-    if (d.mode === "link") { const t = grid().rows[Math.floor(d.my / RH)]; if (t && t !== d.r && t.uid > 0) await act({ LinkSet: { pred: d.r.uid, succ: t.uid, kind: "FS", lag: "" } }); }
+    if (d.mode === "link") { const t = grid().rows[rowIdx(d.my)]; if (t && t !== d.r && t.uid > 0) await act({ LinkSet: { pred: d.r.uid, succ: t.uid, kind: linkKind(e), lag: "" } }); }
     else if (d.mode === "pct") { if (d.pct !== d.r.bar.pct) await set(d.r.uid, "pct", String(d.pct)); }
     else if (d.dd && d.mode === "move") await set(d.r.uid, "start", iso(d.r.bar.s + d.dd));
     else if (d.dd) await set(d.r.uid, "finish", iso(Math.max(Math.floor(d.r.bar.s), endDay(d.r) + d.dd)));
   };
+  /** Linking by dragging: finish-to-start; Shift makes it start-to-start, Ctrl finish-to-finish. */
+  const linkKind = (e?: MouseEvent) => (e?.shiftKey ? "SS" : e?.ctrlKey ? "FF" : "FS");
+  // Esc drops a drag; Ctrl and + / − / 0 zoom the chart when it has the focus.
+  const esc0 = (e: KeyboardEvent) => { if (e.key === "Escape" && drag) { drag = null; setTip(null); draw(); } };
+  const chartKeys = (e: KeyboardEvent) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === "=" || e.key === "+") { e.preventDefault(); setZ(zoom() * 1.5); } else if (e.key === "-") { e.preventDefault(); setZ(zoom() / 1.5); } else if (e.key === "0") { e.preventDefault(); fitAll(); }
+  };
+  const goToday = () => { body.scrollLeft = Math.max(0, (today() - d0()) * zoom() - body.clientWidth / 3); draw(); };
   const setZ = (v: number, keep?: number) => {
     const day = keep ?? d0() + (body.scrollLeft + body.clientWidth / 2) / zoom();
     setZoom(Math.max(0.3, Math.min(120, v)));
@@ -343,7 +354,8 @@ export const Gantt = () => {
   onMount(() => {
     shown = { scale: scaleCv, bars: barsCv };
     ro.observe(body);
-    addEventListener("mousemove", move); addEventListener("mouseup", up);
+    addEventListener("mousemove", move); addEventListener("mouseup", up); addEventListener("keydown", esc0);
+    document.addEventListener("gantt-today", goToday);
     document.addEventListener("gantt-fit", fitAll); document.addEventListener("gantt-range", range); document.addEventListener("gantt-scroll", scrollDay); document.addEventListener("chart-scroll", syncY);
     const s = out()?.summary;
     if (s) body.scrollLeft = Math.max(0, (s.s - d0() - 2) * zoom());
@@ -351,24 +363,24 @@ export const Gantt = () => {
   onCleanup(() => {
     setInView(null);
     shown = null;
-    ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up);
+    ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up); removeEventListener("keydown", esc0); document.removeEventListener("gantt-today", goToday);
     document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-range", range); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
   });
-  createEffect(() => { themeTick(); out(); grid(); sel(); pathMap(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); moreBls(); ghost(); draw(); });
+  createEffect(() => { themeTick(); out(); grid(); tops(); sel(); pathMap(); zoom(); size(); showCrit(); showBase(); showSlack(); showLate(); showLabels(); view(); baseline(); moreBls(); ghost(); draw(); });
 
   return (
     <div class="chart">
       <canvas class="scale" ref={scaleCv} onDblClick={() => fitAll()} />
       <div class="cwrap">
-        <div class="cbody" ref={body} onMouseDown={down} onScroll={() => { draw(); if (!echo) document.dispatchEvent(new CustomEvent("grid-scroll", { detail: body.scrollTop })); echo = false; document.dispatchEvent(new CustomEvent("tl-redraw")); }}
+        <div class="cbody" ref={body} tabindex="0" onKeyDown={chartKeys} onMouseDown={down} onScroll={() => { draw(); if (!echo) document.dispatchEvent(new CustomEvent("grid-scroll", { detail: body.scrollTop })); echo = false; document.dispatchEvent(new CustomEvent("tl-redraw")); }}
           onWheel={e => { if (e.ctrlKey) { e.preventDefault(); setZ(zoom() * (e.deltaY < 0 ? 1.2 : 1 / 1.2), d0() + (body.scrollLeft + e.offsetX) / zoom()); } }}
           onDblClick={e => { const h = hit(e); if (h.r?.sub) import("./plans").then(m => m.goToLink(h.r!.sub!, h.r!.suid ?? 0)); else C.info(); }} onContextMenu={e => { const h = hit(e); if (h.r?.sub) { e.preventDefault(); const x = h.r; return void import("./plans").then(m => m.subRowMenu(e, x)); } if (h.r && !sel().includes(h.r.uid)) { setSel([h.r.uid]); setCur({ row: h.i, col: cur().col }); } openMenu(e, [
             { label: "Task Information…", icon: "info", run: C.info }, { label: "Scroll to Task", icon: "scroll", run: C.scrollTo }, { label: "Split Task…", icon: "split", run: C.split }, { label: "Mark on Track", icon: "track", run: C.onTrack }, "-",
             { label: "Show Critical Path", run: () => setShowCrit(!showCrit()), on: showCrit() }, { label: "Show Baseline", run: () => setShowBase(!showBase()), on: showBase() },
             { label: "Show Slack", run: () => setShowSlack(!showSlack()), on: showSlack() }, { label: "Show Late Bars", run: () => setShowLate(!showLate()), on: showLate() },
-            { label: "Show Bar Labels", run: () => setShowLabels(!showLabels()), on: showLabels() }, "-", { label: "Zoom In", run: C.zoomIn }, { label: "Zoom Out", run: C.zoomOut }, { label: "Entire Project", run: fitAll },
+            { label: "Show Bar Labels", run: () => setShowLabels(!showLabels()), on: showLabels() }, "-", { label: "Zoom In", run: C.zoomIn, keys: "Ctrl++" }, { label: "Zoom Out", run: C.zoomOut, keys: "Ctrl+−" }, { label: "Entire Project", run: fitAll, keys: "Ctrl+0" }, { label: "Go to Today", run: goToday },
           ]); }}>
-          <div style={{ width: `${(d1() - d0()) * zoom()}px`, height: `${(grid().rows.length + 3) * RH}px` }} />
+          <div style={{ width: `${(d1() - d0()) * zoom()}px`, height: `${rowTop(grid().rows.length + 3)}px` }} />
         </div>
         <canvas class="bars" ref={barsCv} />
       </div>

@@ -4,7 +4,7 @@ import { createStore, produce } from "solid-js/store";
 import { Calendar, CustomDef, Filter, Rule, Out, iso, dateDay, invoke, LevelPreview, fmtAt, Changes, Trend, fmtDay } from "./api";
 import { allCols, saveAll, deleteCol, act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query, ghost, setGhost } from "./store";
 import { ChartBox, line } from "./charts";
-import { Dialog, Row, Text, Pick, Check, Tabs, askText } from "./ui";
+import { Dialog, Row, Text, Pick, Check, Tabs, askText, askYes } from "./ui";
 import * as F from "./fmt";
 import { TaskTab, useInfo, TABS } from "./details";
 
@@ -158,7 +158,7 @@ export const calendars = (start?: string) => openDialog(() => {
       <div class="ptools">
         For calendar <Pick value={name()} set={load} options={P().calendars.map(c => c.name)} />
         <button class="btn sm" onClick={async () => { const n = await askText("Create New Calendar", "Name", "New calendar"); if (n && await act({ CalPut: { old: null, cal: { ...JSON.parse(JSON.stringify(draft)), name: n } } })) load(n); }}>Create New Calendar…</button>
-        <button class="btn sm" onClick={async () => { if (await act({ CalDelete: { name: name() } })) load(P().calendar); }}>Delete</button>
+        <button class="btn sm" onClick={async () => { if ((name() === P().calendar || await askYes("Delete Calendar", `Delete the calendar "${name()}"? Tasks and resources that use it go back to the project calendar.`, "Delete")) && await act({ CalDelete: { name: name() } })) load(P().calendar); }}>Delete</button>
         <span class="grow" /><label>Name <input value={draft.name} onChange={e => setDraft("name", e.currentTarget.value)} /></label>
       </div>
       <div class="cols2">
@@ -695,11 +695,18 @@ export const glossary = () => openDialog(() => {
 });
 export const shortcuts = () => openDialog(() => (
   <Dialog title="Keyboard Shortcuts">
-    <table class="keys"><tbody><For each={[["Insert", "New task"], ["Delete", "Delete tasks"], ["Alt+Shift+→ / ←", "Indent / outdent"], ["Ctrl+F2", "Link selected tasks"], ["Shift+F2", "Task information"], ["F2 / Enter", "Edit cell"],
-      ["Ctrl+C / X / V", "Copy, cut, paste tasks"], ["Ctrl+Z / Y", "Undo, redo"], ["Ctrl+S", "Save"], ["Ctrl+O", "Open"], ["Ctrl+P", "Print"], ["Ctrl+K or Alt+Q", "Tell me what you want to do"], ["Ctrl+F1", "Collapse or pin the ribbon (more room for the view)"],
-      ["Ctrl+wheel", "Zoom the timescale"], ["Ctrl+A", "Select all"], ["Esc", "Cancel"]]}>{([k, v]) => <tr><td>{k}</td><td>{v}</td></tr>}</For></tbody></table>
+    <div class="keycols"><For each={SHORTCUTS}>{([h, list]) => <div><h4>{h}</h4><table class="keys"><tbody><For each={list}>{([k, v]) => <tr><td>{k}</td><td>{v}</td></tr>}</For></tbody></table></div>}</For></div>
   </Dialog>
 ));
+const SHORTCUTS: [string, [string, string][]][] = [
+  ["Task sheet", [["Insert", "New task"], ["Ctrl++ / Ctrl+−", "Insert / delete task"], ["Delete", "Clear cells (whole rows: delete tasks)"], ["Alt+Shift+→ / ←", "Indent / outdent"], ["F2 or Enter", "Edit the cell"], ["Enter / Tab (editing)", "Save and move down / right"],
+    ["Ctrl+Enter (editing)", "Put the value in every selected cell"], ["Esc", "Cancel the edit or selection"], ["Ctrl+D", "Fill down"], ["Alt+↓ or F4", "Open a cell's list"], ["Ctrl+F2", "Link selected tasks"], ["Shift+F2", "Task information"],
+    ["Ctrl+F, F3", "Find in the task sheet, find next"], ["Ctrl+G", "Go to a task ID"], ["Ctrl+A", "Select all"], ["Ctrl+B / I / U", "Bold, italic, underline"], ["Ctrl+Alt+V", "Paste Special"]]],
+  ["Gantt chart", [["Ctrl+wheel", "Zoom the timescale"], ["Ctrl++ / Ctrl+− / Ctrl+0", "Zoom in, out, entire project (click the chart first)"], ["Drag a bar", "Move it; drag its end to resize, its progress line to update"],
+    ["Drag down to a task", "Link finish-to-start (Shift: start-to-start, Ctrl: finish-to-finish)"], ["Esc", "Cancel the drag"]]],
+  ["Everywhere", [["Ctrl+C / X / V", "Copy, cut, paste"], ["Ctrl+Z / Y", "Undo, redo"], ["Ctrl+S", "Save"], ["Ctrl+O", "Open"], ["Ctrl+N", "New"], ["Ctrl+P", "Print"], ["Ctrl+Tab / Ctrl+W", "Next plan tab, close plan"],
+    ["Ctrl+K or Alt+Q", "Tell me what you want to do"], ["Ctrl+F1", "Collapse or pin the ribbon"], ["F1", "This list"], ["F7", "Spelling"]]],
+];
 /** Confirms closing with unsaved changes. */
 export const confirmClose = (then: () => void) => openDialog(() => {
   const dirty = (out()?.tabs ?? []).filter(t => t.dirty).map(t => t.name);

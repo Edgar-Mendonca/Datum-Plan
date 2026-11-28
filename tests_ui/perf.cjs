@@ -7,7 +7,10 @@ const fs = require("fs"), http = require("http"), path = require("path");
 const N = +(process.argv[2] || 100000);
 const root = path.join(__dirname, "../ui/dist"), fix = JSON.parse(fs.readFileSync(path.join(__dirname, "fixture.json")));
 const base = fix.query.rows.filter(r => r.uid > 0), rows = [];
-for (let i = 0; i < N; i++) { const r = base[i % base.length]; rows.push({ ...r, uid: i + 1, id: i + 1, name: `${r.name} ${i + 1}`, bar: { ...r.bar, links: i % 50 ? [[i, "FS"]] : [] } }); }
+// With "wrap" (second argument) the Task Name column wraps and every third name is long (rows of two to four lines).
+const WRAP = process.argv[3] === "wrap";
+for (let i = 0; i < N; i++) { const r = base[i % base.length], nm = `${r.name} ${i + 1}${WRAP && i % 3 === 0 ? " – supply, fabrication, inspection and delivery to site of the item" : ""}`; rows.push({ ...r, uid: i + 1, id: i + 1, name: nm, cells: r.cells.map((c, k) => (c === r.name ? nm : c)), bar: { ...r.bar, links: i % 50 ? [[i, "FS"]] : [] } }); }
+if (WRAP) fix.state = { ...fix.state, project: { ...fix.state.project, ui: { ...(fix.state.project.ui ?? {}), wrap: { Entry: ["name"] } } } };
 fix.query = { ...fix.query, rows, shown: N, total: N };
 const types = { ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".html": "text/html" };
 const srv = http.createServer((q, r) => {
@@ -41,8 +44,10 @@ const srv = http.createServer((q, r) => {
     times.sort((a, b) => a - b);
     return { median: times[15], worst: times[29], last: document.querySelector(".gbody .row:last-child")?.textContent?.slice(0, 40) };
   });
-  console.log(`${N} rows: first paint ${first} ms; scroll frame median ${scroll.median.toFixed(1)} ms, worst ${scroll.worst.toFixed(1)} ms`);
-  const ok = first < 15000 && scroll.median < 120;
+  console.log(`${N} rows${WRAP ? " (Task Name wrapped)" : ""}: first paint ${first} ms; scroll frame median ${scroll.median.toFixed(1)} ms, worst ${scroll.worst.toFixed(1)} ms`);
+  const tall = await p.$$eval(".gbody .row", rs => rs.filter(r => r.offsetHeight > 21).length);
+  if (WRAP) console.log(`wrapped rows on screen: ${tall}`);
+  const ok = first < 15000 && scroll.median < 120 && (!WRAP || tall > 0);
   console.log(ok ? "Within budget" : "TOO SLOW");
   await b.close(); srv.close();
   process.exit(ok ? 0 : 1);

@@ -3,6 +3,7 @@ import { table, useTable, act, call, cur, curRow, grid, loadOut, out, refresh, s
 import { Out } from "./api";
 import { zoomSheet } from "./sheetlayout";
 import * as D from "./dialogs";
+import { askYes } from "./ui";
 
 const uids = () => { const s = selRows().map(r => r.uid); return s.length ? s : curRow()?.uid > 0 ? [curRow()!.uid] : []; };
 const leafIdx = () => grid().rows[cur().row]?.id ?? (grid().rows.filter(r => r.uid > 0).length + 1);
@@ -23,7 +24,13 @@ export const C = {
     // One step, so one Undo takes it all back.
     await act({ Batch: [{ Insert: { at: first.id - 1, name: "New summary task", ms: false } }, { Indent: { uids: u } }] });
   },
-  del: () => { const u = uids(); if (u.length) act({ Delete: { uids: u } }); },
+  // A summary goes with every task under it: asked first (Undo still brings it back).
+  del: async () => {
+    const u = uids(); if (!u.length) return;
+    const sums = grid().rows.filter(r => r.kids && u.includes(r.uid));
+    if (sums.length && !(await askYes("Delete Tasks", sums.length === 1 ? `"${sums[0].name}" is a summary task: deleting it deletes every task under it too.` : `${sums.length} of the selected tasks are summary tasks: deleting them deletes every task under them too.`, "Delete"))) return;
+    act({ Delete: { uids: u } });
+  },
   indent: () => act({ Indent: { uids: uids() } }),
   outdent: () => act({ Outdent: { uids: uids() } }),
   link: () => { const u = uids(); if (u.length > 1) act({ Link: { uids: u } }); else toast("Select two or more tasks to link."); },
@@ -59,6 +66,7 @@ export const C = {
   zoomIn: () => (view() === "sheets" ? zoomSheet(1) : setZoom(Math.min(400, zoom() * 1.5))),
   zoomOut: () => (view() === "sheets" ? zoomSheet(-1) : setZoom(Math.max(0.6, zoom() / 1.5))),
   fit: () => document.dispatchEvent(new CustomEvent("gantt-fit")),
+  today: () => document.dispatchEvent(new CustomEvent("gantt-today")),
   outline: (n: number) => { setCollapsed([]); setLevel(n); },
   expandAll: () => { setLevel(0); setCollapsed([]); },
   collapseAll: () => setCollapsed(grid().rows.filter(r => r.kids && r.uid > 0).map(r => r.uid)),
@@ -92,7 +100,7 @@ export const ALL_CMDS: [string, () => void, string?][] = [
   ["Gantt Chart", () => C.view("gantt")], ["Tracking Gantt", () => C.view("tracking")], ["Network Diagram", () => C.view("network")], ["Calendar view", () => C.view("calendar")],
   ["Task Usage", () => C.view("taskusage")], ["Resource Sheet", () => C.view("ressheet")], ["Resource Usage", () => C.view("resusage")], ["Resource Graph", () => C.view("resgraph")],
   ["Team Planner", () => C.view("team")], ["Dashboard", () => C.view("dashboard")], ["Reports", () => C.view("reports")], ["Portfolio", () => C.view("portfolio")],
-  ["Risks", () => C.view("risks")], ["Check schedule", () => C.view("checks")], ["Zoom in", C.zoomIn], ["Zoom out", C.zoomOut], ["Entire project", C.fit],
+  ["Risks", () => C.view("risks")], ["Check schedule", () => C.view("checks")], ["Zoom in", C.zoomIn], ["Zoom out", C.zoomOut], ["Entire project", C.fit], ["Go to today", C.today],
   ["Expand all", C.expandAll], ["Collapse all", C.collapseAll], ["Show details pane", C.details], ["Show timeline", C.timelineBar], ["Project setup", C.setup],
   ["Open the guide (PDF, English or 中文)", () => D.guide()], ["Level resources", () => C.level()], ["Clear leveling", C.clearLevel], ["Set baseline", C.baseline], ["Update project", C.update],
   ["Project information", () => D.projectInfo()], ["Change working time", () => D.calendars()], ["Schedule options", () => D.scheduleOptions()],

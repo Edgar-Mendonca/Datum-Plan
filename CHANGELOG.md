@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.5 — 2026-11-28
+
+Everyday comforts in the task sheet and the Gantt chart.
+
+- **Wrap Text on the task sheet.** Right-click the **Task Name** heading (or any text column) and choose **Wrap Text**, or use **Home › Alignment › Wrap Text**: long names break onto up to four lines and the row grows to fit, with the Gantt bar kept in the middle of its row. Widen the column and the rows shrink again. Kept with the plan, for each table. A name that does not fit shows whole when you point at it.
+- **Find in the task sheet** (Ctrl+F): a find bar that looks in every column shown and lights up the matches; Enter or F3 goes to the next, Shift+Enter to the one before. **Go To** (Ctrl+G) goes to a task ID. Both are also in **Home › Editing › Find**.
+- **Ribbon tooltips name the shortcut** (Cut (Ctrl+X), Link (Ctrl+F2)…), and **F1** lists every shortcut by area: task sheet, Gantt chart, everywhere.
+- **The window's title names the open file**, with • while there are unsaved changes, as the taskbar shows it; the status bar says **● Unsaved** and shows the sort in use (click it to go back to ID order).
+- The task menu (right-click) has **Insert Task Below**, and **Paste** pastes what you copied.
+- **Best Fit** (double-click a column edge) measures the text as it shows, so bold or wide text is no longer cut. The Document and Procurement registers fit a column on a double-click too, and their column widths are kept with the plan instead of on one computer.
+- Deleting a **summary task** (and every task under it) or a **calendar** asks first.
+- **Gantt chart:** click the chart, then Ctrl++, Ctrl+− and Ctrl+0 zoom in, out and to the whole project; **View › Zoom › Today** scrolls to today. When you drag from a bar to another to link them, Shift makes a start-to-start link and Ctrl a finish-to-finish one; Esc cancels a drag. Pointing anywhere on a bar shows its dates.
+
 ## 0.11.4 — 2026-11-26
 
 Room to see large plans on a laptop screen, and the S-curve page scrolls again.

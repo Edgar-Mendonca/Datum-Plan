@@ -6,21 +6,52 @@ import { Col, Row } from "./api";
 import { out, toggleSub, grid, cols, setCols, saveCols, hideCol, unhideCol, hiddenCols, sel, setSel, cur, setCur, act, openMenu, Item, fields, P, setSort, sort, setGroup, refresh, table, filter, setFilter, ALL, toast, call } from "./store";
 /** Columns measured at the status date: their heading says at which date. */
 const MEASURED = ["plannedpct", "pctvar"];
-import { C } from "./cmds";
+import { C, selectUid } from "./cmds";
 import { pathMap } from "./path";
 import * as D from "./dialogs";
 import * as F from "./fmt";
 import { parseTsv, transpose, series, clip } from "./cells";
 import { Range, norm, createSel, aggregate } from "./selection";
-import { Icon, DateBtn } from "./ui";
+import { Icon, DateBtn, askText } from "./ui";
 
 export const RH = 20;
-const IDW = 44;
+const IDW = 44, LH = 15, MAXL = 4;
+/** Row tops when a column wraps its text (rows of different heights; one more entry for the end);
+ *  null when every row is RH high. The Gantt chart draws its bars on the same rows. */
+export const [tops, setTops] = createSignal<Float64Array | null>(null);
+export const rowTop = (i: number) => { const t = tops(); if (!t) return i * RH; const n = t.length - 1; return i <= n ? t[Math.max(0, i)] : t[n] + (i - n) * RH; };
+export const rowHt = (i: number) => rowTop(i + 1) - rowTop(i);
+/** The row at height y (binary search over the tops). */
+export const rowIdx = (y: number) => {
+  const t = tops(); if (!t) return Math.floor(y / RH);
+  const n = t.length - 1; if (y >= t[n]) return n + Math.floor((y - t[n]) / RH);
+  let lo = 0, hi = n; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (t[m] <= y) lo = m; else hi = m; } return lo;
+};
+/** The columns of the current table that wrap their text (kept with the plan, per table). */
+export const wrapKeys = () => new Set<string>(out()?.project.ui?.wrap?.[table()] ?? []);
+export const toggleWrap = (key: string) => { const w = wrapKeys(); if (w.has(key)) w.delete(key); else w.add(key); return act({ Ui: { key: "wrap", value: { ...(out()?.project.ui?.wrap ?? {}), [table()]: [...w] } } }); };
+// Text widths in the sheet's font, measured once per text.
+let cv: CanvasRenderingContext2D | null = null; const widthOf = new Map<string, number>();
+export const textPx = (t: string) => {
+  let w = widthOf.get(t);
+  if (w === undefined) { cv ??= document.createElement("canvas").getContext("2d"); if (cv) cv.font = getComputedStyle(document.body).font || "12.5px sans-serif"; w = cv ? cv.measureText(t).width : t.length * 6.6; if (widthOf.size > 200000) widthOf.clear(); widthOf.set(t, w); }
+  return w;
+};
+/** Lines the text takes in `room` pixels, breaking between words (at most MAXL). */
+const linesOf = (t: string, room: number) => {
+  if (!t || textPx(t) <= room) return 1;
+  let n = 1, line = 0; const sp = textPx(" ");
+  for (const w of t.split(/\s+/)) { const x = textPx(w); if (line && line + sp + x > room) { if (++n >= MAXL) return MAXL; line = x; } else line += (line ? sp : 0) + x; while (line > room && n < MAXL) { n++; line -= room; } }
+  return Math.min(n, MAXL);
+};
 export const [scrollTop, setScrollTop] = createSignal(0);
 export type { Range } from "./selection";
 export const [ranges, setRanges] = createSignal<Range[]>([]);
 /** Sum, average and count of the selected numbers, for the status bar. */
 export const [agg, setAgg] = createSignal("");
+/** The task sheet's find bar (Ctrl+F): open, and the text looked for. */
+export const [findOn, setFindOn] = createSignal(false);
+export const [findText, setFindText] = createSignal("");
 
 const CHOICES: Record<string, string[]> = {
   ctype: ["As Soon As Possible", "As Late As Possible", "Start No Earlier Than", "Start No Later Than", "Finish No Earlier Than", "Finish No Later Than", "Must Start On", "Must Finish On"],
@@ -67,6 +98,9 @@ export const fieldMenu = (run: (key: string) => void): Item[] => {
   return items;
 };
 
+/** Find and Go To, for the ribbon (set by the task sheet while it is shown). */
+export const findApi: { open?: () => void; goTo?: () => void } = {};
+
 export const Grid = (p: { width?: number }) => {
   let box!: HTMLDivElement;
   const [edit, setEdit] = createSignal<{ row: number; col: number; text: string; all?: boolean } | null>(null);
@@ -80,9 +114,23 @@ export const Grid = (p: { width?: number }) => {
   const frozen = createMemo(() => { const k = cols().findIndex(c => c[0] === "name"); return k >= 0 && k < 3 ? k : -1; });
   const rows = () => grid().rows;
   const ncols = () => grid().cols.length;
-  const first = () => Math.max(0, Math.floor(scrollTop() / RH) - 4);
-  const visible = createMemo(() => rows().slice(first(), first() + Math.ceil(viewH() / RH) + 10).map((r, j) => [r, first() + j] as [Row, number]));
+  const first = () => Math.max(0, rowIdx(scrollTop()) - 4);
+  const visible = createMemo(() => rows().slice(first(), rowIdx(scrollTop() + viewH()) + 6).map((r, j) => [r, first() + j] as [Row, number]));
   const selSet = createMemo(() => new Set(sel()));
+  // Wrapped columns make rows as tall as their text (up to MAXL lines); otherwise one fixed height.
+  const wraps = createMemo(() => { const w = wrapKeys(); return grid().cols.map((c, k) => [c, k] as const).filter(([c]) => w.has(c.key)); });
+  createEffect(() => {
+    const ws = wraps(), rs = rows(), wd = widths();
+    if (!ws.length) return setTops(null);
+    const t = new Float64Array(rs.length + 1);
+    for (let i = 0; i < rs.length; i++) {
+      const r = rs[i]; let n = 1;
+      for (const [c, k] of ws) n = Math.max(n, linesOf(r.cells[k] ?? "", wd[k] - 12 - (c.key === "name" ? r.lvl * 16 + 14 : 0)));
+      t[i + 1] = t[i] + (n > 1 ? n * LH + 5 : RH);
+    }
+    setTops(t);
+  });
+  onCleanup(() => setTops(null));
   // The shared grid engine's selection (also used by the Sheets tabs), kept in the store's signals.
   const S = createSel(() => [rows().length, ncols()], (r, c) => reveal(r, c), { ranges, setRanges, cur, setCur });
   const inRange = S.inRange, wholeRows = S.wholeRows;
@@ -122,9 +170,9 @@ export const Grid = (p: { width?: number }) => {
   onCleanup(() => { ro.disconnect(); document.removeEventListener("grid-scroll", sync); if (F.target() === fmtTarget) F.setTarget(null); });
 
   const reveal = (row: number, col: number) => {
-    const top = row * RH, h = box.clientHeight - 40 - 16;
+    const top = rowTop(row), rh = rowHt(row), h = box.clientHeight - 40 - 16;
     if (top < box.scrollTop) box.scrollTop = top;
-    else if (top + RH > box.scrollTop + h) box.scrollTop = top + RH - h;
+    else if (top + rh > box.scrollTop + h) box.scrollTop = top + rh - h;
     if (col >= 0 && col > frozen()) {
       const l = lefts()[col], w = widths()[col], fz = frozen() >= 0 ? lefts()[frozen()] + widths()[frozen()] : IDW;
       if (l - fz < box.scrollLeft) box.scrollLeft = l - fz;
@@ -139,7 +187,7 @@ export const Grid = (p: { width?: number }) => {
     const x = xAbs < fzEnd ? xAbs : xAbs + box.scrollLeft;
     let col = lefts().findIndex((l, k) => x >= l && x < l + widths()[k]);
     if (col < 0) col = x < IDW ? -1 : ncols() - 1;
-    return [Math.floor(y / RH), col];
+    return [rowIdx(y), col];
   };
   // Drag across cells to select a range; drag the fill handle to fill down.
   const down = (e: MouseEvent) => {
@@ -312,8 +360,8 @@ export const Grid = (p: { width?: number }) => {
       case "ArrowUp": return go(jump(-1), at.col);
       case "ArrowLeft": if (e.altKey && e.shiftKey) { e.preventDefault(); return C.outdent(); } return go(at.row, ctrl ? 0 : at.col - 1);
       case "ArrowRight": if (e.altKey && e.shiftKey) { e.preventDefault(); return C.indent(); } return go(at.row, ctrl ? ncols() - 1 : at.col + 1);
-      case "PageDown": return go(at.row + Math.floor(box.clientHeight / RH), at.col);
-      case "PageUp": return go(at.row - Math.floor(box.clientHeight / RH), at.col);
+      case "PageDown": return go(rowIdx(rowTop(at.row) + box.clientHeight - 60), at.col);
+      case "PageUp": return go(Math.max(0, rowIdx(rowTop(at.row) - box.clientHeight + 60)), at.col);
       case "Home": return go(ctrl ? 0 : at.row, 0);
       case "End": return go(ctrl ? rows().length - 1 : at.row, ncols() - 1);
       case "Tab": e.preventDefault(); return pick(row, col + (e.shiftKey ? -1 : 1));
@@ -326,6 +374,9 @@ export const Grid = (p: { width?: number }) => {
     const k = e.key.toLowerCase();
     if (ctrl && e.altKey && k === "v") { e.preventDefault(); return D.pasteSpecial(); }
     if (ctrl && !e.shiftKey && (k === "b" || k === "i" || k === "u")) { e.preventDefault(); return F.toggle(k); }
+    if (ctrl && k === "f") { e.preventDefault(); return openFind(); }
+    if (ctrl && k === "g") { e.preventDefault(); return goTo(); }
+    if (e.key === "F3") { e.preventDefault(); return findOn() ? findNext(e.shiftKey ? -1 : 1) : openFind(); }
     if (ctrl && k === "a") { e.preventDefault(); setRanges([{ r0: 0, c0: 0, r1: rows().length - 1, c1: ncols() - 1 }]); return; }
     if (ctrl && k === "d" && last) { e.preventDefault(); const n = norm(last); return n.r1 > n.r0 ? fill({ ...n, r1: n.r0 }, n.r1, true) : undefined; }
     if (ctrl && (k === "-" || k === "delete")) { e.preventDefault(); return C.del(); }
@@ -333,16 +384,39 @@ export const Grid = (p: { width?: number }) => {
     if (!ctrl && !e.altKey && e.key.length === 1) { e.preventDefault(); startEdit(row, col, e.key); }
   };
 
+  // ---------- find (Ctrl+F) and go to ID (Ctrl+G) ----------
+  const hits = createMemo(() => {
+    const q = findText().trim().toLowerCase(), out: [number, number][] = [];
+    if (!findOn() || !q) return out;
+    rows().forEach((r, i) => { if (r.uid > 0) r.cells.forEach((v, j) => { if (out.length < 100000 && v && v.toLowerCase().includes(q)) out.push([i, j]); }); });
+    return out;
+  });
+  const [hitAt, setHitAt] = createSignal(-1);
+  const findNext = (d = 1) => {
+    const h = hits(); if (!h.length) return;
+    const { row, col } = cur(), after = h.findIndex(([r, c]) => r > row || (r === row && c > col)), from = h.findIndex(([r, c]) => r > row || (r === row && c >= col));
+    const n = d > 0 ? Math.max(0, after) : ((from < 0 ? h.length : from) - 1 + h.length) % h.length;
+    setHitAt(n); pick(h[n][0], h[n][1]);
+  };
+  const goTo = async () => {
+    const v = await askText("Go To", "Task ID", String(rows()[cur().row]?.id ?? ""), "Go");
+    if (!v) return box.focus();
+    const k = rows().findIndex(r => r.uid > 0 && r.id === +v);
+    if (k < 0) return toast(`No task with ID ${v} is shown (check the filter and collapsed summaries).`);
+    pick(k, cur().col); box.focus();
+  };
+  const openFind = () => { setFindOn(true); setTimeout(() => { const el = document.querySelector<HTMLInputElement>(".gfind input"); el?.focus(); el?.select(); }); };
+  findApi.open = openFind; findApi.goTo = goTo;
   const rowMenu = (e: MouseEvent) => {
     const [r, c] = cellAt(e);
     if (rows()[r]?.sub) { const x = rows()[r]; return void import("./plans").then(m => m.subRowMenu(e, x)); }
     if (!inRange(r, Math.max(0, c))) pick(r, Math.max(0, c));
     const k = cur().row;
     openMenu(e, [
-      { label: "Cut", icon: "cut", run: () => document.execCommand("cut"), keys: "Ctrl+X" }, { label: "Copy", icon: "copy", run: () => document.execCommand("copy"), keys: "Ctrl+C" }, { label: "Paste", icon: "paste", run: () => toast("Press Ctrl+V to paste."), keys: "Ctrl+V" }, { label: "Paste Special…", icon: "paste", run: () => D.pasteSpecial(), keys: "Ctrl+Alt+V" },
+      { label: "Cut", icon: "cut", run: () => document.execCommand("cut"), keys: "Ctrl+X" }, { label: "Copy", icon: "copy", run: () => document.execCommand("copy"), keys: "Ctrl+C" }, { label: "Paste", icon: "paste", run: async () => { const t = await navigator.clipboard?.readText().catch(() => null); if (t == null) return toast("Press Ctrl+V to paste."); if (lastCopy.rows && t === lastCopy.text) return C.paste(); await pasteMatrix(parseTsv(t)); }, keys: "Ctrl+V" }, { label: "Paste Special…", icon: "paste", run: () => D.pasteSpecial(), keys: "Ctrl+Alt+V" },
       { label: "Clear Contents", icon: "clear", run: clear, keys: "Delete" }, "-",
       { label: "Rename Task", icon: "rename", run: () => { const nc = grid().cols.findIndex(x => x.key === "name"); if (nc >= 0) startEdit(k, nc); }, keys: "F2" },
-      { label: "Insert Task", icon: "task", run: () => C.newTask(), keys: "Insert" }, { label: "Insert Milestone", icon: "ms", run: () => C.newTask(true) }, { label: "Delete Task", icon: "del", run: C.del, keys: "Ctrl+−" }, "-",
+      { label: "Insert Task", icon: "task", run: () => C.newTask(), keys: "Insert" }, { label: "Insert Task Below", icon: "task", run: async () => { const x = rows()[k]; if (!x || x.uid <= 0) return C.newTask(); if (await act({ Insert: { at: x.id, name: "New task", ms: false } })) { await refresh(); const u = grid().rows.find(r => r.id === x.id + 1); if (u) selectUid(u.uid); } } }, { label: "Insert Milestone", icon: "ms", run: () => C.newTask(true) }, { label: "Delete Task", icon: "del", run: C.del, keys: "Ctrl+−" }, "-",
       { label: "Indent", icon: "indent", run: C.indent, keys: "Alt+Shift+→" }, { label: "Outdent", icon: "outdent", run: C.outdent, keys: "Alt+Shift+←" }, { label: "Link Tasks", icon: "link", run: C.link, keys: "Ctrl+F2" }, { label: "Unlink Tasks", icon: "unlink", run: C.unlink }, "-",
       { label: "Task Information…", icon: "info", run: C.info, keys: "Shift+F2" }, { label: "Notes…", icon: "detail", run: C.notes }, { label: "Link to Plan…", icon: "link", run: () => import("./plans").then(m => m.linkSelected()) }, ...(rows()[k]?.ext?.length || rows()[k]?.ext_out?.length ? [{ label: "Linked Tasks…", icon: "link", run: () => import("./plans").then(m => m.linkMenu(e, rows()[k].uid)) }] : []), { label: "Inspect…", icon: "find", run: () => D.inspect(rows()[k]?.uid) }, "-",
       { label: "Mark on Track", icon: "track", run: C.onTrack }, { label: "Progress", icon: "pct", sub: [0, 25, 50, 75, 100].map(v => ({ label: `${v}% Complete`, run: () => C.pct(v) })) },
@@ -365,10 +439,10 @@ export const Grid = (p: { width?: number }) => {
       { label: "Field Settings…", icon: "table", run: () => D.fieldSettings(k) }, { label: "Custom Fields…", icon: "fields", run: () => D.customFields(c?.key.startsWith("c:") ? c.key.slice(2) : undefined) }, "-",
       { label: "Sort A to Z", icon: "az", run: () => setSort([[c.key, false]]), on: sort()[0]?.[0] === c.key && !sort()[0][1] }, { label: "Sort Z to A", icon: "za", run: () => setSort([[c.key, true]]), on: sort()[0]?.[0] === c.key && sort()[0][1] },
       { label: "No Sort", icon: "sort", run: () => setSort([]) }, { label: "Group by This Field", icon: "group", run: () => setGroup([c.key]) }, { label: "Filter…", icon: "filter", run: () => autoFilter(e, k) }, "-",
-      { label: "Conditional Formatting…", icon: "style", run: () => D.condFormat(c.key) }, { label: "Best Fit", icon: "fit", run: () => bestFit(k) }, { label: `Table: ${table()}`, icon: "table", sub: [{ label: "Tables…", run: () => D.tablesDialog() }] },
+      { label: "Conditional Formatting…", icon: "style", run: () => D.condFormat(c.key) }, { label: "Best Fit", icon: "fit", run: () => bestFit(k) }, { label: "Wrap Text", icon: "wrap", on: wrapKeys().has(c.key), run: () => toggleWrap(c.key) }, { label: `Table: ${table()}`, icon: "table", sub: [{ label: "Tables…", run: () => D.tablesDialog() }] },
     ]);
   };
-  const bestFit = (k: number) => { const c = grid().cols[k], v = [...cols()]; v[k] = [v[k][0], Math.min(420, Math.max(48, Math.max(c.name.length, ...rows().slice(0, 800).map(r => (r.cells[k]?.length ?? 0) + (k === frozen() ? r.lvl * 2.3 + 2 : 0))) * 6.6 + 22))]; saveCols(v); };
+  const bestFit = (k: number) => { const c = grid().cols[k], v = [...cols()], nm = c.key === "name"; v[k] = [v[k][0], Math.round(Math.min(nm ? 600 : 420, Math.max(48, textPx(c.name) + 30, ...rows().slice(0, 2000).map(r => textPx(r.cells[k] ?? "") * (r.kind === "summary" || r.kind === "group" ? 1.08 : 1) + (nm ? r.lvl * 16 + 14 : 0) + (listCol(c.key) ? 30 : 16)))))]; saveCols(v); };
   /** AutoFilter: sort, and tick the values to show. */
   const autoFilter = (e: MouseEvent, k: number) => {
     const c = grid().cols[k];
@@ -406,27 +480,42 @@ export const Grid = (p: { width?: number }) => {
     if (c.key === "name") return <>
       <span style={{ width: `${r.lvl * 16}px`, display: "inline-block" }} />
       {r.kids ? <b class="tg" onMouseDown={e => { e.stopPropagation(); if (r.uid > 0) C.toggle(r.uid); else if (r.kind === "subplan") toggleSub(r.sub!); }}>{r.open ? "◢" : "▷"}</b> : <span class="tg" />}
-      {r.kind === "subplan" && <i class="subico" title="A subplan of this project (read-only here; double-click to open it)">◇</i>}{t}
+      {r.kind === "subplan" && <i class="subico" title="A subplan of this project (read-only here; double-click to open it)">◇</i>}{wrapKeys().has("name") ? <span class="wt">{t}</span> : t}
     </>;
     if (icon) return <span class="ico" title={t}>{icon}</span>;
     if (c.key === "pct" && r.kind !== "group") return <span class="pctc"><i style={{ width: `${parseFloat(t) || 0}%` }} />{t}</span>;
     if (t.startsWith("#")) return <span class="err" title="Formula error">{t}</span>;
-    return t;
+    return wrapKeys().has(c.key) ? <span class="wt">{t}</span> : t;
+  };
+  /** Text that does not fit its cell (shown whole as a tooltip). */
+  const cut = (r: Row, c: Col, k: number) => {
+    const t = r.cells[k] ?? "";
+    if (t.length < 4 || c.key === "mode" || r.icons?.some(x => x[0] === k)) return false;
+    const room = widths()[k] - 12 - (c.key === "name" ? r.lvl * 16 + 14 : 0);
+    return t.length * 4 > room && (wrapKeys().has(c.key) ? linesOf(t, room) >= MAXL && textPx(t) > room * MAXL * 0.9 : textPx(t) > room);
   };
   const fillHandle = createMemo(() => {
     const g = ranges()[ranges().length - 1];
     if (!g || edit()) return null;
     const n = norm(g);
-    return { left: lefts()[n.c1] + widths()[n.c1] - 4, top: (fillTo() ?? n.r1) * RH + RH - 4 + 40, r0: n.r0, c0: n.c0, c1: n.c1 };
+    return { left: lefts()[n.c1] + widths()[n.c1] - 4, top: rowTop((fillTo() ?? n.r1) + 1) - 4 + 40, r0: n.r0, c0: n.c0, c1: n.c1 };
   });
 
   return (
     <div class="grid" style={{ width: p.width ? `${p.width}px` : undefined }}>
+      <Show when={findOn()}>
+        <div class="gfind">
+          <Icon n="find" /><input value={findText()} placeholder="Find in the task sheet" onInput={e => { setFindText(e.currentTarget.value); setHitAt(-1); }}
+            onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter" || e.key === "F3") { e.preventDefault(); findNext(e.shiftKey ? -1 : 1); } if (e.key === "Escape") { setFindOn(false); box.focus(); } }} />
+          <span class="muted">{findText().trim() ? (hits().length ? `${hitAt() >= 0 ? hitAt() + 1 : "–"} of ${hits().length}` : "No match") : ""}</span>
+          <button class="x" title="Previous (Shift+Enter)" onClick={() => findNext(-1)}>↑</button><button class="x" title="Next (Enter)" onClick={() => findNext(1)}>↓</button><button class="x" title="Close (Esc)" onClick={() => { setFindOn(false); box.focus(); }}>×</button>
+        </div>
+      </Show>
       <div class="gscroll" ref={box} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onContextMenu={rowMenu}
         onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste}
         onDblClick={e => { const [r, c] = cellAt(e), x = rows()[r]; if (x?.sub) return void import("./plans").then(m => m.goToLink(x.sub!, x.suid ?? 0)); if (c < 0) C.info(); else if (!pickList(r, c, { x: e.clientX, y: e.clientY + 8 })) startEdit(r, c); }}
         onScroll={() => { setScrollTop(box.scrollTop); if (echo) { echo = false; return; } document.dispatchEvent(new CustomEvent("chart-scroll", { detail: box.scrollTop })); }}>
-        <div class="gsheet" style={{ width: `${total() + 160}px`, height: `${(rows().length + 3) * RH + 40}px` }}>
+        <div class="gsheet" style={{ width: `${total() + 160}px`, height: `${rowTop(rows().length + 3) + 40}px` }}>
           <div class="ghead" onMouseDown={e => e.stopPropagation()} onContextMenu={e => e.stopPropagation()} onDblClick={e => e.stopPropagation()}>
             <div class="hc idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 2 }} title="Select all" onClick={() => setRanges([{ r0: 0, c0: 0, r1: rows().length - 1, c1: ncols() - 1 }])}>◢</div>
             <For each={grid().cols}>{(c, k) => (
@@ -448,11 +537,12 @@ export const Grid = (p: { width?: number }) => {
           </div>
           <div class="gbody">
             <For each={visible()}>{([r, k]) => (
-              <div class="row" style={{ top: `${k * RH}px`, width: `${total()}px` }}
+              <div class="row" style={{ top: `${rowTop(k)}px`, width: `${total()}px`, ...(tops() ? { height: `${rowHt(k)}px` } : {}) }}
                 classList={{ sum: r.kind === "summary" || r.kind === "project" || r.kind === "subplan", subp: r.kind === "subplan", subc: !!r.sub && r.kind !== "subplan", grp: r.kind === "group", sel: selSet().has(r.uid), off: r.off, late: r.late, hl: r.hl, proj: r.kind === "project", [`tp${pathMap().get(r.uid) ?? 0}`]: pathMap().size > 0 && (pathMap().get(r.uid) ?? 0) > 1 }}>
                 <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }} title={r.late ? "Late" : ""}>{r.uid > 0 ? r.id : ""}{r.late && <i class="ind late">!</i>}{r.manual && <i class="ind">✎</i>}{r.uid > 0 && r.ext?.length ? <i class="ind xin" classList={{ moved: r.ext_moved }} title={`Waits for a task in another plan:\n${r.ext.join("\n")}${r.ext_moved ? "\n\nThat plan has moved since: Project › Update Links." : ""}\n(click: go to it, edit or update)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkMenu(e, r.uid)); }}>{r.ext_moved ? "⇠!" : "⇠"}</i> : null}{r.uid > 0 && r.ext_out?.length ? <i class="ind xout" title={`Another plan waits for this task:\n${r.ext_out.join("\n")}\n(click: go to it)`} onClick={e => { e.stopPropagation(); import("./plans").then(m => m.linkMenu(e, r.uid)); }}>⇢</i> : null}</div>
                 <For each={grid().cols}>{(c, j) => (
-                  <div class="c" classList={{ r: right(c), nm: c.key === "name", ro: !c.edit, in: inRange(k, j()), at: cur().row === k && cur().col === j(), fz: j() === frozen(), fx: !!formulaOf(c.key) }}
+                  <div class="c" classList={{ r: right(c), nm: c.key === "name", wr: wrapKeys().has(c.key), ro: !c.edit, in: inRange(k, j()), at: cur().row === k && cur().col === j(), hit: findOn() && !!findText().trim() && (r.cells[j()] ?? "").toLowerCase().includes(findText().trim().toLowerCase()), fz: j() === frozen(), fx: !!formulaOf(c.key) }}
+                    title={cut(r, c, j()) ? r.cells[j()] : undefined}
                     style={{ width: `${widths()[j()]}px`, ...sticky(j()), ...(r.style ? { ...F.css(r.style["*"]), ...F.css(r.style[c.key]) } : {}), ...(D.cfRules().length ? D.cfStyle(c.key, r.cells[j()] ?? "") : {}) }}>
                     {cell(r, c, j())}
                     {r.uid > 0 && c.edit && listCol(c.key) && <button class="lsb" title="Choose from the list (Alt+Down)" onMouseDown={e => { e.stopPropagation(); e.preventDefault(); }}
@@ -461,22 +551,22 @@ export const Grid = (p: { width?: number }) => {
                 )}</For>
               </div>
             )}</For>
-            <div class="row blank" style={{ top: `${rows().length * RH}px`, width: `${total()}px` }}>
+            <div class="row blank" style={{ top: `${rowTop(rows().length)}px`, width: `${total()}px` }}>
               <div class="c idc" style={{ width: `${IDW}px`, position: "sticky", left: "0", "z-index": 1 }}>＋</div>
               <For each={grid().cols}>{(c, j) => <div class="c" classList={{ at: cur().row === rows().length && cur().col === j() }} style={{ width: `${widths()[j()]}px`, ...sticky(j()) }}>{c.key === "name" ? <span class="ph">Type a new task…</span> : ""}</div>}</For>
             </div>
             <Show when={fillHandle()}>{h => <>
-              <Show when={fillTo() !== null}><div class="fillzone" style={{ left: `${lefts()[h().c0]}px`, top: `${h().r0 * RH}px`, width: `${lefts()[h().c1] + widths()[h().c1] - lefts()[h().c0]}px`, height: `${(fillTo()! - h().r0 + 1) * RH}px` }} /></Show>
+              <Show when={fillTo() !== null}><div class="fillzone" style={{ left: `${lefts()[h().c0]}px`, top: `${rowTop(h().r0)}px`, width: `${lefts()[h().c1] + widths()[h().c1] - lefts()[h().c0]}px`, height: `${rowTop(fillTo()! + 1) - rowTop(h().r0)}px` }} /></Show>
               <i class="fill" title="Drag to fill down" style={{ left: `${h().left}px`, top: `${h().top - 40}px` }} onMouseDown={fillDrag} />
             </>}</Show>
             <Show when={!edit() && (() => { const c = grid().cols[cur().col], r = rows()[cur().row]; return c && r && r.uid > 0 && c.edit && ["Date", "Fin"].includes(c.kind) ? { c, r } : null; })()}>{x => (
-              <div class="gdate" style={{ left: `${(cur().col <= frozen() ? lefts()[cur().col] + box.scrollLeft : lefts()[cur().col]) + widths()[cur().col] - 20}px`, top: `${cur().row * RH + 1}px` }}>
+              <div class="gdate" style={{ left: `${(cur().col <= frozen() ? lefts()[cur().col] + box.scrollLeft : lefts()[cur().col]) + widths()[cur().col] - 20}px`, top: `${rowTop(cur().row) + 1}px` }}>
                 <DateBtn value={x().r.cells[cur().col] ?? ""} title="Pick a date (or type it)" set={v => act({ Cells: { cells: [[x().r.uid, x().c.key, v]] } })} />
               </div>)}</Show>
             <Show when={edit()}>{e => {
               const c = grid().cols[e().col];
               const opts = c && choices(c.key);
-              const style = { left: `${e().col <= frozen() ? lefts()[e().col] + box.scrollLeft : lefts()[e().col]}px`, top: `${e().row * RH}px`, width: `${Math.max(widths()[e().col], c?.key === "name" ? 220 : 96)}px` };
+              const style = { left: `${e().col <= frozen() ? lefts()[e().col] + box.scrollLeft : lefts()[e().col]}px`, top: `${rowTop(e().row)}px`, width: `${Math.max(widths()[e().col], c?.key === "name" ? 220 : 96)}px` };
               const keys = (x: KeyboardEvent) => {
                 x.stopPropagation();
                 if (x.key === "Enter") { x.preventDefault(); commit(x.shiftKey ? [-1, 0] : [1, 0], x.ctrlKey); }

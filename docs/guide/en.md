@@ -79,7 +79,7 @@ When you start a new plan, **Project Setup** walks you through the basics. You c
 7. **The details pane.** Everything about the selected task in tabs: General, Status, Resources, Predecessors, Successors, Codes, Steps, Notebook, Expenses, WPs & Docs, Custom Fields, Risks and Notes.
 8. **Tell Me** ([[Ctrl+K]]). Type what you want to do, for example "baseline" or "level", and press [[Enter]].
 
-The status bar at the bottom shows the number of tasks, the start and finish, the duration, % complete and the cost.
+The status bar at the bottom shows the number of tasks, the start and finish, the duration, % complete and the cost. It also says **● Unsaved** while the plan has changes not yet saved, the filter and the sort in use (click either to clear it). The window's title, as on the taskbar, names the open file. Pointing at a ribbon button shows what it does and its shortcut; [[F1]] lists every shortcut.
 
 On a small screen, ribbon groups that do not fit fold into one button with the group's name (**EDITING ▾**): click it for the group's commands. For more room, collapse the ribbon to its tab names with [[Ctrl+F1]], a double-click on a tab or **⌃** at the end of the tabs: a tab you click then shows its ribbon over the view until you click a command or elsewhere, and the same keys pin it again. Datum Plan remembers your choice. The details pane and the timeline open as you last left them; **View › Split View** shows or hides them (on a short window the timeline starts closed). Dialogs can be moved by dragging their title bar.
 
@@ -97,6 +97,15 @@ On a small screen, ribbon groups that do not fit fold into one button with the g
 Datum Plan schedules automatically: when you change a duration or a link, every date that depends on it moves.
 
 Columns with a list of values (**Task Mode**, **Type**, **Calendar**, **Resource Names**, activity codes and lookup fields) show a ▾ on the cell under the pointer: click it and click the value, two clicks. In **Resource Names** each click ticks a person on or off (units such as [50%] are kept); **Type names and units…** (or [[F2]]) opens the cell for typing. Double-click on the cell, or [[Alt+Down]], opens the list too. With several rows selected, the value goes into all of them.
+
+### Work faster in the task sheet
+
+- **Wrap Text.** A long task name can show in full: right-click the **Task Name** heading and choose **Wrap Text** (or **Home › Alignment › Wrap Text** with a cell of the column selected). The text breaks onto more lines, up to four, and the row grows to fit; the Gantt bar stays in the middle of its row. Make the column wider and the rows shrink again. It works for any text column and is kept with the plan, for each table. A name that does not fit shows whole when you point at it.
+- **Find** ([[Ctrl+F]]): a bar over the task sheet looks for the text in every column shown and lights up the cells that have it; [[Enter]] or [[F3]] goes to the next one, [[Shift+Enter]] to the one before, [[Esc]] closes it. **Go To** ([[Ctrl+G]]) goes to a task by its ID. Both are also in **Home › Editing › Find**.
+- **Best Fit** (double-click the edge of a column heading) makes the column as wide as its longest text, measured as it shows. The Document and Procurement registers do the same, and their column widths are now kept with the plan.
+- Right-click a task for **Insert Task Below** (and **Paste**, which pastes what you copied).
+- Deleting a summary task, which deletes every task under it, asks first; so does deleting a calendar. **Undo** brings back anything deleted.
+- On the Gantt chart, click the chart and press [[Ctrl++]], [[Ctrl+−]] or [[Ctrl+0]] to zoom in, out or to the whole project; **View › Zoom › Today** scrolls to today. When you drag from one bar down to another to link them, hold [[Shift]] for a start-to-start link or [[Ctrl]] for finish-to-finish; [[Esc]] cancels a drag.
 
 ### The outline (WBS)
 

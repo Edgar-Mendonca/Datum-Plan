@@ -5,7 +5,8 @@
 // through `set` (or `add` for new rows), and the engine's answer redraws it.
 import { For, JSX, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { Portal } from "solid-js/web";
-import { openMenu, Item, toast } from "./store";
+import { openMenu, Item, toast, out, act } from "./store";
+import { textPx } from "./grid";
 import { order } from "./cells";
 
 export type Opt = { value: string; label?: string };
@@ -65,7 +66,11 @@ export const RegGrid = <R,>(p: {
   const [filt, setFilt] = createSignal<Record<string, string>>({});
   const [top, setTop] = createSignal(0), [hgt, setHgt] = createSignal(600);
   const widthKey = `rg-w-${p.id}`;
-  const [widths, setWidths] = createSignal<Record<string, number>>((() => { try { return JSON.parse(localStorage.getItem(widthKey) ?? "{}"); } catch { return {}; } })());
+  // Widths go with the plan (project.ui.rgw), so they are the same on every computer; older ones were kept per computer.
+  const [widths, setWidths] = createSignal<Record<string, number>>(out()?.project.ui?.rgw?.[p.id] ?? (() => { try { return JSON.parse(localStorage.getItem(widthKey) ?? "{}"); } catch { return {}; } })());
+  const keepW = () => { act({ Ui: { key: "rgw", value: { ...(out()?.project.ui?.rgw ?? {}), [p.id]: widths() } } }); try { localStorage.setItem(widthKey, JSON.stringify(widths())); } catch { /* no storage */ } };
+  /** Double-click a column's edge: as wide as its longest text. */
+  const autoFit = (cl: Col<R>) => { setWidths({ ...widths(), [cl.key]: Math.round(Math.min(520, Math.max(48, textPx(cl.name) + 34, ...view().slice(0, 2000).map(r => textPx(String(text(cl, r) ?? "")) + 18)))) }); keepW(); };
   const w = (c: Col<R>) => widths()[c.key] ?? c.width;
   const text = (c: Col<R>, r: R) => { const v = c.get(r); return c.kind === "date" || c.date ? dt(v) : c.kind === "check" ? (v ? "Yes" : "") : v; };
   // What the grid shows: filtered, then sorted.
@@ -267,7 +272,7 @@ export const RegGrid = <R,>(p: {
     e.preventDefault(); e.stopPropagation();
     const x0 = e.clientX, w0 = w(cl);
     const mv = (m: MouseEvent) => setWidths({ ...widths(), [cl.key]: Math.max(36, Math.round(w0 + m.clientX - x0)) });
-    const end = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", end); try { localStorage.setItem(widthKey, JSON.stringify(widths())); } catch { /* no storage */ } };
+    const end = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", end); if (w(cl) !== w0) keepW(); };
     document.addEventListener("mousemove", mv); document.addEventListener("mouseup", end);
   };
   // ---- the rows on screen ----
@@ -314,7 +319,7 @@ export const RegGrid = <R,>(p: {
           <colgroup><col style={{ width: "40px" }} /><For each={p.cols}>{c => <col style={{ width: `${w(c)}px` }} />}</For></colgroup>
           <thead><tr><th class="rh" onClick={() => { setAnc([0, 1]); setCur([n() - 1, C()]); focus(); }} title="Select every row" />
             <For each={p.cols}>{c => <th classList={{ calc: c.kind === "calc", on: !!filt()[c.key] || sort()?.[0] === c.key }} title={c.tip ?? (c.kind === "calc" ? "Worked out by the app" : "")}>
-              <span>{c.name}</span><button class="rgf" onClick={e => head(e, c)} title="Sort or filter">▾</button><i class="rgw" onMouseDown={e => resize(e, c)} /></th>}</For></tr></thead>
+              <span>{c.name}</span><button class="rgf" onClick={e => head(e, c)} title="Sort or filter">▾</button><i class="rgw" title="Drag to resize; double-click to fit" onMouseDown={e => resize(e, c)} onDblClick={e => { e.stopPropagation(); autoFit(c); }} /></th>}</For></tr></thead>
           <tbody>
             <tr style={{ height: `${first() * H}px` }} />
             <For each={idx()}>{i => { const r = () => row(i); return (

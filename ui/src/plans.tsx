@@ -3,7 +3,7 @@
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 import { Out, Row as GRow, SubPlan, TabInfo, fmtAt } from "./api";
 import { act, call, out, P, setOut, openMenu, openDialog, closeDialog, toast, useTable, table, tick, refresh, grid, setView, view, toggleSub, setShowSubs } from "./store";
-import { RH } from "./grid";
+import { rowTop } from "./grid";
 import { selectUid } from "./cmds";
 import { Dialog, Row } from "./ui";
 import { C } from "./cmds";
@@ -50,7 +50,7 @@ export const goToLink = async (file: string, uid: number) => {
   await refresh();
   selectUid(uid);
   const k = grid().rows.findIndex(r => r.uid === uid);
-  if (k >= 0) { document.dispatchEvent(new CustomEvent("grid-scroll", { detail: Math.max(0, k * RH - 60) })); document.dispatchEvent(new CustomEvent("gantt-scroll", { detail: grid().rows[k].bar.s })); }
+  if (k >= 0) { document.dispatchEvent(new CustomEvent("grid-scroll", { detail: Math.max(0, rowTop(k) - 60) })); document.dispatchEvent(new CustomEvent("gantt-scroll", { detail: grid().rows[k].bar.s })); }
 };
 /** The menu of a task's links: go to the other plan's task, edit, update. */
 export const linkMenu = async (e: MouseEvent, uid: number) => {

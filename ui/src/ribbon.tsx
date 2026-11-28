@@ -2,7 +2,7 @@
 import { modules, openContract, openDocuments, openProcurement } from "./contract";
 import { linkSelected, linkedPlans, updateLinks, subplans, shareSetup } from "./plans";
 import { For, Show, JSX, createSignal, createMemo, createEffect, onMount, onCleanup } from "solid-js";
-import { kept, setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, moreBls, setMoreBls, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
+import { kept, setOut, call, out, grid, cur, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, moreBls, setMoreBls, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import { aiOn, aiLink } from "./ai";
 import { pathOn, setPathOn } from "./path";
@@ -11,7 +11,7 @@ import * as P2 from "./progress";
 import { Icon } from "./ui";
 import { STYLES, gstyle } from "./gantt";
 import { showCrit, setShowCrit, showBase, setShowBase, showSlack, setShowSlack, showLate, setShowLate, showLabels, setShowLabels } from "./gantt";
-import { fieldMenu } from "./grid";
+import { fieldMenu, wrapKeys, toggleWrap, findApi } from "./grid";
 import * as F from "./fmt";
 import { Help, helpCard, HELP } from "./help";
 import { sheetApi, STYLE_SECTIONS } from "./sheets";
@@ -48,15 +48,21 @@ const Font = (p0: { noAlign?: boolean }) => {
 
 /** Locks or unlocks the baseline dates for typing in the task sheet (a plan always opens locked). */
 const lockBaseline = (u: boolean) => act({ BaselineLock: { unlocked: u } }).then(ok => ok && toast(u ? "Baseline unlocked: type new dates in Baseline Start and Baseline Finish (insert those columns if they are not shown). Lock it again when you are done." : "Baseline locked: its dates can no longer be typed in.", true));
+/** Shortcuts named in the button tooltips (from the command list, plus the ribbon's own names). */
+const KEYS = (): Record<string, string> => (KEYS_ ??= { ...Object.fromEntries(ALL_CMDS.filter(c => c[2]).map(c => [c[0].toLowerCase(), c[2]!])),
+  link: "Ctrl+F2", information: "Shift+F2", "task information": "Shift+F2", find: "Ctrl+F", "go to": "Ctrl+G", "zoom in": "Ctrl++ on the chart", "zoom out": "Ctrl+− on the chart", "entire project": "Ctrl+0 on the chart",
+  "fill": "Ctrl+D", "paste special": "Ctrl+Alt+V", italic: "Ctrl+I", underline: "Ctrl+U", "wrap text": "", spelling: "F7", "print preview": "Ctrl+P" });
+let KEYS_: Record<string, string> | undefined;
+const tipOf = (title: string | undefined, l: string) => { const k = KEYS()[l.toLowerCase()]; return (title ?? l) + (k && !(title ?? "").includes(k) ? ` (${k})` : ""); };
 const B = (p: { i: string; l: string; run?: (e: MouseEvent) => void; big?: boolean; on?: boolean; off?: boolean; dd?: (e: MouseEvent) => void; title?: string }) => p.big && p.run && p.dd ? (
   // Split button: the picture runs the command, the label opens the menu.
   <div class="rbw big splitbig" classList={{ on: p.on }}>
-    <button class="rb top" title={p.title ?? p.l} onClick={e => p.run!(e)}><Icon n={p.i} /></button>
+    <button class="rb top" title={tipOf(p.title, p.l)} onClick={e => p.run!(e)}><Icon n={p.i} /></button>
     <button class="rb bot" title={`${p.l} options`} onClick={e => p.dd!(e)}><span>{p.l}</span><b class="car">▾</b></button>
   </div>
 ) : (
   <div class="rbw" classList={{ big: p.big, sp: !p.big && !!p.run && !!p.dd }}>
-    <button class="rb" classList={{ big: p.big, on: p.on }} disabled={p.off} title={p.title ?? p.l} onClick={e => (p.run ?? p.dd)?.(e)}><Icon n={p.i} />{p.big ? <span>{p.l}{p.dd && !p.run ? " ▾" : ""}</span> : <span>{p.l}</span>}{!p.big && p.dd && !p.run && <b class="car">▾</b>}</button>
+    <button class="rb" classList={{ big: p.big, on: p.on }} disabled={p.off} title={tipOf(p.title, p.l)} onClick={e => (p.run ?? p.dd)?.(e)}><Icon n={p.i} />{p.big ? <span>{p.l}{p.dd && !p.run ? " ▾" : ""}</span> : <span>{p.l}</span>}{!p.big && p.dd && !p.run && <b class="car">▾</b>}</button>
     {p.run && p.dd && <button class="rb sarr" title={`${p.l} options`} onClick={e => p.dd!(e)}>▾</button>}
   </div>
 );
@@ -240,11 +246,11 @@ const Home = () => {
         <button class="rb fb" title={sh() ? "Decrease Indent" : "Outdent the task"} onClick={() => (sh() ? F.setProp("x", Math.max(0, (s().x || 0) - 1) || undefined) : C.outdent())}><Icon n="outdent" /></button><button class="rb fb" title={sh() ? "Increase Indent" : "Indent the task"} onClick={() => (sh() ? F.setProp("x", Math.min(15, (s().x || 0) + 1)) : C.indent())}><Icon n="indent" /></button></div>
       <div><AL k="a" v="" i="al" t="Align Left" /><AL k="a" v="c" i="ac" t="Center" /><AL k="a" v="r" i="ar" t="Align Right" /><span class="vsep" />
         <button class="rb fb" title="Clear Formatting" onClick={F.clearFmt}><Icon n="clear" /></button></div></div>
-      <S><B i="wrap" l="Wrap Text" off={!sh()} on={sh() && !!s().w} run={() => F.setProp("w", !s().w || undefined)} />
+      <S><B i="wrap" l="Wrap Text" title={sh() ? "Wrap Text" : "Wrap Text: long text in this column wraps onto more lines and the row grows"} on={sh() ? !!s().w : wrapKeys().has(grid().cols[cur().col]?.key ?? "")} run={() => (sh() ? F.setProp("w", !s().w || undefined) : grid().cols[cur().col] && toggleWrap(grid().cols[cur().col].key))} />
         <B i={A()?.merged() ? "unmerge" : "merge"} l={sh() && A()?.merged() ? "Unmerge Cells" : "Merge & Center"} off={!sh()} run={() => A()?.merge(A()?.merged() ? "unmerge" : "center")} dd={e => openMenu(e, [{ label: "Merge & Center", icon: "merge", run: () => A()?.merge("center") }, { label: "Merge Across", icon: "mergeacross", run: () => A()?.merge("across") }, { label: "Merge Cells", icon: "merge", run: () => A()?.merge("cells") }, { label: "Unmerge Cells", icon: "unmerge", run: () => A()?.merge("unmerge") }])} /></S></G>
     <G l="Tasks" h="hometasks"><B big i="task" l="New Task" run={() => onGantt(() => C.newTask())} dd={e => openMenu(e, [{ label: "Task", run: () => onGantt(() => C.newTask()) }, { label: "Summary Task", run: () => onGantt(C.summary) }, { label: "Milestone", run: () => onGantt(() => C.newTask(true)) }, { label: "Recurring Task…", icon: "repeat", run: () => onGantt(C.recurring) }, "-", { label: "Delete Task", run: () => onGantt(C.del) }])} />
       <S><B i="outdent" l="Outdent" run={() => onGantt(C.outdent)} /><B i="indent" l="Indent" run={() => onGantt(C.indent)} /><B i="info" l="Information" run={() => onGantt(C.info)} /></S><S><B i="link" l="Link" title="Link the selected tasks Finish-to-Start (Ctrl+F2)" run={() => onGantt(C.link)} /><B i="unlink" l="Unlink" run={() => onGantt(C.unlink)} /><B i="scroll" l="Scroll to Task" run={() => onGantt(C.scrollTo)} /></S></G>
-    <G l="Editing" h="editing"><S><B i="find" l="Find" dd={e => openMenu(e, sh() ? [{ label: "Find…", keys: "Ctrl+F", run: () => A()?.find() }, { label: "Replace…", keys: "Ctrl+H", run: () => A()?.replace() }] : [{ label: "Find a Task or Command…", keys: "Ctrl+K", run: palette }, { label: "Scroll to Task", run: C.scrollTo }])} />
+    <G l="Editing" h="editing"><S><B i="find" l="Find" dd={e => openMenu(e, sh() ? [{ label: "Find…", keys: "Ctrl+F", run: () => A()?.find() }, { label: "Replace…", keys: "Ctrl+H", run: () => A()?.replace() }] : [{ label: "Find…", keys: "Ctrl+F", run: () => findApi.open?.() }, { label: "Go To…", keys: "Ctrl+G", run: () => findApi.goTo?.() }, { label: "Find a Task or Command…", keys: "Ctrl+K", run: palette }, { label: "Scroll to Task", run: C.scrollTo }])} />
         <B i="filldown" l="Fill" dd={e => openMenu(e, [{ label: "Down", keys: "Ctrl+D", run: () => (sh() ? A()?.fillDown() : ctrlD()) }, { label: "Right", keys: "Ctrl+R", off: !sh(), run: run("fillRight") }])} />
         <B i="clear" l="Clear" off={!sh()} dd={e => openMenu(e, [{ label: "Clear All", run: () => A()?.clearKind("all") }, { label: "Clear Formats", run: () => A()?.clearKind("formats") }, { label: "Clear Contents", keys: "Delete", run: () => A()?.clearKind("contents") }])} /></S>
       <S><B i="az" l="Sort" dd={e => openMenu(e, sh() ? [{ label: "Sort A to Z", run: () => A()?.sortRows(true) }, { label: "Sort Z to A", run: () => A()?.sortRows(false) }, { label: "Custom Sort…", run: run("customSort") }, "-", { label: "Filter", keys: "Ctrl+Shift+L", on: !!A()?.filtering(), run: run("toggleFilter") }, { label: "Clear Filter", run: run("clearFilter") }] : sortMenu())} /></S></G>
@@ -364,7 +370,7 @@ export const Ribbon = () => (
         <S><B i="cols" l="Columns…" run={() => D.columnsDialog()} /></S>
         <S><B i="filter" l={`Filter: ${filter().name || "Custom"}`} dd={e => openMenu(e, filterMenu())} on={filter().rules.length > 0} /><B i="filter" l="Highlight" dd={e => openMenu(e, filterMenu().map(x => x === "-" ? x : { ...x, run: () => { x.run?.(); setFilter({ ...filter(), highlight: true }); } }))} /><B i="group" l={`Group by: ${group().length ? group().join(", ") : "None"}`} dd={e => openMenu(e, groupMenu())} on={group().length > 0} /></S>
       </G>
-      <G l="Zoom" h="zoom"><B big i="zin" l="Timescale" dd={e => openMenu(e, zoomMenu())} /><S><B i="zin" l="Zoom In" run={C.zoomIn} /><B i="zout" l="Zoom Out" run={C.zoomOut} /><B i="fit" l="Entire Project" run={C.fit} /></S></G>
+      <G l="Zoom" h="zoom"><B big i="zin" l="Timescale" dd={e => openMenu(e, zoomMenu())} /><S><B i="zin" l="Zoom In" run={C.zoomIn} /><B i="zout" l="Zoom Out" run={C.zoomOut} /><B i="fit" l="Entire Project" run={C.fit} /></S><S><B i="cal" l="Today" title="Go to Today: scroll the chart to today" run={C.today} /></S></G>
       <G l="Split View" h="split"><S><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
     </Show>
     <Show when={tab() === "sheet"}><SheetCells /><SheetPageTab /></Show>
